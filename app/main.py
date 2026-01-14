@@ -56,8 +56,30 @@ async def lifespan(app: FastAPI):
         logger.error(f"Fehler bei Datenbank-Initialisierung: {e}")
         raise
     
+    # Docker-Client initialisieren
+    try:
+        from app.executor import init_docker_client, reconcile_zombie_containers
+        init_docker_client()
+        logger.info("Docker-Client initialisiert")
+    except Exception as e:
+        logger.error(f"Fehler bei Docker-Client-Initialisierung: {e}")
+        raise
+    
+    # Zombie-Reconciliation (Crash-Recovery)
+    try:
+        from app.database import get_session
+        session_gen = get_session()
+        session = next(session_gen)
+        try:
+            await reconcile_zombie_containers(session)
+            logger.info("Zombie-Reconciliation abgeschlossen")
+        finally:
+            session.close()
+    except Exception as e:
+        logger.error(f"Fehler bei Zombie-Reconciliation: {e}")
+        # Nicht kritisch, App kann trotzdem starten
+    
     # TODO: Scheduler starten (Phase 8)
-    # TODO: Zombie-Reconciliation (Phase 5.7)
     
     logger.info("Fast-Flow Orchestrator gestartet")
     
@@ -74,15 +96,19 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"Fehler beim Scheduler-Shutdown: {e}")
     
-    # Laufende Runs auf INTERRUPTED oder WARNING setzen
-    # TODO: Implementierung in Phase 5.3 (executor.py)
-    # - Alle RUNNING-Runs in DB finden
-    # - Status auf INTERRUPTED oder WARNING setzen
-    # - Optional: Versuch, Docker-Container sauber herunterzufahren (nicht hart killen)
-    
-    # Container-Cleanup
-    # TODO: Implementierung in Phase 5.3 (executor.py)
-    # - Verwaiste Container aufräumen
+    # Graceful Shutdown: Laufende Runs beenden
+    try:
+        from app.executor import graceful_shutdown
+        from app.database import get_session
+        session_gen = get_session()
+        session = next(session_gen)
+        try:
+            await graceful_shutdown(session)
+            logger.info("Graceful Shutdown abgeschlossen")
+        finally:
+            session.close()
+    except Exception as e:
+        logger.error(f"Fehler beim Graceful Shutdown: {e}")
     
     logger.info("Fast-Flow Orchestrator heruntergefahren")
 
