@@ -1,0 +1,327 @@
+.sync {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.sync-status-card,
+.sync-actions-card,
+.cache-status-card {
+  background-color: #2a2a2a;
+  padding: 1.5rem;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+}
+
+.sync-status-card h3,
+.sync-actions-card h3,
+.cache-status-card h3 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
+.status-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.status-row {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.status-label {
+  font-weight: 600;
+  color: #888;
+  min-width: 150px;
+}
+
+.status-value {
+  color: white;
+  word-break: break-all;
+}
+
+.status-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.status-badge.success {
+  background-color: #4caf50;
+  color: white;
+}
+
+.status-badge.failed {
+  background-color: #f44336;
+  color: white;
+}
+
+.status-badge.pending {
+  background-color: #ff9800;
+  color: white;
+}
+
+.sync-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-group label {
+  color: #888;
+  font-size: 0.9rem;
+}
+
+.form-group input[type="text"] {
+  padding: 0.5rem;
+  background-color: #1a1a1a;
+  color: white;
+  border: 1px solid #444;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+.sync-button {
+  padding: 0.75rem 1.5rem;
+  background-color: #646cff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 500;
+  align-self: flex-start;
+}
+
+.sync-button:hover:not(:disabled) {
+  background-color: #535bf2;
+}
+
+.sync-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cached-pipelines {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.cached-badge {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  background-color: #4caf50;
+  color: white;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.sync-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 2px solid #444;
+}
+
+.sync-tabs button {
+  padding: 0.75rem 1.5rem;
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  font-size: 1rem;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.2s;
+}
+
+.sync-tabs button:hover {
+  color: white;
+}
+
+.sync-tabs button.active {
+  color: #646cff;
+  border-bottom-color: #646cff;
+}
+
+.sync-settings-card {
+  background-color: #2a2a2a;
+  padding: 1.5rem;
+  border-radius: 8px;
+}
+
+.sync-settings-card h3 {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+}
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.settings-form .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.settings-form label {
+  color: #888;
+  font-size: 0.9rem;
+}
+
+.settings-form input[type="number"] {
+  padding: 0.5rem;
+  background-color: #1a1a1a;
+  color: white;
+  border: 1px solid #444;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+.settings-form input[type="number"]:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.form-actions {
+  margin-top: 1rem;
+}
+
+.save-button {
+  padding: 0.5rem 1rem;
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.save-button:hover:not(:disabled) {
+  background-color: #45a049;
+}
+
+.save-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.settings-note {
+  margin-top: 1rem;
+  font-size: 0.85rem;
+  color: #888;
+  font-style: italic;
+}
+
+.sync-logs-card {
+  background-color: #2a2a2a;
+  padding: 1.5rem;
+  border-radius: 8px;
+}
+
+.sync-logs-card h3 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
+.sync-logs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.sync-log-entry {
+  background-color: #1a1a1a;
+  padding: 1rem;
+  border-radius: 4px;
+  border-left: 3px solid #444;
+}
+
+.log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.log-timestamp {
+  color: #888;
+  font-size: 0.85rem;
+}
+
+.log-status {
+  padding: 0.25rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.log-success {
+  background-color: #4caf50;
+  color: white;
+}
+
+.log-failed {
+  background-color: #f44336;
+  color: white;
+}
+
+.log-started {
+  background-color: #2196f3;
+  color: white;
+}
+
+.log-unknown {
+  background-color: #666;
+  color: white;
+}
+
+.log-message {
+  color: #ccc;
+  margin-top: 0.5rem;
+}
+
+.log-error {
+  color: #f44336;
+  margin-top: 0.5rem;
+  font-weight: 500;
+}
+
+.log-details {
+  color: #888;
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+}
+
+.no-logs {
+  text-align: center;
+  color: #888;
+  padding: 2rem;
+}

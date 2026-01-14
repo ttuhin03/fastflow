@@ -1,0 +1,93 @@
+.runs {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.runs-filters {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.filter-group label {
+  font-size: 0.875rem;
+  color: #888;
+}
+
+.filter-group select,
+.filter-group input[type="datetime-local"] {
+  padding: 0.5rem;
+  background-color: #2a2a2a;
+  color: white;
+  border: 1px solid #444;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+.filter-group input[type="datetime-local"] {
+  font-family: inherit;
+}
+
+.runs-table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: #2a2a2a;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.runs-table th,
+.runs-table td {
+  padding: 1rem;
+  text-align: left;
+  border-bottom: 1px solid #444;
+}
+
+.runs-table th {
+  background-color: #1a1a1a;
+  font-weight: 600;
+}
+
+.status {
+  padding: 0.25rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.status-success {
+  background-color: #4caf50;
+  color: white;
+}
+
+.status-failed {
+  background-color: #f44336;
+  color: white;
+}
+
+.status-running {
+  background-color: #2196f3;
+  color: white;
+}
+
+.status-pending {
+  background-color: #ff9800;
+  color: white;
+}
+
+.exit-success {
+  color: #4caf50;
+  font-weight: 500;
+}
+
+.exit-error {
+  color: #f44336;
+  font-weight: 500;
+}
