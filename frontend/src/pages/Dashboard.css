@@ -1,0 +1,86 @@
+.dashboard {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.dashboard h2 {
+  margin-bottom: 2rem;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 3rem;
+}
+
+.stat-card {
+  background-color: #2a2a2a;
+  padding: 1.5rem;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.stat-card h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1rem;
+  color: #888;
+}
+
+.stat-value {
+  font-size: 2.5rem;
+  font-weight: bold;
+  margin: 0;
+}
+
+.stat-value.success {
+  color: #4caf50;
+}
+
+.stat-value.error {
+  color: #f44336;
+}
+
+.pipelines-list h3 {
+  margin-bottom: 1.5rem;
+}
+
+.pipeline-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.pipeline-card {
+  background-color: #2a2a2a;
+  padding: 1.5rem;
+  border-radius: 8px;
+}
+
+.pipeline-card h4 {
+  margin: 0 0 1rem 0;
+}
+
+.pipeline-stats {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.pipeline-stats .success {
+  color: #4caf50;
+}
+
+.pipeline-stats .error {
+  color: #f44336;
+}
+
+.badge {
+  display: inline-block;
+  background-color: #646cff;
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+}

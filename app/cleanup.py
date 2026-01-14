@@ -588,6 +588,19 @@ async def run_cleanup_job() -> Dict[str, Any]:
         session.close()
 
 
+def run_cleanup_job_sync() -> Dict[str, Any]:
+    """
+    Synchroner Wrapper für run_cleanup_job().
+    
+    Wird vom Scheduler aufgerufen (APScheduler benötigt synchrone Funktionen).
+    Führt asyncio.run() intern aus.
+    
+    Returns:
+        Dictionary mit kombinierten Cleanup-Statistiken
+    """
+    return asyncio.run(run_cleanup_job())
+
+
 def schedule_cleanup_job() -> None:
     """
     Plant periodischen Cleanup-Job im Scheduler.
@@ -609,8 +622,9 @@ def schedule_cleanup_job() -> None:
             return
         
         # Cleanup-Job planen (täglich um 2 Uhr morgens)
+        # Verwende String-Referenz statt Lambda, damit Job serialisiert werden kann
         scheduler.add_job(
-            func=lambda: asyncio.run(run_cleanup_job()),
+            func="app.cleanup:run_cleanup_job_sync",
             trigger=CronTrigger(hour=2, minute=0),
             id="cleanup_job",
             name="Log & Docker Cleanup Job",

@@ -3,10 +3,25 @@
 # Dieses Dockerfile erstellt ein Container-Image für den Orchestrator,
 # der Pipeline-Container verwaltet und ausführt.
 #
-# Basis-Image: Python 3.11 (slim)
-# Dependencies: Aus requirements.txt installiert
-# Entry-Point: uvicorn mit FastAPI-App
+# Multi-Stage Build:
+# 1. Stage: React-Frontend bauen
+# 2. Stage: Python-Backend mit statischem Frontend
 
+# Stage 1: React-Frontend Build
+FROM node:20-slim AS frontend-builder
+
+WORKDIR /app/frontend
+
+# Frontend-Dependencies installieren
+COPY frontend/package.json frontend/package-lock.json* ./
+# Verwende npm ci wenn package-lock.json vorhanden, sonst npm install
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+
+# Frontend-Code kopieren und bauen
+COPY frontend/ ./
+RUN npm run build
+
+# Stage 2: Python-Backend
 FROM python:3.11-slim
 
 # Metadaten
@@ -32,7 +47,10 @@ COPY app/ ./app/
 COPY alembic.ini .
 COPY alembic/ ./alembic/
 
-# Exponiere Port für FastAPI/NiceGUI
+# Static-Files vom Frontend-Build kopieren
+COPY --from=frontend-builder /app/frontend/dist ./static
+
+# Exponiere Port für FastAPI
 EXPOSE 8000
 
 # Health-Check (optional, für Docker Compose)

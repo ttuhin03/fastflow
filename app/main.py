@@ -2,7 +2,7 @@
 FastAPI Main Application Module.
 
 Dieses Modul enthält die FastAPI-App mit Lifecycle-Management,
-Signal-Handling und Integration von NiceGUI.
+Signal-Handling und Serving des React-Frontends.
 """
 
 import asyncio
@@ -11,8 +11,11 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from app.config import config
 from app.database import init_db
+import os
 
 # Logger konfigurieren
 logging.basicConfig(
@@ -98,14 +101,11 @@ async def lifespan(app: FastAPI):
         logger.error(f"Fehler bei Cleanup-Service-Initialisierung: {e}")
         # Nicht kritisch, App kann trotzdem starten
     
-    # NiceGUI UI initialisieren (Phase 9.2, 13)
-    try:
-        from app.ui import init_ui
-        init_ui(app)
-        logger.info("NiceGUI UI initialisiert")
-    except Exception as e:
-        logger.error(f"Fehler bei NiceGUI-Initialisierung: {e}")
-        # Nicht kritisch, API funktioniert auch ohne UI
+    # bcrypt_sha256 wird beim ersten Login automatisch initialisiert
+    # Initialisierung beim Start wird übersprungen, da passlib beim Initialisieren
+    # ein Test-Passwort verwendet, das das 72-Byte-Limit überschreitet
+    
+    # React-Frontend wird über StaticFiles serviert (siehe unten)
     
     logger.info("Fast-Flow Orchestrator gestartet")
     
@@ -169,11 +169,27 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# CORS konfigurieren für React-Frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:8000",
+        "http://0.0.0.0:8000",
+        "http://127.0.0.1:8000",
+        "http://127.0.0.1:3000",
+    ],  # Development
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Signal-Handler einrichten
 setup_signal_handlers()
 
 
 @app.get("/health")
+@app.get("/api/health")
 async def health_check() -> JSONResponse:
     """
     Health-Check-Endpoint für Monitoring.
@@ -190,25 +206,54 @@ async def health_check() -> JSONResponse:
 
 
 # API-Router registrieren (Phase 6)
+# Alle API-Router haben /api-Präfix für klare Trennung von Frontend-Routen
 from app.api import pipelines, runs, logs, metrics, sync, secrets
 
-app.include_router(pipelines.router)
-app.include_router(runs.router)
-app.include_router(logs.router)
-app.include_router(metrics.router)
-app.include_router(sync.router)
-app.include_router(secrets.router)
+app.include_router(pipelines.router, prefix="/api")
+app.include_router(runs.router, prefix="/api")
+app.include_router(logs.router, prefix="/api")
+app.include_router(metrics.router, prefix="/api")
+app.include_router(sync.router, prefix="/api")
+app.include_router(secrets.router, prefix="/api")
 
 # Scheduler-Endpoints (Phase 8)
 from app.api import scheduler as scheduler_api
-app.include_router(scheduler_api.router)
+app.include_router(scheduler_api.router, prefix="/api")
 
 # Auth-Endpoints (Phase 9)
 from app.api import auth as auth_api
-app.include_router(auth_api.router)
+app.include_router(auth_api.router, prefix="/api")
 
-# NiceGUI Integration (Phase 9.2, 13)
-# UI wird in lifespan() initialisiert
+# Static Files für React-Frontend
+# Prüfe ob static-Verzeichnis existiert (nach Build)
+static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
+if os.path.exists(static_dir):
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+    
+    # Serve React-App für alle nicht-API-Routen
+    # Diese Route muss als letzte registriert werden, damit API-Routen zuerst matchen
+    from fastapi.responses import FileResponse
+    @app.get("/{full_path:path}")
+    async def serve_react_app(full_path: str):
+        """
+        Serve React-App für alle Routen, die nicht mit /api beginnen.
+        Diese Route wird als Fallback verwendet für React Router.
+        """
+        # Ignoriere API-Routen, health-check und static assets
+        if full_path.startswith("api") or full_path == "health" or full_path.startswith("static"):
+            return JSONResponse({"detail": "Not found"}, status_code=404)
+        
+        # Prüfe ob Datei existiert (für static assets wie JS/CSS)
+        file_path = os.path.join(static_dir, full_path)
+        if os.path.exists(file_path) and os.path.isfile(file_path):
+            return FileResponse(file_path)
+        
+        # Ansonsten serve index.html (für React Router)
+        index_path = os.path.join(static_dir, "index.html")
+        if os.path.exists(index_path):
+            return FileResponse(index_path)
+        
+        return JSONResponse({"detail": "Not found"}, status_code=404)
 
 if __name__ == "__main__":
     import uvicorn

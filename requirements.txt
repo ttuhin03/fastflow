@@ -5,7 +5,6 @@ docker
 apscheduler
 pydantic
 python-multipart
-nicegui
 aiofiles
 alembic
 python-dotenv

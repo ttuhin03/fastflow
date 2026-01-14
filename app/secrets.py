@@ -9,8 +9,7 @@ Dieses Modul verwaltet die Verschlüsselung und Speicherung von Secrets:
 
 import logging
 from typing import Dict, Optional
-from cryptography.fernet import Fernet
-from cryptography.exceptions import InvalidToken
+from cryptography.fernet import Fernet, InvalidToken
 
 from app.config import config
 from app.models import Secret

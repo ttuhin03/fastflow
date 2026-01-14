@@ -1,0 +1,14 @@
+.run-detail {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.run-info {
+  background-color: #2a2a2a;
+  padding: 1.5rem;
+  border-radius: 8px;
+}
+
+.run-info p {
+  margin: 0.5rem 0;
+}

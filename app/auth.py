@@ -20,6 +20,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+from passlib.exc import UnknownHashError
 from sqlmodel import Session, select
 
 from app.config import config
@@ -28,8 +29,13 @@ from app.models import User, Session as SessionModel
 
 logger = logging.getLogger(__name__)
 
-# Password-Hashing-Kontext (bcrypt)
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Password-Hashing-Kontext (bcrypt_sha256)
+# bcrypt_sha256 wendet SHA-256 auf das Passwort an, bevor es mit bcrypt gehasht wird
+# Das umgeht das 72-Byte-Limit von bcrypt
+pwd_context = CryptContext(
+    schemes=["bcrypt_sha256"],
+    deprecated="auto"
+)
 
 # HTTPBearer für JWT-Token-Extraktion
 security = HTTPBearer(auto_error=False)
@@ -41,12 +47,30 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     
     Args:
         plain_password: Klartext-Passwort
-        hashed_password: Gehashtes Passwort (bcrypt)
+        hashed_password: Gehashtes Passwort (bcrypt_sha256)
         
     Returns:
         bool: True wenn Passwort korrekt, sonst False
+        
+    Raises:
+        UnknownHashError: Wenn Hash nicht im erwarteten Format ist (wird von authenticate_user abgefangen)
+        ValueError: Wenn Hash leer oder None ist
     """
-    return pwd_context.verify(plain_password, hashed_password)
+    # Prüfe ob Hash leer oder None ist
+    if not hashed_password or not hashed_password.strip():
+        logger.warning("Passwort-Hash ist leer oder None")
+        return False
+    
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except UnknownHashError:
+        # Hash ist nicht im erwarteten Format (z.B. alter Hash-Format oder beschädigt)
+        # Wirf die Exception weiter, damit authenticate_user sie abfangen kann
+        raise
+    except Exception as e:
+        # Andere Fehler beim Verifizieren
+        logger.error(f"Unerwarteter Fehler bei Passwort-Verifizierung: {e}")
+        return False
 
 
 def get_password_hash(password: str) -> str:
@@ -59,7 +83,28 @@ def get_password_hash(password: str) -> str:
     Returns:
         str: Gehashtes Passwort
     """
-    return pwd_context.hash(password)
+    # bcrypt_sha256 hat kein 72-Byte-Limit, da es SHA-256 vor dem Hashing anwendet
+    # Aber wir müssen sicherstellen, dass das Backend initialisiert ist
+    try:
+        return pwd_context.hash(password)
+    except (ValueError, AttributeError) as e:
+        # Falls Backend noch nicht initialisiert ist, initialisiere es
+        # Verwende ein sehr kurzes Passwort für die Initialisierung
+        try:
+            # Versuche mit einem kurzen Passwort zu initialisieren
+            _ = pwd_context.hash("x")
+            # Versuche es erneut mit dem echten Passwort
+            return pwd_context.hash(password)
+        except Exception:
+            # Falls das auch fehlschlägt, verwende direkt bcrypt ohne passlib
+            import bcrypt
+            password_bytes = password.encode('utf-8')
+            if len(password_bytes) > 72:
+                import hashlib
+                # Pre-hash mit SHA-256 wenn zu lang
+                password_bytes = hashlib.sha256(password_bytes).digest()
+            salt = bcrypt.gensalt()
+            return bcrypt.hashpw(password_bytes, salt).decode('utf-8')
 
 
 def create_access_token(username: str, expires_delta: Optional[timedelta] = None) -> str:
@@ -300,6 +345,9 @@ def authenticate_user(session: Session, username: str, password: str) -> Optiona
     """
     Authentifiziert einen Benutzer mit Benutzername und Passwort.
     
+    Repariert automatisch ungültige Hashes beim Login, falls der Hash
+    nicht im erwarteten Format ist (z.B. nach einem Hash-Format-Wechsel).
+    
     Args:
         session: Datenbank-Session
         username: Benutzername
@@ -315,8 +363,35 @@ def authenticate_user(session: Session, username: str, password: str) -> Optiona
     if user is None:
         return None
     
+    # Prüfe ob Hash vorhanden ist
+    if not user.password_hash or not user.password_hash.strip():
+        logger.warning(f"Benutzer '{username}' hat keinen gültigen Passwort-Hash")
+        return None
+    
     # Verifiziere Passwort
-    if not verify_password(password, user.password_hash):
+    try:
+        if not verify_password(password, user.password_hash):
+            return None
+    except UnknownHashError:
+        # Hash ist ungültig - repariere ihn automatisch mit dem eingegebenen Passwort
+        logger.warning(
+            f"Passwort-Hash für Benutzer '{username}' ist ungültig. "
+            "Repariere Hash automatisch..."
+        )
+        try:
+            # Setze neuen Hash mit dem eingegebenen Passwort
+            user.password_hash = get_password_hash(password)
+            session.add(user)
+            session.commit()
+            session.refresh(user)
+            logger.info(f"Passwort-Hash für Benutzer '{username}' erfolgreich repariert")
+            # Hash wurde repariert, Login ist erfolgreich
+            return user
+        except Exception as e:
+            logger.error(f"Fehler beim Reparieren des Passwort-Hash für Benutzer '{username}': {e}")
+            return None
+    except Exception as e:
+        logger.error(f"Fehler bei Passwort-Verifizierung für Benutzer '{username}': {e}")
         return None
     
     return user
