@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 
 # Globale Variablen für Graceful Shutdown
 shutdown_event = asyncio.Event()
-scheduler = None  # Wird später in scheduler.py initialisiert
 
 
 @asynccontextmanager
@@ -79,7 +78,14 @@ async def lifespan(app: FastAPI):
         logger.error(f"Fehler bei Zombie-Reconciliation: {e}")
         # Nicht kritisch, App kann trotzdem starten
     
-    # TODO: Scheduler starten (Phase 8)
+    # Scheduler starten (Phase 8)
+    try:
+        from app.scheduler import start_scheduler
+        start_scheduler()
+        logger.info("Scheduler gestartet")
+    except Exception as e:
+        logger.error(f"Fehler beim Scheduler-Start: {e}")
+        # Nicht kritisch, App kann trotzdem starten (Jobs können manuell gestartet werden)
     
     logger.info("Fast-Flow Orchestrator gestartet")
     
@@ -89,12 +95,11 @@ async def lifespan(app: FastAPI):
     logger.info("Fast-Flow Orchestrator wird heruntergefahren...")
     
     # Scheduler stoppen
-    if scheduler is not None:
-        try:
-            scheduler.shutdown()
-            logger.info("Scheduler gestoppt")
-        except Exception as e:
-            logger.error(f"Fehler beim Scheduler-Shutdown: {e}")
+    try:
+        from app.scheduler import stop_scheduler
+        stop_scheduler()
+    except Exception as e:
+        logger.error(f"Fehler beim Scheduler-Shutdown: {e}")
     
     # Graceful Shutdown: Laufende Runs beenden
     try:
@@ -174,7 +179,10 @@ app.include_router(metrics.router)
 app.include_router(sync.router)
 app.include_router(secrets.router)
 
-# TODO: Scheduler-Endpoints in Phase 8
+# Scheduler-Endpoints (Phase 8)
+from app.api import scheduler as scheduler_api
+app.include_router(scheduler_api.router)
+
 # TODO: Auth-Endpoints in Phase 9
 # TODO: NiceGUI Integration in Phase 13
 
