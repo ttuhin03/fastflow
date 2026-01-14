@@ -16,3 +16,6 @@ PyJWT
 requests
 httpx
 psycopg2-binary
+pytest
+pytest-asyncio
+pytest-cov
