@@ -87,6 +87,17 @@ async def lifespan(app: FastAPI):
         logger.error(f"Fehler beim Scheduler-Start: {e}")
         # Nicht kritisch, App kann trotzdem starten (Jobs können manuell gestartet werden)
     
+    # Cleanup-Service initialisieren (Phase 11)
+    try:
+        from app.cleanup import init_docker_client_for_cleanup, schedule_cleanup_job
+        init_docker_client_for_cleanup()
+        # Cleanup-Job planen (nach Scheduler-Start)
+        schedule_cleanup_job()
+        logger.info("Cleanup-Service initialisiert")
+    except Exception as e:
+        logger.error(f"Fehler bei Cleanup-Service-Initialisierung: {e}")
+        # Nicht kritisch, App kann trotzdem starten
+    
     # NiceGUI UI initialisieren (Phase 9.2, 13)
     try:
         from app.ui import init_ui
