@@ -1,0 +1,17 @@
+fastapi
+uvicorn[standard]
+sqlmodel
+docker
+apscheduler
+pydantic
+python-multipart
+nicegui
+aiofiles
+alembic
+python-dotenv
+passlib[bcrypt]
+python-jose[cryptography]
+cryptography
+PyJWT
+requests
+psycopg2-binary

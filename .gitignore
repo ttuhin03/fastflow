@@ -205,3 +205,22 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Fast-Flow Orchestrator spezifisch
+# Datenbank
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+
+# Logs
+logs/
+
+# UV Cache
+data/uv_cache/
+
+# Environment-Variablen
+.env
+
+# Pipelines (wird als Volume gemountet)
+pipelines/.git/
