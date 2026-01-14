@@ -88,15 +88,42 @@ Metadaten-Datei für Resource-Limits und Konfiguration.
   "cpu_hard_limit": 1.0,
   "mem_hard_limit": "1g",
   "cpu_soft_limit": 0.8,
-  "mem_soft_limit": "800m"
+  "mem_soft_limit": "800m",
+  "timeout": 3600,
+  "retry_attempts": 3,
+  "description": "Prozessiert täglich eingehende Daten",
+  "tags": ["data-processing", "daily"],
+  "enabled": true,
+  "default_env": {
+    "LOG_LEVEL": "INFO",
+    "DEBUG": "false"
+  }
 }
 ```
 
 **Felder:**
+
+**Resource-Limits:**
 - `cpu_hard_limit` (Float, optional): CPU-Limit in Kernen (z.B. 1.0 = 1 Kern, 0.5 = halber Kern)
 - `mem_hard_limit` (String, optional): Memory-Limit (z.B. "512m", "1g", "2g")
 - `cpu_soft_limit` (Float, optional): CPU-Soft-Limit für Monitoring (wird überwacht, keine Limitierung)
 - `mem_soft_limit` (String, optional): Memory-Soft-Limit für Monitoring (wird überwacht, keine Limitierung)
+
+**Pipeline-Konfiguration:**
+- `timeout` (Integer, optional): Timeout in Sekunden (pipeline-spezifisch, überschreibt globales CONTAINER_TIMEOUT)
+- `retry_attempts` (Integer, optional): Anzahl Retry-Versuche bei Fehlern (pipeline-spezifisch, überschreibt globales RETRY_ATTEMPTS)
+- `enabled` (Boolean, optional): Pipeline aktiviert/deaktiviert (Standard: true)
+
+**Dokumentation:**
+- `description` (String, optional): Beschreibung der Pipeline (wird in UI angezeigt)
+- `tags` (Array[String], optional): Tags für Kategorisierung/Filterung in der UI
+
+**Environment-Variablen:**
+- `default_env` (Object, optional): Pipeline-spezifische Default-Environment-Variablen
+  - Diese werden bei jedem Pipeline-Start gesetzt
+  - Können in der UI durch zusätzliche Env-Vars ergänzt werden (werden zusammengeführt)
+  - Nützlich für Pipeline-spezifische Konfiguration (z.B. LOG_LEVEL, API_ENDPOINT, etc.)
+  - Secrets sollten NICHT hier gespeichert werden (verwende stattdessen Secrets-Management in der UI)
 
 **Verhalten:**
 - **Hard Limits**: Werden beim Container-Start gesetzt (Docker-Limits)
@@ -106,6 +133,8 @@ Metadaten-Datei für Resource-Limits und Konfiguration.
   - Überschreitung wird im Frontend angezeigt (Warnung)
   - Nützlich für frühe Erkennung von Resource-Problemen
 - **Fehlende Metadaten**: Standard-Limits werden verwendet (falls konfiguriert)
+- **Timeout & Retry**: Pipeline-spezifische Werte überschreiben globale Konfiguration
+- **Environment-Variablen**: `default_env` wird mit UI-spezifischen Env-Vars zusammengeführt (UI-Werte haben Vorrang)
 
 **Beispiel:**
 ```json
@@ -174,7 +203,16 @@ requests==2.31.0
   "cpu_hard_limit": 1.0,
   "mem_hard_limit": "512m",
   "cpu_soft_limit": 0.8,
-  "mem_soft_limit": "400m"
+  "mem_soft_limit": "400m",
+  "timeout": 1800,
+  "retry_attempts": 2,
+  "description": "Prozessiert eingehende Daten und erstellt Reports",
+  "tags": ["data-processing", "reports"],
+  "enabled": true,
+  "default_env": {
+    "LOG_LEVEL": "INFO",
+    "API_ENDPOINT": "https://api.example.com"
+  }
 }
 ```
 

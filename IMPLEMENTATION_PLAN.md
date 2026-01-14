@@ -176,15 +176,41 @@ fastflow/
 - [ ] Pipeline-Validierung: Pipeline muss `main.py` enthalten, sonst wird sie ignoriert
 - [ ] Cache für Pipeline-Liste
 - [ ] **Pipeline-Metadaten-JSON**: Erkennung von `pipeline.json` oder `{pipeline_name}.json` im Pipeline-Verzeichnis
-  - JSON-Format: `{"cpu_hard_limit": 1.0, "mem_hard_limit": "1g", "cpu_soft_limit": 0.8, "mem_soft_limit": "800m"}`
-  - Felder:
-    - `cpu_hard_limit` (Float, optional): CPU-Limit in Kernen (z.B. 1.0 = 1 Kern)
-    - `mem_hard_limit` (String, optional): Memory-Limit (z.B. "512m", "1g")
-    - `cpu_soft_limit` (Float, optional): CPU-Soft-Limit für Monitoring (wird überwacht, keine Limitierung)
-    - `mem_soft_limit` (String, optional): Memory-Soft-Limit für Monitoring (wird überwacht, keine Limitierung)
+  - JSON-Format (alle Felder optional):
+    ```json
+    {
+      "cpu_hard_limit": 1.0,
+      "mem_hard_limit": "1g",
+      "cpu_soft_limit": 0.8,
+      "mem_soft_limit": "800m",
+      "timeout": 3600,
+      "retry_attempts": 3,
+      "description": "Beschreibung der Pipeline",
+      "tags": ["tag1", "tag2"],
+      "enabled": true,
+      "default_env": {"LOG_LEVEL": "INFO"}
+    }
+    ```
+  - **Felder (alle optional)**:
+    - Resource-Limits:
+      - `cpu_hard_limit` (Float): CPU-Limit in Kernen (z.B. 1.0 = 1 Kern)
+      - `mem_hard_limit` (String): Memory-Limit (z.B. "512m", "1g")
+      - `cpu_soft_limit` (Float): CPU-Soft-Limit für Monitoring (wird überwacht, keine Limitierung)
+      - `mem_soft_limit` (String): Memory-Soft-Limit für Monitoring (wird überwacht, keine Limitierung)
+    - Pipeline-Konfiguration:
+      - `timeout` (Integer): Timeout in Sekunden (pipeline-spezifisch, überschreibt CONTAINER_TIMEOUT)
+      - `retry_attempts` (Integer): Retry-Versuche bei Fehlern (pipeline-spezifisch, überschreibt RETRY_ATTEMPTS)
+      - `enabled` (Boolean): Pipeline aktiviert/deaktiviert (Standard: true)
+    - Dokumentation:
+      - `description` (String): Beschreibung (wird in UI angezeigt)
+      - `tags` (Array[String]): Tags für Kategorisierung/Filterung in UI
+    - Environment-Variablen:
+      - `default_env` (Object): Pipeline-spezifische Default-Env-Vars (werden bei jedem Start gesetzt, können in UI ergänzt werden)
   - Hard Limits: Werden beim Container-Start gesetzt (mem_limit, nano_cpus)
   - Soft Limits: Werden überwacht, Überschreitung wird im Frontend angezeigt
-  - Optional: Falls keine Metadaten-JSON vorhanden, Standard-Limits verwenden
+  - Timeout & Retry: Pipeline-spezifische Werte überschreiben globale Konfiguration
+  - Default-Env-Vars: Werden mit UI-spezifischen Env-Vars zusammengeführt (UI-Werte haben Vorrang)
+  - Optional: Falls keine Metadaten-JSON vorhanden, Standard-Werte verwenden
 - [ ] **Pipeline-Struktur**: Pipelines werden mit `uv run --with-requirements {requirements.txt} {main.py}` ausgeführt
   - Code kann von oben nach unten ausgeführt werden (keine `main()`-Funktion erforderlich)
   - Optional: `main()`-Funktion mit `if __name__ == "__main__"` Block
@@ -213,7 +239,11 @@ fastflow/
 - [ ] Volume-Mounts konfigurieren:
   - Pipelines-Verzeichnis als `/app` (read-only)
   - UV-Cache-Verzeichnis als `/root/.cache/uv` (read-write, shared)
-- [ ] Environment-Variablen-Injection (Secrets + Parameter)
+- [ ] **Environment-Variablen-Injection**:
+  - Default-Env-Vars aus Pipeline-Metadaten-JSON lesen (`default_env`)
+  - Secrets und Parameter aus UI/Datenbank abrufen
+  - Env-Vars zusammenführen: Default-Env-Vars + UI-Env-Vars (UI-Werte haben Vorrang bei Duplikaten)
+  - Als Environment-Variablen an Container übergeben
 - [ ] **Resource-Limits aus Metadaten-JSON**: Hard Limits (mem_limit, nano_cpus) beim Container-Start setzen
 - [ ] UV-Version erfassen und in DB speichern
 - [ ] Setup-Duration messen (Zeit für uv-Setup)
@@ -303,18 +333,28 @@ fastflow/
 
 ### 5.6 Run-Funktion
 - [ ] `run_pipeline(name, env_vars=None, parameters=None)` Funktion
+- [ ] **Pipeline-Metadaten laden**: Metadaten-JSON aus Pipeline-Verzeichnis lesen
+  - Timeout (pipeline-spezifisch oder global CONTAINER_TIMEOUT)
+  - Retry-Attempts (pipeline-spezifisch oder global RETRY_ATTEMPTS)
+  - Enabled-Status prüfen (wenn `enabled: false`, Pipeline-Start ablehnen)
+  - Default-Env-Vars aus Metadaten (`default_env`)
 - [ ] **Pre-Heating-Lock-Mechanismus**: Lock pro Pipeline für Pre-Heating-Operationen
   - Wenn Pre-Heating für Pipeline läuft: Start-Befehl warten oder Meldung "Warte auf Abschluss der Dependency-Installation"
   - Verhindert Race-Conditions: Zwei Container greifen nicht gleichzeitig schreibend auf uv-Cache zu
   - Lock wird freigegeben wenn Pre-Heating abgeschlossen ist
+- [ ] **Environment-Variablen zusammenführen**:
+  - Default-Env-Vars aus Metadaten (`default_env`)
+  - UI-spezifische Env-Vars (Secrets + Parameter)
+  - Zusammenführen: Default + UI (UI-Werte haben Vorrang bei Duplikaten)
 - [ ] PipelineRun-Datensatz erstellen
 - [ ] Container starten und überwachen (mit Label `fastflow-run-id`)
 - [ ] **Docker-Log-Limits**: Log-Limits beim Container-Start setzen
   - `log_config={'type': 'json-file', 'config': {'max-size': '10m', 'max-file': '3'}}`
   - Verhindert "Silent Death" durch Amok-laufende Pipelines, die Terabytes an Log-Text produzieren
   - Zusätzlich zur Dateispeicherung (Docker-Limits als zusätzliche Sicherheit)
+- [ ] **Pipeline-spezifisches Timeout**: Timeout aus Metadaten verwenden (falls gesetzt)
 - [ ] Status-Updates (RUNNING → SUCCESS/FAILED basierend auf Exit-Code)
-- [ ] Retry-Mechanismus (konfigurierbar)
+- [ ] **Pipeline-spezifischer Retry-Mechanismus**: Retry-Attempts aus Metadaten verwenden (falls gesetzt)
 
 ### 5.7 Zombie-Reconciliation (Crash-Recovery)
 - [ ] Startup-Reconciler-Funktion in `app/executor.py`
@@ -439,7 +479,9 @@ fastflow/
 ### 7.4 Integration in Executor
 - [ ] Secrets bei Pipeline-Start abrufen
 - [ ] Parameter bei Pipeline-Start abrufen
-- [ ] Als Environment-Variablen injizieren
+- [ ] Default-Env-Vars aus Pipeline-Metadaten (`default_env`) lesen
+- [ ] Environment-Variablen zusammenführen: Default-Env-Vars + Secrets + Parameter (UI-Werte haben Vorrang bei Duplikaten)
+- [ ] Als Environment-Variablen an Container injizieren
 
 ---
 
