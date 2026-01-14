@@ -55,6 +55,17 @@ fastflow/
 - requests (für GitHub API-Calls)
 - psycopg2-binary (optional, für PostgreSQL-Support)
 
+### 1.3 App-Lifecycle & Signal-Handling
+- [ ] `app/main.py`: FastAPI-App mit Lifecycle-Management
+- [ ] **Graceful Shutdown-Handler**: SIGTERM/SIGINT Handler implementieren
+  - Wenn Orchestrator gestoppt wird (z.B. für Update):
+    - Scheduler pausieren (Scheduler.shutdown())
+    - Status der laufenden Runs auf INTERRUPTED oder WARNING setzen
+    - (Optional) Versuch, Docker-Container sauber herunterzufahren (nicht hart killen)
+  - Verhindert Zombie-Container und Datenbank-Inkonsistenzen
+- [ ] Startup-Event: Datenbank-Initialisierung, Scheduler-Start, Zombie-Reconciliation
+- [ ] Shutdown-Event: Scheduler-Stop, Cleanup-Tasks
+
 ---
 
 ## Phase 2: Datenbank & Models
@@ -69,9 +80,20 @@ fastflow/
   - `connect_args={"check_same_thread": False}` für FastAPI setzen
   - WAL-Mode: `PRAGMA journal_mode=WAL` nach Verbindungsaufbau
   - Verhindert "database is locked" Fehler bei parallelen Schreibzugriffen
+- [ ] **SQLite WAL-Checkpointing**: Periodisches Checkpointing implementieren
+  - WAL-Dateien können unbegrenzt wachsen ohne Checkpoint
+  - Periodisches `PRAGMA wal_checkpoint(TRUNCATE)` (z.B. alle 100 Transaktionen oder alle 10 Minuten)
+  - Optional: Background-Task für automatisches Checkpointing
 - [ ] Session-Dependency für FastAPI
 - [ ] Alembic Setup für Migrationen (funktioniert mit SQLite und PostgreSQL)
+  - **SQLite-Migrationen**: `render_as_batch=True` für Alembic konfigurieren
+  - Verwendet "Tabelle kopieren, ändern, Original löschen"-Strategie bei SQLite
+  - Verhindert Fehler bei Spalten-Löschen/Umbenennen (SQLite-Limitation)
 - [ ] Datenbank-Initialisierung beim ersten Start
+- [ ] **Timezone-Handling**: Alle Zeitstempel in UTC in der Datenbank speichern
+  - DateTime-Felder immer als UTC speichern (keine lokale Zeit)
+  - Konvertierung zur lokalen Zeit erst im Frontend (NiceGUI)
+  - Verhindert Probleme bei Zeitzonen-Unterschieden (Host vs. Container vs. DB)
 
 ### 2.2 Models
 - [ ] `app/models.py`: Alle Models definieren
@@ -145,17 +167,27 @@ fastflow/
 
 ### 4.1 Pipeline-Discovery
 - [ ] `app/pipeline_discovery.py`: Scan des Pipelines-Verzeichnisses
-- [ ] Erkennung von Python-Dateien (.py)
-- [ ] Pipeline-Validierung (Existenz, Ausführbarkeit)
+- [ ] **Pipeline-Repository-Struktur** (siehe README.md für Details):
+  - Verzeichnisstruktur: Jede Pipeline in eigenem Unterverzeichnis (z.B. `pipelines/pipeline_a/`)
+  - **`main.py`** (erforderlich): Haupt-Pipeline-Skript, wird mit `uv run --with-requirements` ausgeführt
+  - **`requirements.txt`** (optional): Python-Dependencies für die Pipeline
+  - **`pipeline.json` oder `{pipeline_name}.json`** (optional): Metadaten für Resource-Limits
+- [ ] Pipeline-Name-Erkennung: Pipeline-Name = Verzeichnisname (z.B. `pipeline_a/` → Name: `pipeline_a`)
+- [ ] Pipeline-Validierung: Pipeline muss `main.py` enthalten, sonst wird sie ignoriert
 - [ ] Cache für Pipeline-Liste
 - [ ] **Pipeline-Metadaten-JSON**: Erkennung von `pipeline.json` oder `{pipeline_name}.json` im Pipeline-Verzeichnis
   - JSON-Format: `{"cpu_hard_limit": 1.0, "mem_hard_limit": "1g", "cpu_soft_limit": 0.8, "mem_soft_limit": "800m"}`
+  - Felder:
+    - `cpu_hard_limit` (Float, optional): CPU-Limit in Kernen (z.B. 1.0 = 1 Kern)
+    - `mem_hard_limit` (String, optional): Memory-Limit (z.B. "512m", "1g")
+    - `cpu_soft_limit` (Float, optional): CPU-Soft-Limit für Monitoring (wird überwacht, keine Limitierung)
+    - `mem_soft_limit` (String, optional): Memory-Soft-Limit für Monitoring (wird überwacht, keine Limitierung)
   - Hard Limits: Werden beim Container-Start gesetzt (mem_limit, nano_cpus)
   - Soft Limits: Werden überwacht, Überschreitung wird im Frontend angezeigt
   - Optional: Falls keine Metadaten-JSON vorhanden, Standard-Limits verwenden
-- [ ] **Pipeline-Struktur**: Pipelines werden einfach mit `python pipeline.py` ausgeführt
-  - Keine `main()`-Funktion erforderlich (kann aber verwendet werden)
-  - Code wird von oben nach unten ausgeführt
+- [ ] **Pipeline-Struktur**: Pipelines werden mit `uv run --with-requirements {requirements.txt} {main.py}` ausgeführt
+  - Code kann von oben nach unten ausgeführt werden (keine `main()`-Funktion erforderlich)
+  - Optional: `main()`-Funktion mit `if __name__ == "__main__"` Block
   - Bei uncaught Exceptions → Exit-Code != 0 → Status FAILED
 
 ---
@@ -164,6 +196,17 @@ fastflow/
 
 ### 5.1 Docker Client Setup (UV-basiert)
 - [ ] `app/executor.py`: Docker Client initialisieren
+- [ ] **Docker-Daemon-Error-Handling**: Retry-Logik mit Exponential Backoff für Docker-Operationen
+  - Health-Check für Docker-Socket-Verbindung
+  - Klare Fehlermeldungen wenn Docker-Daemon nicht erreichbar
+  - Graceful Degradation: Pipeline-Starts ablehnen wenn Docker nicht verfügbar
+- [ ] **Worker-Image-Pull**: Worker-Image (`WORKER_BASE_IMAGE`) beim App-Start prüfen/pullen
+  - Falls Image nicht vorhanden: Versuch es zu pullen
+  - Fehler-Handling: Klare Fehlermeldung wenn Registry nicht erreichbar
+- [ ] **System-Library-Dokumentation**: "Goldene Regel" für Basis-Image dokumentieren
+  - Basis-Image muss gängige System-Dependencies vorinstalliert haben (Build-Essentials, DB-Clients, etc.)
+  - UV isoliert Python-Pakete, aber keine System-Bibliotheken (z.B. libpq-dev, libgl1)
+  - Falls Pipeline etwas Spezielles braucht: Entweder im Skript via apt-get nachinstallieren (langsam) oder Basis-Image erweitern
 - [ ] Container-Start-Logik mit UV-Worker-Image (`auto_remove=False` - wird manuell entfernt)
 - [ ] Container-Befehl: `uv run --with-requirements /app/{pipeline}/requirements.txt /app/{pipeline}/main.py`
 - [ ] Container-Labels setzen: `fastflow-run-id={run_id}` für Reconciliation
@@ -187,22 +230,33 @@ fastflow/
   - Überschreitung in Metrics-Queue markieren (für UI-Warnung)
 - [ ] Concurrency-Limits (max gleichzeitige Container)
   - Wenn Limit erreicht: Neue Pipeline-Starts ablehnen (HTTP 429)
+  - **Race-Condition-Prevention**: Locking-Mechanismus (`asyncio.Lock`) oder atomare DB-Transaktionen für Zähler-Updates
+  - Verhindert, dass mehrere gleichzeitige Requests das Limit überschreiten
 - [ ] Container-Cancellation (`container.stop()`)
 - [ ] Timeout-Handling (optional, harter Timeout - Container killen)
 - [ ] Status-Polling für Container-Status
 
 ### 5.3 Log-Streaming & Persistenz
 - [ ] Log-Streaming aus Container
+- [ ] **File-Handle-Management**: Context-Manager für Log-Streams verwenden
+  - Handles explizit schließen in `finally`-Blocks
+  - Verhindert File-Handle-Leaks bei vielen gleichzeitigen Runs
 - [ ] Log-Datei-Schreibung in konfiguriertem Logs-Verzeichnis (alle Logs werden geschrieben)
 - [ ] Rate-Limited Queue für SSE-Streaming (konfigurierbar, Standard: 100 Zeilen/Sekunde)
 - [ ] `container.wait()` für Exit-Code-Abruf
-- [ ] Container manuell entfernen nach Log-Speicherung (`container.remove()`)
+- [ ] **Container-Cleanup mit Error-Handling**:
+  - `container.remove()` in Try-Except-Block
+  - Fehler loggen wenn Container bereits entfernt oder Docker-Daemon nicht erreichbar
+  - Graceful Degradation: Fehler nicht an Aufrufer weitergeben (Container ist bereits weg)
 - [ ] Status-Updates in Datenbank
 - [ ] Exit-Code-Erfassung
 
 ### 5.4 Container-Metrics-Monitoring (CPU & RAM)
 - [ ] Container-Stats-Monitoring in `app/executor.py`
 - [ ] Hintergrund-Task für `container.stats(stream=True)` während Container läuft
+- [ ] **Container-Stats-Stream-Cleanup**: Streams explizit beenden in `finally`-Blocks
+  - Context-Manager für Stats-Streams verwenden
+  - Verhindert Ressourcen-Leaks wenn Container beendet wird
 - [ ] CPU-Usage-Berechnung (Delta-Vergleich aus Docker Stats):
   - CPU-Delta und System-Delta berechnen
   - CPU-Prozentsatz: `(cpu_delta / system_delta) * online_cpus * 100.0`
@@ -218,6 +272,8 @@ fastflow/
   - Datei: `logs/{run_id}_metrics.json` oder `logs/{run_id}_metrics.jsonl`
   - Format: `{"timestamp": "...", "cpu_percent": 45.2, "ram_mb": 128.5, "ram_limit_mb": 512, "soft_limit_exceeded": false}`
   - Metrics werden so lange gespeichert wie Logs (gleiche Retention-Policy)
+  - **I/O-Error-Handling**: Try-Except beim Schreiben, Fehler loggen
+  - Optional: Metrics in DB statt Datei wenn Disk voll ist
 - [ ] Metrics-Queue für Live-UI-Streaming (ähnlich wie Logs)
 - [ ] Metrics-Datei-Pfad in Datenbank speichern (`metrics_file` Feld)
 - [ ] Metrics-Speicherung stoppen wenn Container beendet wird
@@ -240,12 +296,23 @@ fastflow/
   - `total_runs` +1
   - Bei SUCCESS: `successful_runs` +1
   - Bei FAILED: `failed_runs` +1
+  - **Race-Condition-Prevention**: Atomare DB-Updates verwenden
+    - `UPDATE Pipeline SET total_runs = total_runs + 1 WHERE pipeline_name = ?`
+    - Verhindert verlorene Updates bei gleichzeitigen Runs
   - Statistiken in Pipeline Model aktualisieren
 
 ### 5.6 Run-Funktion
 - [ ] `run_pipeline(name, env_vars=None, parameters=None)` Funktion
+- [ ] **Pre-Heating-Lock-Mechanismus**: Lock pro Pipeline für Pre-Heating-Operationen
+  - Wenn Pre-Heating für Pipeline läuft: Start-Befehl warten oder Meldung "Warte auf Abschluss der Dependency-Installation"
+  - Verhindert Race-Conditions: Zwei Container greifen nicht gleichzeitig schreibend auf uv-Cache zu
+  - Lock wird freigegeben wenn Pre-Heating abgeschlossen ist
 - [ ] PipelineRun-Datensatz erstellen
 - [ ] Container starten und überwachen (mit Label `fastflow-run-id`)
+- [ ] **Docker-Log-Limits**: Log-Limits beim Container-Start setzen
+  - `log_config={'type': 'json-file', 'config': {'max-size': '10m', 'max-file': '3'}}`
+  - Verhindert "Silent Death" durch Amok-laufende Pipelines, die Terabytes an Log-Text produzieren
+  - Zusätzlich zur Dateispeicherung (Docker-Limits als zusätzliche Sicherheit)
 - [ ] Status-Updates (RUNNING → SUCCESS/FAILED basierend auf Exit-Code)
 - [ ] Retry-Mechanismus (konfigurierbar)
 
@@ -254,6 +321,9 @@ fastflow/
 - [ ] Beim App-Start: Scan aller laufenden Docker-Container mit Label `fastflow-run-id`
 - [ ] Abgleich mit Datenbank: Container mit Label, die in DB als `RUNNING` stehen
 - [ ] Re-attach zu laufenden Containern: Log-Stream wieder aufnehmen
+- [ ] **Zombie-Container-Cleanup**: Periodischer Cleanup-Job für orphaned Container
+  - Container ohne `fastflow-run-id` Label, die aber Pipeline-Containern ähneln
+  - Optional: Cleanup alter/beendeter Container die nicht entfernt wurden
 - [ ] Integration in FastAPI Startup-Event (in `app/main.py`)
 
 ### 5.8 Container-Health-Checks
@@ -314,6 +384,9 @@ fastflow/
 - [ ] Konflikt-Handling (Remote-Version übernehmen)
 - [ ] Branch-Auswahl-Unterstützung
 - [ ] Auto-Sync-Setup (optional, konfigurierbar)
+- [ ] **Git-Sync-Race-Condition-Prevention**: Lock für Git-Sync-Operationen
+  - Verhindert gleichzeitige Git-Syncs (können zu Inkonsistenzen führen)
+  - Pipeline-Discovery-Cache nach Sync invalidieren
 - [ ] Requirements.txt-Erkennung (Discovery)
 - [ ] **UV Pre-Heating (Warming)** - Wenn UV_PRE_HEAT=true:
   - Step 1: Git Pull (Aktualisierung des Codes)
@@ -323,6 +396,11 @@ fastflow/
     - Status-Update in DB: `last_cache_warmup` aktualisieren
     - UI-Status: "Pipeline bereit (Cached)"
   - Fehlerbehandlung: Fehlgeschlagene Pre-Heats in UI anzeigen
+- [ ] **UV-Cache-Disk-Space-Management** (Optional, für Produktion):
+  - UV-Cache kann unbegrenzt wachsen (`uv pip compile` lädt alle Pakete)
+  - Optional: Cache-Größen-Limit konfigurierbar (ENV-Variable)
+  - Optional: Cleanup-Job für alte/unbenutzte Pakete (`uv cache clean`)
+  - Dokumentation: Cache-Größe überwachen in Produktion
 - [ ] **Git-Authentifizierung: GitHub Apps**
   - Funktion `get_github_app_token()` in `app/git_sync.py`
   - JWT erstellen (mit Private Key signiert, RS256)
@@ -401,6 +479,9 @@ fastflow/
 - [ ] User-Model (optional, erstmal einfache Konfiguration)
 - [ ] Password-Hashing (passlib)
 - [ ] Session-Management (JWT oder Session-Cookies)
+  - **Session-Persistenz**: Sessions in Datenbank speichern (nicht nur in Memory)
+  - Verhindert Session-Verlust bei App-Neustart
+  - Alternative: Redis für Session-Storage (für Multi-Instance-Deployments)
 - [ ] Login-Endpoint: `POST /auth/login`
 - [ ] Logout-Endpoint: `POST /auth/logout`
 - [ ] Protected Routes (Dependency für FastAPI)
@@ -513,8 +594,11 @@ fastflow/
 
 ### 13.4 Live-Log-Viewer & Metrics-Monitoring
 - [ ] **NiceGUI ui.log Element** für optimierte Log-Anzeige
-  - `max_lines` Attribut setzen (z.B. 1000 Zeilen) - verhindert DOM-Überfüllung bei High-Frequency-Logs
+  - `max_lines` Attribut setzen (z.B. 500 Zeilen) - **KRITISCH für Browser-Memory-Leak-Prevention**
+  - Verhindert DOM-Überfüllung bei High-Frequency-Logs (z.B. 50.000 Zeilen)
+  - Verhindert Browser-Tab-Crash nach mehreren Stunden Dauerbetrieb
   - Alte Zeilen werden automatisch entfernt (Ring-Buffer-Verhalten)
+  - Vollständige Logs über Download-Button verfügbar (aus Log-Datei)
 - [ ] **Frontend-Pattern**: ui.timer (z.B. alle 0.5 Sekunden) zum Abrufen von Log-Zeilen aus asyncio.Queue
   - Alternative: ui.context.client.download für direkten Zugriff
 - [ ] Log-Anzeige für laufende Runs (Live-Streaming aus Backend-Queue)
