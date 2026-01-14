@@ -351,3 +351,72 @@ def get_cache_info() -> Dict[str, Any]:
         "pipeline_count": len(_pipeline_cache) if _pipeline_cache else 0,
         "cached": _pipeline_cache is not None
     }
+
+
+def set_pipeline_enabled(name: str, enabled: bool) -> None:
+    """
+    Aktiviert oder deaktiviert eine Pipeline durch Aktualisierung der pipeline.json.
+    
+    Aktualisiert das `enabled` Feld in pipeline.json oder {pipeline_name}.json.
+    Die Datei wird atomar geschrieben (mit temporärer Datei) um Race-Conditions zu vermeiden.
+    
+    Args:
+        name: Pipeline-Name
+        enabled: True um Pipeline zu aktivieren, False um zu deaktivieren
+    
+    Raises:
+        ValueError: Wenn Pipeline nicht gefunden wurde
+        IOError: Wenn Datei nicht geschrieben werden kann
+    """
+    # Pipeline finden
+    pipeline = get_pipeline(name)
+    if pipeline is None:
+        raise ValueError(f"Pipeline nicht gefunden: {name}")
+    
+    pipeline_dir = pipeline.path
+    
+    # Metadaten-Datei finden (pipeline.json oder {pipeline_name}.json)
+    metadata_path = pipeline_dir / "pipeline.json"
+    if not metadata_path.exists():
+        metadata_path = pipeline_dir / f"{name}.json"
+    
+    # Wenn keine Metadaten-Datei existiert, erstelle eine
+    if not metadata_path.exists():
+        # Neue pipeline.json erstellen
+        metadata_path = pipeline_dir / "pipeline.json"
+        data = {"enabled": enabled}
+    else:
+        # Bestehende Datei laden
+        try:
+            with open(metadata_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except json.JSONDecodeError as e:
+            raise IOError(f"Ungültige JSON-Datei: {metadata_path}. Fehler: {e}")
+        except Exception as e:
+            raise IOError(f"Fehler beim Lesen der Metadaten-Datei: {e}")
+    
+    # enabled-Feld aktualisieren
+    data["enabled"] = enabled
+    
+    # Atomar schreiben (mit temporärer Datei)
+    temp_path = metadata_path.with_suffix(metadata_path.suffix + ".tmp")
+    
+    try:
+        # In temporäre Datei schreiben
+        with open(temp_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        
+        # Atomar umbenennen (ersetzt Original-Datei)
+        temp_path.replace(metadata_path)
+        
+        # Cache invalidieren, damit Änderung sofort sichtbar ist
+        invalidate_cache()
+        
+    except Exception as e:
+        # Temporäre Datei aufräumen bei Fehler
+        if temp_path.exists():
+            try:
+                temp_path.unlink()
+            except Exception:
+                pass
+        raise IOError(f"Fehler beim Schreiben der Metadaten-Datei: {e}") from e

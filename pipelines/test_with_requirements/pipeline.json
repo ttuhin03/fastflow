@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "description": "Test-Pipeline mit externen Dependencies (requests) zum Testen des Pre-Heating",
+  "tags": ["test", "dependencies", "pre-heat"],
+  "timeout": 120,
+  "retry_attempts": 2,
+  "cpu_hard_limit": 2,
+  "mem_hard_limit": "1G",
+  "cpu_soft_limit": 1,
+  "mem_soft_limit": "800M",
+  "default_env": {
+    "API_URL": "https://httpbin.org/get",
+    "REQUEST_TIMEOUT": "10",
+    "LOG_LEVEL": "DEBUG"
+  }
+}

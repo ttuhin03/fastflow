@@ -593,6 +593,78 @@ def get_job(job_id: UUID, session: Optional[Session] = None) -> Optional[Schedul
             session.close()
 
 
+def get_job_details(job_id: UUID, session: Optional[Session] = None) -> Dict[str, Any]:
+    """
+    Gibt erweiterte Job-Details zurück (inkl. next_run_time, last_run_time, run_count).
+    
+    Args:
+        job_id: Job-ID
+        session: SQLModel Session (optional)
+    
+    Returns:
+        Dictionary mit Job-Details oder None wenn nicht gefunden
+    """
+    job = get_job(job_id, session)
+    if job is None:
+        return None
+    
+    details = {
+        "id": job.id,
+        "pipeline_name": job.pipeline_name,
+        "trigger_type": job.trigger_type,
+        "trigger_value": job.trigger_value,
+        "enabled": job.enabled,
+        "created_at": job.created_at.isoformat(),
+        "next_run_time": None,
+        "last_run_time": None,
+        "run_count": 0
+    }
+    
+    # APScheduler-Job-Details abrufen
+    if _scheduler is not None and _scheduler.running:
+        try:
+            scheduler_job = _scheduler.get_job(str(job_id))
+            if scheduler_job:
+                if scheduler_job.next_run_time:
+                    details["next_run_time"] = scheduler_job.next_run_time.isoformat()
+        except Exception as e:
+            logger.warning(f"Fehler beim Abrufen von Scheduler-Job-Details für {job_id}: {e}")
+    
+    # Run-Count aus Datenbank abrufen
+    if session is None:
+        session_gen = get_session()
+        session = next(session_gen)
+        close_session = True
+    else:
+        close_session = False
+    
+    try:
+        from app.models import PipelineRun
+        from sqlmodel import select, func
+        run_count_stmt = (
+            select(func.count(PipelineRun.id))
+            .where(PipelineRun.pipeline_name == job.pipeline_name)
+        )
+        run_count = session.exec(run_count_stmt).one()
+        details["run_count"] = run_count
+        
+        # Letzte Ausführung finden
+        last_run_stmt = (
+            select(PipelineRun)
+            .where(PipelineRun.pipeline_name == job.pipeline_name)
+            .order_by(PipelineRun.started_at.desc())
+            .limit(1)
+        )
+        last_run = session.exec(last_run_stmt).first()
+        if last_run:
+            details["last_run_time"] = last_run.started_at.isoformat()
+    finally:
+        if close_session:
+            session.close()
+    
+    return details
+
+
 def get_scheduler() -> Optional[BackgroundScheduler]:
     """
     Gibt die globale Scheduler-Instanz zurück.

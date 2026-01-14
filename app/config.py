@@ -66,11 +66,27 @@ class Config:
     PIPELINES_DIR: Path = Path(os.getenv("PIPELINES_DIR", "./pipelines")).resolve()
     """Verzeichnis für das Pipeline-Repository (wird als Volume gemountet)."""
     
+    PIPELINES_HOST_DIR: Optional[str] = os.getenv("PIPELINES_HOST_DIR")
+    """
+    Host-Pfad für das Pipeline-Repository (für Docker Volume-Mounts).
+    
+    Wenn nicht gesetzt, wird PIPELINES_DIR verwendet. Muss gesetzt werden,
+    wenn der Code in einem Docker-Container läuft, um den Host-Pfad zu verwenden.
+    """
+    
     LOGS_DIR: Path = Path(os.getenv("LOGS_DIR", "./logs")).resolve()
     """Verzeichnis für persistente Log-Dateien aller Pipeline-Runs."""
     
     DATA_DIR: Path = Path(os.getenv("DATA_DIR", "./data")).resolve()
     """Verzeichnis für Datenbank und persistente Daten."""
+    
+    UV_CACHE_HOST_DIR: Optional[str] = os.getenv("UV_CACHE_HOST_DIR")
+    """
+    Host-Pfad für UV-Cache (für Docker Volume-Mounts).
+    
+    Wenn nicht gesetzt, wird UV_CACHE_DIR verwendet. Muss gesetzt werden,
+    wenn der Code in einem Docker-Container läuft, um den Host-Pfad zu verwenden.
+    """
     
     # Docker & UV-Konfiguration
     WORKER_BASE_IMAGE: str = os.getenv(
@@ -134,6 +150,14 @@ class Config:
     GIT_BRANCH: str = os.getenv("GIT_BRANCH", "main")
     """Git-Branch für Sync-Operationen (Standard: main)."""
     
+    AUTO_SYNC_ENABLED: bool = os.getenv("AUTO_SYNC_ENABLED", "false").lower() == "true"
+    """
+    Aktiviert automatisches Git-Sync.
+    
+    Wenn True: Periodisches Git-Pull basierend auf AUTO_SYNC_INTERVAL.
+    Standard: false (deaktiviert).
+    """
+    
     AUTO_SYNC_INTERVAL: Optional[int] = (
         int(os.getenv("AUTO_SYNC_INTERVAL"))
         if os.getenv("AUTO_SYNC_INTERVAL")
@@ -143,7 +167,7 @@ class Config:
     Automatisches Git-Sync-Intervall in Sekunden.
     
     None = Auto-Sync deaktiviert. Wenn gesetzt: Periodisches Git-Pull
-    aus dem konfigurierten Branch.
+    aus dem konfigurierten Branch. Wird nur verwendet wenn AUTO_SYNC_ENABLED=True.
     """
     
     # Log-Management

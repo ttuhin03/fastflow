@@ -8,7 +8,7 @@ Dieses Modul enthält alle REST-API-Endpoints für Secrets-Management:
 - Secret löschen
 """
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 from pydantic import BaseModel
@@ -24,11 +24,13 @@ class SecretCreateRequest(BaseModel):
     """Request-Model für Secret-Erstellung."""
     key: str
     value: str
+    is_parameter: bool = False
 
 
 class SecretUpdateRequest(BaseModel):
     """Request-Model für Secret-Aktualisierung."""
     value: str
+    is_parameter: Optional[bool] = None
 
 
 @router.get("", response_model=List[Dict[str, Any]])
@@ -57,10 +59,15 @@ async def get_secrets(
         result = []
         for secret in secrets:
             try:
-                decrypted_value = decrypt(secret.value)
+                # Parameter werden nicht verschlüsselt, Secrets schon
+                if secret.is_parameter:
+                    decrypted_value = secret.value
+                else:
+                    decrypted_value = decrypt(secret.value)
                 result.append({
                     "key": secret.key,
                     "value": decrypted_value,
+                    "is_parameter": secret.is_parameter,
                     "created_at": secret.created_at.isoformat(),
                     "updated_at": secret.updated_at.isoformat()
                 })
@@ -109,13 +116,17 @@ async def create_secret(
                 detail=f"Secret mit Key '{request.key}' existiert bereits. Verwende PUT für Aktualisierung."
             )
         
-        # Verschlüssele Value
-        encrypted_value = encrypt(request.value)
+        # Verschlüssele Value nur wenn es kein Parameter ist
+        if request.is_parameter:
+            stored_value = request.value  # Parameter werden nicht verschlüsselt
+        else:
+            stored_value = encrypt(request.value)  # Secrets werden verschlüsselt
         
         # Secret erstellen
         secret = Secret(
             key=request.key,
-            value=encrypted_value
+            value=stored_value,
+            is_parameter=request.is_parameter
         )
         
         session.add(secret)
@@ -175,11 +186,15 @@ async def update_secret(
                 detail=f"Secret mit Key '{key}' nicht gefunden. Verwende POST für Erstellung."
             )
         
-        # Verschlüssele neuen Value
-        encrypted_value = encrypt(request.value)
+        # Verschlüssele neuen Value nur wenn es kein Parameter ist
+        if request.is_parameter is not None:
+            secret.is_parameter = request.is_parameter
         
-        # Secret aktualisieren
-        secret.value = encrypted_value
+        if secret.is_parameter:
+            secret.value = request.value  # Parameter werden nicht verschlüsselt
+        else:
+            secret.value = encrypt(request.value)  # Secrets werden verschlüsselt
+        
         secret.updated_at = datetime.utcnow()
         
         session.add(secret)

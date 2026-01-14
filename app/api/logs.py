@@ -52,12 +52,19 @@ async def get_run_logs(
             detail=f"Run nicht gefunden: {run_id}"
         )
     
+    # Pfad auflösen (falls relativ, wird relativ zu LOGS_DIR aufgelöst)
     log_file_path = Path(run.log_file)
+    if not log_file_path.is_absolute():
+        # Relativer Pfad: Auflösen relativ zu LOGS_DIR
+        log_file_path = config.LOGS_DIR / log_file_path
+    else:
+        # Absoluter Pfad: Verwende direkt
+        log_file_path = log_file_path
     
     if not log_file_path.exists():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Log-Datei nicht gefunden: {run.log_file}"
+            detail=f"Log-Datei nicht gefunden: {log_file_path} (original: {run.log_file})"
         )
     
     try:
@@ -117,6 +124,9 @@ async def stream_run_logs(
         # Queue nicht vorhanden (Run ist bereits beendet oder noch nicht gestartet)
         # Versuche Logs aus Datei zu lesen (für abgeschlossene Runs)
         log_file_path = Path(run.log_file)
+        # Pfad auflösen (falls relativ, wird relativ zu LOGS_DIR aufgelöst)
+        if not log_file_path.is_absolute():
+            log_file_path = config.LOGS_DIR / log_file_path
         if log_file_path.exists():
             try:
                 async with aiofiles.open(log_file_path, "r", encoding="utf-8") as f:

@@ -13,6 +13,158 @@
   background-color: #2a2a2a;
   padding: 1.5rem;
   border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.pipeline-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pipeline-card h3 {
+  margin: 0;
+}
+
+.status-badge {
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: bold;
+}
+
+.status-badge.enabled {
+  background-color: #4caf50;
+  color: white;
+}
+
+.status-badge.disabled {
+  background-color: #666;
+  color: white;
+}
+
+.pipeline-description {
+  font-size: 0.85rem;
+  color: #aaa;
+  margin: 0;
+}
+
+.pipeline-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.stat-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+}
+
+.stat-label {
+  color: #888;
+}
+
+.stat-value {
+  font-weight: 500;
+  color: white;
+}
+
+.stat-label.success,
+.stat-value.success {
+  color: #4caf50;
+}
+
+.stat-label.error,
+.stat-value.error {
+  color: #f44336;
+}
+
+.resource-limits {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.85rem;
+  padding: 0.5rem;
+  background-color: #1a1a1a;
+  border-radius: 4px;
+}
+
+.limit-item {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.limit-label {
+  color: #888;
+}
+
+.limit-value {
+  color: white;
+  font-weight: 500;
+}
+
+.pipeline-badges {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.badge {
+  display: inline-block;
+  background-color: #646cff;
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+}
+
+.badge.cache {
+  background-color: #4caf50;
+}
+
+.badge.tag {
+  background-color: #2196f3;
+}
+
+.pipeline-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: auto;
+}
+
+.details-button,
+.reset-button {
+  flex: 1;
+  padding: 0.5rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.details-button {
+  background-color: #646cff;
+  color: white;
+}
+
+.details-button:hover {
+  background-color: #535bf2;
+}
+
+.reset-button {
+  background-color: #ff9800;
+  color: white;
+}
+
+.reset-button:hover:not(:disabled) {
+  background-color: #f57c00;
+}
+
+.reset-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .pipeline-card h3 {

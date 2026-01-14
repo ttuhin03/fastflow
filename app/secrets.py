@@ -105,6 +105,8 @@ def get_all_secrets(session: Session) -> Dict[str, str]:
     """
     Ruft alle Secrets aus der Datenbank ab und entschlüsselt sie.
     
+    Parameter (is_parameter=True) werden nicht entschlüsselt, da sie unverschlüsselt gespeichert werden.
+    
     Args:
         session: SQLModel Session für Datenbankzugriffe
         
@@ -121,7 +123,11 @@ def get_all_secrets(session: Session) -> Dict[str, str]:
     result = {}
     for secret in secrets:
         try:
-            decrypted_value = decrypt(secret.value)
+            # Parameter werden nicht verschlüsselt, Secrets schon
+            if secret.is_parameter:
+                decrypted_value = secret.value  # Parameter sind bereits unverschlüsselt
+            else:
+                decrypted_value = decrypt(secret.value)  # Secrets müssen entschlüsselt werden
             result[secret.key] = decrypted_value
         except ValueError as e:
             logger.error(f"Fehler beim Entschlüsseln von Secret '{secret.key}': {e}")

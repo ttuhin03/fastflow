@@ -12,8 +12,10 @@ import asyncio
 import subprocess
 import logging
 import time
+import json
+import aiofiles
 from pathlib import Path
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple, List
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor
 
@@ -35,6 +37,78 @@ _sync_lock = asyncio.Lock()
 
 # GitHub App Token Cache (Token ist 1 Stunde gültig)
 _github_token_cache: Optional[Tuple[str, datetime]] = None
+
+
+def _get_sync_log_file() -> Path:
+    """
+    Gibt den Pfad zur Sync-Log-Datei zurück.
+    
+    Returns:
+        Path: Pfad zur Sync-Log-Datei
+    """
+    return config.LOGS_DIR / "sync.log"
+
+
+async def _write_sync_log(entry: Dict[str, Any]) -> None:
+    """
+    Schreibt einen Sync-Log-Eintrag in die Log-Datei (JSONL-Format).
+    
+    Args:
+        entry: Dictionary mit Log-Eintrag-Daten
+    """
+    log_file = _get_sync_log_file()
+    
+    # Stelle sicher, dass Logs-Verzeichnis existiert
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Timestamp hinzufügen
+    entry["timestamp"] = datetime.utcnow().isoformat()
+    
+    # JSON-Zeile in Datei schreiben (JSONL-Format)
+    try:
+        async with aiofiles.open(log_file, "a", encoding="utf-8") as f:
+            await f.write(json.dumps(entry) + "\n")
+    except Exception as e:
+        logger.error(f"Fehler beim Schreiben von Sync-Log: {e}")
+
+
+async def get_sync_logs(limit: int = 100) -> List[Dict[str, Any]]:
+    """
+    Liest Sync-Logs aus der Log-Datei.
+    
+    Args:
+        limit: Maximale Anzahl Log-Einträge (Standard: 100)
+    
+    Returns:
+        Liste von Log-Einträgen (neueste zuerst)
+    """
+    log_file = _get_sync_log_file()
+    
+    if not log_file.exists():
+        return []
+    
+    try:
+        logs = []
+        async with aiofiles.open(log_file, "r", encoding="utf-8") as f:
+            async for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        entry = json.loads(line)
+                        logs.append(entry)
+                    except json.JSONDecodeError:
+                        # Ungültige JSON-Zeile ignorieren
+                        continue
+        
+        # Neueste zuerst (reverse)
+        logs.reverse()
+        
+        # Limit anwenden
+        return logs[:limit]
+        
+    except Exception as e:
+        logger.error(f"Fehler beim Lesen von Sync-Logs: {e}")
+        return []
 
 
 def get_github_app_token() -> Optional[str]:
@@ -310,12 +384,25 @@ async def sync_pipelines(
         # Git-Sync-Lock (verhindert gleichzeitige Syncs)
         async with _sync_lock:
             pipelines_dir = config.PIPELINES_DIR
+            sync_start_time = datetime.utcnow()
             
             # Step 1: Git Pull
             logger.info(f"Starte Git Pull für Branch: {branch}")
+            await _write_sync_log({
+                "event": "sync_started",
+                "branch": branch,
+                "status": "started"
+            })
+            
             success, message = await _git_pull(branch, pipelines_dir)
             
             if not success:
+                await _write_sync_log({
+                    "event": "sync_failed",
+                    "branch": branch,
+                    "status": "failed",
+                    "error": message
+                })
                 raise RuntimeError(f"Git Pull fehlgeschlagen: {message}")
             
             logger.info(f"Git Pull erfolgreich: {message}")
@@ -354,6 +441,19 @@ async def sync_pipelines(
                             else:
                                 logger.warning(f"Pre-Heating fehlgeschlagen für {pipeline.name}: {pre_message}")
             
+            sync_end_time = datetime.utcnow()
+            sync_duration = (sync_end_time - sync_start_time).total_seconds()
+            
+            # Sync-Log schreiben
+            await _write_sync_log({
+                "event": "sync_completed",
+                "branch": branch,
+                "status": "success",
+                "duration_seconds": sync_duration,
+                "pipelines_cached": list(pre_heat_results.keys()),
+                "pre_heat_results": pre_heat_results
+            })
+            
             return {
                 "success": True,
                 "message": "Git-Sync erfolgreich abgeschlossen",
@@ -366,6 +466,18 @@ async def sync_pipelines(
     except Exception as e:
         error_msg = f"Fehler beim Git-Sync: {e}"
         logger.error(error_msg, exc_info=True)
+        
+        # Sync-Log für Fehler schreiben
+        try:
+            await _write_sync_log({
+                "event": "sync_failed",
+                "branch": branch,
+                "status": "failed",
+                "error": error_msg
+            })
+        except Exception:
+            pass  # Log-Fehler nicht weiterwerfen
+        
         return {
             "success": False,
             "message": error_msg,

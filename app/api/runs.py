@@ -9,12 +9,13 @@ Dieses Modul enthält alle REST-API-Endpoints für Run-Management:
 
 from typing import List, Optional, Dict, Any
 from uuid import UUID
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlmodel import Session, select
 
 from app.database import get_session
 from app.models import PipelineRun, RunStatus
-from app.executor import cancel_run
+from app.executor import cancel_run, check_container_health
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
@@ -23,6 +24,8 @@ router = APIRouter(prefix="/runs", tags=["runs"])
 async def get_runs(
     pipeline_name: Optional[str] = Query(None, description="Filter nach Pipeline-Name"),
     status_filter: Optional[RunStatus] = Query(None, description="Filter nach Status"),
+    start_date: Optional[str] = Query(None, description="Startdatum für Filterung (ISO-Format: YYYY-MM-DD oder YYYY-MM-DDTHH:MM:SS)"),
+    end_date: Optional[str] = Query(None, description="Enddatum für Filterung (ISO-Format: YYYY-MM-DD oder YYYY-MM-DDTHH:MM:SS)"),
     limit: int = Query(100, ge=1, le=1000, description="Maximale Anzahl Runs"),
     session: Session = Depends(get_session)
 ) -> List[Dict[str, Any]]:
@@ -32,6 +35,8 @@ async def get_runs(
     Args:
         pipeline_name: Optionaler Filter nach Pipeline-Name
         status_filter: Optionaler Filter nach Status (PENDING, RUNNING, SUCCESS, FAILED, etc.)
+        start_date: Optionales Startdatum für Filterung (ISO-Format)
+        end_date: Optionales Enddatum für Filterung (ISO-Format)
         limit: Maximale Anzahl Runs (Standard: 100, Max: 1000)
         session: SQLModel Session
         
@@ -47,6 +52,27 @@ async def get_runs(
     
     if status_filter:
         stmt = stmt.where(PipelineRun.status == status_filter)
+    
+    # Zeitraum-Filterung
+    if start_date:
+        try:
+            start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+            stmt = stmt.where(PipelineRun.started_at >= start_dt)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Ungültiges Startdatum-Format: {start_date}. Erwartet: ISO-Format (YYYY-MM-DD oder YYYY-MM-DDTHH:MM:SS)"
+            )
+    
+    if end_date:
+        try:
+            end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            stmt = stmt.where(PipelineRun.started_at <= end_dt)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Ungültiges Enddatum-Format: {end_date}. Erwartet: ISO-Format (YYYY-MM-DD oder YYYY-MM-DDTHH:MM:SS)"
+            )
     
     # Sortierung und Limit
     stmt = stmt.order_by(PipelineRun.started_at.desc()).limit(limit)
@@ -160,4 +186,41 @@ async def cancel_run_endpoint(
     
     return {
         "message": f"Run {run_id} wurde erfolgreich abgebrochen"
+    }
+
+
+@router.get("/{run_id}/health", response_model=Dict[str, Any])
+async def get_run_health(
+    run_id: UUID,
+    session: Session = Depends(get_session)
+) -> Dict[str, Any]:
+    """
+    Gibt Container-Health-Status für einen Run zurück.
+    
+    Args:
+        run_id: Run-ID (UUID)
+        session: SQLModel Session
+        
+    Returns:
+        Dictionary mit Health-Status-Informationen
+        
+    Raises:
+        HTTPException: Wenn Run nicht gefunden wurde
+    """
+    # Run aus DB abrufen
+    run = session.get(PipelineRun, run_id)
+    
+    if run is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Run nicht gefunden: {run_id}"
+        )
+    
+    # Health-Check durchführen
+    health_info = await check_container_health(run_id, session)
+    
+    return {
+        "run_id": str(run_id),
+        "status": run.status.value,
+        **health_info
     }

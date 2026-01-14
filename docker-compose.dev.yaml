@@ -27,6 +27,11 @@ services:
       - LOGS_DIR=/app/logs
       - DATA_DIR=/app/data
       - UV_CACHE_DIR=/app/data/uv_cache
+      # Host-Pfade für Docker Volume-Mounts (wichtig für Worker-Container)
+      # Diese werden automatisch aus den Container-Volumes extrahiert
+      # Falls manuell gesetzt werden soll, verwende absolute Pfade
+      # - PIPELINES_HOST_DIR=/absoluter/host/pfad/pipelines
+      # - UV_CACHE_HOST_DIR=/absoluter/host/pfad/data/uv_cache
     
     ports:
       - "${PORT:-8000}:8000"

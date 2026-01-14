@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Pipelines from './pages/Pipelines'
+import PipelineDetail from './pages/PipelineDetail'
 import Runs from './pages/Runs'
 import RunDetail from './pages/RunDetail'
 import Scheduler from './pages/Scheduler'
@@ -49,6 +50,7 @@ function AppRoutes() {
       >
         <Route index element={<Dashboard />} />
         <Route path="pipelines" element={<Pipelines />} />
+        <Route path="pipelines/:name" element={<PipelineDetail />} />
         <Route path="runs" element={<Runs />} />
         <Route path="runs/:runId" element={<RunDetail />} />
         <Route path="scheduler" element={<Scheduler />} />

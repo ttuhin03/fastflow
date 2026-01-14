@@ -166,6 +166,7 @@ class Secret(SQLModel, table=True):
     
     Speichert verschlüsselte Secrets in der Datenbank.
     Secrets werden mit Fernet verschlüsselt gespeichert.
+    Parameter (is_parameter=True) werden nicht verschlüsselt gespeichert.
     """
     __tablename__ = "secrets"
     
@@ -180,7 +181,11 @@ class Secret(SQLModel, table=True):
         description="Secret-Key (eindeutig)"
     )
     value: str = Field(
-        description="Verschlüsselter Secret-Wert"
+        description="Verschlüsselter Secret-Wert (oder unverschlüsselt wenn is_parameter=True)"
+    )
+    is_parameter: bool = Field(
+        default=False,
+        description="True wenn Parameter (nicht verschlüsselt), False wenn Secret (verschlüsselt)"
     )
     created_at: datetime = Field(
         default_factory=datetime.utcnow,

@@ -17,7 +17,7 @@ from pydantic import BaseModel
 from app.database import get_session
 from app.models import Pipeline, PipelineRun, RunStatus
 from app.executor import run_pipeline
-from app.pipeline_discovery import discover_pipelines, get_pipeline as get_discovered_pipeline
+from app.pipeline_discovery import discover_pipelines, get_pipeline as get_discovered_pipeline, set_pipeline_enabled
 
 router = APIRouter(prefix="/pipelines", tags=["pipelines"])
 
@@ -315,3 +315,64 @@ async def reset_pipeline_stats(
     return {
         "message": f"Statistiken für Pipeline '{name}' wurden zurückgesetzt"
     }
+
+
+class PipelineEnabledRequest(BaseModel):
+    """Request-Model für Pipeline Enable/Disable."""
+    enabled: bool
+
+
+@router.put("/{name}/enabled", response_model=Dict[str, Any])
+async def set_pipeline_enabled_endpoint(
+    name: str,
+    request: PipelineEnabledRequest,
+    session: Session = Depends(get_session)
+) -> Dict[str, Any]:
+    """
+    Aktiviert oder deaktiviert eine Pipeline.
+    
+    Aktualisiert das `enabled` Feld in pipeline.json oder {pipeline_name}.json.
+    
+    Args:
+        name: Name der Pipeline
+        request: Request-Body mit enabled (bool)
+        session: SQLModel Session
+        
+    Returns:
+        Bestätigungs-Message
+        
+    Raises:
+        HTTPException: Wenn Pipeline nicht existiert oder Datei nicht geschrieben werden kann
+    """
+    # Prüfe ob Pipeline existiert
+    discovered = get_discovered_pipeline(name)
+    if discovered is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Pipeline nicht gefunden: {name}"
+        )
+    
+    try:
+        # Pipeline enabled/disabled setzen
+        set_pipeline_enabled(name, request.enabled)
+        
+        return {
+            "message": f"Pipeline '{name}' wurde {'aktiviert' if request.enabled else 'deaktiviert'}",
+            "pipeline_name": name,
+            "enabled": request.enabled
+        }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except IOError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Fehler beim Aktualisieren der Pipeline-Metadaten: {str(e)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unerwarteter Fehler: {str(e)}"
+        )

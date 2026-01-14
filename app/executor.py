@@ -11,6 +11,7 @@ Dieses Modul verwaltet die Ausführung von Pipeline-Containers:
 import asyncio
 import json
 import logging
+import os
 import time
 from datetime import datetime
 from pathlib import Path
@@ -128,6 +129,63 @@ def _get_docker_client() -> docker.DockerClient:
     if _docker_client is None:
         raise RuntimeError("Docker-Client nicht initialisiert. Rufe init_docker_client() auf.")
     return _docker_client
+
+
+def _get_host_path_for_volume(
+    client: docker.DockerClient,
+    container_path: str,
+    host_path_env: Optional[str]
+) -> str:
+    """
+    Ermittelt den Host-Pfad für ein gemountetes Volume.
+    
+    Versucht zuerst, den Host-Pfad aus den Container-Volumes zu extrahieren (zuverlässigste Methode).
+    Falls das nicht möglich ist, wird der host_path_env verwendet oder container_path als Fallback.
+    
+    Args:
+        client: Docker-Client
+        container_path: Container-interner Pfad (z.B. /app/pipelines)
+        host_path_env: Host-Pfad aus Environment-Variable (optional)
+    
+    Returns:
+        Absoluter Host-Pfad für Volume-Mounts
+    """
+    # Versuche zuerst, Host-Pfad aus Container-Volumes zu extrahieren (zuverlässigste Methode)
+    try:
+        # Container-Name aus Environment-Variable (falls gesetzt)
+        container_name = os.getenv("HOSTNAME", "fastflow-orchestrator")
+        
+        # Versuche, Container zu finden
+        try:
+            container = client.containers.get(container_name)
+            # Container-Volumes inspizieren
+            mounts = container.attrs.get("Mounts", [])
+            for mount in mounts:
+                destination = mount.get("Destination")
+                # Prüfe ob der Container-Pfad übereinstimmt
+                if destination == container_path or container_path.startswith(destination + "/"):
+                    source = mount.get("Source")
+                    if source and os.path.isabs(source):
+                        logger.debug(f"Host-Pfad für {container_path} aus Volume extrahiert: {source}")
+                        return source
+        except docker.errors.NotFound:
+            # Container nicht gefunden, verwende Fallback
+            pass
+    except Exception as e:
+        logger.debug(f"Fehler beim Extrahieren des Host-Pfads für {container_path}: {e}")
+    
+    # Fallback 1: Wenn host_path_env gesetzt ist und absolut ist, verwende es
+    if host_path_env and os.path.isabs(host_path_env):
+        logger.debug(f"Verwende absoluten Host-Pfad aus Environment: {host_path_env}")
+        return host_path_env
+    
+    # Fallback 2: Für lokale Entwicklung außerhalb von Docker
+    logger.warning(
+        f"Konnte Host-Pfad für {container_path} nicht ermitteln. "
+        f"Verwende container_path als Fallback. "
+        f"Dies funktioniert nur für lokale Entwicklung außerhalb von Docker."
+    )
+    return str(Path(container_path).resolve())
 
 
 def _convert_memory_to_bytes(memory_str: str) -> int:
@@ -314,6 +372,9 @@ async def _run_container_task(
         # Log-Datei-Pfad aus Run-Objekt verwenden
         log_file_path = Path(run.log_file)
         log_file_path.parent.mkdir(parents=True, exist_ok=True)
+        # Leere Log-Datei erstellen, damit der Endpoint sie finden kann
+        if not log_file_path.exists():
+            log_file_path.touch()
         
         # Metrics-Datei-Pfad erstellen
         metrics_file_path = Path(config.LOGS_DIR / f"{run_id}_metrics.jsonl")
@@ -334,13 +395,23 @@ async def _run_container_task(
         mem_hard_limit = pipeline.metadata.mem_hard_limit
         
         # Container-Konfiguration
+        # Host-Pfade für Volume-Mounts verwenden (falls in Docker-Container)
+        # WICHTIG: Host-Pfade müssen absolut sein und vom Host-System stammen, nicht vom Container
+        # Versuche, Host-Pfade aus den gemounteten Volumes zu extrahieren
+        pipelines_host_path = _get_host_path_for_volume(
+            client, str(config.PIPELINES_DIR), config.PIPELINES_HOST_DIR
+        )
+        uv_cache_host_path = _get_host_path_for_volume(
+            client, str(config.UV_CACHE_DIR), config.UV_CACHE_HOST_DIR
+        )
+        
         container_config = {
             "image": config.WORKER_BASE_IMAGE,
             "command": _build_container_command(pipeline),
             "environment": env_vars,
             "volumes": {
-                str(config.PIPELINES_DIR): {"bind": "/app", "mode": "ro"},
-                str(config.UV_CACHE_DIR): {"bind": "/root/.cache/uv", "mode": "rw"}
+                pipelines_host_path: {"bind": "/app", "mode": "ro"},
+                uv_cache_host_path: {"bind": "/root/.cache/uv", "mode": "rw"}
             },
             "labels": {
                 "fastflow-run-id": str(run_id),
@@ -382,7 +453,22 @@ async def _run_container_task(
         session.add(run)
         session.commit()
         
-        # UV-Version erfassen (aus Container)
+        # WICHTIG: Log-Streaming SOFORT starten, damit keine Logs verloren gehen
+        # Laut IMPLEMENTATION_PLAN sollen Logs während des gesamten Container-Laufs gestreamt werden
+        log_task = asyncio.create_task(
+            _stream_logs(container, log_file_path, log_queue, run_id)
+        )
+        metrics_task = asyncio.create_task(
+            _monitor_metrics(
+                container,
+                metrics_file_path,
+                metrics_queue,
+                pipeline,
+                run_id
+            )
+        )
+        
+        # UV-Version erfassen (aus Container) - parallel zu Log-Streaming
         uv_version = await _get_uv_version(container)
         run.uv_version = uv_version
         session.add(run)
@@ -400,20 +486,6 @@ async def _run_container_task(
         
         # Pipeline-spezifisches Timeout bestimmen
         timeout = pipeline.get_timeout() or config.CONTAINER_TIMEOUT
-        
-        # Log-Streaming und Metrics-Monitoring starten
-        log_task = asyncio.create_task(
-            _stream_logs(container, log_file_path, log_queue, run_id)
-        )
-        metrics_task = asyncio.create_task(
-            _monitor_metrics(
-                container,
-                metrics_file_path,
-                metrics_queue,
-                pipeline,
-                run_id
-            )
-        )
         
         # Container-Wait mit Timeout
         if timeout:
@@ -437,9 +509,70 @@ async def _run_container_task(
                 container.wait
             )
         
-        # Tasks beenden
+        # Warte kurz, damit alle Logs geschrieben werden können
+        await asyncio.sleep(0.5)
+        
+        # Tasks beenden (gracefully)
         log_task.cancel()
+        try:
+            await asyncio.wait_for(log_task, timeout=2.0)
+        except (asyncio.TimeoutError, asyncio.CancelledError):
+            pass
+        
+        # Versuche, verbleibende Logs aus Container zu lesen (falls Stream nicht alle geliefert hat)
+        try:
+            import aiofiles
+            remaining_logs_bytes = await asyncio.get_event_loop().run_in_executor(
+                _executor,
+                lambda: container.logs(stdout=True, stderr=True, tail=1000)
+            )
+            if remaining_logs_bytes:
+                # Prüfe ob Log-Datei bereits Logs enthält
+                log_file_size = log_file_path.stat().st_size if log_file_path.exists() else 0
+                
+                # Dekodiere Logs
+                remaining_logs = remaining_logs_bytes.decode("utf-8", errors="replace")
+                
+                # Verarbeite JSON-Log-Format (falls verwendet)
+                log_lines = []
+                for line in remaining_logs.split("\n"):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    # Docker JSON-Log-Format verarbeiten
+                    if line.startswith("{"):
+                        try:
+                            log_json = json.loads(line)
+                            log_lines.append(log_json.get("log", line).rstrip())
+                        except (json.JSONDecodeError, AttributeError):
+                            log_lines.append(line)
+                    else:
+                        log_lines.append(line)
+                
+                # Nur hinzufügen wenn Log-Datei leer oder klein ist
+                if log_file_size < 100:  # Datei ist leer oder fast leer
+                    async with aiofiles.open(log_file_path, "w", encoding="utf-8") as f:
+                        await f.write("\n".join(log_lines))
+                        await f.flush()
+                else:
+                    # Datei hat bereits Inhalte, prüfe ob neue Logs hinzugefügt werden müssen
+                    async with aiofiles.open(log_file_path, "r", encoding="utf-8") as f:
+                        existing_content = await f.read()
+                    
+                    # Füge nur neue Logs hinzu
+                    new_logs_text = "\n".join(log_lines)
+                    if new_logs_text and new_logs_text not in existing_content:
+                        async with aiofiles.open(log_file_path, "a", encoding="utf-8") as f:
+                            await f.write("\n" + new_logs_text)
+                            await f.flush()
+        except Exception as e:
+            logger.debug(f"Fehler beim Lesen verbleibender Logs für Run {run_id}: {e}")
+        
         metrics_task.cancel()
+        try:
+            await asyncio.wait_for(metrics_task, timeout=1.0)
+        except (asyncio.TimeoutError, asyncio.CancelledError):
+            pass
         
         # Exit-Code extrahieren
         exit_code_value = exit_code.get("StatusCode", -1) if isinstance(exit_code, dict) else exit_code
@@ -582,16 +715,22 @@ async def _stream_logs(
     import aiofiles
     
     try:
+        logger.info(f"Starte Log-Streaming für Run {run_id}, Container: {container.id}")
+        
         # Log-Stream aus Container abrufen
         log_stream = await asyncio.get_event_loop().run_in_executor(
             _executor,
             lambda: container.logs(stream=True, follow=True, stdout=True, stderr=True)
         )
         
-        # Datei-Handle öffnen (asynchron)
-        async with aiofiles.open(log_file_path, "w", encoding="utf-8") as log_file:
+        logger.debug(f"Log-Stream für Run {run_id} erstellt")
+        
+        # Datei-Handle öffnen (asynchron, append-Modus falls Datei bereits existiert)
+        # Verwende "a" (append) statt "w" (write), damit vorhandene Inhalte nicht überschrieben werden
+        async with aiofiles.open(log_file_path, "a", encoding="utf-8") as log_file:
             line_count = 0
             last_size_check = time.time()
+            first_log_received = False
             
             async for log_chunk in _iter_log_stream(log_stream):
                 # Log-Zeile dekodieren
@@ -600,20 +739,40 @@ async def _stream_logs(
                 except UnicodeDecodeError:
                     log_line = log_chunk.decode("utf-8", errors="replace").rstrip()
                 
-                # In Datei schreiben (asynchron)
-                await log_file.write(log_line + "\n")
-                await log_file.flush()
-                
-                # In Queue für SSE-Streaming (rate-limited)
-                try:
-                    log_queue.put_nowait(log_line)
-                except asyncio.QueueFull:
-                    # Queue voll, alte Einträge entfernen (Ring-Buffer-Verhalten)
+                # Docker JSON-Log-Format verarbeiten (falls verwendet)
+                # Docker kann Logs im JSON-Format ausgeben: {"log":"...","stream":"stdout","time":"..."}
+                if log_line.startswith("{"):
                     try:
-                        log_queue.get_nowait()
-                        log_queue.put_nowait(log_line)
-                    except asyncio.QueueEmpty:
+                        log_json = json.loads(log_line)
+                        log_line = log_json.get("log", log_line).rstrip()
+                    except (json.JSONDecodeError, AttributeError):
+                        # Kein JSON, verwende direkt
                         pass
+                
+                # Nur schreiben wenn Zeile nicht leer ist
+                if log_line:
+                    if not first_log_received:
+                        logger.info(f"Erste Log-Zeile für Run {run_id} empfangen: {log_line[:100]}")
+                        first_log_received = True
+                    
+                    # Zeitstempel hinzufügen (Format: YYYY-MM-DD HH:MM:SS.mmm)
+                    timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+                    log_line_with_timestamp = f"[{timestamp}] {log_line}"
+                    
+                    # In Datei schreiben (asynchron)
+                    await log_file.write(log_line_with_timestamp + "\n")
+                    await log_file.flush()
+                    
+                    # In Queue für SSE-Streaming (mit Zeitstempel)
+                    try:
+                        log_queue.put_nowait(log_line_with_timestamp)
+                    except asyncio.QueueFull:
+                        # Queue voll, alte Einträge entfernen (Ring-Buffer-Verhalten)
+                        try:
+                            log_queue.get_nowait()
+                            log_queue.put_nowait(log_line_with_timestamp)
+                        except asyncio.QueueEmpty:
+                            pass
                 
                 line_count += 1
                 
@@ -633,6 +792,7 @@ async def _stream_logs(
         
     except asyncio.CancelledError:
         # Task wurde abgebrochen (normal bei Container-Ende)
+        logger.debug(f"Log-Streaming für Run {run_id} wurde abgebrochen (Container beendet)")
         pass
     except Exception as e:
         logger.error(f"Fehler beim Log-Streaming für Run {run_id}: {e}", exc_info=True)

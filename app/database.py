@@ -67,6 +67,46 @@ def wal_checkpoint() -> None:
         logger.warning(f"Fehler beim WAL-Checkpoint: {e}")
 
 
+def _ensure_secret_is_parameter_column() -> None:
+    """
+    Stellt sicher, dass die is_parameter Spalte in der secrets Tabelle existiert.
+    
+    Fügt die Spalte hinzu, falls sie fehlt (für bestehende Datenbanken ohne Migration).
+    """
+    try:
+        with Session(engine) as session:
+            # Prüfe ob Spalte existiert (SQLite-spezifisch)
+            if database_url.startswith("sqlite"):
+                result = session.execute(text(
+                    "SELECT COUNT(*) FROM pragma_table_info('secrets') WHERE name='is_parameter'"
+                ))
+                count = result.scalar()
+                if count == 0:
+                    # Spalte hinzufügen
+                    session.execute(text(
+                        "ALTER TABLE secrets ADD COLUMN is_parameter BOOLEAN NOT NULL DEFAULT 0"
+                    ))
+                    session.commit()
+                    logger.info("Spalte 'is_parameter' zur secrets-Tabelle hinzugefügt")
+            else:
+                # PostgreSQL: Prüfe ob Spalte existiert
+                result = session.execute(text(
+                    "SELECT COUNT(*) FROM information_schema.columns "
+                    "WHERE table_name='secrets' AND column_name='is_parameter'"
+                ))
+                count = result.scalar()
+                if count == 0:
+                    # Spalte hinzufügen
+                    session.execute(text(
+                        "ALTER TABLE secrets ADD COLUMN is_parameter BOOLEAN NOT NULL DEFAULT FALSE"
+                    ))
+                    session.commit()
+                    logger.info("Spalte 'is_parameter' zur secrets-Tabelle hinzugefügt")
+    except Exception as e:
+        logger.warning(f"Fehler beim Hinzufügen der is_parameter-Spalte: {e}")
+        # Nicht kritisch, Migration kann später ausgeführt werden
+
+
 def init_db() -> None:
     """
     Initialisiert die Datenbank und erstellt alle Tabellen.
@@ -82,6 +122,9 @@ def init_db() -> None:
             session.execute(text("PRAGMA journal_mode=WAL"))
             session.commit()
         logger.info("SQLite WAL-Mode aktiviert")
+    
+    # Stelle sicher, dass is_parameter-Spalte existiert (für bestehende DBs)
+    _ensure_secret_is_parameter_column()
 
 
 def get_session() -> Generator[Session, None, None]:
