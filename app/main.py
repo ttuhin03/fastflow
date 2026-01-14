@@ -164,7 +164,17 @@ async def health_check() -> JSONResponse:
     )
 
 
-# TODO: Weitere Endpoints in Phase 6
+# API-Router registrieren (Phase 6)
+from app.api import pipelines, runs, logs, metrics, sync
+
+app.include_router(pipelines.router)
+app.include_router(runs.router)
+app.include_router(logs.router)
+app.include_router(metrics.router)
+app.include_router(sync.router)
+
+# TODO: Scheduler-Endpoints in Phase 8
+# TODO: Auth-Endpoints in Phase 9
 # TODO: NiceGUI Integration in Phase 13
 
 if __name__ == "__main__":

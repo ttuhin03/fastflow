@@ -8,4 +8,463 @@ Dieses Modul verwaltet die Git-Synchronisation des Pipeline-Repositories:
 - GitHub Apps Authentifizierung
 """
 
-# TODO: Implementierung in Phase 6.6
+import asyncio
+import subprocess
+import logging
+import time
+from pathlib import Path
+from typing import Dict, Any, Optional, Tuple
+from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor
+
+import jwt
+import requests
+from sqlmodel import Session
+
+from app.config import config
+from app.models import Pipeline
+from app.pipeline_discovery import discover_pipelines, invalidate_cache, get_pipeline
+
+logger = logging.getLogger(__name__)
+
+# Thread Pool für synchrone Git-Operationen
+_executor = ThreadPoolExecutor(max_workers=2)
+
+# Git-Sync-Lock (verhindert gleichzeitige Syncs)
+_sync_lock = asyncio.Lock()
+
+# GitHub App Token Cache (Token ist 1 Stunde gültig)
+_github_token_cache: Optional[Tuple[str, datetime]] = None
+
+
+def get_github_app_token() -> Optional[str]:
+    """
+    Generiert ein GitHub Installation Access Token via GitHub Apps API.
+    
+    Verwendet JWT (RS256) mit Private Key für Authentifizierung.
+    Token wird gecacht (1 Stunde Gültigkeit) um Rate-Limit-Throttling zu vermeiden.
+    
+    Returns:
+        Installation Access Token oder None wenn Konfiguration fehlt
+        
+    Raises:
+        RuntimeError: Wenn Token-Generierung fehlschlägt
+    """
+    global _github_token_cache
+    
+    # Prüfe ob GitHub Apps konfiguriert ist
+    if not config.GITHUB_APP_ID or not config.GITHUB_INSTALLATION_ID or not config.GITHUB_PRIVATE_KEY_PATH:
+        return None
+    
+    # Prüfe Cache (Token ist 1 Stunde gültig, erneuere 5 Minuten vor Ablauf)
+    if _github_token_cache is not None:
+        token, expires_at = _github_token_cache
+        if datetime.utcnow() < expires_at - timedelta(minutes=5):
+            return token
+    
+    try:
+        # Private Key laden
+        private_key_path = Path(config.GITHUB_PRIVATE_KEY_PATH)
+        if not private_key_path.exists():
+            raise RuntimeError(f"GitHub Private Key nicht gefunden: {private_key_path}")
+        
+        with open(private_key_path, "r") as f:
+            private_key = f.read()
+        
+        # JWT erstellen (RS256, 10 Minuten Gültigkeit)
+        now = int(time.time())
+        jwt_payload = {
+            "iat": now - 60,  # 1 Minute Puffer
+            "exp": now + (10 * 60),  # 10 Minuten Gültigkeit
+            "iss": config.GITHUB_APP_ID
+        }
+        
+        jwt_token = jwt.encode(jwt_payload, private_key, algorithm="RS256")
+        
+        # Installation Access Token anfordern
+        url = f"https://api.github.com/app/installations/{config.GITHUB_INSTALLATION_ID}/access_tokens"
+        headers = {
+            "Authorization": f"Bearer {jwt_token}",
+            "Accept": "application/vnd.github.v3+json"
+        }
+        
+        response = requests.post(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        data = response.json()
+        installation_token = data["token"]
+        expires_at_str = data.get("expires_at")
+        
+        # Expires-At parsen (ISO-Format)
+        if expires_at_str:
+            expires_at = datetime.fromisoformat(expires_at_str.replace("Z", "+00:00"))
+        else:
+            # Standard: 1 Stunde (GitHub Standard)
+            expires_at = datetime.utcnow() + timedelta(hours=1)
+        
+        # Cache aktualisieren
+        _github_token_cache = (installation_token, expires_at)
+        
+        logger.info("GitHub Installation Access Token erfolgreich generiert")
+        return installation_token
+        
+    except Exception as e:
+        error_msg = f"Fehler bei GitHub App Token-Generierung: {e}"
+        logger.error(error_msg)
+        raise RuntimeError(error_msg) from e
+
+
+def _run_git_command(cmd: list, cwd: Path, env: Optional[Dict[str, str]] = None) -> Tuple[int, str, str]:
+    """
+    Führt einen Git-Befehl aus (synchron).
+    
+    Args:
+        cmd: Git-Befehl als Liste (z.B. ["git", "pull", "origin", "main"])
+        cwd: Arbeitsverzeichnis
+        env: Optional Environment-Variablen (für GitHub Token)
+        
+    Returns:
+        Tuple (exit_code, stdout, stderr)
+    """
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=cwd,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=300  # 5 Minuten Timeout
+        )
+        return (result.returncode, result.stdout, result.stderr)
+    except subprocess.TimeoutExpired:
+        logger.error(f"Git-Befehl Timeout: {' '.join(cmd)}")
+        return (-1, "", "Timeout: Git-Befehl dauerte länger als 5 Minuten")
+    except Exception as e:
+        logger.error(f"Fehler beim Ausführen von Git-Befehl: {e}")
+        return (-1, "", str(e))
+
+
+async def _git_pull(branch: str, pipelines_dir: Path) -> Tuple[bool, str]:
+    """
+    Führt Git Pull aus (mit GitHub Apps Authentifizierung falls konfiguriert).
+    
+    Args:
+        branch: Git-Branch (z.B. "main")
+        pipelines_dir: Pfad zum Pipelines-Verzeichnis
+        
+    Returns:
+        Tuple (success, message)
+    """
+    # Prüfe ob Verzeichnis ein Git-Repository ist
+    git_dir = pipelines_dir / ".git"
+    if not git_dir.exists():
+        return (False, "Pipelines-Verzeichnis ist kein Git-Repository")
+    
+    # GitHub Token abrufen (falls konfiguriert)
+    github_token = get_github_app_token()
+    
+    # Environment-Variablen für Git-Befehle
+    env = None
+    if github_token:
+        # Remote-URL mit Token aktualisieren
+        remote_url_cmd = ["git", "config", "remote.origin.url"]
+        exit_code, stdout, stderr = _run_git_command(remote_url_cmd, pipelines_dir)
+        
+        if exit_code == 0:
+            remote_url = stdout.strip()
+            # Prüfe ob URL bereits Token enthält
+            if "x-access-token" not in remote_url:
+                # URL mit Token aktualisieren
+                if remote_url.startswith("https://"):
+                    # GitHub URL: https://github.com/owner/repo.git
+                    # Konvertiere zu: https://x-access-token:TOKEN@github.com/owner/repo.git
+                    parts = remote_url.split("://")
+                    if len(parts) == 2:
+                        new_url = f"https://x-access-token:{github_token}@{parts[1]}"
+                        set_url_cmd = ["git", "config", "remote.origin.url", new_url]
+                        _run_git_command(set_url_cmd, pipelines_dir)
+    
+    # Git Fetch
+    fetch_cmd = ["git", "fetch", "origin", branch]
+    exit_code, stdout, stderr = await asyncio.get_event_loop().run_in_executor(
+        _executor,
+        lambda: _run_git_command(fetch_cmd, pipelines_dir, env)
+    )
+    
+    if exit_code != 0:
+        return (False, f"Git Fetch fehlgeschlagen: {stderr}")
+    
+    # Git Reset --hard (Remote-Version übernehmen, Konflikte lösen)
+    reset_cmd = ["git", "reset", "--hard", f"origin/{branch}"]
+    exit_code, stdout, stderr = await asyncio.get_event_loop().run_in_executor(
+        _executor,
+        lambda: _run_git_command(reset_cmd, pipelines_dir, env)
+    )
+    
+    if exit_code != 0:
+        return (False, f"Git Reset fehlgeschlagen: {stderr}")
+    
+    # Git Pull (zusätzlich, um sicherzustellen dass alles aktuell ist)
+    pull_cmd = ["git", "pull", "origin", branch]
+    exit_code, stdout, stderr = await asyncio.get_event_loop().run_in_executor(
+        _executor,
+        lambda: _run_git_command(pull_cmd, pipelines_dir, env)
+    )
+    
+    if exit_code != 0:
+        return (False, f"Git Pull fehlgeschlagen: {stderr}")
+    
+    return (True, f"Git Pull erfolgreich: {stdout.strip()}")
+
+
+async def _pre_heat_pipeline(pipeline_name: str, requirements_path: Path, session: Session) -> Tuple[bool, str]:
+    """
+    Pre-Heating für eine Pipeline (uv pip compile).
+    
+    Args:
+        pipeline_name: Name der Pipeline
+        requirements_path: Pfad zur requirements.txt
+        session: SQLModel Session
+        
+    Returns:
+        Tuple (success, message)
+    """
+    try:
+        # uv pip compile ausführen (lädt alle Pakete in Cache)
+        cmd = ["uv", "pip", "compile", str(requirements_path)]
+        
+        exit_code, stdout, stderr = await asyncio.get_event_loop().run_in_executor(
+            _executor,
+            lambda: subprocess.run(
+                cmd,
+                cwd=requirements_path.parent,
+                capture_output=True,
+                text=True,
+                timeout=600  # 10 Minuten Timeout
+            )
+        )
+        
+        if exit_code != 0:
+            error_msg = f"Pre-Heating fehlgeschlagen für {pipeline_name}: {stderr}"
+            logger.warning(error_msg)
+            return (False, error_msg)
+        
+        # Status in DB aktualisieren (last_cache_warmup)
+        pipeline = session.get(Pipeline, pipeline_name)
+        if pipeline:
+            pipeline.last_cache_warmup = datetime.utcnow()
+            session.add(pipeline)
+            session.commit()
+        else:
+            # Pipeline existiert noch nicht in DB, erstelle Eintrag
+            pipeline = Pipeline(
+                pipeline_name=pipeline_name,
+                has_requirements=True,
+                last_cache_warmup=datetime.utcnow()
+            )
+            session.add(pipeline)
+            session.commit()
+        
+        return (True, f"Pre-Heating erfolgreich für {pipeline_name}")
+        
+    except subprocess.TimeoutExpired:
+        error_msg = f"Pre-Heating Timeout für {pipeline_name}"
+        logger.warning(error_msg)
+        return (False, error_msg)
+    except Exception as e:
+        error_msg = f"Fehler beim Pre-Heating für {pipeline_name}: {e}"
+        logger.error(error_msg)
+        return (False, error_msg)
+
+
+async def sync_pipelines(
+    branch: Optional[str] = None,
+    session: Optional[Session] = None
+) -> Dict[str, Any]:
+    """
+    Führt Git-Sync mit UV Pre-Heating aus.
+    
+    Args:
+        branch: Git-Branch (Standard: config.GIT_BRANCH)
+        session: SQLModel Session (optional, wird intern erstellt wenn nicht vorhanden)
+        
+    Returns:
+        Dictionary mit Sync-Status und Pre-Heating-Ergebnissen
+        
+    Raises:
+        RuntimeError: Wenn Git-Sync fehlschlägt
+    """
+    if branch is None:
+        branch = config.GIT_BRANCH
+    
+    # Session verwenden oder neue erstellen
+    if session is None:
+        from app.database import get_session
+        session_gen = get_session()
+        session = next(session_gen)
+        close_session = True
+    else:
+        close_session = False
+    
+    try:
+        # Git-Sync-Lock (verhindert gleichzeitige Syncs)
+        async with _sync_lock:
+            pipelines_dir = config.PIPELINES_DIR
+            
+            # Step 1: Git Pull
+            logger.info(f"Starte Git Pull für Branch: {branch}")
+            success, message = await _git_pull(branch, pipelines_dir)
+            
+            if not success:
+                raise RuntimeError(f"Git Pull fehlgeschlagen: {message}")
+            
+            logger.info(f"Git Pull erfolgreich: {message}")
+            
+            # Step 2: Pipeline-Discovery-Cache invalidieren
+            invalidate_cache()
+            
+            # Step 3: Discovery (Suche nach allen requirements.txt)
+            discovered_pipelines = discover_pipelines(force_refresh=True)
+            
+            # Step 4: UV Pre-Heating (wenn UV_PRE_HEAT aktiviert)
+            pre_heat_results: Dict[str, Dict[str, Any]] = {}
+            
+            if config.UV_PRE_HEAT:
+                logger.info("Starte UV Pre-Heating für alle Pipelines mit requirements.txt")
+                
+                for pipeline in discovered_pipelines:
+                    if pipeline.has_requirements:
+                        requirements_path = pipeline.path / "requirements.txt"
+                        
+                        if requirements_path.exists():
+                            # Pre-Heating ausführen
+                            pre_success, pre_message = await _pre_heat_pipeline(
+                                pipeline.name,
+                                requirements_path,
+                                session
+                            )
+                            
+                            pre_heat_results[pipeline.name] = {
+                                "success": pre_success,
+                                "message": pre_message
+                            }
+                            
+                            if pre_success:
+                                logger.info(f"Pre-Heating erfolgreich für {pipeline.name}")
+                            else:
+                                logger.warning(f"Pre-Heating fehlgeschlagen für {pipeline.name}: {pre_message}")
+            
+            return {
+                "success": True,
+                "message": "Git-Sync erfolgreich abgeschlossen",
+                "branch": branch,
+                "timestamp": datetime.utcnow().isoformat(),
+                "pipelines_discovered": len(discovered_pipelines),
+                "pre_heat_results": pre_heat_results
+            }
+            
+    except Exception as e:
+        error_msg = f"Fehler beim Git-Sync: {e}"
+        logger.error(error_msg, exc_info=True)
+        return {
+            "success": False,
+            "message": error_msg,
+            "branch": branch,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    finally:
+        if close_session:
+            session.close()
+
+
+async def get_sync_status() -> Dict[str, Any]:
+    """
+    Gibt Git-Status-Informationen zurück.
+    
+    Returns:
+        Dictionary mit Git-Status (Branch, Commits ahead/behind, etc.)
+    """
+    pipelines_dir = config.PIPELINES_DIR
+    
+    # Prüfe ob Verzeichnis ein Git-Repository ist
+    git_dir = pipelines_dir / ".git"
+    if not git_dir.exists():
+        return {
+            "is_git_repo": False,
+            "message": "Pipelines-Verzeichnis ist kein Git-Repository"
+        }
+    
+    try:
+        # Aktueller Branch
+        branch_cmd = ["git", "rev-parse", "--abbrev-ref", "HEAD"]
+        exit_code, stdout, stderr = await asyncio.get_event_loop().run_in_executor(
+            _executor,
+            lambda: _run_git_command(branch_cmd, pipelines_dir)
+        )
+        
+        current_branch = stdout.strip() if exit_code == 0 else "unknown"
+        
+        # Remote-URL
+        remote_url_cmd = ["git", "config", "remote.origin.url"]
+        exit_code, stdout, stderr = await asyncio.get_event_loop().run_in_executor(
+            _executor,
+            lambda: _run_git_command(remote_url_cmd, pipelines_dir)
+        )
+        
+        remote_url = stdout.strip() if exit_code == 0 else None
+        
+        # Letzter Commit
+        last_commit_cmd = ["git", "log", "-1", "--format=%H|%s|%ai", "HEAD"]
+        exit_code, stdout, stderr = await asyncio.get_event_loop().run_in_executor(
+            _executor,
+            lambda: _run_git_command(last_commit_cmd, pipelines_dir)
+        )
+        
+        last_commit = None
+        if exit_code == 0 and stdout.strip():
+            parts = stdout.strip().split("|")
+            if len(parts) == 3:
+                last_commit = {
+                    "hash": parts[0],
+                    "message": parts[1],
+                    "date": parts[2]
+                }
+        
+        # Pipeline-Discovery-Info
+        discovered_pipelines = discover_pipelines()
+        pipelines_with_requirements = sum(1 for p in discovered_pipelines if p.has_requirements)
+        
+        # Pre-Heating-Status (aus DB)
+        from app.database import get_session
+        session_gen = get_session()
+        session = next(session_gen)
+        try:
+            pre_heated_pipelines = []
+            for pipeline in discovered_pipelines:
+                if pipeline.has_requirements:
+                    db_pipeline = session.get(Pipeline, pipeline.name)
+                    if db_pipeline and db_pipeline.last_cache_warmup:
+                        pre_heated_pipelines.append({
+                            "name": pipeline.name,
+                            "last_cache_warmup": db_pipeline.last_cache_warmup.isoformat()
+                        })
+        finally:
+            session.close()
+        
+        return {
+            "is_git_repo": True,
+            "current_branch": current_branch,
+            "remote_url": remote_url,
+            "last_commit": last_commit,
+            "pipelines_discovered": len(discovered_pipelines),
+            "pipelines_with_requirements": pipelines_with_requirements,
+            "pre_heated_pipelines": pre_heated_pipelines,
+            "uv_pre_heat_enabled": config.UV_PRE_HEAT
+        }
+        
+    except Exception as e:
+        logger.error(f"Fehler beim Abrufen des Git-Status: {e}")
+        return {
+            "is_git_repo": True,
+            "error": str(e)
+        }
