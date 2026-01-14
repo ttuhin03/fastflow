@@ -46,6 +46,7 @@ fastflow/
 - pydantic
 - python-multipart
 - nicegui
+- aiofiles (für asynchrones Datei-I/O)
 - alembic (für DB-Migrationen)
 - python-dotenv (für .env Konfiguration)
 - passlib[bcrypt] (für Password-Hashing)
@@ -271,7 +272,16 @@ fastflow/
 - [ ] **File-Handle-Management**: Context-Manager für Log-Streams verwenden
   - Handles explizit schließen in `finally`-Blocks
   - Verhindert File-Handle-Leaks bei vielen gleichzeitigen Runs
+- [ ] **Asynchrones Datei-I/O**: Nutze `aiofiles` oder `run_in_executor` für alle Datei-Operationen
+  - Verhindert Blocking des Event-Loops bei großen Log-Dateien (z.B. 500 MB)
+  - Beim Lesen: `contents = await run_in_executor(None, file.read)` oder `aiofiles.open()`
+  - Beim Schreiben: Asynchrones Schreiben mit `aiofiles.open()` oder `run_in_executor`
+  - Verhindert, dass FastAPI/Scheduler während Datei-Operationen blockiert
 - [ ] Log-Datei-Schreibung in konfiguriertem Logs-Verzeichnis (alle Logs werden geschrieben)
+- [ ] **Log-Spam-Schutz (Dateisystem)**: Dateigröße beim Schreiben prüfen
+  - Dateigröße regelmäßig prüfen (z.B. alle 1000 Zeilen oder alle 10 Sekunden)
+  - Wenn Datei größer als LOG_MAX_SIZE_MB: Stream kappen oder Warnung ausgeben
+  - Zusätzlich zu Docker Log-Limits (zusätzliche Sicherheitsschicht)
 - [ ] Rate-Limited Queue für SSE-Streaming (konfigurierbar, Standard: 100 Zeilen/Sekunde)
 - [ ] `container.wait()` für Exit-Code-Abruf
 - [ ] **Container-Cleanup mit Error-Handling**:
@@ -402,6 +412,9 @@ fastflow/
 
 ### 6.4 Log Streaming (SSE)
 - [ ] `GET /runs/{run_id}/logs`: Logs aus Datei lesen
+  - **Asynchrones Datei-Lesen**: `aiofiles` oder `run_in_executor` verwenden
+  - Verhindert Blocking des Event-Loops bei großen Log-Dateien (z.B. 500 MB)
+  - Beispiel: `contents = await run_in_executor(None, lambda: open(path).read())` oder `aiofiles.open()`
 - [ ] `GET /runs/{run_id}/logs/stream`: Server-Sent Events für Live-Logs
 - [ ] **Backend: asyncio.Queue** für Log-Zeilen (pro Run-ID eine Queue)
   - Docker-Client schiebt jede neue Log-Zeile in die Queue
@@ -427,6 +440,15 @@ fastflow/
 - [ ] **Git-Sync-Race-Condition-Prevention**: Lock für Git-Sync-Operationen
   - Verhindert gleichzeitige Git-Syncs (können zu Inkonsistenzen führen)
   - Pipeline-Discovery-Cache nach Sync invalidieren
+- [ ] **Git-Atomarität (Atomic Switch)**: Verhindert "Halbe-Datei"-Fehler
+  - Problem: Race Condition beim Git-Sync (git pull während Pipeline-Start kann zu halbgeschriebenen Dateien führen)
+  - Lösung: Atomic Switch-Pattern
+    - Option 1 (Empfohlen): Git-Sync in temporäres Verzeichnis, dann atomarer Symlink-Austausch
+      - Sync in `/tmp/pipelines_new` durchführen
+      - Nach erfolgreichem Sync: Symlink `/app/pipelines` auf neues Verzeichnis umsetzen (atomare Operation)
+      - Altes Verzeichnis nach kurzer Verzögerung entfernen
+    - Option 2 (Alternative): Lock-Datei während Git-Sync (Pipelines warten auf Lock-Freigabe)
+  - Verhindert, dass Pipeline-Container Dateien lesen, die gerade geschrieben werden
 - [ ] Requirements.txt-Erkennung (Discovery)
 - [ ] **UV Pre-Heating (Warming)** - Wenn UV_PRE_HEAT=true:
   - Step 1: Git Pull (Aktualisierung des Codes)
@@ -489,9 +511,15 @@ fastflow/
 
 ### 8.1 APScheduler Setup
 - [ ] `app/scheduler.py`: BackgroundScheduler initialisieren
+- [ ] **Job-Store: SQLAlchemyJobStore** (statt MemoryJobStore)
+  - Job-Store auf SQLite/PostgreSQL-Datenbank (gleiche DB wie SQLModel)
+  - Vorteil: Geplante Jobs überleben Orchestrator-Neustarts ohne manuelles Neuladen
+  - Vorteil: Scheduler "erinnert" sich selbst an verpasste Jobs (Misfire-Handling)
+  - Vorteil: Wenn Orchestrator 5 Minuten offline war, werden verpasste Jobs automatisch nachgeholt
+  - Konfiguration: `SQLAlchemyJobStore(url=DATABASE_URL)` in Scheduler initialisieren
 - [ ] Scheduler beim App-Start starten
 - [ ] Scheduler beim App-Shutdown stoppen
-- [ ] Job-Persistenz: Jobs beim Start aus DB laden und registrieren
+- [ ] **Hinweis**: Jobs werden automatisch aus Job-Store geladen (kein manuelles Laden aus DB nötig)
 
 ### 8.2 Job-Model
 - [ ] ScheduledJob Model (bereits in Phase 2.2 definiert)
@@ -502,8 +530,7 @@ fastflow/
   - `DELETE /scheduler/jobs/{id}`: Job löschen
 
 ### 8.3 Scheduler-Logik
-- [ ] Jobs beim App-Start aus Datenbank laden
-- [ ] Aktive Jobs beim Scheduler registrieren
+- [ ] **Hinweis**: Mit SQLAlchemyJobStore werden Jobs automatisch aus der Datenbank geladen (kein manuelles Laden nötig)
 - [ ] Cron-Trigger unterstützen
 - [ ] Interval-Trigger unterstützen
 - [ ] Job-Ausführung via `run_pipeline()`
@@ -574,6 +601,22 @@ fastflow/
 - [ ] **Datenbank-Cleanup**: Beim Löschen von Log-Dateien auch Datenbank-Einträge bereinigen
   - `log_file` und `metrics_file` Felder auf NULL setzen (oder Einträge löschen)
   - Verhindert "Broken Links" in der UI (UI versucht auf nicht-existierende Dateien zuzugreifen)
+
+### 11.2 Docker Garbage Collection (Janitor-Service)
+- [ ] **Docker Garbage Collection Background-Task** (Janitor-Service)
+- [ ] Periodischer Cleanup-Job (z.B. einmal pro Woche) für Docker-Metadaten
+- [ ] **Label-basierte Cleanup-Strategie**: Gezieltes Aufräumen mit Label-Filterung
+  - Container: Nur Container mit Label `fastflow-run-id` aufräumen (verwaiste Container)
+  - Volumes: Nur Volumes mit `fastflow-run-id` Label löschen (wenn Pipelines Volumes nutzen)
+  - Problem: `docker system prune` löscht oft nicht alle verwaisten Volumes (wenn noch referenziert)
+  - Lösung: Spezifisch nach Labels suchen (`docker container prune --filter "label=fastflow-run-id"`)
+  - Vorteil: Gezieltes Aufräumen ohne andere Container/Volumes auf dem Host zu stören
+- [ ] `docker system prune -f` ausführen (oder spezifischer: `docker image prune`, `docker volume prune`)
+- [ ] Problem: Docker-Metadaten sammeln sich über Zeit an (fehlgeschlagene Builds, ungenutzte Netzwerke, verwaiste Volumes)
+- [ ] Lösung: Automatischer Cleanup verhindert, dass Host-Server schleichend voll läuft
+- [ ] Konfigurierbares Intervall (optional, Standard: wöchentlich)
+- [ ] Error-Handling: Fehler loggen, aber Orchestrator nicht crashen lassen
+- [ ] Optional: Nur spezifische Ressourcen bereinigen (z.B. nur Images, nur Volumes)
 
 ---
 
@@ -651,6 +694,13 @@ fastflow/
 - [ ] Log-Download-Button (Download als .txt oder .log)
 - [ ] Log-Anzeige in Run-Detailansicht integriert
 - [ ] Separate Log-Viewer-Seite für bessere Übersicht bei großen Logs
+- [ ] **NiceGUI-Verbindungsstabilität (Re-Connect-Handling)**:
+  - Problem: WebSocket-Verbindung bricht ab (Tab in Ruhezustand, WLAN-Wechsel)
+  - Lösung: Re-Connect-Mechanismus implementieren
+    - Re-Connect-Button in UI (manuelle Wiederherstellung)
+    - Automatisches Nachladen beim Wiederverbinden: Letzte 50-100 Zeilen aus Log-Datei nachladen
+    - Verhindert, dass User denkt, Pipeline hängt (tatsächlich ist nur Frontend getrennt)
+    - Log-Stream automatisch fortsetzen nach Re-Connect
 - [ ] **CPU & RAM Live-Monitoring**:
   - Live-Metrics-Streaming aus Backend-Queue (ähnlich wie Logs)
   - CPU-Usage-Anzeige: `ui.linear_progress` oder `ui.chart` (Prozentsatz)

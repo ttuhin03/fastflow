@@ -171,6 +171,13 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/lang/d
 
 ## 5. Wichtige Hinweise für LLM-Chats
 
+### Bei Unsicherheiten
+- **Wichtig**: Wenn du dir bei etwas nicht sicher bist (API-Nutzung, Best Practices, Framework-Spezifika), solltest du:
+  1. **Zuerst**: Den Nutzer fragen oder nach Klärung bitten
+  2. **Alternativ**: Im Internet recherchieren (web_search) um aktuelle Informationen zu erhalten
+  3. **Nicht**: Raten oder unsichere Annahmen treffen
+- **Ziel**: Fehler vermeiden durch Klarstellung vor der Implementierung
+
 ### Bei Code-Änderungen
 - **Immer**: Docstrings aktualisieren, wenn sich Funktions-Signatur ändert
 - **Immer**: Changelog aktualisieren
