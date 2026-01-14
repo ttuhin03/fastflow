@@ -6,6 +6,8 @@ Dieses Modul definiert alle SQLModel-Models für die Datenbank:
 - PipelineRun (Ausführungs-Historie)
 - ScheduledJob (Geplante Jobs)
 - Secret (Verschlüsselte Secrets)
+- User (Benutzer für Authentifizierung)
+- Session (Session-Tokens für persistente Authentifizierung)
 """
 
 from datetime import datetime
@@ -187,4 +189,65 @@ class Secret(SQLModel, table=True):
     updated_at: datetime = Field(
         default_factory=datetime.utcnow,
         description="Letzte Aktualisierung (UTC)"
+    )
+
+
+class User(SQLModel, table=True):
+    """
+    User-Model.
+    
+    Speichert Benutzer-Informationen für Authentifizierung.
+    Passwörter werden gehasht gespeichert (passlib bcrypt).
+    """
+    __tablename__ = "users"
+    
+    id: UUID = Field(
+        default_factory=uuid4,
+        primary_key=True,
+        description="Eindeutige User-ID"
+    )
+    username: str = Field(
+        unique=True,
+        index=True,
+        description="Benutzername (eindeutig)"
+    )
+    password_hash: str = Field(
+        description="Gehashtes Passwort (bcrypt)"
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Erstellungs-Zeitpunkt (UTC)"
+    )
+
+
+class Session(SQLModel, table=True):
+    """
+    Session-Model.
+    
+    Speichert Session-Tokens in der Datenbank für persistente
+    Authentifizierung. Verhindert Session-Verlust bei App-Neustart.
+    """
+    __tablename__ = "sessions"
+    
+    id: UUID = Field(
+        default_factory=uuid4,
+        primary_key=True,
+        description="Eindeutige Session-ID"
+    )
+    token: str = Field(
+        unique=True,
+        index=True,
+        description="JWT-Token (eindeutig)"
+    )
+    user_id: UUID = Field(
+        foreign_key="users.id",
+        index=True,
+        description="Verknüpfte User-ID"
+    )
+    expires_at: datetime = Field(
+        description="Ablauf-Zeitpunkt (UTC)"
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Erstellungs-Zeitpunkt (UTC)"
     )

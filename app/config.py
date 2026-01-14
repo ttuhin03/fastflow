@@ -229,6 +229,42 @@ class Config:
     gesetzt werden.
     """
     
+    # Authentication-Konfiguration
+    AUTH_USERNAME: str = os.getenv("AUTH_USERNAME", "admin")
+    """
+    Benutzername für Basic Authentication.
+    
+    Standard: admin. Sollte in Produktion geändert werden.
+    """
+    
+    AUTH_PASSWORD: str = os.getenv("AUTH_PASSWORD", "admin")
+    """
+    Passwort für Basic Authentication.
+    
+    Standard: admin. MUSS in Produktion geändert werden!
+    ⚠️ KRITISCH: Authentifizierung ist der wichtigste Schutz gegen
+    Docker-Socket-Missbrauch (Docker-Socket = Root-Zugriff auf Host).
+    """
+    
+    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "change-me-in-production")
+    """
+    Secret Key für JWT-Token-Signierung.
+    
+    Standard: change-me-in-production. MUSS in Produktion geändert werden!
+    Sollte ein zufälliger, sicherer String sein (mindestens 32 Zeichen).
+    """
+    
+    JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
+    """Algorithmus für JWT-Token-Signierung (Standard: HS256)."""
+    
+    JWT_EXPIRATION_HOURS: int = int(os.getenv("JWT_EXPIRATION_HOURS", "24"))
+    """
+    Gültigkeitsdauer von JWT-Tokens in Stunden.
+    
+    Standard: 24 Stunden. Nach Ablauf muss sich der Benutzer erneut
+    anmelden.
+    """
+    
     @classmethod
     def ensure_directories(cls) -> None:
         """

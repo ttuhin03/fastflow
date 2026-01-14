@@ -87,6 +87,15 @@ async def lifespan(app: FastAPI):
         logger.error(f"Fehler beim Scheduler-Start: {e}")
         # Nicht kritisch, App kann trotzdem starten (Jobs können manuell gestartet werden)
     
+    # NiceGUI UI initialisieren (Phase 9.2, 13)
+    try:
+        from app.ui import init_ui
+        init_ui(app)
+        logger.info("NiceGUI UI initialisiert")
+    except Exception as e:
+        logger.error(f"Fehler bei NiceGUI-Initialisierung: {e}")
+        # Nicht kritisch, API funktioniert auch ohne UI
+    
     logger.info("Fast-Flow Orchestrator gestartet")
     
     yield
@@ -183,8 +192,12 @@ app.include_router(secrets.router)
 from app.api import scheduler as scheduler_api
 app.include_router(scheduler_api.router)
 
-# TODO: Auth-Endpoints in Phase 9
-# TODO: NiceGUI Integration in Phase 13
+# Auth-Endpoints (Phase 9)
+from app.api import auth as auth_api
+app.include_router(auth_api.router)
+
+# NiceGUI Integration (Phase 9.2, 13)
+# UI wird in lifespan() initialisiert
 
 if __name__ == "__main__":
     import uvicorn

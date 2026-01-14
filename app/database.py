@@ -14,7 +14,7 @@ Features:
 from typing import Generator
 from sqlmodel import SQLModel, create_engine, Session, text
 from app.config import config
-from app.models import Pipeline, PipelineRun, ScheduledJob, Secret  # Import Models für Metadaten-Registrierung
+from app.models import Pipeline, PipelineRun, ScheduledJob, Secret, User, Session  # Import Models für Metadaten-Registrierung
 import logging
 
 logger = logging.getLogger(__name__)
