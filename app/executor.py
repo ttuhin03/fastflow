@@ -218,23 +218,6 @@ async def run_pipeline(
     # Pre-Heating-Lock abrufen (wenn Pre-Heating aktiv ist)
     pre_heating_lock = _get_pre_heating_lock(name)
     
-    # Environment-Variablen zusammenführen
-    # 1. Default-Env-Vars aus Metadaten
-    merged_env_vars = pipeline.metadata.default_env.copy()
-    
-    # 2. UI-spezifische Env-Vars (haben Vorrang bei Duplikaten)
-    merged_env_vars.update(env_vars)
-    merged_env_vars.update(parameters)
-    
-    # PipelineRun-Datensatz erstellen
-    run = PipelineRun(
-        pipeline_name=name,
-        status=RunStatus.PENDING,
-        log_file=str(config.LOGS_DIR / f"{name}_{datetime.utcnow().isoformat()}.log"),
-        env_vars=merged_env_vars,
-        parameters=parameters
-    )
-    
     # Datenbank-Session verwenden oder neue erstellen
     if session is None:
         from app.database import get_session
@@ -245,6 +228,30 @@ async def run_pipeline(
         close_session = False
     
     try:
+        # Secrets aus Datenbank abrufen
+        from app.secrets import get_all_secrets
+        all_secrets = get_all_secrets(session)
+        
+        # Environment-Variablen zusammenführen
+        # 1. Default-Env-Vars aus Metadaten
+        merged_env_vars = pipeline.metadata.default_env.copy()
+        
+        # 2. Secrets aus Datenbank (haben Vorrang vor Default-Env-Vars)
+        merged_env_vars.update(all_secrets)
+        
+        # 3. UI-spezifische Env-Vars und Parameter (haben Vorrang bei Duplikaten)
+        merged_env_vars.update(env_vars)
+        merged_env_vars.update(parameters)
+        
+        # PipelineRun-Datensatz erstellen
+        run = PipelineRun(
+            pipeline_name=name,
+            status=RunStatus.PENDING,
+            log_file=str(config.LOGS_DIR / f"{name}_{datetime.utcnow().isoformat()}.log"),
+            env_vars=merged_env_vars,
+            parameters=parameters
+        )
+        
         session.add(run)
         session.commit()
         session.refresh(run)

@@ -165,13 +165,14 @@ async def health_check() -> JSONResponse:
 
 
 # API-Router registrieren (Phase 6)
-from app.api import pipelines, runs, logs, metrics, sync
+from app.api import pipelines, runs, logs, metrics, sync, secrets
 
 app.include_router(pipelines.router)
 app.include_router(runs.router)
 app.include_router(logs.router)
 app.include_router(metrics.router)
 app.include_router(sync.router)
+app.include_router(secrets.router)
 
 # TODO: Scheduler-Endpoints in Phase 8
 # TODO: Auth-Endpoints in Phase 9
