@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  orchestrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fastflow-orchestrator
+    image: fastflow-orchestrator:latest
+    
+    # Docker-Socket-Mount (KRITISCH für Container-Management)
+    # ⚠️ SECURITY-WARNUNG: Docker-Socket gibt Root-Zugriff auf Host-System!
+    # - Authentifizierung (Phase 9) ist KRITISCH für Security
+    # - User Namespaces als optionaler zusätzlicher Schutz
+    # - Für Internet-Deployment: Reverse-Proxy (Nginx/Traefik) mit HTTPS vor den Orchestrator
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Pipeline-Repository (wird als Volume gemountet, konfigurierbar)
+      - ${PIPELINES_DIR:-./pipelines}:/app/pipelines:rw
+      # Log-Verzeichnis (persistente Logs)
+      - ${LOGS_DIR:-./logs}:/app/logs:rw
+      # Daten-Verzeichnis (Datenbank, persistente Daten)
+      - ${DATA_DIR:-./data}:/app/data:rw
+      # UV-Cache-Verzeichnis (shared zwischen allen Container-Runs)
+      - ${UV_CACHE_DIR:-./data/uv_cache}:/app/data/uv_cache:rw
+    
+    # Environment-Variablen (aus .env oder direkt)
+    env_file:
+      - .env
+    environment:
+      # Verzeichnis-Pfade (innerhalb Container)
+      - PIPELINES_DIR=/app/pipelines
+      - LOGS_DIR=/app/logs
+      - DATA_DIR=/app/data
+      - UV_CACHE_DIR=/app/data/uv_cache
+    
+    # Port-Mapping (FastAPI/NiceGUI)
+    ports:
+      - "${PORT:-8000}:8000"
+    
+    # Restart-Policy
+    restart: unless-stopped
+    
+    # Health-Check (optional)
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Netzwerk (optional, für Multi-Container-Setups)
+    networks:
+      - fastflow-network
+
+# Netzwerk-Definition
+networks:
+  fastflow-network:
+    driver: bridge
+
+# Hinweise:
+# - Worker-Image (WORKER_BASE_IMAGE) muss nicht gebaut werden, wird von Registry gepullt
+# - Standard: ghcr.io/astral-sh/uv:python3.11-bookworm-slim
+# - Docker-Socket-Mount ist erforderlich für Container-Management
+# - Alle Volumes sind konfigurierbar über Environment-Variablen
+# - .env-Datei sollte im Projekt-Root erstellt werden (siehe .env.example)
