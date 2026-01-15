@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
+import { showError, showSuccess, showConfirm } from '../utils/toast'
 import './Sync.css'
 
 interface SyncStatus {
@@ -109,13 +110,13 @@ export default function Sync() {
     if (setupSuccess === 'true' && tab === 'github') {
       // Erfolgreiche App-Erstellung UND Installation in einem Schritt!
       queryClient.invalidateQueries({ queryKey: ['github-config'] })
-      alert('✓ GitHub App erfolgreich erstellt und installiert!\n\nDie App ist jetzt bereit für Git-Sync.')
+      showSuccess('✓ GitHub App erfolgreich erstellt und installiert! Die App ist jetzt bereit für Git-Sync.')
       // Entferne URL-Parameter
       window.history.replaceState({}, '', window.location.pathname + '?tab=github')
     } else if (installationSuccess === 'true' && tab === 'github') {
       // Erfolgreiche Installation (Fallback für manuellen Flow)
       queryClient.invalidateQueries({ queryKey: ['github-config'] })
-      alert('✓ GitHub App erfolgreich installiert und konfiguriert!\n\nDie App ist jetzt bereit für Git-Sync.')
+      showSuccess('✓ GitHub App erfolgreich installiert und konfiguriert! Die App ist jetzt bereit für Git-Sync.')
       // Entferne URL-Parameter
       window.history.replaceState({}, '', window.location.pathname + '?tab=github')
     } else if (manifestCode && state && tab === 'github' && exchangeError === 'true') {
@@ -132,10 +133,10 @@ export default function Sync() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sync-status'] })
       queryClient.invalidateQueries({ queryKey: ['pipelines'] })
-      alert('Git-Sync erfolgreich abgeschlossen')
+      showSuccess('Git-Sync erfolgreich abgeschlossen')
     },
     onError: (error: any) => {
-      alert(`Fehler beim Git-Sync: ${error.response?.data?.detail || error.message}`)
+      showError(`Fehler beim Git-Sync: ${error.response?.data?.detail || error.message}`)
     },
   })
 
@@ -146,10 +147,10 @@ export default function Sync() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sync-settings'] })
-      alert('Sync-Einstellungen aktualisiert')
+      showSuccess('Sync-Einstellungen aktualisiert')
     },
     onError: (error: any) => {
-      alert(`Fehler beim Aktualisieren: ${error.response?.data?.detail || error.message}`)
+      showError(`Fehler beim Aktualisieren: ${error.response?.data?.detail || error.message}`)
     },
   })
 
@@ -161,11 +162,11 @@ export default function Sync() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['github-config'] })
-      alert('GitHub Apps Konfiguration erfolgreich gespeichert')
+      showSuccess('GitHub Apps Konfiguration erfolgreich gespeichert')
       setGithubForm({ ...githubForm, private_key: '', private_key_file: null })
     },
     onError: (error: any) => {
-      alert(`Fehler beim Speichern: ${error.response?.data?.detail || error.message}`)
+      showError(`Fehler beim Speichern: ${error.response?.data?.detail || error.message}`)
     },
   })
 
@@ -176,13 +177,13 @@ export default function Sync() {
     },
     onSuccess: (data) => {
       if (data.success) {
-        alert('✓ Konfiguration erfolgreich getestet!')
+        showSuccess('✓ Konfiguration erfolgreich getestet!')
       } else {
-        alert(`✗ Test fehlgeschlagen: ${data.message}`)
+        showError(`✗ Test fehlgeschlagen: ${data.message}`)
       }
     },
     onError: (error: any) => {
-      alert(`Fehler beim Testen: ${error.response?.data?.detail || error.message}`)
+      showError(`Fehler beim Testen: ${error.response?.data?.detail || error.message}`)
     },
   })
 
@@ -193,7 +194,7 @@ export default function Sync() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['github-config'] })
-      alert('GitHub Apps Konfiguration gelöscht')
+      showSuccess('GitHub Apps Konfiguration gelöscht')
       setGithubForm({
         app_id: '',
         installation_id: '',
@@ -202,7 +203,7 @@ export default function Sync() {
       })
     },
     onError: (error: any) => {
-      alert(`Fehler beim Löschen: ${error.response?.data?.detail || error.message}`)
+      showError(`Fehler beim Löschen: ${error.response?.data?.detail || error.message}`)
     },
   })
 
@@ -217,7 +218,7 @@ export default function Sync() {
       window.location.href = data.authorization_url
     },
     onError: (error: any) => {
-      alert(`Fehler: ${error.response?.data?.detail || error.message}`)
+      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
     },
   })
 
@@ -228,27 +229,28 @@ export default function Sync() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['github-config'] })
-      alert(`✓ ${data.message}\n\n${data.next_step || ''}`)
+      showSuccess(`✓ ${data.message}${data.next_step ? ' ' + data.next_step : ''}`)
       // Entferne URL-Parameter
       window.history.replaceState({}, '', window.location.pathname + '?tab=github')
     },
     onError: (error: any) => {
-      alert(`Fehler beim Code-Exchange: ${error.response?.data?.detail || error.message}`)
+      showError(`Fehler beim Code-Exchange: ${error.response?.data?.detail || error.message}`)
       // Entferne URL-Parameter auch bei Fehler
       window.history.replaceState({}, '', window.location.pathname + '?tab=github')
     },
   })
 
-  const handleSync = () => {
+  const handleSync = async () => {
     if (syncMutation.isPending) return
-    if (confirm('Git-Sync ausführen? Dies kann einige Zeit dauern.')) {
+    const confirmed = await showConfirm('Git-Sync ausführen? Dies kann einige Zeit dauern.')
+    if (confirmed) {
       syncMutation.mutate(syncBranch || undefined)
     }
   }
 
   const handleSaveSettings = () => {
     if (settingsForm.auto_sync_interval !== null && settingsForm.auto_sync_interval < 60) {
-      alert('Auto-Sync-Intervall muss mindestens 60 Sekunden betragen')
+      showError('Auto-Sync-Intervall muss mindestens 60 Sekunden betragen')
       return
     }
     updateSettingsMutation.mutate(settingsForm)
@@ -259,7 +261,7 @@ export default function Sync() {
     const file = event.target.files?.[0]
     if (file) {
       if (!file.name.endsWith('.pem')) {
-        alert('Bitte wählen Sie eine .pem Datei aus')
+        showError('Bitte wählen Sie eine .pem Datei aus')
         return
       }
       const reader = new FileReader()
@@ -277,24 +279,24 @@ export default function Sync() {
 
   const handleSaveGithubConfig = () => {
     if (!githubForm.app_id || !githubForm.installation_id || !githubForm.private_key) {
-      alert('Bitte füllen Sie alle Felder aus')
+      showError('Bitte füllen Sie alle Felder aus')
       return
     }
 
     // Validiere numerische IDs
     if (!/^\d+$/.test(githubForm.app_id.trim())) {
-      alert('GitHub App ID muss eine Zahl sein')
+      showError('GitHub App ID muss eine Zahl sein')
       return
     }
 
     if (!/^\d+$/.test(githubForm.installation_id.trim())) {
-      alert('Installation ID muss eine Zahl sein')
+      showError('Installation ID muss eine Zahl sein')
       return
     }
 
     // Validiere Private Key Format
     if (!githubForm.private_key.includes('-----BEGIN') || !githubForm.private_key.includes('-----END')) {
-      alert('Private Key muss PEM-Format haben (-----BEGIN ... -----END ...)')
+      showError('Private Key muss PEM-Format haben (-----BEGIN ... -----END ...)')
       return
     }
 
@@ -309,8 +311,9 @@ export default function Sync() {
     testGithubConfigMutation.mutate()
   }
 
-  const handleDeleteGithubConfig = () => {
-    if (confirm('GitHub Apps Konfiguration wirklich löschen?')) {
+  const handleDeleteGithubConfig = async () => {
+    const confirmed = await showConfirm('GitHub Apps Konfiguration wirklich löschen?')
+    if (confirmed) {
       deleteGithubConfigMutation.mutate()
     }
   }

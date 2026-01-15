@@ -1,0 +1,61 @@
+.resource-comparison-chart {
+  padding: 1rem;
+  background: var(--card-bg, #1e1e1e);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.resource-comparison-chart h4 {
+  margin: 0 0 1rem 0;
+  color: var(--text-primary, #fff);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.chart-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.chart-tab-content h5 {
+  margin: 0 0 0.5rem 0;
+  color: var(--text-primary, #fff);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.resource-comparison-tooltip {
+  background: var(--tooltip-bg, #2a2a2a);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 6px;
+  padding: 0.75rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.resource-comparison-tooltip .tooltip-header {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary, #888);
+  font-weight: 600;
+  border-bottom: 1px solid var(--border-color, #444);
+  padding-bottom: 0.5rem;
+}
+
+.resource-comparison-tooltip .tooltip-stat {
+  margin: 0.25rem 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.resource-comparison-tooltip .tooltip-label {
+  color: var(--text-secondary, #888);
+  font-size: 0.85rem;
+}
+
+.resource-comparison-tooltip .tooltip-value {
+  color: var(--text-primary, #fff);
+  font-size: 0.85rem;
+  font-weight: 600;
+}

@@ -29,6 +29,13 @@
 .stats-card,
 .runs-card,
 .webhook-card,
+.charts-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-xl);
+}
+
 .source-files-card {
   background-color: #2a2a2a;
   padding: 1.5rem;

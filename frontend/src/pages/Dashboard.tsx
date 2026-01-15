@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
+import { showError, showSuccess, showConfirm } from '../utils/toast'
 import { 
   MdPlayArrow, 
   MdInfo, 
@@ -103,7 +104,7 @@ export default function Dashboard() {
     },
     onError: (error: any) => {
       setStartingPipeline(null)
-      alert(`Fehler beim Starten der Pipeline: ${error.response?.data?.detail || error.message}`)
+      showError(`Fehler beim Starten der Pipeline: ${error.response?.data?.detail || error.message}`)
     },
   })
 
@@ -115,10 +116,10 @@ export default function Dashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pipelines'] })
       queryClient.invalidateQueries({ queryKey: ['sync-status'] })
-      alert('Git-Sync erfolgreich abgeschlossen')
+      showSuccess('Git-Sync erfolgreich abgeschlossen')
     },
     onError: (error: any) => {
-      alert(`Fehler beim Git-Sync: ${error.response?.data?.detail || error.message}`)
+      showError(`Fehler beim Git-Sync: ${error.response?.data?.detail || error.message}`)
     },
   })
 
@@ -129,9 +130,10 @@ export default function Dashboard() {
     startPipelineMutation.mutate(name)
   }
 
-  const handleSync = () => {
+  const handleSync = async () => {
     if (syncMutation.isPending) return
-    if (confirm('Git-Sync ausführen? Dies kann einige Zeit dauern.')) {
+    const confirmed = await showConfirm('Git-Sync ausführen? Dies kann einige Zeit dauern.')
+    if (confirmed) {
       syncMutation.mutate()
     }
   }
@@ -308,6 +310,7 @@ export default function Dashboard() {
                   <span className="recent-runs-label">Letzte Runs:</span>
                   <RunStatusCircles pipelineName={pipeline.name} />
                 </div>
+
                 
                 <div className="pipeline-actions">
                   {!isReadonly && (

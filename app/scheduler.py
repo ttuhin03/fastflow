@@ -321,6 +321,13 @@ def _create_job_function(pipeline_name: str):
             logger.info(f"Geplante Pipeline ausgeführt: {pipeline_name}")
         except Exception as e:
             logger.error(f"Fehler bei geplanter Pipeline-Ausführung {pipeline_name}: {e}")
+            # Notification für Scheduler-Fehler (asynchron im Hintergrund)
+            try:
+                import asyncio
+                from app.notifications import send_scheduler_error_notification
+                asyncio.create_task(send_scheduler_error_notification(pipeline_name, str(e)))
+            except Exception as notif_error:
+                logger.error(f"Fehler beim Senden der Scheduler-Notification: {notif_error}")
     
     return job_function
 
@@ -330,13 +337,22 @@ def _job_executed_listener(event) -> None:
     Event-Listener für Job-Ausführungen.
     
     Wird aufgerufen, wenn ein Job erfolgreich ausgeführt wurde oder
-    einen Fehler hatte. Loggt die Ergebnisse.
+    einen Fehler hatte. Loggt die Ergebnisse und sendet Notifications.
     
     Args:
         event: APScheduler Event-Objekt
     """
     if event.exception:
         logger.error(f"Job {event.job_id} fehlgeschlagen: {event.exception}")
+        # Notification für Scheduler-Fehler (asynchron im Hintergrund)
+        try:
+            import asyncio
+            from app.notifications import send_scheduler_error_notification
+            # Versuche Pipeline-Name aus Job-ID zu extrahieren (falls Job-ID = Pipeline-Name)
+            pipeline_name = event.job_id
+            asyncio.create_task(send_scheduler_error_notification(pipeline_name, str(event.exception)))
+        except Exception as notif_error:
+            logger.error(f"Fehler beim Senden der Scheduler-Notification: {notif_error}")
     else:
         logger.debug(f"Job {event.job_id} erfolgreich ausgeführt")
 

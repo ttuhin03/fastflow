@@ -352,6 +352,9 @@
 .header-content {
   max-width: 1400px;
   margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .page-title {
@@ -369,11 +372,61 @@
   margin: 0 auto;
 }
 
+/* Mobile Menu Button */
+.mobile-menu-button {
+  display: none;
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  z-index: var(--z-sidebar) + 1;
+  background-color: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  font-size: 1.5rem;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: all var(--transition-base);
+  touch-action: manipulation; /* Better touch handling */
+  min-width: 48px;
+  min-height: 48px; /* Touch target size */
+}
+
+.mobile-menu-button:active {
+  transform: scale(0.95);
+  background-color: var(--color-primary-dark, #1976d2);
+}
+
+/* Sidebar Overlay for Mobile */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: var(--z-sidebar) - 1;
+  animation: fade-in 0.3s ease-out;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
+  .mobile-menu-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .sidebar-overlay {
+    display: block;
+  }
+
   .sidebar {
     transform: translateX(-100%);
-    transition: transform var(--transition-base);
+    transition: transform 0.3s ease-out;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
   }
 
   .sidebar.open {
@@ -384,7 +437,27 @@
     margin-left: 0;
   }
 
+  .main-header {
+    padding-left: calc(var(--spacing-xl) + 60px); /* Space for menu button */
+  }
+
   .main-content {
     padding: var(--spacing-md);
+  }
+
+  /* Touch-optimized buttons */
+  .nav-item {
+    padding: var(--spacing-lg); /* Larger touch targets */
+    min-height: 48px;
+  }
+
+  .logout-btn {
+    min-height: 48px;
+    padding: var(--spacing-lg);
+  }
+
+  /* Touch-optimized icons */
+  .nav-icon {
+    font-size: 1.75rem; /* Larger icons for touch */
   }
 }

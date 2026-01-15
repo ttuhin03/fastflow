@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../api/client'
+import { showError, showSuccess, showConfirm } from '../utils/toast'
 import {
   MdAdd,
   MdEdit,
@@ -97,10 +98,10 @@ export default function Users() {
       queryClient.invalidateQueries({ queryKey: ['users'] })
       setShowCreateForm(false)
       resetForm()
-      alert('Benutzer erfolgreich erstellt')
+      showSuccess('Benutzer erfolgreich erstellt')
     },
     onError: (error: any) => {
-      alert(`Fehler: ${error.response?.data?.detail || error.message}`)
+      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
     },
   })
 
@@ -119,11 +120,11 @@ export default function Users() {
       resetInviteForm()
       // Show invite link
       const fullLink = `${window.location.origin}/invite/${data.token}`
-      alert(`Einladungslink erstellt:\n\n${fullLink}\n\nLink wurde in die Zwischenablage kopiert.`)
       navigator.clipboard.writeText(fullLink)
+      showSuccess(`Einladungslink erstellt und in Zwischenablage kopiert: ${fullLink}`)
     },
     onError: (error: any) => {
-      alert(`Fehler: ${error.response?.data?.detail || error.message}`)
+      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
     },
   })
 
@@ -144,10 +145,10 @@ export default function Users() {
       setEditingUser(null)
       resetForm()
       setShowCreateForm(false)
-      alert('Benutzer erfolgreich aktualisiert')
+      showSuccess('Benutzer erfolgreich aktualisiert')
     },
     onError: (error: any) => {
-      alert(`Fehler: ${error.response?.data?.detail || error.message}`)
+      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
     },
   })
 
@@ -159,10 +160,10 @@ export default function Users() {
       return response.data
     },
     onSuccess: () => {
-      alert('Passwort erfolgreich zurückgesetzt')
+      showSuccess('Passwort erfolgreich zurückgesetzt')
     },
     onError: (error: any) => {
-      alert(`Fehler: ${error.response?.data?.detail || error.message}`)
+      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
     },
   })
 
@@ -173,10 +174,10 @@ export default function Users() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
-      alert('Benutzer erfolgreich blockiert')
+      showSuccess('Benutzer erfolgreich blockiert')
     },
     onError: (error: any) => {
-      alert(`Fehler: ${error.response?.data?.detail || error.message}`)
+      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
     },
   })
 
@@ -187,10 +188,10 @@ export default function Users() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
-      alert('Benutzer erfolgreich entblockiert')
+      showSuccess('Benutzer erfolgreich entblockiert')
     },
     onError: (error: any) => {
-      alert(`Fehler: ${error.response?.data?.detail || error.message}`)
+      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
     },
   })
 
@@ -201,10 +202,10 @@ export default function Users() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
-      alert('Benutzer erfolgreich gelöscht')
+      showSuccess('Benutzer erfolgreich gelöscht')
     },
     onError: (error: any) => {
-      alert(`Fehler: ${error.response?.data?.detail || error.message}`)
+      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
     },
   })
 
@@ -262,29 +263,33 @@ export default function Users() {
     })
   }
 
-  const handleResetPassword = (userId: string) => {
-    const newPassword = prompt('Neues Passwort eingeben:')
+  const handleResetPassword = async (userId: string) => {
+    // Für Passwort-Eingabe verwenden wir einen einfachen Prompt (kann später durch ein Modal ersetzt werden)
+    const newPassword = window.prompt('Neues Passwort eingeben:')
     if (newPassword && newPassword.length >= 6) {
       resetPasswordMutation.mutate({ userId, newPassword })
     } else if (newPassword) {
-      alert('Passwort muss mindestens 6 Zeichen lang sein')
+      showError('Passwort muss mindestens 6 Zeichen lang sein')
     }
   }
 
-  const handleBlockUser = (userId: string) => {
-    if (confirm('Möchten Sie diesen Benutzer wirklich blockieren?')) {
+  const handleBlockUser = async (userId: string) => {
+    const confirmed = await showConfirm('Möchten Sie diesen Benutzer wirklich blockieren?')
+    if (confirmed) {
       blockUserMutation.mutate(userId)
     }
   }
 
-  const handleUnblockUser = (userId: string) => {
-    if (confirm('Möchten Sie diesen Benutzer wirklich entblockieren?')) {
+  const handleUnblockUser = async (userId: string) => {
+    const confirmed = await showConfirm('Möchten Sie diesen Benutzer wirklich entblockieren?')
+    if (confirmed) {
       unblockUserMutation.mutate(userId)
     }
   }
 
-  const handleDeleteUser = (userId: string) => {
-    if (confirm('Möchten Sie diesen Benutzer wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.')) {
+  const handleDeleteUser = async (userId: string) => {
+    const confirmed = await showConfirm('Möchten Sie diesen Benutzer wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.')
+    if (confirmed) {
       deleteUserMutation.mutate(userId)
     }
   }

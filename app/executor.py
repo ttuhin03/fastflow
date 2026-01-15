@@ -26,6 +26,7 @@ from sqlmodel import Session, select, update
 from app.config import config
 from app.models import Pipeline, PipelineRun, RunStatus
 from app.pipeline_discovery import DiscoveredPipeline, get_pipeline
+from app.retry_strategy import wait_for_retry
 
 logger = logging.getLogger(__name__)
 
@@ -611,8 +612,49 @@ async def _run_container_task(
         # Pipeline-Statistiken aktualisieren (atomar)
         await _update_pipeline_stats(pipeline.name, exit_code_value == 0, session, triggered_by=run.triggered_by)
         
-        # Benachrichtigungen senden (nur bei Fehlern)
+        # Retry-Logik: Prüfe ob Retry nötig ist
         if exit_code_value != 0:
+            # Bestimme Retry-Attempts
+            retry_attempts = pipeline.get_retry_attempts()
+            if retry_attempts is None:
+                retry_attempts = config.RETRY_ATTEMPTS
+            
+            # Lade aktuellen Run aus DB um retry_count zu prüfen
+            run = session.get(PipelineRun, run_id)
+            if run and retry_attempts > 0:
+                # Prüfe ob wir bereits retries gemacht haben (über retry_count in env_vars)
+                current_retry_count = run.env_vars.get("_fastflow_retry_count", "0")
+                try:
+                    current_retry_count = int(current_retry_count)
+                except (ValueError, TypeError):
+                    current_retry_count = 0
+                
+                if current_retry_count < retry_attempts:
+                    # Retry nötig
+                    retry_strategy = pipeline.metadata.retry_strategy
+                    
+                    # Warte basierend auf Retry-Strategie
+                    await wait_for_retry(current_retry_count + 1, retry_strategy)
+                    
+                    # Starte neuen Run mit erhöhtem retry_count
+                    new_env_vars = env_vars.copy()
+                    new_env_vars["_fastflow_retry_count"] = str(current_retry_count + 1)
+                    new_env_vars["_fastflow_previous_run_id"] = str(run_id)
+                    
+                    logger.info(f"Starte Retry-Versuch {current_retry_count + 1}/{retry_attempts} für Pipeline {pipeline.name} (vorheriger Run: {run_id})")
+                    
+                    # Neuen Run starten
+                    from app.executor import run_pipeline
+                    await run_pipeline(
+                        pipeline.name,
+                        env_vars=new_env_vars,
+                        parameters=None,  # Parameter werden nicht retry'd
+                        session=session,
+                        triggered_by=f"{run.triggered_by}_retry"
+                    )
+                    return  # Originaler Run bleibt als FAILED, neuer Run wird gestartet
+            
+            # Benachrichtigungen senden (nur bei finalen Fehlern)
             from app.notifications import send_notifications
             await send_notifications(run, RunStatus.FAILED)
         
@@ -631,7 +673,42 @@ async def _run_container_task(
             # Pipeline-Statistiken aktualisieren (Fehler)
             await _update_pipeline_stats(run.pipeline_name, False, session, triggered_by=run.triggered_by)
             
-            # Benachrichtigungen senden
+            # Retry-Logik auch für Exceptions
+            if run:
+                pipeline = get_pipeline(run.pipeline_name)
+                if pipeline:
+                    retry_attempts = pipeline.get_retry_attempts()
+                    if retry_attempts is None:
+                        retry_attempts = config.RETRY_ATTEMPTS
+                    
+                    current_retry_count = run.env_vars.get("_fastflow_retry_count", "0")
+                    try:
+                        current_retry_count = int(current_retry_count)
+                    except (ValueError, TypeError):
+                        current_retry_count = 0
+                    
+                    if retry_attempts > 0 and current_retry_count < retry_attempts:
+                        retry_strategy = pipeline.metadata.retry_strategy
+                        
+                        await wait_for_retry(current_retry_count + 1, retry_strategy)
+                        
+                        new_env_vars = run.env_vars.copy()
+                        new_env_vars["_fastflow_retry_count"] = str(current_retry_count + 1)
+                        new_env_vars["_fastflow_previous_run_id"] = str(run.id)
+                        
+                        logger.info(f"Starte Retry-Versuch {current_retry_count + 1}/{retry_attempts} für Pipeline {run.pipeline_name} nach Exception")
+                        
+                        from app.executor import run_pipeline
+                        await run_pipeline(
+                            run.pipeline_name,
+                            env_vars=new_env_vars,
+                            parameters=None,
+                            session=session,
+                            triggered_by=f"{run.triggered_by}_retry"
+                        )
+                        return
+            
+            # Benachrichtigungen senden (nur bei finalen Fehlern)
             from app.notifications import send_notifications
             await send_notifications(run, RunStatus.FAILED)
         
@@ -953,15 +1030,28 @@ async def _monitor_metrics(
                     
                     # Soft-Limit-Überwachung
                     soft_limit_exceeded = False
+                    exceeded_resource = None
+                    exceeded_value = None
+                    exceeded_limit = None
+                    
                     if pipeline.metadata.cpu_soft_limit and cpu_percent:
-                        if cpu_percent > (pipeline.metadata.cpu_soft_limit * 100):
+                        cpu_soft_limit_percent = pipeline.metadata.cpu_soft_limit * 100
+                        if cpu_percent > cpu_soft_limit_percent:
                             soft_limit_exceeded = True
+                            if not exceeded_resource:  # Nur erste Überschreitung melden
+                                exceeded_resource = "CPU"
+                                exceeded_value = cpu_percent
+                                exceeded_limit = cpu_soft_limit_percent
                     
                     if pipeline.metadata.mem_soft_limit:
                         mem_soft_limit_bytes = _convert_memory_to_bytes(pipeline.metadata.mem_soft_limit)
                         mem_soft_limit_mb = mem_soft_limit_bytes / (1024 * 1024)
                         if ram_usage_mb > mem_soft_limit_mb:
                             soft_limit_exceeded = True
+                            if not exceeded_resource:  # Nur erste Überschreitung melden
+                                exceeded_resource = "RAM"
+                                exceeded_value = ram_usage_mb
+                                exceeded_limit = mem_soft_limit_mb
                     
                     # Metrics-Objekt erstellen
                     metric = {
@@ -971,6 +1061,22 @@ async def _monitor_metrics(
                         "ram_limit_mb": ram_limit_mb,
                         "soft_limit_exceeded": soft_limit_exceeded
                     }
+                    
+                    # Sende Notification bei Soft-Limit-Überschreitung (nur einmal pro Run)
+                    if soft_limit_exceeded and exceeded_resource:
+                        # Prüfe ob bereits benachrichtigt wurde (über env_var)
+                        if "_fastflow_soft_limit_notified" not in env_vars:
+                            # Hole Run aus DB
+                            run_for_notification = session.get(PipelineRun, run_id)
+                            if run_for_notification:
+                                # Markiere als benachrichtigt
+                                env_vars["_fastflow_soft_limit_notified"] = "1"
+                                # Sende Notification im Hintergrund
+                                asyncio.create_task(
+                                    _send_soft_limit_notification_async(
+                                        run_for_notification, exceeded_resource, exceeded_value, exceeded_limit
+                                    )
+                                )
                     
                     # In Datei schreiben (JSONL-Format)
                     await metrics_file.write(json.dumps(metric) + "\n")
@@ -1035,6 +1141,50 @@ async def _iter_stats_stream(stream):
         except Exception as e:
             logger.warning(f"Fehler beim Lesen aus Stats-Stream: {e}")
             break
+
+
+async def _send_soft_limit_notification_async(
+    run: PipelineRun,
+    resource_type: str,
+    current_value: float,
+    limit_value: float
+) -> None:
+    """
+    Interne Funktion zum asynchronen Senden von Soft-Limit-Benachrichtigungen.
+    
+    Args:
+        run: PipelineRun-Objekt
+        resource_type: Art der Ressource ("CPU" oder "RAM")
+        current_value: Aktueller Wert
+        limit_value: Soft-Limit-Wert
+    """
+    try:
+        from app.notifications import send_soft_limit_notification
+        await send_soft_limit_notification(run, resource_type, current_value, limit_value)
+    except Exception as e:
+        logger.error(f"Fehler beim Senden der Soft-Limit-Notification für Run {run.id}: {e}")
+
+
+async def _send_soft_limit_notification_async(
+    run: PipelineRun,
+    resource_type: str,
+    current_value: float,
+    limit_value: float
+) -> None:
+    """
+    Interne Funktion zum asynchronen Senden von Soft-Limit-Benachrichtigungen.
+    
+    Args:
+        run: PipelineRun-Objekt
+        resource_type: Art der Ressource ("CPU" oder "RAM")
+        current_value: Aktueller Wert
+        limit_value: Soft-Limit-Wert
+    """
+    try:
+        from app.notifications import send_soft_limit_notification
+        await send_soft_limit_notification(run, resource_type, current_value, limit_value)
+    except Exception as e:
+        logger.error(f"Fehler beim Senden der Soft-Limit-Notification für Run {run.id}: {e}")
 
 
 def _classify_exit_code(exit_code: int) -> Optional[str]:

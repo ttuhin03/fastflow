@@ -60,6 +60,7 @@ class DailyStat(BaseModel):
     successful_runs: int
     failed_runs: int
     success_rate: float
+    run_ids: Optional[List[str]] = None  # Run-IDs für diesen Tag (optional, für Tooltips)
 
 
 class DailyStatsResponse(BaseModel):
@@ -439,7 +440,7 @@ async def get_pipeline_daily_stats(
     logger.info(f"Daily stats for {name}: Found {len(runs)} runs, today UTC: {today_utc}, start_dt: {start_dt}, end_dt: {end_dt}")
     
     # In Python nach Datum gruppieren und aggregieren
-    daily_data = defaultdict(lambda: {"total": 0, "successful": 0, "failed": 0})
+    daily_data = defaultdict(lambda: {"total": 0, "successful": 0, "failed": 0, "run_ids": []})
     
     for run in runs:
         # Datum extrahieren (nur Datum, ohne Zeit) - UTC-Datum verwenden
@@ -453,6 +454,7 @@ async def get_pipeline_daily_stats(
         
         # Zähle ALLE Runs, unabhängig vom Status (auch RUNNING/PENDING)
         daily_data[date_str]["total"] += 1
+        daily_data[date_str]["run_ids"].append(str(run.id))  # Speichere Run-ID
         if run.status == RunStatus.SUCCESS:
             daily_data[date_str]["successful"] += 1
         elif run.status == RunStatus.FAILED:
@@ -466,6 +468,7 @@ async def get_pipeline_daily_stats(
         total = data["total"]
         successful = data["successful"]
         failed = data["failed"]
+        run_ids = data["run_ids"][:10]  # Max 10 Run-IDs für Tooltip (Performance)
         
         # Erfolgsrate berechnen
         success_rate = 0.0
@@ -477,7 +480,8 @@ async def get_pipeline_daily_stats(
             total_runs=total,
             successful_runs=successful,
             failed_runs=failed,
-            success_rate=success_rate
+            success_rate=success_rate,
+            run_ids=run_ids if run_ids else None
         ))
     
     return DailyStatsResponse(daily_stats=daily_stats)

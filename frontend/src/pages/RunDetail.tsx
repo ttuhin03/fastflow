@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
 import apiClient from '../api/client'
+import { showError, showSuccess } from '../utils/toast'
 import './RunDetail.css'
 
 interface LineChartProps {
@@ -349,10 +350,10 @@ export default function RunDetail() {
         queryClient.invalidateQueries({ queryKey: ['all-pipelines-daily-stats'] })
         queryClient.invalidateQueries({ queryKey: ['pipeline-daily-stats', run.pipeline_name] })
       }
-      alert('Run wurde erfolgreich abgebrochen')
+      showSuccess('Run wurde erfolgreich abgebrochen')
     },
     onError: (error: any) => {
-      alert(`Fehler beim Abbrechen: ${error.response?.data?.detail || error.message}`)
+      showError(`Fehler beim Abbrechen: ${error.response?.data?.detail || error.message}`)
     },
   })
 
@@ -371,7 +372,7 @@ export default function RunDetail() {
       navigate(`/runs/${data.id}`)
     },
     onError: (error: any) => {
-      alert(`Fehler beim Neustart: ${error.response?.data?.detail || error.message}`)
+      showError(`Fehler beim Neustart: ${error.response?.data?.detail || error.message}`)
     },
   })
 

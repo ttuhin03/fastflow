@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { Toaster } from 'react-hot-toast'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Pipelines from './pages/Pipelines'
@@ -13,6 +14,8 @@ import Settings from './pages/Settings'
 import Users from './pages/Users'
 import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { NotificationProvider } from './contexts/NotificationContext'
+import { useRunNotifications } from './hooks/useRunNotifications'
 import './App.css'
 
 const queryClient = new QueryClient({
@@ -39,6 +42,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AppRoutes() {
+  // Automatische Run-Notifications aktivieren
+  useRunNotifications()
+
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
@@ -69,9 +75,34 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
+        <NotificationProvider>
+          <BrowserRouter>
+            <AppRoutes />
+            <Toaster
+            position="top-right"
+            toastOptions={{
+              duration: 4000,
+              style: {
+                background: '#2a2a2a',
+                color: '#fff',
+                border: '1px solid #444',
+              },
+              success: {
+                iconTheme: {
+                  primary: '#4caf50',
+                  secondary: '#fff',
+                },
+              },
+              error: {
+                iconTheme: {
+                  primary: '#f44336',
+                  secondary: '#fff',
+                },
+              },
+            }}
+          />
+          </BrowserRouter>
+        </NotificationProvider>
       </AuthProvider>
     </QueryClientProvider>
   )

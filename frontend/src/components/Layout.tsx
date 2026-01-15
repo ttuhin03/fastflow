@@ -14,8 +14,11 @@ import {
   MdPeople,
   MdLogout,
   MdCircle,
-  MdPause
+  MdPause,
+  MdMenu,
+  MdClose
 } from 'react-icons/md'
+import NotificationCenter from './NotificationCenter'
 import './Layout.css'
 
 interface NavItem {
@@ -42,6 +45,7 @@ export default function Layout() {
   const [backendStatus, setBackendStatus] = useState<'online' | 'offline' | 'checking'>('checking')
   const [healthPulse, setHealthPulse] = useState(false)
   const [clickedIcons, setClickedIcons] = useState<Set<string>>(new Set())
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const previousStatusRef = useRef<'online' | 'offline' | 'checking'>('checking')
 
   const { data: health, isError, error, isFetching } = useQuery({
@@ -121,9 +125,27 @@ export default function Layout() {
     }, animationDuration)
   }
 
+  const toggleSidebar = () => {
+    setSidebarOpen(!sidebarOpen)
+  }
+
+  const closeSidebar = () => {
+    setSidebarOpen(false)
+  }
+
   return (
     <div className="layout">
-      <aside className="sidebar">
+      {/* Mobile Sidebar Overlay */}
+      {sidebarOpen && (
+        <div className="sidebar-overlay" onClick={closeSidebar}></div>
+      )}
+      
+      {/* Mobile Menu Button */}
+      <button className="mobile-menu-button" onClick={toggleSidebar} aria-label="Menu">
+        {sidebarOpen ? <MdClose /> : <MdMenu />}
+      </button>
+
+      <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
           <h1 className="sidebar-logo">Fast-Flow</h1>
         </div>
@@ -148,7 +170,10 @@ export default function Layout() {
                 key={item.path}
                 to={item.path}
                 className={`nav-item ${isActive(item.path) ? 'active' : ''}`}
-                onClick={() => handleNavClick(item.path)}
+                onClick={() => {
+                  handleNavClick(item.path)
+                  closeSidebar() // Close sidebar on mobile after navigation
+                }}
               >
                 <span className={`nav-icon ${iconClass} ${iconType}`}>
                   {showPauseIcon ? <MdPause /> : item.icon}
@@ -179,6 +204,7 @@ export default function Layout() {
             <h2 className="page-title">
               {navItems.find(item => isActive(item.path))?.label || 'Dashboard'}
             </h2>
+            <NotificationCenter />
           </div>
         </header>
         

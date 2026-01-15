@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import { MdSave, MdRefresh, MdInfo, MdWarning, MdEmail, MdGroup } from 'react-icons/md'
+import { showError, showSuccess } from '../utils/toast'
 import StorageStats from '../components/StorageStats'
 import SystemMetrics from '../components/SystemMetrics'
 import './Settings.css'
@@ -46,11 +47,11 @@ export default function Settings() {
       return response.data
     },
     onSuccess: (data) => {
-      alert(data.message || 'Einstellungen aktualisiert (Neustart erforderlich)')
+      showSuccess(data.message || 'Einstellungen aktualisiert (Neustart erforderlich)')
       queryClient.invalidateQueries({ queryKey: ['settings'] })
     },
     onError: (error: any) => {
-      alert(`Fehler beim Aktualisieren: ${error.response?.data?.detail || error.message}`)
+      showError(`Fehler beim Aktualisieren: ${error.response?.data?.detail || error.message}`)
     },
   })
 
@@ -109,10 +110,10 @@ export default function Settings() {
         message += `  Docker: ${data.docker_cleanup.deleted_containers || 0} Container, ${data.docker_cleanup.deleted_volumes || 0} Volumes gelöscht\n`
       }
       
-      alert(message)
+      showSuccess(message.replace(/\n/g, ' ')) // Replace newlines for toast
     },
     onError: (error: any) => {
-      alert(`Fehler beim Cleanup: ${error.response?.data?.detail || error.message}`)
+      showError(`Fehler beim Cleanup: ${error.response?.data?.detail || error.message}`)
     },
   })
 
@@ -122,10 +123,10 @@ export default function Settings() {
       return response.data
     },
     onSuccess: (data) => {
-      alert(data.message || 'Test-E-Mail erfolgreich gesendet')
+      showSuccess(data.message || 'Test-E-Mail erfolgreich gesendet')
     },
     onError: (error: any) => {
-      alert(`Fehler beim Senden der Test-E-Mail: ${error.response?.data?.detail || error.message}`)
+      showError(`Fehler beim Senden der Test-E-Mail: ${error.response?.data?.detail || error.message}`)
     },
   })
 
@@ -135,10 +136,10 @@ export default function Settings() {
       return response.data
     },
     onSuccess: (data) => {
-      alert(data.message || 'Test-Teams-Nachricht erfolgreich gesendet')
+      showSuccess(data.message || 'Test-Teams-Nachricht erfolgreich gesendet')
     },
     onError: (error: any) => {
-      alert(`Fehler beim Senden der Test-Teams-Nachricht: ${error.response?.data?.detail || error.message}`)
+      showError(`Fehler beim Senden der Test-Teams-Nachricht: ${error.response?.data?.detail || error.message}`)
     },
   })
 

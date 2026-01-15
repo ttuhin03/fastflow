@@ -359,3 +359,142 @@ def _create_teams_card(run: PipelineRun, status: RunStatus) -> dict:
         ]
     
     return card
+
+
+async def send_soft_limit_notification(run: PipelineRun, resource_type: str, current_value: float, limit_value: float) -> None:
+    """
+    Sendet eine Benachrichtigung bei Soft-Limit-Überschreitung.
+    
+    Args:
+        run: PipelineRun-Objekt
+        resource_type: Art der Ressource ("CPU" oder "RAM")
+        current_value: Aktueller Wert
+        limit_value: Soft-Limit-Wert
+    """
+    if not config.EMAIL_ENABLED and not config.TEAMS_ENABLED:
+        return
+    
+    try:
+        subject = f"[FastFlow] Soft-Limit überschritten: {run.pipeline_name}"
+        message = f"Pipeline {run.pipeline_name} (Run {run.id}) hat das {resource_type}-Soft-Limit überschritten: {current_value:.1f} > {limit_value:.1f}"
+        
+        # E-Mail senden
+        if config.EMAIL_ENABLED:
+            try:
+                from email.mime.text import MIMEText
+                from email.mime.multipart import MIMEMultipart
+                import aiosmtplib
+                
+                msg = MIMEMultipart("alternative")
+                msg["From"] = config.SMTP_FROM
+                msg["To"] = ", ".join(config.EMAIL_RECIPIENTS)
+                msg["Subject"] = subject
+                msg.attach(MIMEText(message, "plain"))
+                
+                smtp = aiosmtplib.SMTP(
+                    hostname=config.SMTP_HOST,
+                    port=config.SMTP_PORT,
+                    use_tls=config.SMTP_PORT == 587
+                )
+                await smtp.connect()
+                if config.SMTP_USER and config.SMTP_PASSWORD:
+                    await smtp.login(config.SMTP_USER, config.SMTP_PASSWORD)
+                await smtp.send_message(msg)
+                await smtp.quit()
+            except Exception as e:
+                logger.error(f"Fehler beim Senden der Soft-Limit-E-Mail: {e}")
+        
+        # Teams senden (falls aktiviert)
+        if config.TEAMS_ENABLED:
+            try:
+                import httpx
+                card = {
+                    "@type": "MessageCard",
+                    "@context": "https://schema.org/extensions",
+                    "summary": subject,
+                    "themeColor": "FF9800",
+                    "title": "Soft-Limit überschritten",
+                    "sections": [{
+                        "activityTitle": f"Pipeline: {run.pipeline_name}",
+                        "facts": [
+                            {"title": "Run-ID", "value": str(run.id)[:8] + "..."},
+                            {"title": "Ressource", "value": resource_type},
+                            {"title": "Aktueller Wert", "value": f"{current_value:.1f}"},
+                            {"title": "Soft-Limit", "value": f"{limit_value:.1f}"},
+                        ],
+                        "markdown": True
+                    }]
+                }
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    await client.post(config.TEAMS_WEBHOOK_URL, json=card)
+            except Exception as e:
+                logger.error(f"Fehler beim Senden der Soft-Limit-Teams-Nachricht: {e}")
+    except Exception as e:
+        logger.error(f"Fehler beim Senden der Soft-Limit-Benachrichtigung: {e}")
+
+
+async def send_scheduler_error_notification(pipeline_name: str, error_message: str) -> None:
+    """
+    Sendet eine Benachrichtigung bei Scheduler-Fehlern.
+    
+    Args:
+        pipeline_name: Name der Pipeline
+        error_message: Fehlermeldung
+    """
+    if not config.EMAIL_ENABLED and not config.TEAMS_ENABLED:
+        return
+    
+    try:
+        subject = f"[FastFlow] Scheduler-Fehler: {pipeline_name}"
+        message = f"Scheduler konnte Pipeline {pipeline_name} nicht ausführen: {error_message}"
+        
+        # E-Mail senden
+        if config.EMAIL_ENABLED:
+            try:
+                from email.mime.text import MIMEText
+                from email.mime.multipart import MIMEMultipart
+                import aiosmtplib
+                
+                msg = MIMEMultipart("alternative")
+                msg["From"] = config.SMTP_FROM
+                msg["To"] = ", ".join(config.EMAIL_RECIPIENTS)
+                msg["Subject"] = subject
+                msg.attach(MIMEText(message, "plain"))
+                
+                smtp = aiosmtplib.SMTP(
+                    hostname=config.SMTP_HOST,
+                    port=config.SMTP_PORT,
+                    use_tls=config.SMTP_PORT == 587
+                )
+                await smtp.connect()
+                if config.SMTP_USER and config.SMTP_PASSWORD:
+                    await smtp.login(config.SMTP_USER, config.SMTP_PASSWORD)
+                await smtp.send_message(msg)
+                await smtp.quit()
+            except Exception as e:
+                logger.error(f"Fehler beim Senden der Scheduler-Error-E-Mail: {e}")
+        
+        # Teams senden
+        if config.TEAMS_ENABLED:
+            try:
+                import httpx
+                card = {
+                    "@type": "MessageCard",
+                    "@context": "https://schema.org/extensions",
+                    "summary": subject,
+                    "themeColor": "F44336",
+                    "title": "Scheduler-Fehler",
+                    "sections": [{
+                        "activityTitle": f"Pipeline: {pipeline_name}",
+                        "facts": [
+                            {"title": "Fehler", "value": error_message},
+                        ],
+                        "markdown": True
+                    }]
+                }
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    await client.post(config.TEAMS_WEBHOOK_URL, json=card)
+            except Exception as e:
+                logger.error(f"Fehler beim Senden der Scheduler-Error-Teams-Nachricht: {e}")
+    except Exception as e:
+        logger.error(f"Fehler beim Senden der Scheduler-Error-Benachrichtigung: {e}")

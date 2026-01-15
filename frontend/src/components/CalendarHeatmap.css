@@ -198,6 +198,48 @@
   color: #f44336;
 }
 
+.tooltip-run-ids {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #444;
+}
+
+.tooltip-run-ids-label {
+  font-size: 0.75rem;
+  color: #888;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.tooltip-run-ids-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.tooltip-run-id-link {
+  font-size: 0.75rem;
+  color: #2196f3;
+  text-decoration: none;
+  padding: 0.2rem 0.4rem;
+  background-color: rgba(33, 150, 243, 0.1);
+  border-radius: 4px;
+  transition: background-color 0.2s;
+  font-family: monospace;
+  pointer-events: auto;
+}
+
+.tooltip-run-id-link:hover {
+  background-color: rgba(33, 150, 243, 0.2);
+  text-decoration: underline;
+}
+
+.tooltip-run-ids-more {
+  font-size: 0.75rem;
+  color: #888;
+  font-style: italic;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .calendar-heatmap {

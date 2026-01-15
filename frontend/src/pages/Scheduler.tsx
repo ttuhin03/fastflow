@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
+import { showError, showSuccess, showConfirm } from '../utils/toast'
 import './Scheduler.css'
 
 interface Job {
@@ -58,9 +59,10 @@ export default function Scheduler() {
       queryClient.invalidateQueries({ queryKey: ['scheduler-jobs'] })
       setIsAdding(false)
       resetForm()
+      showSuccess('Job erfolgreich erstellt')
     },
     onError: (error: any) => {
-      alert(`Fehler beim Erstellen: ${error.response?.data?.detail || error.message}`)
+      showError(`Fehler beim Erstellen: ${error.response?.data?.detail || error.message}`)
     },
   })
 
@@ -84,9 +86,10 @@ export default function Scheduler() {
       queryClient.invalidateQueries({ queryKey: ['scheduler-jobs'] })
       setEditingJob(null)
       resetForm()
+      showSuccess('Job erfolgreich aktualisiert')
     },
     onError: (error: any) => {
-      alert(`Fehler beim Aktualisieren: ${error.response?.data?.detail || error.message}`)
+      showError(`Fehler beim Aktualisieren: ${error.response?.data?.detail || error.message}`)
     },
   })
 
@@ -96,9 +99,10 @@ export default function Scheduler() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['scheduler-jobs'] })
+      showSuccess('Job erfolgreich gelöscht')
     },
     onError: (error: any) => {
-      alert(`Fehler beim Löschen: ${error.response?.data?.detail || error.message}`)
+      showError(`Fehler beim Löschen: ${error.response?.data?.detail || error.message}`)
     },
   })
 
@@ -111,7 +115,7 @@ export default function Scheduler() {
       queryClient.invalidateQueries({ queryKey: ['scheduler-jobs'] })
     },
     onError: (error: any) => {
-      alert(`Fehler beim Umschalten: ${error.response?.data?.detail || error.message}`)
+      showError(`Fehler beim Umschalten: ${error.response?.data?.detail || error.message}`)
     },
   })
 
@@ -125,7 +129,7 @@ export default function Scheduler() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!formPipeline || !formTriggerValue) {
-      alert('Bitte füllen Sie alle Felder aus')
+      showError('Bitte füllen Sie alle Felder aus')
       return
     }
 
@@ -158,8 +162,9 @@ export default function Scheduler() {
     setIsAdding(true)
   }
 
-  const handleDelete = (jobId: string, pipelineName: string) => {
-    if (confirm(`Möchten Sie den Job für '${pipelineName}' wirklich löschen?`)) {
+  const handleDelete = async (jobId: string, pipelineName: string) => {
+    const confirmed = await showConfirm(`Möchten Sie den Job für '${pipelineName}' wirklich löschen?`)
+    if (confirmed) {
       deleteMutation.mutate(jobId)
     }
   }

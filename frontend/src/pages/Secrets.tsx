@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
+import { showError, showSuccess, showConfirm } from '../utils/toast'
 import './Secrets.css'
 
 interface Secret {
@@ -41,9 +42,10 @@ export default function Secrets() {
       setFormKey('')
       setFormValue('')
       setIsParameter(false)
+      showSuccess('Secret erfolgreich erstellt')
     },
     onError: (error: any) => {
-      alert(`Fehler beim Erstellen: ${error.response?.data?.detail || error.message}`)
+      showError(`Fehler beim Erstellen: ${error.response?.data?.detail || error.message}`)
     },
   })
 
@@ -58,9 +60,10 @@ export default function Secrets() {
       setFormKey('')
       setFormValue('')
       setIsParameter(false)
+      showSuccess('Secret erfolgreich aktualisiert')
     },
     onError: (error: any) => {
-      alert(`Fehler beim Aktualisieren: ${error.response?.data?.detail || error.message}`)
+      showError(`Fehler beim Aktualisieren: ${error.response?.data?.detail || error.message}`)
     },
   })
 
@@ -70,16 +73,17 @@ export default function Secrets() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['secrets'] })
+      showSuccess('Secret erfolgreich gelöscht')
     },
     onError: (error: any) => {
-      alert(`Fehler beim Löschen: ${error.response?.data?.detail || error.message}`)
+      showError(`Fehler beim Löschen: ${error.response?.data?.detail || error.message}`)
     },
   })
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!formKey || !formValue) {
-      alert('Bitte füllen Sie alle Felder aus')
+      showError('Bitte füllen Sie alle Felder aus')
       return
     }
 
@@ -98,8 +102,9 @@ export default function Secrets() {
     setIsAdding(true)
   }
 
-  const handleDelete = (key: string) => {
-    if (confirm(`Möchten Sie das Secret '${key}' wirklich löschen?`)) {
+  const handleDelete = async (key: string) => {
+    const confirmed = await showConfirm(`Möchten Sie das Secret '${key}' wirklich löschen?`)
+    if (confirmed) {
       deleteMutation.mutate(key)
     }
   }

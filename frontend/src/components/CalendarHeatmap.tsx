@@ -7,6 +7,7 @@ interface DailyStat {
   successful_runs: number
   failed_runs: number
   success_rate: number
+  run_ids?: string[]  // Run-IDs für Tooltip
 }
 
 interface CalendarHeatmapProps {
@@ -21,6 +22,7 @@ interface DayData {
   successful_runs: number
   failed_runs: number
   success_rate: number
+  run_ids?: string[]
 }
 
 export default function CalendarHeatmap({ dailyStats, days = 365 }: CalendarHeatmapProps) {
@@ -56,7 +58,8 @@ export default function CalendarHeatmap({ dailyStats, days = 365 }: CalendarHeat
         total_runs: stat?.total_runs || 0,
         successful_runs: stat?.successful_runs || 0,
         failed_runs: stat?.failed_runs || 0,
-        success_rate: stat?.success_rate || 0
+        success_rate: stat?.success_rate || 0,
+        run_ids: stat?.run_ids || undefined
       })
     }
     
@@ -305,6 +308,31 @@ export default function CalendarHeatmap({ dailyStats, days = 365 }: CalendarHeat
               <span className="tooltip-value">{hoveredDayData.success_rate.toFixed(1)}%</span>
             </div>
           </div>
+          {hoveredDayData.run_ids && hoveredDayData.run_ids.length > 0 && (
+            <div className="tooltip-run-ids">
+              <div className="tooltip-run-ids-label">Run-IDs:</div>
+              <div className="tooltip-run-ids-list">
+                {hoveredDayData.run_ids.map((runId) => (
+                  <a
+                    key={runId}
+                    href={`/runs/${runId}`}
+                    className="tooltip-run-id-link"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      window.location.href = `/runs/${runId}`
+                    }}
+                  >
+                    {runId.substring(0, 8)}...
+                  </a>
+                ))}
+                {hoveredDayData.total_runs > hoveredDayData.run_ids.length && (
+                  <span className="tooltip-run-ids-more">
+                    +{hoveredDayData.total_runs - hoveredDayData.run_ids.length} weitere
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

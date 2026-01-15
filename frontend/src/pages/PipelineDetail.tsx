@@ -3,7 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
+import { showError, showSuccess, showConfirm } from '../utils/toast'
 import CalendarHeatmap from '../components/CalendarHeatmap'
+import SuccessRateTrendChart from '../components/SuccessRateTrendChart'
+import AverageRuntimeChart from '../components/AverageRuntimeChart'
 import './PipelineDetail.css'
 
 interface PipelineStats {
@@ -115,16 +118,17 @@ export default function PipelineDetail() {
       queryClient.invalidateQueries({ queryKey: ['pipeline-stats', name] })
       queryClient.invalidateQueries({ queryKey: ['pipeline', name] })
       queryClient.invalidateQueries({ queryKey: ['pipelines'] })
-      alert('Statistiken wurden zurückgesetzt')
+      showSuccess('Statistiken wurden zurückgesetzt')
     },
     onError: (error: any) => {
-      alert(`Fehler beim Zurücksetzen: ${error.response?.data?.detail || error.message}`)
+      showError(`Fehler beim Zurücksetzen: ${error.response?.data?.detail || error.message}`)
     },
   })
 
 
-  const handleResetStats = () => {
-    if (confirm('Möchten Sie die Statistiken wirklich zurücksetzen?')) {
+  const handleResetStats = async () => {
+    const confirmed = await showConfirm('Möchten Sie die Statistiken wirklich zurücksetzen?')
+    if (confirmed) {
       resetStatsMutation.mutate()
     }
   }
@@ -135,7 +139,7 @@ export default function PipelineDetail() {
       const baseUrl = window.location.origin
       const webhookUrl = `${baseUrl}/api/webhooks/${name}/${pipeline.metadata.webhook_key}`
       navigator.clipboard.writeText(webhookUrl)
-      alert('Webhook-URL wurde in die Zwischenablage kopiert')
+      showSuccess('Webhook-URL wurde in die Zwischenablage kopiert')
     }
   }
 
@@ -349,11 +353,13 @@ export default function PipelineDetail() {
 
       {dailyStats && dailyStats.daily_stats && dailyStats.daily_stats.length > 0 && (
         <>
-          <CalendarHeatmap dailyStats={dailyStats.daily_stats} days={365} />
-          {/* Debug: Zeige die letzten 5 Tage */}
-          <div style={{ marginTop: '10px', fontSize: '12px', color: '#666' }}>
-            Letzte 5 Tage: {dailyStats.daily_stats.slice(-5).map((s: { date: string; total_runs: number; successful_runs: number; failed_runs: number; success_rate: number }) => `${s.date}: ${s.total_runs} runs`).join(', ')}
+          <div className="charts-section">
+            <SuccessRateTrendChart dailyStats={dailyStats.daily_stats} days={30} />
+            {runs && runs.length > 0 && (
+              <AverageRuntimeChart runs={runs} days={30} />
+            )}
           </div>
+          <CalendarHeatmap dailyStats={dailyStats.daily_stats} days={365} />
         </>
       )}
 

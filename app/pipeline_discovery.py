@@ -31,6 +31,7 @@ class PipelineMetadata:
         mem_soft_limit: Optional[str] = None,
         timeout: Optional[int] = None,
         retry_attempts: Optional[int] = None,
+        retry_strategy: Optional[Dict[str, Any]] = None,
         description: Optional[str] = None,
         tags: Optional[List[str]] = None,
         enabled: bool = True,
@@ -47,6 +48,11 @@ class PipelineMetadata:
             mem_soft_limit: Memory-Soft-Limit für Monitoring (wird überwacht, keine Limitierung)
             timeout: Timeout in Sekunden (pipeline-spezifisch, überschreibt CONTAINER_TIMEOUT)
             retry_attempts: Retry-Versuche bei Fehlern (pipeline-spezifisch, überschreibt RETRY_ATTEMPTS)
+            retry_strategy: Retry-Strategie (Dict mit "type" und weiteren Parametern)
+                - type: "exponential_backoff", "fixed_delay", oder "custom_schedule"
+                - Für exponential_backoff: "initial_delay" (Sekunden), "max_delay" (Sekunden), "multiplier" (Float)
+                - Für fixed_delay: "delay" (Sekunden)
+                - Für custom_schedule: "delays" (Liste von Sekunden)
             description: Beschreibung der Pipeline (wird in UI angezeigt)
             tags: Tags für Kategorisierung/Filterung in UI
             enabled: Pipeline aktiviert/deaktiviert (Standard: true)
@@ -59,6 +65,7 @@ class PipelineMetadata:
         self.mem_soft_limit = mem_soft_limit
         self.timeout = timeout
         self.retry_attempts = retry_attempts
+        self.retry_strategy = retry_strategy
         self.description = description
         self.tags = tags or []
         self.enabled = enabled
@@ -86,6 +93,8 @@ class PipelineMetadata:
             result["timeout"] = self.timeout
         if self.retry_attempts is not None:
             result["retry_attempts"] = self.retry_attempts
+        if self.retry_strategy is not None:
+            result["retry_strategy"] = self.retry_strategy
         if self.description is not None:
             result["description"] = self.description
         if self.tags:
@@ -296,6 +305,7 @@ def _load_pipeline_metadata(
             mem_soft_limit=data.get("mem_soft_limit"),
             timeout=data.get("timeout"),
             retry_attempts=data.get("retry_attempts"),
+            retry_strategy=data.get("retry_strategy"),
             description=data.get("description"),
             tags=data.get("tags"),
             enabled=data.get("enabled", True),  # Standard: true

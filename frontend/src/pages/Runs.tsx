@@ -242,7 +242,8 @@ export default function Runs() {
 
       {filteredAndSortedRuns.length > 0 ? (
         <>
-          <div className="runs-table-container card">
+          {/* Desktop Table View */}
+          <div className="runs-table-container card desktop-only">
             <table className="runs-table">
               <thead>
                 <tr>
@@ -289,6 +290,51 @@ export default function Runs() {
                 ))}
               </tbody>
             </table>
+          </div>
+
+          {/* Mobile Card View */}
+          <div className="runs-cards-container mobile-only">
+            {filteredAndSortedRuns.map((run) => (
+              <div key={run.id} className="run-card card">
+                <div className="run-card-header">
+                  <div className="run-card-id">
+                    {getStatusIcon(run.status)}
+                    <span className="run-card-id-text">{run.id.substring(0, 8)}...</span>
+                  </div>
+                  <span className={`status-badge status-${run.status.toLowerCase()}`}>
+                    {run.status}
+                  </span>
+                </div>
+                <div className="run-card-body">
+                  <div className="run-card-row">
+                    <span className="run-card-label">Pipeline:</span>
+                    <span className="run-card-value">{run.pipeline_name}</span>
+                  </div>
+                  <div className="run-card-row">
+                    <span className="run-card-label">Gestartet:</span>
+                    <span className="run-card-value">{new Date(run.started_at).toLocaleString('de-DE')}</span>
+                  </div>
+                  <div className="run-card-row">
+                    <span className="run-card-label">Dauer:</span>
+                    <span className="run-card-value">{getDuration(run)}</span>
+                  </div>
+                  {run.exit_code !== null && (
+                    <div className="run-card-row">
+                      <span className="run-card-label">Exit Code:</span>
+                      <span className={`run-card-value ${run.exit_code === 0 ? 'exit-success' : 'exit-error'}`}>
+                        {run.exit_code}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="run-card-footer">
+                  <Link to={`/runs/${run.id}`} className="btn btn-outlined btn-sm details-link">
+                    <MdInfo />
+                    Details
+                  </Link>
+                </div>
+              </div>
+            ))}
           </div>
           
           {totalPages > 1 && (

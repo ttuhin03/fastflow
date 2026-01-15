@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
+import { showError, showSuccess, showConfirm } from '../utils/toast'
 import { MdInfo, MdRefresh, MdMemory } from 'react-icons/md'
 import RunStatusCircles from '../components/RunStatusCircles'
 import ProgressBar from '../components/ProgressBar'
@@ -47,15 +48,16 @@ export default function Pipelines() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pipelines'] })
-      alert('Statistiken wurden zurückgesetzt')
+      showSuccess('Statistiken wurden zurückgesetzt')
     },
     onError: (error: any) => {
-      alert(`Fehler beim Zurücksetzen: ${error.response?.data?.detail || error.message}`)
+      showError(`Fehler beim Zurücksetzen: ${error.response?.data?.detail || error.message}`)
     },
   })
 
-  const handleResetStats = (name: string) => {
-    if (confirm(`Möchten Sie die Statistiken für '${name}' wirklich zurücksetzen?`)) {
+  const handleResetStats = async (name: string) => {
+    const confirmed = await showConfirm(`Möchten Sie die Statistiken für '${name}' wirklich zurücksetzen?`)
+    if (confirmed) {
       resetStatsMutation.mutate(name)
     }
   }

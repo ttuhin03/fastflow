@@ -216,6 +216,61 @@ Anzahl Retry-Versuche bei Fehlern.
 - Retries werden nur bei fehlgeschlagenen Runs durchgeführt
 - Wenn nicht gesetzt: Verwendet globales `RETRY_ATTEMPTS`
 
+##### `retry_strategy` (Object, optional)
+
+Retry-Strategie für intelligente Wartezeiten zwischen Retry-Versuchen.
+
+**Unterstützte Strategien:**
+
+**1. Exponential Backoff** (empfohlen für externe APIs):
+```json
+{
+  "retry_attempts": 3,
+  "retry_strategy": {
+    "type": "exponential_backoff",
+    "initial_delay": 60,
+    "max_delay": 3600,
+    "multiplier": 2.0
+  }
+}
+```
+- `initial_delay`: Wartezeit vor dem ersten Retry in Sekunden (Standard: 60)
+- `max_delay`: Maximale Wartezeit in Sekunden (Standard: 3600 = 1 Stunde)
+- `multiplier`: Multiplikator für exponentielle Erhöhung (Standard: 2.0)
+- **Beispiel**: 1. Retry nach 60s, 2. Retry nach 120s, 3. Retry nach 240s
+
+**2. Fixed Delay** (empfohlen für interne Services):
+```json
+{
+  "retry_attempts": 3,
+  "retry_strategy": {
+    "type": "fixed_delay",
+    "delay": 120
+  }
+}
+```
+- `delay`: Feste Wartezeit vor jedem Retry in Sekunden (Standard: 60)
+- **Beispiel**: Alle Retries nach genau 120 Sekunden
+
+**3. Custom Schedule** (für spezifische Anforderungen):
+```json
+{
+  "retry_attempts": 4,
+  "retry_strategy": {
+    "type": "custom_schedule",
+    "delays": [30, 60, 180, 600]
+  }
+}
+```
+- `delays`: Liste von Wartezeiten in Sekunden (ein Wert pro Retry-Versuch)
+- **Beispiel**: 1. Retry nach 30s, 2. Retry nach 60s, 3. Retry nach 180s, 4. Retry nach 600s
+- Wenn mehr Retries als Wartezeiten: Letzte Wartezeit wird wiederholt
+
+**Verhalten:**
+- Wenn `retry_strategy` nicht gesetzt ist, wird Fixed Delay mit Standard-Wartezeit (60 Sekunden) verwendet
+- Retry-Strategie wird nur verwendet wenn `retry_attempts > 0`
+- Jeder Retry-Versuch wird als neuer Run in der Datenbank erstellt (für vollständige Nachverfolgbarkeit)
+
 ##### `enabled` (Boolean, optional)
 
 Pipeline aktiviert/deaktiviert.
@@ -432,7 +487,13 @@ requests==2.31.0
   "description": "Prozessiert eingehende Daten von API und erstellt Reports",
   "tags": ["data-processing", "reports", "api"],
   "timeout": 1800,
-  "retry_attempts": 2,
+  "retry_attempts": 3,
+  "retry_strategy": {
+    "type": "exponential_backoff",
+    "initial_delay": 60,
+    "max_delay": 600,
+    "multiplier": 2.0
+  },
   "cpu_hard_limit": 1.0,
   "mem_hard_limit": "512m",
   "cpu_soft_limit": 0.8,
@@ -444,6 +505,92 @@ requests==2.31.0
   "webhook_key": "data-processor-secret-key-12345"
 }
 ```
+
+### Retry-Strategien Beispiele
+
+#### Beispiel 1: API-Call mit Exponential Backoff
+Für Pipelines, die externe APIs aufrufen (häufig temporäre Fehler):
+
+```json
+{
+  "retry_attempts": 5,
+  "retry_strategy": {
+    "type": "exponential_backoff",
+    "initial_delay": 30,
+    "max_delay": 1800,
+    "multiplier": 2.0
+  }
+}
+```
+
+**Timing:**
+- 1. Retry: Nach 30 Sekunden
+- 2. Retry: Nach 60 Sekunden  
+- 3. Retry: Nach 120 Sekunden
+- 4. Retry: Nach 240 Sekunden
+- 5. Retry: Nach 480 Sekunden
+
+**Wann verwenden:**
+- Externe API-Calls (häufig temporäre Netzwerk-Fehler)
+- Datenbank-Verbindungen (Connection-Pool-Auslastung)
+- Rate-Limited Services (Backend braucht Zeit zum Zurücksetzen)
+
+#### Beispiel 2: Interne Datenbank-Pipeline mit Fixed Delay
+Für Pipelines, die interne Services nutzen (schnellere Retries):
+
+```json
+{
+  "retry_attempts": 3,
+  "retry_strategy": {
+    "type": "fixed_delay",
+    "delay": 120
+  }
+}
+```
+
+**Timing:**
+- Alle Retries nach genau 120 Sekunden
+
+**Wann verwenden:**
+- Interne Services (schnelle Recovery-Zeit)
+- Datenbank-Queries (Lock-Timeout-Erwartung)
+- File-Processing (Datei-Verfügbarkeit)
+
+#### Beispiel 3: Kritische Pipeline mit Custom Schedule
+Für spezifische Retry-Zeitpläne:
+
+```json
+{
+  "retry_attempts": 4,
+  "retry_strategy": {
+    "type": "custom_schedule",
+    "delays": [60, 300, 900, 3600]
+  }
+}
+```
+
+**Timing:**
+- 1. Retry: Nach 1 Minute (60s)
+- 2. Retry: Nach 5 Minuten (300s)
+- 3. Retry: Nach 15 Minuten (900s)
+- 4. Retry: Nach 1 Stunde (3600s)
+
+**Wann verwenden:**
+- Kritische Pipelines mit spezifischen Recovery-Zeiten
+- Externe Services mit Wartungsfenstern
+- Dependencies die Zeit zum Hochfahren brauchen
+
+#### Beispiel 4: Keine Retry-Strategie (Standard)
+Wenn keine Strategie angegeben ist, wird Fixed Delay mit 60 Sekunden verwendet:
+
+```json
+{
+  "retry_attempts": 2
+}
+```
+
+**Timing:**
+- Alle Retries nach genau 60 Sekunden (Standard)
 
 ## Best Practices
 
