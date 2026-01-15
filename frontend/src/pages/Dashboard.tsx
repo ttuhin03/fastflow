@@ -14,6 +14,7 @@ import {
 } from 'react-icons/md'
 import RunStatusCircles from '../components/RunStatusCircles'
 import StorageStats from '../components/StorageStats'
+import CalendarHeatmap from '../components/CalendarHeatmap'
 import './Dashboard.css'
 
 interface Pipeline {
@@ -59,6 +60,15 @@ export default function Dashboard() {
       return response.data
     },
     refetchInterval: 10000,
+  })
+
+  const { data: allPipelinesDailyStats } = useQuery({
+    queryKey: ['all-pipelines-daily-stats'],
+    queryFn: async () => {
+      const response = await apiClient.get('/pipelines/daily-stats/all?days=365')
+      return response.data
+    },
+    refetchInterval: 30000,
   })
 
   const startPipelineMutation = useMutation({
@@ -211,6 +221,15 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {allPipelinesDailyStats && allPipelinesDailyStats.daily_stats && allPipelinesDailyStats.daily_stats.length > 0 && (
+        <div className="dashboard-calendar-section">
+          <h3 className="section-title">Gesamt-Übersicht aller Pipelines</h3>
+          <div className="dashboard-calendar-wrapper">
+            <CalendarHeatmap dailyStats={allPipelinesDailyStats.daily_stats} days={365} />
+          </div>
+        </div>
+      )}
 
       <div className="storage-section">
         <h3 className="section-title">Speicherplatz</h3>

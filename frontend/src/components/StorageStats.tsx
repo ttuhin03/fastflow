@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import apiClient from '../api/client'
-import { MdStorage, MdDescription, MdDataUsage } from 'react-icons/md'
+import { MdStorage, MdDescription, MdDataUsage, MdArchive } from 'react-icons/md'
 import './StorageStats.css'
 
 interface StorageStats {
@@ -10,6 +10,10 @@ interface StorageStats {
   used_disk_space_gb: number
   free_disk_space_gb: number
   log_files_percentage: number
+  database_size_bytes?: number
+  database_size_mb?: number
+  database_size_gb?: number
+  database_percentage?: number
 }
 
 export default function StorageStats() {
@@ -93,6 +97,38 @@ export default function StorageStats() {
             </p>
           </div>
         </div>
+
+        {stats.database_size_bytes !== undefined && stats.database_size_bytes > 0 && (
+          <div className="storage-stat-card card">
+            <div className="stat-icon database-icon">
+              <MdArchive />
+            </div>
+            <div className="stat-content">
+              <h4 className="stat-label">Datenbank</h4>
+              <p className="stat-value">{stats.database_size_mb?.toFixed(2) || '0.00'} MB</p>
+              {stats.database_size_gb !== undefined && stats.database_size_gb >= 1 && (
+                <p className="stat-detail-small">
+                  ({stats.database_size_gb.toFixed(2)} GB)
+                </p>
+              )}
+              {stats.database_percentage !== undefined && stats.database_percentage > 0 && (
+                <>
+                  <div className="disk-usage-bar">
+                    <div
+                      className="disk-usage-fill database"
+                      style={{
+                        width: `${stats.database_percentage.toFixed(1)}%`,
+                      }}
+                    />
+                  </div>
+                  <p className={`stat-detail percentage ${getPercentageColor(stats.database_percentage)}`}>
+                    {stats.database_percentage.toFixed(2)}% vom Gesamtspeicher
+                  </p>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

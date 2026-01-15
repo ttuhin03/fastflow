@@ -5,12 +5,552 @@
   justify-content: center;
   background-color: var(--color-background);
   padding: var(--spacing-lg);
+  position: relative;
+  overflow: hidden;
+}
+
+.login-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 0;
+}
+
+.login-background-gradient {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, 
+    rgba(33, 150, 243, 0.1) 0%, 
+    rgba(156, 39, 176, 0.1) 50%, 
+    rgba(76, 175, 80, 0.1) 100%);
+  animation: gradientShift 15s ease infinite;
+}
+
+.login-background-pattern {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    radial-gradient(circle at 20% 50%, rgba(33, 150, 243, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(156, 39, 176, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 40% 20%, rgba(76, 175, 80, 0.05) 0%, transparent 50%);
+  animation: patternMove 20s ease-in-out infinite;
+}
+
+.graph-flow-animation {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  opacity: 0.25;
+  overflow: hidden;
+}
+
+.graph-svg {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+/* Nodes with hierarchical styling */
+.graph-node {
+  fill: url(#nodeGradient);
+  filter: url(#glow);
+  opacity: 0.7;
+  transition: all 0.3s ease;
+}
+
+.node-layer-1 {
+  animation: nodePulse 4s ease-in-out infinite;
+}
+
+.node-layer-2 {
+  animation: nodePulse 4s ease-in-out infinite 0.5s;
+}
+
+.node-layer-3 {
+  animation: nodePulse 4s ease-in-out infinite 1s;
+}
+
+.node-layer-4 {
+  animation: nodePulse 4s ease-in-out infinite 1.5s;
+}
+
+@keyframes nodePulse {
+  0%, 100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.1);
+  }
+}
+
+/* Edges with directional flow */
+.graph-edge {
+  stroke: url(#edgeGradient);
+  stroke-width: 1.5;
+  opacity: 0.15;
+  fill: none;
+  stroke-linecap: round;
+}
+
+.edge-1-2 {
+  stroke-dasharray: 8, 4;
+  animation: edgeFlow 6s linear infinite;
+}
+
+.edge-2-3 {
+  stroke-dasharray: 8, 4;
+  animation: edgeFlow 6s linear infinite 1s;
+}
+
+.edge-3-4 {
+  stroke-dasharray: 8, 4;
+  animation: edgeFlow 6s linear infinite 2s;
+}
+
+@keyframes edgeFlow {
+  0% {
+    stroke-dashoffset: 0;
+    opacity: 0.15;
+  }
+  50% {
+    opacity: 0.3;
+  }
+  100% {
+    stroke-dashoffset: 24;
+    opacity: 0.15;
+  }
+}
+
+/* Flow particles following logical paths */
+.flow-particle {
+  fill: var(--color-primary);
+  filter: url(#glow);
+  opacity: 0.9;
+}
+
+.particle-1 {
+  animation: flowPath1 6s ease-in-out infinite;
+}
+
+.particle-2 {
+  animation: flowPath2 7s ease-in-out infinite 0.5s;
+}
+
+.particle-3 {
+  animation: flowPath3 8s ease-in-out infinite 1s;
+}
+
+.particle-4 {
+  animation: flowPath4 6.5s ease-in-out infinite 1.5s;
+}
+
+.particle-5 {
+  animation: flowPath5 7.5s ease-in-out infinite 2s;
+}
+
+.particle-6 {
+  animation: flowPath6 6s ease-in-out infinite 2.5s;
+}
+
+.particle-7 {
+  animation: flowPath7 8s ease-in-out infinite 3s;
+}
+
+/* Path 1: Source -> Processing -> Aggregation -> Output */
+@keyframes flowPath1 {
+  0% {
+    cx: 200;
+    cy: 150;
+    opacity: 0;
+    r: 2;
+  }
+  5% {
+    opacity: 1;
+    r: 4;
+  }
+  25% {
+    cx: 250;
+    cy: 225;
+  }
+  35% {
+    cx: 300;
+    cy: 300;
+    opacity: 1;
+  }
+  50% {
+    cx: 350;
+    cy: 375;
+  }
+  60% {
+    cx: 400;
+    cy: 450;
+    opacity: 1;
+  }
+  75% {
+    cx: 450;
+    cy: 525;
+  }
+  90% {
+    cx: 500;
+    cy: 600;
+    opacity: 0.8;
+  }
+  100% {
+    cx: 500;
+    cy: 650;
+    opacity: 0;
+    r: 2;
+  }
+}
+
+/* Path 2: Different source path */
+@keyframes flowPath2 {
+  0% {
+    cx: 400;
+    cy: 150;
+    opacity: 0;
+    r: 2;
+  }
+  5% {
+    opacity: 1;
+    r: 4;
+  }
+  25% {
+    cx: 450;
+    cy: 225;
+  }
+  35% {
+    cx: 500;
+    cy: 300;
+    opacity: 1;
+  }
+  50% {
+    cx: 550;
+    cy: 375;
+  }
+  60% {
+    cx: 600;
+    cy: 450;
+    opacity: 1;
+  }
+  75% {
+    cx: 650;
+    cy: 525;
+  }
+  90% {
+    cx: 700;
+    cy: 600;
+    opacity: 0.8;
+  }
+  100% {
+    cx: 700;
+    cy: 650;
+    opacity: 0;
+    r: 2;
+  }
+}
+
+/* Path 3: Middle path */
+@keyframes flowPath3 {
+  0% {
+    cx: 600;
+    cy: 150;
+    opacity: 0;
+    r: 2;
+  }
+  5% {
+    opacity: 1;
+    r: 4;
+  }
+  25% {
+    cx: 600;
+    cy: 225;
+  }
+  35% {
+    cx: 700;
+    cy: 300;
+    opacity: 1;
+  }
+  50% {
+    cx: 750;
+    cy: 375;
+  }
+  60% {
+    cx: 800;
+    cy: 450;
+    opacity: 1;
+  }
+  75% {
+    cx: 750;
+    cy: 525;
+  }
+  90% {
+    cx: 700;
+    cy: 600;
+    opacity: 0.8;
+  }
+  100% {
+    cx: 700;
+    cy: 650;
+    opacity: 0;
+    r: 2;
+  }
+}
+
+/* Path 4: Right side path */
+@keyframes flowPath4 {
+  0% {
+    cx: 800;
+    cy: 150;
+    opacity: 0;
+    r: 2;
+  }
+  5% {
+    opacity: 1;
+    r: 4;
+  }
+  25% {
+    cx: 850;
+    cy: 225;
+  }
+  35% {
+    cx: 900;
+    cy: 300;
+    opacity: 1;
+  }
+  50% {
+    cx: 850;
+    cy: 375;
+  }
+  60% {
+    cx: 800;
+    cy: 450;
+    opacity: 1;
+  }
+  75% {
+    cx: 750;
+    cy: 525;
+  }
+  90% {
+    cx: 700;
+    cy: 600;
+    opacity: 0.8;
+  }
+  100% {
+    cx: 700;
+    cy: 650;
+    opacity: 0;
+    r: 2;
+  }
+}
+
+/* Path 5: Far right path */
+@keyframes flowPath5 {
+  0% {
+    cx: 1000;
+    cy: 150;
+    opacity: 0;
+    r: 2;
+  }
+  5% {
+    opacity: 1;
+    r: 4;
+  }
+  25% {
+    cx: 950;
+    cy: 225;
+  }
+  35% {
+    cx: 900;
+    cy: 300;
+    opacity: 1;
+  }
+  50% {
+    cx: 850;
+    cy: 375;
+  }
+  60% {
+    cx: 800;
+    cy: 450;
+    opacity: 1;
+  }
+  75% {
+    cx: 750;
+    cy: 525;
+  }
+  90% {
+    cx: 700;
+    cy: 600;
+    opacity: 0.8;
+  }
+  100% {
+    cx: 700;
+    cy: 650;
+    opacity: 0;
+    r: 2;
+  }
+}
+
+/* Path 6: Left path variant */
+@keyframes flowPath6 {
+  0% {
+    cx: 200;
+    cy: 150;
+    opacity: 0;
+    r: 2;
+  }
+  5% {
+    opacity: 1;
+    r: 4;
+  }
+  25% {
+    cx: 250;
+    cy: 225;
+  }
+  35% {
+    cx: 300;
+    cy: 300;
+    opacity: 1;
+  }
+  50% {
+    cx: 350;
+    cy: 375;
+  }
+  60% {
+    cx: 400;
+    cy: 450;
+    opacity: 1;
+  }
+  75% {
+    cx: 450;
+    cy: 525;
+  }
+  90% {
+    cx: 500;
+    cy: 600;
+    opacity: 0.8;
+  }
+  100% {
+    cx: 500;
+    cy: 650;
+    opacity: 0;
+    r: 2;
+  }
+}
+
+/* Path 7: Center path variant */
+@keyframes flowPath7 {
+  0% {
+    cx: 600;
+    cy: 150;
+    opacity: 0;
+    r: 2;
+  }
+  5% {
+    opacity: 1;
+    r: 4;
+  }
+  25% {
+    cx: 550;
+    cy: 225;
+  }
+  35% {
+    cx: 500;
+    cy: 300;
+    opacity: 1;
+  }
+  50% {
+    cx: 550;
+    cy: 375;
+  }
+  60% {
+    cx: 600;
+    cy: 450;
+    opacity: 1;
+  }
+  75% {
+    cx: 650;
+    cy: 525;
+  }
+  90% {
+    cx: 700;
+    cy: 600;
+    opacity: 0.8;
+  }
+  100% {
+    cx: 700;
+    cy: 650;
+    opacity: 0;
+    r: 2;
+  }
+}
+
+@keyframes gradientShift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes patternMove {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(20px, -20px) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+}
+
+.login-content {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xl);
 }
 
 .login-card {
   width: 100%;
-  max-width: 420px;
   padding: var(--spacing-2xl);
+  backdrop-filter: blur(10px);
+  background: rgba(42, 42, 42, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+  animation: cardFadeIn 0.6s ease-out;
+}
+
+@keyframes cardFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .login-header {
@@ -19,36 +559,93 @@
 }
 
 .login-icon {
-  width: 64px;
-  height: 64px;
+  width: 80px;
+  height: 80px;
   margin: 0 auto var(--spacing-lg);
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: rgba(33, 150, 243, 0.1);
+  background: linear-gradient(135deg, rgba(33, 150, 243, 0.2), rgba(156, 39, 176, 0.2));
   border-radius: var(--radius-full);
   color: var(--color-primary);
+  box-shadow: 
+    0 4px 20px rgba(33, 150, 243, 0.3),
+    0 0 0 4px rgba(33, 150, 243, 0.1);
+  animation: iconPulse 3s ease-in-out infinite;
+  position: relative;
+}
+
+.login-icon::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(135deg, rgba(33, 150, 243, 0.4), rgba(156, 39, 176, 0.4));
+  z-index: -1;
+  opacity: 0;
+  animation: iconGlow 3s ease-in-out infinite;
+}
+
+@keyframes iconPulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 
+      0 4px 20px rgba(33, 150, 243, 0.3),
+      0 0 0 4px rgba(33, 150, 243, 0.1);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 
+      0 6px 30px rgba(33, 150, 243, 0.5),
+      0 0 0 6px rgba(33, 150, 243, 0.15);
+  }
+}
+
+@keyframes iconGlow {
+  0%, 100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.1);
+  }
 }
 
 .login-icon svg {
-  font-size: 2rem;
+  font-size: 2.5rem;
+  position: relative;
+  z-index: 1;
 }
 
 .login-card h1 {
   font-size: var(--font-size-3xl);
   font-weight: var(--font-weight-bold);
-  color: var(--color-text-primary);
+  background: linear-gradient(135deg, var(--color-primary), #9c27b0);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   margin-bottom: var(--spacing-sm);
+  letter-spacing: -0.5px;
 }
 
 .login-subtitle {
   color: var(--color-text-secondary);
   font-size: var(--font-size-base);
   margin: 0;
+  font-weight: var(--font-weight-normal);
+  letter-spacing: 0.5px;
 }
 
 .login-form {
   margin-bottom: var(--spacing-xl);
+}
+
+.form-group {
+  margin-bottom: var(--spacing-lg);
 }
 
 .form-label {
@@ -63,7 +660,31 @@
 
 .form-label svg {
   font-size: 1.125rem;
+  color: var(--color-primary);
+  transition: transform var(--transition-base);
+}
+
+.form-input {
+  width: 100%;
+  padding: var(--spacing-md);
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-base);
+  transition: all var(--transition-base);
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  background-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+}
+
+.form-input::placeholder {
   color: var(--color-text-secondary);
+  opacity: 0.6;
 }
 
 .login-btn {
@@ -71,6 +692,33 @@
   padding: var(--spacing-md);
   font-size: var(--font-size-base);
   margin-top: var(--spacing-md);
+  font-weight: var(--font-weight-medium);
+  position: relative;
+  overflow: hidden;
+  transition: all var(--transition-base);
+}
+
+.login-btn::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  transform: translate(-50%, -50%);
+  transition: width 0.6s, height 0.6s;
+}
+
+.login-btn:hover::before {
+  width: 300px;
+  height: 300px;
+}
+
+.login-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(33, 150, 243, 0.4);
 }
 
 .error-message {
@@ -117,4 +765,69 @@
 
 .login-hint small {
   color: var(--color-text-secondary);
+}
+
+.login-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-md);
+  text-align: center;
+}
+
+.github-link {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  text-decoration: none;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  transition: all var(--transition-base);
+  backdrop-filter: blur(10px);
+}
+
+.github-link:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.github-link svg {
+  font-size: 1.25rem;
+  color: var(--color-primary);
+}
+
+.login-footer-text {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.login-footer-text .heart {
+  color: #f44336;
+  animation: heartBeat 1.5s ease-in-out infinite;
+  display: inline-block;
+}
+
+@keyframes heartBeat {
+  0%, 100% {
+    transform: scale(1);
+  }
+  10%, 30% {
+    transform: scale(1.2);
+  }
+  20%, 40% {
+    transform: scale(1);
+  }
+}
+
+.login-footer-text strong {
+  color: var(--color-primary);
+  font-weight: var(--font-weight-bold);
 }

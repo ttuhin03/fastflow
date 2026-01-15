@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
@@ -12,7 +12,8 @@ import {
   MdSync,
   MdSettings,
   MdLogout,
-  MdCircle
+  MdCircle,
+  MdPause
 } from 'react-icons/md'
 import './Layout.css'
 
@@ -37,24 +38,56 @@ export default function Layout() {
   const navigate = useNavigate()
   const location = useLocation()
   const [backendStatus, setBackendStatus] = useState<'online' | 'offline' | 'checking'>('checking')
+  const [healthPulse, setHealthPulse] = useState(false)
+  const [clickedIcons, setClickedIcons] = useState<Set<string>>(new Set())
+  const previousStatusRef = useRef<'online' | 'offline' | 'checking'>('checking')
 
-  const { data: health, isError } = useQuery({
+  const { data: health, isError, error, isFetching } = useQuery({
     queryKey: ['health'],
     queryFn: async () => {
       const response = await apiClient.get('/health')
       return response.data
     },
     refetchInterval: 5000,
-    retry: 1,
+    retry: false, // Keine Retries, damit Fehler sofort erkannt werden
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    refetchOnMount: true,
   })
-
+  
   useEffect(() => {
-    if (health) {
-      setBackendStatus('online')
-    } else if (isError) {
-      setBackendStatus('offline')
+    const previousStatus = previousStatusRef.current
+    
+    // Wenn gerade gefetched wird, Status auf 'checking' setzen (nur beim ersten Mal)
+    if (isFetching && previousStatus === 'checking') {
+      return // Beim ersten Check nichts ändern
     }
-  }, [health, isError])
+    
+    // Wenn ein Fehler auftritt, ist der Server offline
+    if (isError || error) {
+      if (previousStatus !== 'offline') {
+        setBackendStatus('offline')
+        previousStatusRef.current = 'offline'
+      }
+    } 
+    // Wenn health Daten vorhanden sind, ist der Server online
+    else if (health && health.status === 'healthy') {
+      if (previousStatus !== 'online') {
+        setHealthPulse(true)
+        setTimeout(() => setHealthPulse(false), 600)
+      }
+      setBackendStatus('online')
+      previousStatusRef.current = 'online'
+    }
+    // Wenn health undefined/null ist und kein Fehler, könnte es noch laden
+    else if (!health && !isError && !isFetching) {
+      // Wenn kein Fetch läuft und keine Daten, dann offline
+      if (previousStatus !== 'offline') {
+        setBackendStatus('offline')
+        previousStatusRef.current = 'offline'
+      }
+    }
+  }, [health, isError, error, isFetching])
 
   const handleLogout = async () => {
     await logout()
@@ -68,6 +101,24 @@ export default function Layout() {
     return location.pathname.startsWith(path)
   }
 
+  const handleNavClick = (path: string) => {
+    // Icon-Animation auslösen
+    setClickedIcons(prev => {
+      const newSet = new Set(prev)
+      newSet.add(path)
+      return newSet
+    })
+    // Nach Animation wieder entfernen (länger für Runs wegen Pause-Icon)
+    const animationDuration = path === '/runs' ? 800 : 600
+    setTimeout(() => {
+      setClickedIcons(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(path)
+        return newSet
+      })
+    }, animationDuration)
+  }
+
   return (
     <div className="layout">
       <aside className="sidebar">
@@ -76,20 +127,37 @@ export default function Layout() {
         </div>
         
         <nav className="sidebar-nav">
-          {navItems.map((item) => (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`nav-item ${isActive(item.path) ? 'active' : ''}`}
-            >
-              <span className="nav-icon">{item.icon}</span>
-              <span className="nav-label">{item.label}</span>
-            </Link>
-          ))}
+          {navItems.map((item) => {
+            const iconClass = clickedIcons.has(item.path) ? 'icon-clicked' : ''
+            const iconType = item.path === '/settings' ? 'settings-icon' :
+                           item.path === '/sync' ? 'sync-icon' :
+                           item.path === '/scheduler' ? 'scheduler-icon' :
+                           item.path === '/runs' ? 'runs-icon' :
+                           item.path === '/pipelines' ? 'pipelines-icon' :
+                           item.path === '/' ? 'dashboard-icon' :
+                           item.path === '/secrets' ? 'secrets-icon' : 'default-icon'
+            
+            // Für Runs: Pause-Icon während Animation zeigen
+            const showPauseIcon = item.path === '/runs' && clickedIcons.has(item.path)
+            
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`nav-item ${isActive(item.path) ? 'active' : ''}`}
+                onClick={() => handleNavClick(item.path)}
+              >
+                <span className={`nav-icon ${iconClass} ${iconType}`}>
+                  {showPauseIcon ? <MdPause /> : item.icon}
+                </span>
+                <span className="nav-label">{item.label}</span>
+              </Link>
+            )
+          })}
         </nav>
 
         <div className="sidebar-footer">
-          <div className={`backend-status ${backendStatus}`} title={backendStatus === 'online' ? 'Backend online' : 'Backend offline'}>
+          <div className={`backend-status ${backendStatus} ${healthPulse ? 'pulse' : ''}`} title={backendStatus === 'online' ? 'Backend online' : 'Backend offline'}>
             <MdCircle className="status-dot-icon" />
             <span className="status-text">
               {backendStatus === 'online' ? 'Online' : backendStatus === 'offline' ? 'Offline' : 'Prüfe...'}

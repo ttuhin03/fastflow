@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../api/client'
 import { MdSave, MdRefresh, MdInfo, MdWarning, MdEmail, MdGroup } from 'react-icons/md'
 import StorageStats from '../components/StorageStats'
+import SystemMetrics from '../components/SystemMetrics'
 import './Settings.css'
 
 interface Settings {
@@ -27,6 +28,7 @@ interface Settings {
 export default function Settings() {
   const queryClient = useQueryClient()
   const [localSettings, setLocalSettings] = useState<Settings | null>(null)
+  const [showCleanupInfo, setShowCleanupInfo] = useState(false)
 
   const { data: settings, isLoading } = useQuery<Settings>({
     queryKey: ['settings'],
@@ -56,11 +58,56 @@ export default function Settings() {
       return response.data
     },
     onSuccess: (data) => {
-      alert(
-        `Cleanup erfolgreich!\n` +
-        `Logs: ${data.log_cleanup?.deleted_logs || 0} gelöscht, ${data.log_cleanup?.truncated_logs || 0} gekürzt\n` +
-        `Docker: ${data.docker_cleanup?.deleted_containers || 0} Container, ${data.docker_cleanup?.deleted_volumes || 0} Volumes`
-      )
+      // Erstelle detaillierte Nachricht
+      let message = '✅ Cleanup erfolgreich abgeschlossen!\n\n'
+      
+      // Zusammenfassung
+      if (data.summary && data.summary.length > 0) {
+        message += '📊 Zusammenfassung:\n'
+        data.summary.forEach((item: string) => {
+          message += `  • ${item}\n`
+        })
+        message += '\n'
+      }
+      
+      // Was wurde geflusht - Log-Cleanup
+      if (data.cleanup_info?.log_cleanup) {
+        message += `📁 Log-Cleanup:\n`
+        message += `  ${data.cleanup_info.log_cleanup.description}\n`
+        if (data.cleanup_info.log_cleanup.actions && data.cleanup_info.log_cleanup.actions.length > 0) {
+          data.cleanup_info.log_cleanup.actions.forEach((action: string) => {
+            message += `  • ${action}\n`
+          })
+        }
+        message += '\n'
+      }
+      
+      // Was wurde geflusht - Docker-Cleanup
+      if (data.cleanup_info?.docker_cleanup) {
+        message += `🐳 Docker-Cleanup:\n`
+        message += `  ${data.cleanup_info.docker_cleanup.description}\n`
+        if (data.cleanup_info.docker_cleanup.actions && data.cleanup_info.docker_cleanup.actions.length > 0) {
+          data.cleanup_info.docker_cleanup.actions.forEach((action: string) => {
+            message += `  • ${action}\n`
+          })
+        }
+        message += '\n'
+      }
+      
+      // Detaillierte Statistiken
+      message += '📈 Detaillierte Statistiken:\n'
+      if (data.log_cleanup) {
+        message += `  Logs: ${data.log_cleanup.deleted_runs || 0} Runs, ${data.log_cleanup.deleted_logs || 0} Dateien gelöscht, ${data.log_cleanup.deleted_metrics || 0} Metrics gelöscht`
+        if (data.log_cleanup.truncated_logs > 0) {
+          message += `, ${data.log_cleanup.truncated_logs} Dateien gekürzt`
+        }
+        message += '\n'
+      }
+      if (data.docker_cleanup) {
+        message += `  Docker: ${data.docker_cleanup.deleted_containers || 0} Container, ${data.docker_cleanup.deleted_volumes || 0} Volumes gelöscht\n`
+      }
+      
+      alert(message)
     },
     onError: (error: any) => {
       alert(`Fehler beim Cleanup: ${error.response?.data?.detail || error.message}`)
@@ -146,9 +193,13 @@ export default function Settings() {
   }
 
   const handleForceCleanup = () => {
-    if (confirm('Möchten Sie wirklich einen Force-Flush (Cleanup) durchführen? Dies kann nicht rückgängig gemacht werden.')) {
-      forceCleanupMutation.mutate()
-    }
+    // Zeige Informationen an, was geflusht wird
+    setShowCleanupInfo(true)
+  }
+
+  const confirmForceCleanup = () => {
+    setShowCleanupInfo(false)
+    forceCleanupMutation.mutate()
   }
 
   if (isLoading) {
@@ -176,6 +227,10 @@ export default function Settings() {
       <div className="storage-section-settings">
         <h3 className="section-title">Speicherplatz-Statistiken</h3>
         <StorageStats />
+      </div>
+
+      <div className="system-metrics-section">
+        <SystemMetrics />
       </div>
 
       {currentSettings && (
@@ -519,6 +574,88 @@ export default function Settings() {
                 Um Einstellungen dauerhaft zu ändern, bearbeiten Sie die .env-Datei oder setzen Sie
                 Environment-Variablen. Ein Neustart der Anwendung ist erforderlich.
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cleanup Info Modal */}
+      {showCleanupInfo && currentSettings && (
+        <div className="modal-overlay" onClick={() => setShowCleanupInfo(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Force Flush (Cleanup) - Was wird geflusht?</h3>
+              <button
+                className="modal-close"
+                onClick={() => setShowCleanupInfo(false)}
+                aria-label="Schließen"
+              >
+                ×
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="cleanup-info-section">
+                <h4>📁 Log-Cleanup</h4>
+                <p className="cleanup-description">
+                  Bereinigt Log-Dateien, Metrics-Dateien und Datenbank-Einträge
+                </p>
+                <ul className="cleanup-actions">
+                  {currentSettings.log_retention_runs ? (
+                    <li>
+                      Löscht älteste Runs pro Pipeline (max. {currentSettings.log_retention_runs} Runs pro Pipeline behalten)
+                    </li>
+                  ) : null}
+                  {currentSettings.log_retention_days ? (
+                    <li>
+                      Löscht Runs älter als {currentSettings.log_retention_days} Tage
+                    </li>
+                  ) : null}
+                  {currentSettings.log_max_size_mb ? (
+                    <li>
+                      Kürzt oder löscht Log-Dateien größer als {currentSettings.log_max_size_mb} MB
+                    </li>
+                  ) : null}
+                  {!currentSettings.log_retention_runs && !currentSettings.log_retention_days && !currentSettings.log_max_size_mb && (
+                    <li className="cleanup-disabled">Keine Log-Cleanup-Regeln konfiguriert</li>
+                  )}
+                </ul>
+              </div>
+
+              <div className="cleanup-info-section">
+                <h4>🐳 Docker-Cleanup</h4>
+                <p className="cleanup-description">
+                  Bereinigt verwaiste Docker-Container und Volumes
+                </p>
+                <ul className="cleanup-actions">
+                  <li>Löscht verwaiste Container mit Label 'fastflow-run-id' (ohne zugehörigen DB-Eintrag)</li>
+                  <li>Löscht beendete Container mit Label 'fastflow-run-id'</li>
+                  <li>Löscht verwaiste Volumes mit Label 'fastflow-run-id'</li>
+                </ul>
+              </div>
+
+              <div className="cleanup-warning">
+                <MdWarning />
+                <p>
+                  <strong>Warnung:</strong> Diese Aktion kann nicht rückgängig gemacht werden.
+                  Alle gelöschten Daten gehen unwiderruflich verloren.
+                </p>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button
+                className="btn btn-secondary"
+                onClick={() => setShowCleanupInfo(false)}
+              >
+                Abbrechen
+              </button>
+              <button
+                className="btn btn-warning"
+                onClick={confirmForceCleanup}
+                disabled={forceCleanupMutation.isPending}
+              >
+                <MdRefresh />
+                {forceCleanupMutation.isPending ? 'Cleanup läuft...' : 'Cleanup durchführen'}
+              </button>
             </div>
           </div>
         </div>
