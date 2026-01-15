@@ -233,7 +233,8 @@ async def run_pipeline(
     name: str,
     env_vars: Optional[Dict[str, str]] = None,
     parameters: Optional[Dict[str, str]] = None,
-    session: Optional[Session] = None
+    session: Optional[Session] = None,
+    triggered_by: str = "manual"
 ) -> PipelineRun:
     """
     Startet eine Pipeline mit optionalen Environment-Variablen und Parametern.
@@ -243,6 +244,7 @@ async def run_pipeline(
         env_vars: Dictionary mit Environment-Variablen (werden als Secrets injiziert)
         parameters: Dictionary mit Pipeline-Parametern (werden als Env-Vars injiziert)
         session: SQLModel Session (optional, wird intern erstellt wenn nicht vorhanden)
+        triggered_by: Trigger-Quelle ("manual", "webhook", oder "scheduler", Standard: "manual")
     
     Returns:
         PipelineRun: Der erstellte PipelineRun-Datensatz mit Status PENDING
@@ -307,7 +309,8 @@ async def run_pipeline(
             status=RunStatus.PENDING,
             log_file=str(config.LOGS_DIR / f"{name}_{datetime.utcnow().isoformat()}.log"),
             env_vars=merged_env_vars,
-            parameters=parameters
+            parameters=parameters,
+            triggered_by=triggered_by
         )
         
         session.add(run)
@@ -606,7 +609,7 @@ async def _run_container_task(
         session.commit()
         
         # Pipeline-Statistiken aktualisieren (atomar)
-        await _update_pipeline_stats(pipeline.name, exit_code_value == 0, session)
+        await _update_pipeline_stats(pipeline.name, exit_code_value == 0, session, triggered_by=run.triggered_by)
         
         # Benachrichtigungen senden (nur bei Fehlern)
         if exit_code_value != 0:
@@ -626,7 +629,7 @@ async def _run_container_task(
             session.commit()
             
             # Pipeline-Statistiken aktualisieren (Fehler)
-            await _update_pipeline_stats(run.pipeline_name, False, session)
+            await _update_pipeline_stats(run.pipeline_name, False, session, triggered_by=run.triggered_by)
             
             # Benachrichtigungen senden
             from app.notifications import send_notifications
@@ -1111,7 +1114,8 @@ def _calculate_cpu_percent(
 async def _update_pipeline_stats(
     pipeline_name: str,
     success: bool,
-    session: Session
+    session: Session,
+    triggered_by: Optional[str] = None
 ) -> None:
     """
     Aktualisiert Pipeline-Statistiken (atomar).
@@ -1120,20 +1124,28 @@ async def _update_pipeline_stats(
         pipeline_name: Name der Pipeline
         success: True wenn Run erfolgreich war, sonst False
         session: SQLModel Session
+        triggered_by: Trigger-Quelle ("manual", "webhook", oder "scheduler")
     """
     try:
         # Atomare Updates (verhindert Race-Conditions)
         pipeline = session.get(Pipeline, pipeline_name)
         if pipeline:
             # Atomare Zähler-Updates
+            # Wenn triggered_by == "webhook", auch webhook_runs erhöhen
+            update_values = {
+                "total_runs": Pipeline.total_runs + 1,
+                "successful_runs": Pipeline.successful_runs + (1 if success else 0),
+                "failed_runs": Pipeline.failed_runs + (1 if not success else 0)
+            }
+            
+            # Webhook-Statistik aktualisieren
+            if triggered_by == "webhook":
+                update_values["webhook_runs"] = Pipeline.webhook_runs + 1
+            
             stmt = (
                 update(Pipeline)
                 .where(Pipeline.pipeline_name == pipeline_name)
-                .values(
-                    total_runs=Pipeline.total_runs + 1,
-                    successful_runs=Pipeline.successful_runs + (1 if success else 0),
-                    failed_runs=Pipeline.failed_runs + (1 if not success else 0)
-                )
+                .values(**update_values)
             )
             session.execute(stmt)
             session.commit()
@@ -1310,7 +1322,7 @@ async def reconcile_zombie_containers(session: Session) -> None:
                     session.commit()
                     
                     # Pipeline-Statistiken aktualisieren
-                    await _update_pipeline_stats(run.pipeline_name, exit_code == 0, session)
+                    await _update_pipeline_stats(run.pipeline_name, exit_code == 0, session, triggered_by=run.triggered_by)
                     
                     # Container entfernen
                     try:
@@ -1426,7 +1438,7 @@ async def _re_attach_container(
             session.commit()
         
         # Pipeline-Statistiken aktualisieren
-        await _update_pipeline_stats(run.pipeline_name, exit_code_value == 0, session)
+        await _update_pipeline_stats(run.pipeline_name, exit_code_value == 0, session, triggered_by=run.triggered_by)
         
         # Container entfernen
         try:

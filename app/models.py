@@ -63,6 +63,10 @@ class Pipeline(SQLModel, table=True):
         default=0,
         description="Anzahl fehlgeschlagener Runs (resetbar)"
     )
+    webhook_runs: int = Field(
+        default=0,
+        description="Anzahl webhook-getriggerter Runs (resetbar)"
+    )
 
 
 class PipelineRun(SQLModel, table=True):
@@ -123,6 +127,10 @@ class PipelineRun(SQLModel, table=True):
     exit_code: Optional[int] = Field(
         default=None,
         description="Exit-Code des Container-Prozesses"
+    )
+    triggered_by: str = Field(
+        default="manual",
+        description="Trigger-Quelle: 'manual', 'webhook', oder 'scheduler'"
     )
 
 

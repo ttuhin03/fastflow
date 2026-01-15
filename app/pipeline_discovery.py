@@ -34,7 +34,8 @@ class PipelineMetadata:
         description: Optional[str] = None,
         tags: Optional[List[str]] = None,
         enabled: bool = True,
-        default_env: Optional[Dict[str, str]] = None
+        default_env: Optional[Dict[str, str]] = None,
+        webhook_key: Optional[str] = None
     ):
         """
         Initialisiert Pipeline-Metadaten.
@@ -50,6 +51,7 @@ class PipelineMetadata:
             tags: Tags für Kategorisierung/Filterung in UI
             enabled: Pipeline aktiviert/deaktiviert (Standard: true)
             default_env: Pipeline-spezifische Default-Env-Vars (werden bei jedem Start gesetzt)
+            webhook_key: Webhook-Schlüssel für externe Trigger (optional, None oder leer = Webhooks deaktiviert)
         """
         self.cpu_hard_limit = cpu_hard_limit
         self.mem_hard_limit = mem_hard_limit
@@ -61,6 +63,8 @@ class PipelineMetadata:
         self.tags = tags or []
         self.enabled = enabled
         self.default_env = default_env or {}
+        # Normalize empty strings to None (webhooks disabled)
+        self.webhook_key = webhook_key if webhook_key and webhook_key.strip() else None
     
     def to_dict(self) -> Dict[str, Any]:
         """
@@ -90,6 +94,9 @@ class PipelineMetadata:
             result["enabled"] = self.enabled
         if self.default_env:
             result["default_env"] = self.default_env
+        # Only include webhook_key if it's set and non-empty
+        if self.webhook_key:
+            result["webhook_key"] = self.webhook_key
         return result
 
 
@@ -273,6 +280,15 @@ def _load_pipeline_metadata(
             data = json.load(f)
         
         # Metadaten-Objekt erstellen
+        # Normalize webhook_key: empty string or null becomes None
+        webhook_key = data.get("webhook_key")
+        if webhook_key == "" or webhook_key is None:
+            webhook_key = None
+        else:
+            webhook_key = str(webhook_key).strip()
+            if not webhook_key:
+                webhook_key = None
+        
         metadata = PipelineMetadata(
             cpu_hard_limit=data.get("cpu_hard_limit"),
             mem_hard_limit=data.get("mem_hard_limit"),
@@ -283,7 +299,8 @@ def _load_pipeline_metadata(
             description=data.get("description"),
             tags=data.get("tags"),
             enabled=data.get("enabled", True),  # Standard: true
-            default_env=data.get("default_env", {})
+            default_env=data.get("default_env", {}),
+            webhook_key=webhook_key
         )
         
         return metadata
@@ -337,6 +354,80 @@ def invalidate_cache() -> None:
     global _pipeline_cache, _cache_timestamp
     _pipeline_cache = None
     _cache_timestamp = None
+
+
+def set_pipeline_webhook_key(name: str, webhook_key: Optional[str]) -> None:
+    """
+    Setzt oder entfernt den Webhook-Schlüssel einer Pipeline durch Aktualisierung der pipeline.json.
+    
+    Aktualisiert das `webhook_key` Feld in pipeline.json oder {pipeline_name}.json.
+    Die Datei wird atomar geschrieben (mit temporärer Datei) um Race-Conditions zu vermeiden.
+    
+    Args:
+        name: Pipeline-Name
+        webhook_key: Webhook-Schlüssel (None oder leer = Webhooks deaktivieren)
+    
+    Raises:
+        ValueError: Wenn Pipeline nicht gefunden wurde
+        IOError: Wenn Datei nicht geschrieben werden kann
+    """
+    # Pipeline finden
+    pipeline = get_pipeline(name)
+    if pipeline is None:
+        raise ValueError(f"Pipeline nicht gefunden: {name}")
+    
+    pipeline_dir = pipeline.path
+    
+    # Metadaten-Datei finden (pipeline.json oder {pipeline_name}.json)
+    metadata_path = pipeline_dir / "pipeline.json"
+    if not metadata_path.exists():
+        metadata_path = pipeline_dir / f"{name}.json"
+    
+    # Wenn keine Metadaten-Datei existiert, erstelle eine
+    if not metadata_path.exists():
+        # Neue pipeline.json erstellen
+        metadata_path = pipeline_dir / "pipeline.json"
+        data = {}
+    else:
+        # Bestehende Datei laden
+        try:
+            with open(metadata_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except json.JSONDecodeError as e:
+            raise IOError(f"Ungültige JSON-Datei: {metadata_path}. Fehler: {e}")
+        except Exception as e:
+            raise IOError(f"Fehler beim Lesen der Metadaten-Datei: {e}")
+    
+    # webhook_key normalisieren: None oder leerer String = entfernen
+    if webhook_key is None or (isinstance(webhook_key, str) and webhook_key.strip() == ""):
+        # Webhook-Schlüssel entfernen (Webhooks deaktivieren)
+        data.pop("webhook_key", None)
+    else:
+        # Webhook-Schlüssel setzen (Webhooks aktivieren)
+        data["webhook_key"] = str(webhook_key).strip()
+    
+    # Atomar schreiben (mit temporärer Datei)
+    temp_path = metadata_path.with_suffix(metadata_path.suffix + ".tmp")
+    
+    try:
+        # In temporäre Datei schreiben
+        with open(temp_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        
+        # Atomar umbenennen (ersetzt Original-Datei)
+        temp_path.replace(metadata_path)
+        
+        # Cache invalidieren, damit Änderung sofort sichtbar ist
+        invalidate_cache()
+        
+    except Exception as e:
+        # Temporäre Datei aufräumen bei Fehler
+        if temp_path.exists():
+            try:
+                temp_path.unlink()
+            except Exception:
+                pass
+        raise IOError(f"Fehler beim Schreiben der Metadaten-Datei: {e}") from e
 
 
 def get_cache_info() -> Dict[str, Any]:

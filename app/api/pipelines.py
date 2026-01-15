@@ -18,7 +18,7 @@ from pydantic import BaseModel
 from app.database import get_session
 from app.models import Pipeline, PipelineRun, RunStatus
 from app.executor import run_pipeline
-from app.pipeline_discovery import discover_pipelines, get_pipeline as get_discovered_pipeline, set_pipeline_enabled
+from app.pipeline_discovery import discover_pipelines, get_pipeline as get_discovered_pipeline
 
 router = APIRouter(prefix="/pipelines", tags=["pipelines"])
 
@@ -48,6 +48,7 @@ class PipelineStatsResponse(BaseModel):
     successful_runs: int
     failed_runs: int
     success_rate: float
+    webhook_runs: int
 
 
 class DailyStat(BaseModel):
@@ -99,6 +100,7 @@ async def get_pipelines(
                 session.refresh(pipeline)
             
             # Response-Objekt erstellen
+            # Metadata dict enthält bereits webhook_key (wenn gesetzt)
             response = PipelineResponse(
                 name=discovered.name,
                 has_requirements=pipeline.has_requirements,
@@ -107,7 +109,7 @@ async def get_pipelines(
                 successful_runs=pipeline.successful_runs,
                 failed_runs=pipeline.failed_runs,
                 enabled=discovered.is_enabled(),
-                metadata=discovered.metadata.to_dict()
+                metadata=discovered.metadata.to_dict()  # Enthält webhook_key wenn gesetzt
             )
             pipelines_response.append(response)
         
@@ -141,12 +143,13 @@ async def start_pipeline(
         HTTPException: Wenn Pipeline nicht existiert, deaktiviert ist oder Concurrency-Limit erreicht ist
     """
     try:
-        # Pipeline-Start
+        # Pipeline-Start (manuell getriggert)
         run = await run_pipeline(
             name=name,
             env_vars=request.env_vars,
             parameters=request.parameters,
-            session=session
+            session=session,
+            triggered_by="manual"
         )
         
         return {
@@ -278,7 +281,8 @@ async def get_pipeline_stats(
         total_runs=pipeline.total_runs,
         successful_runs=pipeline.successful_runs,
         failed_runs=pipeline.failed_runs,
-        success_rate=success_rate
+        success_rate=success_rate,
+        webhook_runs=pipeline.webhook_runs
     )
 
 
@@ -323,6 +327,7 @@ async def reset_pipeline_stats(
     pipeline.total_runs = 0
     pipeline.successful_runs = 0
     pipeline.failed_runs = 0
+    pipeline.webhook_runs = 0
     
     session.add(pipeline)
     session.commit()
@@ -330,67 +335,6 @@ async def reset_pipeline_stats(
     return {
         "message": f"Statistiken für Pipeline '{name}' wurden zurückgesetzt"
     }
-
-
-class PipelineEnabledRequest(BaseModel):
-    """Request-Model für Pipeline Enable/Disable."""
-    enabled: bool
-
-
-@router.put("/{name}/enabled", response_model=Dict[str, Any])
-async def set_pipeline_enabled_endpoint(
-    name: str,
-    request: PipelineEnabledRequest,
-    session: Session = Depends(get_session)
-) -> Dict[str, Any]:
-    """
-    Aktiviert oder deaktiviert eine Pipeline.
-    
-    Aktualisiert das `enabled` Feld in pipeline.json oder {pipeline_name}.json.
-    
-    Args:
-        name: Name der Pipeline
-        request: Request-Body mit enabled (bool)
-        session: SQLModel Session
-        
-    Returns:
-        Bestätigungs-Message
-        
-    Raises:
-        HTTPException: Wenn Pipeline nicht existiert oder Datei nicht geschrieben werden kann
-    """
-    # Prüfe ob Pipeline existiert
-    discovered = get_discovered_pipeline(name)
-    if discovered is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Pipeline nicht gefunden: {name}"
-        )
-    
-    try:
-        # Pipeline enabled/disabled setzen
-        set_pipeline_enabled(name, request.enabled)
-        
-        return {
-            "message": f"Pipeline '{name}' wurde {'aktiviert' if request.enabled else 'deaktiviert'}",
-            "pipeline_name": name,
-            "enabled": request.enabled
-        }
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
-    except IOError as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Fehler beim Aktualisieren der Pipeline-Metadaten: {str(e)}"
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unerwarteter Fehler: {str(e)}"
-        )
 
 
 @router.get("/{name}/daily-stats", response_model=DailyStatsResponse)

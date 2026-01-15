@@ -11,7 +11,8 @@ from typing import List, Optional, Dict, Any
 from uuid import UUID
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlmodel import Session, select
+from sqlmodel import Session, select, func
+from pydantic import BaseModel
 
 from app.database import get_session
 from app.models import PipelineRun, RunStatus
@@ -20,44 +21,53 @@ from app.executor import cancel_run, check_container_health
 router = APIRouter(prefix="/runs", tags=["runs"])
 
 
-@router.get("", response_model=List[Dict[str, Any]])
+class RunsResponse(BaseModel):
+    runs: List[Dict[str, Any]]
+    total: int
+    page: int
+    page_size: int
+
+
+@router.get("", response_model=RunsResponse)
 async def get_runs(
     pipeline_name: Optional[str] = Query(None, description="Filter nach Pipeline-Name"),
     status_filter: Optional[RunStatus] = Query(None, description="Filter nach Status"),
     start_date: Optional[str] = Query(None, description="Startdatum für Filterung (ISO-Format: YYYY-MM-DD oder YYYY-MM-DDTHH:MM:SS)"),
     end_date: Optional[str] = Query(None, description="Enddatum für Filterung (ISO-Format: YYYY-MM-DD oder YYYY-MM-DDTHH:MM:SS)"),
-    limit: int = Query(100, ge=1, le=1000, description="Maximale Anzahl Runs"),
+    limit: int = Query(50, ge=1, le=1000, description="Anzahl Runs pro Seite"),
+    offset: int = Query(0, ge=0, description="Offset für Pagination"),
     session: Session = Depends(get_session)
-) -> List[Dict[str, Any]]:
+) -> RunsResponse:
     """
-    Gibt alle Runs anzeigen (mit Filterung).
+    Gibt alle Runs anzeigen (mit Filterung und Pagination).
     
     Args:
         pipeline_name: Optionaler Filter nach Pipeline-Name
         status_filter: Optionaler Filter nach Status (PENDING, RUNNING, SUCCESS, FAILED, etc.)
         start_date: Optionales Startdatum für Filterung (ISO-Format)
         end_date: Optionales Enddatum für Filterung (ISO-Format)
-        limit: Maximale Anzahl Runs (Standard: 100, Max: 1000)
+        limit: Anzahl Runs pro Seite (Standard: 50, Max: 1000)
+        offset: Offset für Pagination (Standard: 0)
         session: SQLModel Session
         
     Returns:
-        Liste aller Runs (sortiert nach started_at, neueste zuerst)
+        RunsResponse mit runs, total, page und page_size
     """
-    # Query bauen
-    stmt = select(PipelineRun)
+    # Query für Filter bauen (ohne Pagination)
+    base_stmt = select(PipelineRun)
     
     # Filter anwenden
     if pipeline_name:
-        stmt = stmt.where(PipelineRun.pipeline_name == pipeline_name)
+        base_stmt = base_stmt.where(PipelineRun.pipeline_name == pipeline_name)
     
     if status_filter:
-        stmt = stmt.where(PipelineRun.status == status_filter)
+        base_stmt = base_stmt.where(PipelineRun.status == status_filter)
     
     # Zeitraum-Filterung
     if start_date:
         try:
             start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
-            stmt = stmt.where(PipelineRun.started_at >= start_dt)
+            base_stmt = base_stmt.where(PipelineRun.started_at >= start_dt)
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -67,15 +77,35 @@ async def get_runs(
     if end_date:
         try:
             end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
-            stmt = stmt.where(PipelineRun.started_at <= end_dt)
+            base_stmt = base_stmt.where(PipelineRun.started_at <= end_dt)
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Ungültiges Enddatum-Format: {end_date}. Erwartet: ISO-Format (YYYY-MM-DD oder YYYY-MM-DDTHH:MM:SS)"
             )
     
-    # Sortierung und Limit
-    stmt = stmt.order_by(PipelineRun.started_at.desc()).limit(limit)
+    # Total count abrufen (mit gleichen Filtern)
+    count_stmt = select(func.count(PipelineRun.id))
+    if pipeline_name:
+        count_stmt = count_stmt.where(PipelineRun.pipeline_name == pipeline_name)
+    if status_filter:
+        count_stmt = count_stmt.where(PipelineRun.status == status_filter)
+    if start_date:
+        try:
+            start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+            count_stmt = count_stmt.where(PipelineRun.started_at >= start_dt)
+        except ValueError:
+            pass  # Already validated above
+    if end_date:
+        try:
+            end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            count_stmt = count_stmt.where(PipelineRun.started_at <= end_dt)
+        except ValueError:
+            pass  # Already validated above
+    total = session.exec(count_stmt).one()
+    
+    # Query für Runs mit Pagination
+    stmt = base_stmt.order_by(PipelineRun.started_at.desc()).limit(limit).offset(offset)
     
     # Runs aus DB abrufen
     runs = session.exec(stmt).all()
@@ -96,7 +126,14 @@ async def get_runs(
             "setup_duration": run.setup_duration
         })
     
-    return runs_response
+    page = (offset // limit) + 1 if limit > 0 else 1
+    
+    return RunsResponse(
+        runs=runs_response,
+        total=total,
+        page=page,
+        page_size=limit
+    )
 
 
 @router.get("/{run_id}", response_model=Dict[str, Any])

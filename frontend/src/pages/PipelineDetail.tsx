@@ -10,6 +10,7 @@ interface PipelineStats {
   successful_runs: number
   failed_runs: number
   success_rate: number
+  webhook_runs: number
 }
 
 interface Pipeline {
@@ -29,6 +30,7 @@ interface Pipeline {
     tags?: string[]
     timeout?: number
     retry_attempts?: number
+    webhook_key?: string
   }
 }
 
@@ -101,29 +103,20 @@ export default function PipelineDetail() {
     },
   })
 
-  const toggleEnabledMutation = useMutation({
-    mutationFn: async (enabled: boolean) => {
-      const response = await apiClient.put(`/pipelines/${name}/enabled`, { enabled })
-      return response.data
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['pipeline', name] })
-      queryClient.invalidateQueries({ queryKey: ['pipelines'] })
-    },
-    onError: (error: any) => {
-      alert(`Fehler beim Umschalten: ${error.response?.data?.detail || error.message}`)
-    },
-  })
-
-  const handleToggleEnabled = () => {
-    if (pipeline) {
-      toggleEnabledMutation.mutate(!pipeline.enabled)
-    }
-  }
 
   const handleResetStats = () => {
     if (confirm('Möchten Sie die Statistiken wirklich zurücksetzen?')) {
       resetStatsMutation.mutate()
+    }
+  }
+
+
+  const handleCopyWebhookUrl = () => {
+    if (pipeline?.metadata.webhook_key) {
+      const baseUrl = window.location.origin
+      const webhookUrl = `${baseUrl}/api/webhooks/${name}/${pipeline.metadata.webhook_key}`
+      navigator.clipboard.writeText(webhookUrl)
+      alert('Webhook-URL wurde in die Zwischenablage kopiert')
     }
   }
 
@@ -149,20 +142,12 @@ export default function PipelineDetail() {
         <div className="info-grid">
         <div className="info-item">
           <span className="info-label">Status:</span>
-          <div className="pipeline-status-controls">
-            <label className="toggle-switch">
-              <input
-                type="checkbox"
-                checked={pipeline.enabled}
-                onChange={handleToggleEnabled}
-                disabled={toggleEnabledMutation.isPending}
-              />
-              <span className="toggle-slider"></span>
-            </label>
-            <span className={`status-badge ${pipeline.enabled ? 'enabled' : 'disabled'}`}>
-              {pipeline.enabled ? 'Aktiv' : 'Inaktiv'}
-            </span>
-          </div>
+          <span className={`status-badge ${pipeline.enabled ? 'enabled' : 'disabled'}`}>
+            {pipeline.enabled ? 'Aktiv' : 'Inaktiv'}
+          </span>
+          <span className="info-hint" style={{ fontSize: '0.75rem', color: '#888', marginLeft: '0.5rem' }}>
+            (Konfiguriert in pipeline.json)
+          </span>
         </div>
           <div className="info-item">
             <span className="info-label">Requirements:</span>
@@ -287,9 +272,59 @@ export default function PipelineDetail() {
               <span className="stat-label">Erfolgsrate</span>
               <span className="stat-value">{stats.success_rate.toFixed(1)}%</span>
             </div>
+            {stats.webhook_runs > 0 && (
+              <div className="stat-box">
+                <span className="stat-label">Webhook Runs</span>
+                <span className="stat-value">{stats.webhook_runs}</span>
+              </div>
+            )}
           </div>
         </div>
       )}
+
+      <div className="webhook-card">
+        <h3>Webhooks</h3>
+        {pipeline?.metadata.webhook_key ? (
+          <div className="webhook-enabled">
+            <div className="webhook-info">
+              <div className="webhook-status">
+                <span className="status-badge enabled">Aktiviert</span>
+                <span className="info-hint" style={{ fontSize: '0.75rem', color: '#888', marginLeft: '0.5rem' }}>
+                  (Konfiguriert in pipeline.json)
+                </span>
+              </div>
+              <div className="webhook-url-section">
+                <label className="webhook-url-label">Webhook-URL:</label>
+                <div className="webhook-url-container">
+                  <code className="webhook-url">
+                    {typeof window !== 'undefined' && `${window.location.origin}/api/webhooks/${name}/${pipeline.metadata.webhook_key}`}
+                  </code>
+                  <button
+                    onClick={handleCopyWebhookUrl}
+                    className="copy-button"
+                    title="URL kopieren"
+                  >
+                    📋
+                  </button>
+                </div>
+              </div>
+              {stats && stats.webhook_runs > 0 && (
+                <div className="webhook-stats">
+                  <span className="webhook-stat-label">Webhook-Trigger:</span>
+                  <span className="webhook-stat-value">{stats.webhook_runs}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="webhook-disabled">
+            <p>Webhooks sind für diese Pipeline deaktiviert.</p>
+            <p style={{ fontSize: '0.85rem', color: '#888', marginTop: '0.5rem' }}>
+              Um Webhooks zu aktivieren, fügen Sie <code>webhook_key</code> in die <code>pipeline.json</code> im Repository hinzu.
+            </p>
+          </div>
+        )}
+      </div>
 
       {dailyStats && dailyStats.daily_stats && dailyStats.daily_stats.length > 0 && (
         <>
