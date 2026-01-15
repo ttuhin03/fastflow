@@ -17,8 +17,9 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from sqlmodel import Session
 
 from app.database import get_session
-from app.models import PipelineRun
+from app.models import PipelineRun, User
 from app.executor import get_metrics_queue
+from app.auth import get_current_user
 
 router = APIRouter(prefix="/runs", tags=["metrics"])
 
@@ -26,7 +27,8 @@ router = APIRouter(prefix="/runs", tags=["metrics"])
 @router.get("/{run_id}/metrics")
 async def get_run_metrics(
     run_id: UUID,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
 ) -> JSONResponse:
     """
     Gibt Metrics aus Datei lesen (für abgeschlossene Runs).
@@ -93,7 +95,8 @@ async def get_run_metrics(
 @router.get("/{run_id}/metrics/stream")
 async def stream_run_metrics(
     run_id: UUID,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
 ) -> StreamingResponse:
     """
     Server-Sent Events für Live-Metrics (für laufende Runs).

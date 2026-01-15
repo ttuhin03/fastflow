@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNotifications } from '../contexts/NotificationContext'
+import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 
 interface Run {
@@ -18,6 +19,7 @@ interface Run {
  */
 export function useRunNotifications() {
   const { addNotification } = useNotifications()
+  const { isAuthenticated } = useAuth()
   const previousRunsRef = useRef<Map<string, string>>(new Map())
 
   // Überwache laufende Runs
@@ -28,6 +30,7 @@ export function useRunNotifications() {
       return response.data as { runs: Run[] }
     },
     refetchInterval: 5000, // Alle 5 Sekunden prüfen
+    enabled: isAuthenticated, // Nur wenn authentifiziert
   })
 
   // Überwache kürzlich abgeschlossene Runs (für Fehler-Notifications)
@@ -38,6 +41,7 @@ export function useRunNotifications() {
       return response.data as { runs: Run[] }
     },
     refetchInterval: 10000, // Alle 10 Sekunden
+    enabled: isAuthenticated, // Nur wenn authentifiziert
   })
 
   useEffect(() => {

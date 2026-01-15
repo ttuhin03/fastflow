@@ -19,7 +19,8 @@ import requests
 from app.database import get_session
 from app.git_sync import sync_pipelines, get_sync_status, get_sync_logs, test_github_app_token
 from app.config import config
-from app.auth import require_write
+from app.auth import require_write, get_current_user
+from app.models import User
 from app.github_config import (
     save_github_config,
     load_github_config,
@@ -90,7 +91,9 @@ async def sync(
 
 
 @router.get("/status", response_model=Dict[str, Any])
-async def sync_status() -> Dict[str, Any]:
+async def sync_status(
+    current_user: User = Depends(get_current_user)
+) -> Dict[str, Any]:
     """
     Gibt Git-Status anzeigen.
     
@@ -122,7 +125,9 @@ class SyncSettingsRequest(BaseModel):
 
 
 @router.get("/settings", response_model=Dict[str, Any])
-async def get_sync_settings() -> Dict[str, Any]:
+async def get_sync_settings(
+    current_user: User = Depends(get_current_user)
+) -> Dict[str, Any]:
     """
     Gibt aktuelle Sync-Einstellungen zurück.
     
@@ -178,7 +183,8 @@ async def update_sync_settings(
 
 @router.get("/logs", response_model=List[Dict[str, Any]])
 async def get_sync_logs_endpoint(
-    limit: int = Query(100, ge=1, le=1000, description="Maximale Anzahl Log-Einträge")
+    limit: int = Query(100, ge=1, le=1000, description="Maximale Anzahl Log-Einträge"),
+    current_user: User = Depends(get_current_user)
 ) -> List[Dict[str, Any]]:
     """
     Gibt Sync-Logs zurück.
@@ -207,7 +213,9 @@ class GitHubConfigRequest(BaseModel):
 
 
 @router.get("/github-config", response_model=Dict[str, Any])
-async def get_github_config() -> Dict[str, Any]:
+async def get_github_config(
+    current_user: User = Depends(get_current_user)
+) -> Dict[str, Any]:
     """
     Gibt aktuelle GitHub Apps Konfiguration zurück.
     
@@ -285,7 +293,9 @@ async def save_github_config_endpoint(
 
 
 @router.post("/github-config/test", response_model=Dict[str, Any])
-async def test_github_config() -> Dict[str, Any]:
+async def test_github_config(
+    current_user: User = Depends(require_write)
+) -> Dict[str, Any]:
     """
     Testet die GitHub Apps Konfiguration durch Token-Generierung.
     

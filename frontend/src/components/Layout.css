@@ -305,6 +305,51 @@
   font-weight: var(--font-weight-medium);
 }
 
+.sidebar-github-link {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background-color: var(--color-surface-variant);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  transition: all var(--transition-base);
+  border: 1px solid transparent;
+}
+
+.sidebar-github-link:hover {
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+  border-color: var(--color-border);
+}
+
+.sidebar-github-link svg {
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.sidebar-footer-text {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  text-align: center;
+  padding: var(--spacing-xs) 0;
+}
+
+.sidebar-footer-text .heart {
+  color: #f44336;
+  animation: heartBeat 1.5s ease-in-out infinite;
+  display: inline-block;
+}
+
+.sidebar-footer-text strong {
+  color: var(--color-primary);
+  font-weight: var(--font-weight-bold);
+}
+
 .logout-btn {
   display: flex;
   align-items: center;

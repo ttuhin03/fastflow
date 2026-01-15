@@ -33,7 +33,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Prüfe ob Token vorhanden ist
-    const storedToken = localStorage.getItem('auth_token')
+    // Verwende sessionStorage statt localStorage für besseren XSS-Schutz
+    // sessionStorage wird beim Schließen des Tabs/Browsers gelöscht
+    const storedToken = sessionStorage.getItem('auth_token')
     if (storedToken) {
       setToken(storedToken)
       setIsAuthenticated(true)
@@ -49,7 +51,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         password,
       })
       const { access_token } = response.data
-      localStorage.setItem('auth_token', access_token)
+      // Verwende sessionStorage statt localStorage für besseren XSS-Schutz
+      // sessionStorage wird beim Schließen des Tabs/Browsers gelöscht
+      sessionStorage.setItem('auth_token', access_token)
       setToken(access_token)
       setIsAuthenticated(true)
       await fetchUserInfo()
@@ -64,7 +68,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       // Ignoriere Fehler beim Logout
     } finally {
-      localStorage.removeItem('auth_token')
+      // Entferne Token aus sessionStorage
+      sessionStorage.removeItem('auth_token')
       setToken(null)
       setIsAuthenticated(false)
       setUserRole(null)

@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from sqlmodel import Session
 
 from app.database import get_session
-from app.models import ScheduledJob, TriggerType
+from app.models import ScheduledJob, TriggerType, User
 from app.scheduler import (
     add_job,
     update_job,
@@ -24,7 +24,7 @@ from app.scheduler import (
     get_scheduler
 )
 from app.pipeline_discovery import get_pipeline
-from app.auth import require_write
+from app.auth import require_write, get_current_user
 
 router = APIRouter(prefix="/scheduler", tags=["scheduler"])
 
@@ -65,7 +65,10 @@ class JobResponse(BaseModel):
 
 
 @router.get("/jobs", response_model=List[JobResponse])
-async def list_jobs(session: Session = Depends(get_session)) -> List[JobResponse]:
+async def list_jobs(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+) -> List[JobResponse]:
     """
     Gibt alle geplanten Jobs zurück.
     
@@ -100,7 +103,8 @@ async def list_jobs(session: Session = Depends(get_session)) -> List[JobResponse
 @router.get("/jobs/{job_id}", response_model=JobResponse)
 async def get_job_by_id(
     job_id: UUID,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
 ) -> JobResponse:
     """
     Gibt einen Job anhand der ID zurück.
@@ -272,7 +276,8 @@ async def update_job_by_id(
 async def get_job_runs(
     job_id: UUID,
     limit: int = Query(50, ge=1, le=500, description="Maximale Anzahl Runs"),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
 ) -> List[Dict[str, Any]]:
     """
     Gibt die Run-Historie für einen Job zurück.

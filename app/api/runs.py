@@ -15,8 +15,9 @@ from sqlmodel import Session, select, func
 from pydantic import BaseModel
 
 from app.database import get_session
-from app.models import PipelineRun, RunStatus
+from app.models import PipelineRun, RunStatus, User
 from app.executor import cancel_run, check_container_health
+from app.auth import get_current_user, require_write
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
@@ -36,7 +37,8 @@ async def get_runs(
     end_date: Optional[str] = Query(None, description="Enddatum für Filterung (ISO-Format: YYYY-MM-DD oder YYYY-MM-DDTHH:MM:SS)"),
     limit: int = Query(50, ge=1, le=1000, description="Anzahl Runs pro Seite"),
     offset: int = Query(0, ge=0, description="Offset für Pagination"),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
 ) -> RunsResponse:
     """
     Gibt alle Runs anzeigen (mit Filterung und Pagination).
@@ -139,7 +141,8 @@ async def get_runs(
 @router.get("/{run_id}", response_model=Dict[str, Any])
 async def get_run_details(
     run_id: UUID,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """
     Gibt Details eines Runs zurück.
@@ -181,7 +184,8 @@ async def get_run_details(
 @router.post("/{run_id}/cancel", response_model=Dict[str, str])
 async def cancel_run_endpoint(
     run_id: UUID,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_write)
 ) -> Dict[str, str]:
     """
     Bricht einen laufenden Run ab (Container stoppen).
@@ -229,7 +233,8 @@ async def cancel_run_endpoint(
 @router.get("/{run_id}/health", response_model=Dict[str, Any])
 async def get_run_health(
     run_id: UUID,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """
     Gibt Container-Health-Status für einen Run zurück.

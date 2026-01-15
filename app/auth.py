@@ -109,23 +109,28 @@ def get_password_hash(password: str) -> str:
 
 def create_access_token(username: str, expires_delta: Optional[timedelta] = None) -> str:
     """
-    Erstellt ein JWT-Token für einen Benutzer.
+    Erstellt ein JWT-Access-Token für einen Benutzer.
+    
+    Standard-Laufzeit: JWT_ACCESS_TOKEN_MINUTES (15 Minuten) für bessere Sicherheit.
+    Kann mit expires_delta überschrieben werden für Rückwärtskompatibilität.
     
     Args:
         username: Benutzername
-        expires_delta: Optionale Ablaufzeit (Standard: JWT_EXPIRATION_HOURS)
+        expires_delta: Optionale Ablaufzeit (Standard: JWT_ACCESS_TOKEN_MINUTES)
         
     Returns:
-        str: JWT-Token
+        str: JWT-Access-Token
     """
     if expires_delta is None:
-        expires_delta = timedelta(hours=config.JWT_EXPIRATION_HOURS)
+        # Verwende kürzere Standard-Laufzeit für Access Tokens (15 Minuten)
+        expires_delta = timedelta(minutes=config.JWT_ACCESS_TOKEN_MINUTES)
     
     expire = datetime.utcnow() + expires_delta
     
     to_encode = {
         "sub": username,
-        "exp": expire
+        "exp": expire,
+        "type": "access"  # Token-Typ für Unterscheidung
     }
     
     encoded_jwt = jwt.encode(

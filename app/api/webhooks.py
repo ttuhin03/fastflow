@@ -6,18 +6,21 @@ Dieses Modul enthält REST-API-Endpoints für Webhook-Trigger:
 """
 
 from typing import Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlmodel import Session
 
 from app.database import get_session
 from app.executor import run_pipeline
+from app.middleware.rate_limiting import limiter
 from app.pipeline_discovery import get_pipeline as get_discovered_pipeline
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
 
 @router.post("/{pipeline_name}/{webhook_key}", response_model=Dict[str, Any])
+@limiter.limit("100/minute")
 async def trigger_pipeline_via_webhook(
+    request: Request,
     pipeline_name: str,
     webhook_key: str,
     session: Session = Depends(get_session)
@@ -31,6 +34,7 @@ async def trigger_pipeline_via_webhook(
     - webhook_key stimmt mit dem in pipeline.json überein
     
     Args:
+        request: FastAPI Request (für Rate Limiting)
         pipeline_name: Name der Pipeline
         webhook_key: Webhook-Schlüssel (aus URL-Pfad)
         session: SQLModel Session

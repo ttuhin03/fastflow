@@ -287,6 +287,17 @@ class Config:
     
     Standard: 24 Stunden. Nach Ablauf muss sich der Benutzer erneut
     anmelden.
+    
+    Hinweis: Für bessere Sicherheit wird empfohlen, kürzere Laufzeiten
+    (z.B. 15 Minuten für Access Tokens) mit Refresh Token Flow zu verwenden.
+    """
+    
+    JWT_ACCESS_TOKEN_MINUTES: int = int(os.getenv("JWT_ACCESS_TOKEN_MINUTES", "15"))
+    """
+    Gültigkeitsdauer von Access Tokens in Minuten (für Refresh Token Flow).
+    
+    Standard: 15 Minuten. Kürzere Laufzeit reduziert das Risiko bei
+    kompromittierten Tokens.
     """
     
     # E-Mail-Benachrichtigungen

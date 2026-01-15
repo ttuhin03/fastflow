@@ -208,6 +208,22 @@ def _validate_security_config() -> None:
             "Es wird empfohlen, einen anderen Benutzernamen zu verwenden."
         )
     
+    # 5. CORS Validierung: Wildcard-Origins mit allow_credentials sind unsicher
+    if config.CORS_ORIGINS:
+        for origin in config.CORS_ORIGINS:
+            if origin == "*" or origin.strip() == "*":
+                if is_production:
+                    errors.append(
+                        "CORS_ORIGINS enthält Wildcard '*', was mit allow_credentials=True unsicher ist. "
+                        "Bitte verwende spezifische Origins in der .env-Datei."
+                    )
+                else:
+                    warnings.append(
+                        "CORS_ORIGINS enthält Wildcard '*', was mit allow_credentials=True unsicher ist. "
+                        "Dies sollte in Produktion geändert werden."
+                    )
+                break
+    
     # Logge Warnungen
     for warning in warnings:
         logger.warning(f"⚠️  Sicherheitswarnung: {warning}")
@@ -254,6 +270,18 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan
 )
+
+# Rate Limiter initialisieren und an App binden
+from app.middleware.rate_limiting import limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Security Headers Middleware (muss vor CORS sein)
+from app.middleware.security_headers import SecurityHeadersMiddleware
+app.add_middleware(SecurityHeadersMiddleware)
 
 # CORS konfigurieren für React-Frontend
 # Origins können über CORS_ORIGINS Environment-Variable konfiguriert werden

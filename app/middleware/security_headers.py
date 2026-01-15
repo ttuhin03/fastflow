@@ -1,0 +1,105 @@
+"""
+Security Headers Middleware.
+
+Dieses Modul stellt eine Middleware bereit, die wichtige HTTP Security Headers
+zu allen Response hinzufügt.
+
+Security Headers:
+- Content-Security-Policy: Schutz vor XSS-Angriffen
+- X-Frame-Options: Schutz vor Clickjacking
+- X-Content-Type-Options: Verhindert MIME-Sniffing
+- Strict-Transport-Security: Erzwingt HTTPS (wenn HTTPS aktiviert)
+- Referrer-Policy: Kontrolliert welche Informationen im Referer-Header gesendet werden
+- X-XSS-Protection: Zusätzlicher XSS-Schutz (veraltet, aber für Kompatibilität)
+"""
+
+import logging
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
+
+from app.config import config
+
+logger = logging.getLogger(__name__)
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware für HTTP Security Headers.
+    
+    Fügt wichtige Security Headers zu allen HTTP-Responses hinzu:
+    - Content-Security-Policy: Schutz vor XSS
+    - X-Frame-Options: Schutz vor Clickjacking
+    - X-Content-Type-Options: Verhindert MIME-Sniffing
+    - Strict-Transport-Security: Erzwingt HTTPS (nur in Produktion mit HTTPS)
+    - Referrer-Policy: Kontrolliert Referer-Informationen
+    """
+    
+    async def dispatch(self, request: Request, call_next):
+        """
+        Fügt Security Headers zur Response hinzu.
+        
+        Args:
+            request: FastAPI Request
+            call_next: Next middleware/handler
+            
+        Returns:
+            Response mit Security Headers
+        """
+        response = await call_next(request)
+        
+        # Content-Security-Policy
+        # Erlaubt:
+        # - self: Eigene Domain
+        # - 'unsafe-inline' für inline scripts/styles (notwendig für React in Dev)
+        # - 'unsafe-eval' für eval (notwendig für React Dev Mode)
+        # In Produktion sollte CSP restriktiver sein
+        if config.ENVIRONMENT == "production":
+            # Produktion: Restriktive CSP
+            csp = (
+                "default-src 'self'; "
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+                "style-src 'self' 'unsafe-inline'; "
+                "img-src 'self' data: https:; "
+                "font-src 'self' data:; "
+                "connect-src 'self'; "
+                "frame-ancestors 'none';"
+            )
+        else:
+            # Development: Weniger restriktiv für Dev-Tools
+            csp = (
+                "default-src 'self'; "
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+                "style-src 'self' 'unsafe-inline'; "
+                "img-src 'self' data: https:; "
+                "font-src 'self' data:; "
+                "connect-src 'self' ws: wss:; "
+                "frame-ancestors 'none';"
+            )
+        
+        response.headers["Content-Security-Policy"] = csp
+        
+        # X-Frame-Options: Verhindert Einbettung in Frames (Clickjacking-Schutz)
+        response.headers["X-Frame-Options"] = "DENY"
+        
+        # X-Content-Type-Options: Verhindert MIME-Sniffing
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        
+        # Referrer-Policy: Begrenzt Referer-Informationen
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        
+        # X-XSS-Protection: Zusätzlicher XSS-Schutz (veraltet, aber für Kompatibilität)
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        
+        # Strict-Transport-Security: Erzwingt HTTPS (nur wenn HTTPS aktiviert ist)
+        # Prüfe ob Request über HTTPS kam
+        # In Produktion sollte HTTPS verwendet werden
+        if config.ENVIRONMENT == "production":
+            # HSTS nur setzen wenn wir sicher sind, dass HTTPS verwendet wird
+            # In Produktion sollte hinter einem Reverse-Proxy mit HTTPS sein
+            # Der Reverse-Proxy sollte diesen Header setzen, aber wir setzen ihn auch
+            # als Fallback
+            hsts_max_age = 31536000  # 1 Jahr
+            response.headers["Strict-Transport-Security"] = f"max-age={hsts_max_age}; includeSubDomains"
+        
+        return response

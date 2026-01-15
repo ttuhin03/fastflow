@@ -17,10 +17,10 @@ from sqlmodel import Session, select, func, text
 from pydantic import BaseModel
 
 from app.database import get_session
-from app.models import Pipeline, PipelineRun, RunStatus
+from app.models import Pipeline, PipelineRun, RunStatus, User
 from app.executor import run_pipeline
 from app.pipeline_discovery import discover_pipelines, get_pipeline as get_discovered_pipeline
-from app.auth import require_write
+from app.auth import require_write, get_current_user
 
 router = APIRouter(prefix="/pipelines", tags=["pipelines"])
 
@@ -70,7 +70,8 @@ class DailyStatsResponse(BaseModel):
 
 @router.get("", response_model=List[PipelineResponse])
 async def get_pipelines(
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
 ) -> List[PipelineResponse]:
     """
     Gibt eine Liste aller verfügbaren Pipelines zurück (via Discovery, inkl. Statistiken).
@@ -186,7 +187,8 @@ async def start_pipeline(
 async def get_pipeline_runs(
     name: str,
     limit: Optional[int] = 100,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
 ) -> List[Dict[str, Any]]:
     """
     Gibt die Historie eines Pipeline-Runs zurück.
@@ -239,7 +241,8 @@ async def get_pipeline_runs(
 @router.get("/{name}/stats", response_model=PipelineStatsResponse)
 async def get_pipeline_stats(
     name: str,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
 ) -> PipelineStatsResponse:
     """
     Gibt Pipeline-Statistiken abrufen (total_runs, successful_runs, failed_runs).
@@ -348,7 +351,8 @@ async def get_pipeline_daily_stats(
     days: int = Query(365, ge=1, le=3650, description="Anzahl der Tage zurück (Standard: 365, Max: 3650)"),
     start_date: Optional[str] = Query(None, description="Startdatum für Filterung (ISO-Format: YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="Enddatum für Filterung (ISO-Format: YYYY-MM-DD)"),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
 ) -> DailyStatsResponse:
     """
     Gibt tägliche Pipeline-Statistiken zurück, gruppiert nach Datum.
@@ -496,7 +500,8 @@ class PipelineSourceFilesResponse(BaseModel):
 
 @router.get("/{name}/source", response_model=PipelineSourceFilesResponse)
 async def get_pipeline_source_files(
-    name: str
+    name: str,
+    current_user: User = Depends(get_current_user)
 ) -> PipelineSourceFilesResponse:
     """
     Gibt die Quelldateien einer Pipeline zurück (main.py, requirements.txt, pipeline.json).
@@ -562,7 +567,8 @@ async def get_all_pipelines_daily_stats(
     days: int = Query(365, ge=1, le=3650, description="Anzahl der Tage zurück (Standard: 365, Max: 3650)"),
     start_date: Optional[str] = Query(None, description="Startdatum für Filterung (ISO-Format: YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="Enddatum für Filterung (ISO-Format: YYYY-MM-DD)"),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
 ) -> DailyStatsResponse:
     """
     Gibt tägliche Statistiken für alle Pipelines kombiniert zurück.

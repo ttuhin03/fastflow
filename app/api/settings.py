@@ -20,10 +20,10 @@ from sqlmodel import Session
 from app.database import get_session, database_url, engine
 from app.config import config
 from app.cleanup import cleanup_logs, cleanup_docker_resources
-from app.models import PipelineRun, RunStatus
+from app.models import PipelineRun, RunStatus, User
 from app.notifications import send_email_notification, send_teams_notification
 from app.executor import _get_docker_client
-from app.auth import require_write
+from app.auth import require_write, get_current_user
 from sqlmodel import text
 
 logger = logging.getLogger(__name__)
@@ -73,7 +73,9 @@ class SettingsUpdate(BaseModel):
 
 
 @router.get("", response_model=SettingsResponse)
-async def get_settings() -> SettingsResponse:
+async def get_settings(
+    current_user: User = Depends(get_current_user)
+) -> SettingsResponse:
     """
     Gibt die aktuellen System-Einstellungen zurück.
     
@@ -130,7 +132,10 @@ async def update_settings(
 
 
 @router.get("/storage", response_model=Dict[str, Any])
-async def get_storage_stats(session: Session = Depends(get_session)) -> Dict[str, Any]:
+async def get_storage_stats(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+) -> Dict[str, Any]:
     """
     Gibt Speicherplatz-Statistiken zurück.
     
@@ -275,7 +280,9 @@ async def get_storage_stats(session: Session = Depends(get_session)) -> Dict[str
 
 
 @router.post("/test-email", response_model=Dict[str, str])
-async def test_email() -> Dict[str, str]:
+async def test_email(
+    current_user: User = Depends(require_write)
+) -> Dict[str, str]:
     """
     Sendet eine Test-E-Mail mit aktuellen E-Mail-Einstellungen.
     
@@ -323,7 +330,9 @@ async def test_email() -> Dict[str, str]:
 
 
 @router.post("/test-teams", response_model=Dict[str, str])
-async def test_teams() -> Dict[str, str]:
+async def test_teams(
+    current_user: User = Depends(require_write)
+) -> Dict[str, str]:
     """
     Sendet eine Test-Teams-Nachricht mit aktuellen Teams-Einstellungen.
     
@@ -372,7 +381,8 @@ async def test_teams() -> Dict[str, str]:
 
 @router.post("/cleanup/force", response_model=Dict[str, Any])
 async def force_cleanup(
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_write)
 ) -> Dict[str, Any]:
     """
     Führt einen manuellen Force-Flush (Cleanup) durch.
@@ -603,10 +613,6 @@ async def get_system_metrics() -> Dict[str, Any]:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Fehler beim Abrufen der System-Metriken: {str(e)}"
         )
-
-
-@router.get("/system-metrics", response_model=Dict[str, Any])
-async def get_system_metrics() -> Dict[str, Any]:
     """
     Gibt System-Metriken zurück (Docker-Container, RAM, CPU).
     

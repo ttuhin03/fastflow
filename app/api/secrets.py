@@ -14,9 +14,9 @@ from sqlmodel import Session, select
 from pydantic import BaseModel
 
 from app.database import get_session
-from app.models import Secret
+from app.models import Secret, User
 from app.secrets import encrypt, decrypt
-from app.auth import require_write
+from app.auth import require_write, get_current_user
 
 router = APIRouter(prefix="/secrets", tags=["secrets"])
 
@@ -36,7 +36,8 @@ class SecretUpdateRequest(BaseModel):
 
 @router.get("", response_model=List[Dict[str, Any]])
 async def get_secrets(
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
 ) -> List[Dict[str, Any]]:
     """
     Gibt alle Secrets zurück (Values entschlüsselt).

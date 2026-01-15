@@ -44,13 +44,50 @@ class UserResponse(BaseModel):
         from_attributes = True
 
 
+def validate_username(username: str) -> None:
+    """
+    Validiert Benutzername-Format.
+    
+    Anforderungen:
+    - Nur alphanumerische Zeichen und Unterstriche erlaubt
+    - Länge: 3-50 Zeichen
+    - Darf nicht mit Unterstrichen beginnen oder enden
+    
+    Args:
+        username: Benutzername zum Validieren
+        
+    Raises:
+        ValueError: Wenn Benutzername ungültig ist
+    """
+    import re
+    
+    # Länge prüfen
+    if len(username) < 3 or len(username) > 50:
+        raise ValueError("Benutzername muss zwischen 3 und 50 Zeichen lang sein")
+    
+    # Nur alphanumerische Zeichen und Unterstriche erlauben
+    if not re.match(r'^[a-zA-Z0-9_]+$', username):
+        raise ValueError("Benutzername darf nur Buchstaben, Zahlen und Unterstriche enthalten")
+    
+    # Darf nicht mit Unterstrichen beginnen oder enden
+    if username.startswith('_') or username.endswith('_'):
+        raise ValueError("Benutzername darf nicht mit Unterstrichen beginnen oder enden")
+    
+    # Darf nicht nur aus Unterstrichen bestehen
+    if username.replace('_', '') == '':
+        raise ValueError("Benutzername darf nicht nur aus Unterstrichen bestehen")
+
+
 def validate_password_strength(password: str) -> None:
     """
     Validiert Passwort-Stärke.
     
     Anforderungen:
-    - Mindestlänge: 8 Zeichen
-    - Optional: Empfehlung für stärkere Passwörter (12+ Zeichen)
+    - Mindestlänge: 12 Zeichen
+    - Mindestens 1 Großbuchstabe
+    - Mindestens 1 Kleinbuchstabe
+    - Mindestens 1 Zahl
+    - Mindestens 1 Sonderzeichen (!@#$%^&*()_+-=[]{}|;:,.<>?)
     
     Args:
         password: Passwort zum Validieren
@@ -58,12 +95,27 @@ def validate_password_strength(password: str) -> None:
     Raises:
         ValueError: Wenn Passwort zu schwach ist
     """
-    if len(password) < 8:
-        raise ValueError("Passwort muss mindestens 8 Zeichen lang sein")
+    import re
     
-    # Optional: Warnung für schwache Passwörter (aber nicht blockieren)
+    # Mindestlänge: 12 Zeichen
     if len(password) < 12:
-        logger.warning("Passwort ist weniger als 12 Zeichen lang. Für bessere Sicherheit wird ein längeres Passwort empfohlen.")
+        raise ValueError("Passwort muss mindestens 12 Zeichen lang sein")
+    
+    # Mindestens 1 Großbuchstabe
+    if not re.search(r'[A-Z]', password):
+        raise ValueError("Passwort muss mindestens einen Großbuchstaben enthalten")
+    
+    # Mindestens 1 Kleinbuchstabe
+    if not re.search(r'[a-z]', password):
+        raise ValueError("Passwort muss mindestens einen Kleinbuchstaben enthalten")
+    
+    # Mindestens 1 Zahl
+    if not re.search(r'[0-9]', password):
+        raise ValueError("Passwort muss mindestens eine Zahl enthalten")
+    
+    # Mindestens 1 Sonderzeichen
+    if not re.search(r'[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]', password):
+        raise ValueError("Passwort muss mindestens ein Sonderzeichen enthalten (!@#$%^&*()_+-=[]{}|;:,.<>?)")
 
 
 class CreateUserRequest(BaseModel):
@@ -72,6 +124,13 @@ class CreateUserRequest(BaseModel):
     password: str
     email: Optional[EmailStr] = None
     role: UserRole = UserRole.READONLY
+    
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v: str) -> str:
+        """Validiert Benutzername-Format."""
+        validate_username(v)
+        return v
     
     @field_validator("password")
     @classmethod
@@ -100,6 +159,13 @@ class AcceptInviteRequest(BaseModel):
     username: str
     password: str
     token: str
+    
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v: str) -> str:
+        """Validiert Benutzername-Format."""
+        validate_username(v)
+        return v
     
     @field_validator("password")
     @classmethod
