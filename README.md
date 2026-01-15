@@ -2,6 +2,8 @@
 
 **The lightweight, Docker-native, Python-centric task orchestrator for 2026.**
 
+![Fast-Flow Banner](docs/images/fastflow_banner.png)
+
 Fast-Flow ist die Antwort auf die Komplexität von Airflow und die Schwerfälligkeit traditioneller CI/CD-Tools. Er wurde für Entwickler gebaut, die echte Isolation wollen, ohne auf die Geschwindigkeit lokaler Skripte zu verzichten.
 
 ## 🏗 Architektur: Das "Runner-Cache"-Prinzip
