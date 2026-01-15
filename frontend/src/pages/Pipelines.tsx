@@ -2,6 +2,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import apiClient from '../api/client'
 import { MdInfo, MdRefresh, MdMemory } from 'react-icons/md'
+import RunStatusCircles from '../components/RunStatusCircles'
+import ProgressBar from '../components/ProgressBar'
+import Skeleton from '../components/Skeleton'
 import './Pipelines.css'
 
 interface Pipeline {
@@ -55,16 +58,34 @@ export default function Pipelines() {
     }
   }
 
-  const successRate = (pipeline: Pipeline) => {
+  const successRate = (pipeline: Pipeline): number => {
     if (pipeline.total_runs === 0) return 0
-    return ((pipeline.successful_runs / pipeline.total_runs) * 100).toFixed(1)
+    return parseFloat(((pipeline.successful_runs / pipeline.total_runs) * 100).toFixed(1))
   }
 
   if (isLoading) {
     return (
-      <div className="loading-container">
-        <div className="spinner"></div>
-        <p>Laden...</p>
+      <div className="pipelines">
+        <div className="pipelines-grid">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="pipeline-card card">
+              <div className="pipeline-header">
+                <Skeleton width="60%" height="24px" />
+                <Skeleton width="60px" height="24px" variant="rectangular" />
+              </div>
+              <Skeleton width="100%" height="16px" />
+              <div className="pipeline-stats">
+                <Skeleton width="100%" height="40px" />
+              </div>
+              <Skeleton width="100%" height="8px" />
+              <Skeleton width="100%" height="28px" />
+              <div className="pipeline-actions">
+                <Skeleton width="50%" height="36px" />
+                <Skeleton width="50%" height="36px" />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     )
   }
@@ -99,12 +120,17 @@ export default function Pipelines() {
                   <span className="stat-label error">Fehlgeschlagen:</span>
                   <span className="stat-value error">{pipeline.failed_runs}</span>
                 </div>
-                {pipeline.total_runs > 0 && (
-                  <div className="stat-item">
-                    <span className="stat-label">Erfolgsrate:</span>
-                    <span className="stat-value">{successRate(pipeline)}%</span>
-                  </div>
-                )}
+              </div>
+
+              {pipeline.total_runs > 0 && (
+                <div className="pipeline-success-rate">
+                  <ProgressBar value={successRate(pipeline)} />
+                </div>
+              )}
+
+              <div className="pipeline-recent-runs">
+                <span className="recent-runs-label">Letzte Runs:</span>
+                <RunStatusCircles pipelineName={pipeline.name} />
               </div>
 
               {pipeline.metadata.cpu_hard_limit && (

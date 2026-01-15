@@ -48,6 +48,7 @@
 .btn-primary:hover:not(:disabled) {
   background-color: var(--color-primary-dark);
   box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
 }
 
 .btn-secondary {
@@ -67,6 +68,7 @@
 
 .btn-outlined:hover:not(:disabled) {
   background-color: rgba(33, 150, 243, 0.1);
+  transform: translateY(-1px);
 }
 
 .btn-success {
@@ -203,4 +205,29 @@
   50% {
     opacity: 0.5;
   }
+}
+
+/* Utility Classes */
+.fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Enhanced Button Hover Effects */
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(0);
 }

@@ -10,6 +10,7 @@ import {
   MdSchedule, 
   MdLock, 
   MdSync,
+  MdSettings,
   MdLogout,
   MdCircle
 } from 'react-icons/md'
@@ -28,6 +29,7 @@ const navItems: NavItem[] = [
   { path: '/scheduler', label: 'Scheduler', icon: <MdSchedule /> },
   { path: '/secrets', label: 'Secrets', icon: <MdLock /> },
   { path: '/sync', label: 'Git Sync', icon: <MdSync /> },
+  { path: '/settings', label: 'Einstellungen', icon: <MdSettings /> },
 ]
 
 export default function Layout() {

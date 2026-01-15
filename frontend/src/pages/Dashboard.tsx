@@ -12,6 +12,8 @@ import {
   MdMemory,
   MdViewList
 } from 'react-icons/md'
+import RunStatusCircles from '../components/RunStatusCircles'
+import StorageStats from '../components/StorageStats'
 import './Dashboard.css'
 
 interface Pipeline {
@@ -210,6 +212,11 @@ export default function Dashboard() {
         </div>
       </div>
 
+      <div className="storage-section">
+        <h3 className="section-title">Speicherplatz</h3>
+        <StorageStats />
+      </div>
+
       <div className="pipelines-section">
         <h3 className="section-title">Pipelines</h3>
         {pipelines && pipelines.length > 0 ? (
@@ -281,6 +288,11 @@ export default function Dashboard() {
                   {pipeline.last_cache_warmup && (
                     <span className="badge badge-success">Cached</span>
                   )}
+                </div>
+
+                <div className="pipeline-recent-runs">
+                  <span className="recent-runs-label">Letzte Runs:</span>
+                  <RunStatusCircles pipelineName={pipeline.name} />
                 </div>
                 
                 <div className="pipeline-actions">

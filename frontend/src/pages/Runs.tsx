@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import apiClient from '../api/client'
-import { MdInfo, MdCheckCircle, MdCancel, MdHourglassEmpty, MdPlayArrow } from 'react-icons/md'
+import { MdInfo, MdCheckCircle, MdCancel, MdHourglassEmpty, MdPlayArrow, MdWarning, MdStop } from 'react-icons/md'
 import './Runs.css'
 
 interface Run {
@@ -84,6 +84,10 @@ export default function Runs() {
         return <MdPlayArrow className="status-icon running" />
       case 'PENDING':
         return <MdHourglassEmpty className="status-icon pending" />
+      case 'WARNING':
+        return <MdWarning className="status-icon warning" />
+      case 'INTERRUPTED':
+        return <MdStop className="status-icon interrupted" />
       default:
         return null
     }
