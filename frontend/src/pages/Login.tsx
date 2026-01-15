@@ -1,4 +1,4 @@
-import { useState, FormEvent } from 'react'
+import { useState, FormEvent, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { MdLock, MdPerson, MdWarning, MdCode } from 'react-icons/md'
@@ -11,6 +11,13 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const { login } = useAuth()
   const navigate = useNavigate()
+  const videoRef = useRef<HTMLVideoElement>(null)
+
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.playbackRate = 0.5
+    }
+  }, [])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -30,85 +37,18 @@ export default function Login() {
   return (
     <div className="login-container">
       <div className="login-background">
-        <div className="login-background-gradient"></div>
-        <div className="login-background-pattern"></div>
-        <div className="graph-flow-animation">
-          <svg className="graph-svg" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice">
-            <defs>
-              <linearGradient id="nodeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="rgba(33, 150, 243, 0.8)" />
-                <stop offset="100%" stopColor="rgba(156, 39, 176, 0.8)" />
-              </linearGradient>
-              <linearGradient id="edgeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="rgba(33, 150, 243, 0.3)" />
-                <stop offset="50%" stopColor="rgba(156, 39, 176, 0.4)" />
-                <stop offset="100%" stopColor="rgba(33, 150, 243, 0.3)" />
-              </linearGradient>
-              <filter id="glow">
-                <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
-                <feMerge>
-                  <feMergeNode in="coloredBlur"/>
-                  <feMergeNode in="SourceGraphic"/>
-                </feMerge>
-              </filter>
-            </defs>
-            
-            {/* Layer 1: Source nodes (top) */}
-            <circle className="graph-node node-layer-1" cx="200" cy="150" r="6" />
-            <circle className="graph-node node-layer-1" cx="400" cy="150" r="6" />
-            <circle className="graph-node node-layer-1" cx="600" cy="150" r="6" />
-            <circle className="graph-node node-layer-1" cx="800" cy="150" r="6" />
-            <circle className="graph-node node-layer-1" cx="1000" cy="150" r="6" />
-            
-            {/* Layer 2: Processing nodes */}
-            <circle className="graph-node node-layer-2" cx="300" cy="300" r="7" />
-            <circle className="graph-node node-layer-2" cx="500" cy="300" r="7" />
-            <circle className="graph-node node-layer-2" cx="700" cy="300" r="7" />
-            <circle className="graph-node node-layer-2" cx="900" cy="300" r="7" />
-            
-            {/* Layer 3: Aggregation nodes */}
-            <circle className="graph-node node-layer-3" cx="400" cy="450" r="8" />
-            <circle className="graph-node node-layer-3" cx="600" cy="450" r="8" />
-            <circle className="graph-node node-layer-3" cx="800" cy="450" r="8" />
-            
-            {/* Layer 4: Output nodes (bottom) */}
-            <circle className="graph-node node-layer-4" cx="500" cy="600" r="9" />
-            <circle className="graph-node node-layer-4" cx="700" cy="600" r="9" />
-            
-            {/* Edges: Layer 1 -> Layer 2 */}
-            <line className="graph-edge edge-1-2" x1="200" y1="150" x2="300" y2="300" />
-            <line className="graph-edge edge-1-2" x1="400" y1="150" x2="300" y2="300" />
-            <line className="graph-edge edge-1-2" x1="400" y1="150" x2="500" y2="300" />
-            <line className="graph-edge edge-1-2" x1="600" y1="150" x2="500" y2="300" />
-            <line className="graph-edge edge-1-2" x1="600" y1="150" x2="700" y2="300" />
-            <line className="graph-edge edge-1-2" x1="800" y1="150" x2="700" y2="300" />
-            <line className="graph-edge edge-1-2" x1="800" y1="150" x2="900" y2="300" />
-            <line className="graph-edge edge-1-2" x1="1000" y1="150" x2="900" y2="300" />
-            
-            {/* Edges: Layer 2 -> Layer 3 */}
-            <line className="graph-edge edge-2-3" x1="300" y1="300" x2="400" y2="450" />
-            <line className="graph-edge edge-2-3" x1="500" y1="300" x2="400" y2="450" />
-            <line className="graph-edge edge-2-3" x1="500" y1="300" x2="600" y2="450" />
-            <line className="graph-edge edge-2-3" x1="700" y1="300" x2="600" y2="450" />
-            <line className="graph-edge edge-2-3" x1="700" y1="300" x2="800" y2="450" />
-            <line className="graph-edge edge-2-3" x1="900" y1="300" x2="800" y2="450" />
-            
-            {/* Edges: Layer 3 -> Layer 4 */}
-            <line className="graph-edge edge-3-4" x1="400" y1="450" x2="500" y2="600" />
-            <line className="graph-edge edge-3-4" x1="600" y1="450" x2="500" y2="600" />
-            <line className="graph-edge edge-3-4" x1="600" y1="450" x2="700" y2="600" />
-            <line className="graph-edge edge-3-4" x1="800" y1="450" x2="700" y2="600" />
-            
-            {/* Flow particles - following logical paths */}
-            <circle className="flow-particle particle-1" cx="200" cy="150" r="4" />
-            <circle className="flow-particle particle-2" cx="400" cy="150" r="4" />
-            <circle className="flow-particle particle-3" cx="600" cy="150" r="4" />
-            <circle className="flow-particle particle-4" cx="800" cy="150" r="4" />
-            <circle className="flow-particle particle-5" cx="1000" cy="150" r="4" />
-            <circle className="flow-particle particle-6" cx="200" cy="150" r="4" />
-            <circle className="flow-particle particle-7" cx="600" cy="150" r="4" />
-          </svg>
-        </div>
+        <video 
+          ref={videoRef}
+          className="login-background-video"
+          autoPlay
+          loop
+          muted
+          playsInline
+        >
+          <source src="/background.mp4" type="video/mp4" />
+          {/* Fallback if video doesn't load */}
+        </video>
+        <div className="login-background-overlay"></div>
       </div>
       
       <div className="login-content">
