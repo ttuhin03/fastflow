@@ -66,9 +66,19 @@ export default function Dashboard() {
     queryKey: ['all-pipelines-daily-stats'],
     queryFn: async () => {
       const response = await apiClient.get('/pipelines/daily-stats/all?days=365')
-      return response.data
+      return response.data as { 
+        daily_stats?: Array<{ 
+          date: string
+          total_runs: number
+          successful_runs: number
+          failed_runs: number
+          success_rate: number
+        }> 
+      }
     },
-    refetchInterval: 30000,
+    refetchInterval: 10000, // Refresh every 10 seconds to show new runs faster
+    staleTime: 0, // Always consider data stale to ensure fresh data
+    gcTime: 0, // Don't cache to always get fresh data (was cacheTime in v4)
   })
 
   const startPipelineMutation = useMutation({
@@ -79,9 +89,13 @@ export default function Dashboard() {
       })
       return response.data
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ['pipelines'] })
       queryClient.invalidateQueries({ queryKey: ['runs'] })
+      queryClient.invalidateQueries({ queryKey: ['all-pipelines-daily-stats'] })
+      queryClient.invalidateQueries({ queryKey: ['pipeline-daily-stats'] })
+      // Force immediate refetch of daily stats with fresh data
+      await queryClient.refetchQueries({ queryKey: ['all-pipelines-daily-stats'], exact: false })
       setStartingPipeline(null)
       navigate(`/runs/${data.id}`)
     },
@@ -227,6 +241,10 @@ export default function Dashboard() {
           <h3 className="section-title">Gesamt-Übersicht aller Pipelines</h3>
           <div className="dashboard-calendar-wrapper">
             <CalendarHeatmap dailyStats={allPipelinesDailyStats.daily_stats} days={365} />
+          </div>
+          {/* Debug: Zeige die letzten 5 Tage */}
+          <div style={{ marginTop: '10px', fontSize: '12px', color: '#666' }}>
+            Letzte 5 Tage: {allPipelinesDailyStats.daily_stats.slice(-5).map((s: { date: string; total_runs: number; successful_runs: number; failed_runs: number; success_rate: number }) => `${s.date}: ${s.total_runs} runs`).join(', ')}
           </div>
         </div>
       )}

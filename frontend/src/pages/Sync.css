@@ -325,3 +325,282 @@
   color: #888;
   padding: 2rem;
 }
+
+.sync-github-card {
+  background-color: #2a2a2a;
+  padding: 1.5rem;
+  border-radius: 8px;
+}
+
+.sync-github-card h3 {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+}
+
+.github-status {
+  background-color: #1a1a1a;
+  padding: 1rem;
+  border-radius: 4px;
+  margin-bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.status-badge.configured {
+  background-color: #4caf50;
+  color: white;
+}
+
+.status-badge.not-configured {
+  background-color: #666;
+  color: white;
+}
+
+.status-warning {
+  background-color: #ff9800;
+  color: white;
+  padding: 0.5rem;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
+}
+
+.github-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.github-form .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.github-form label {
+  color: #888;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.github-form input[type="text"],
+.github-form input[type="file"] {
+  padding: 0.5rem;
+  background-color: #1a1a1a;
+  color: white;
+  border: 1px solid #444;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+.github-form input[type="file"] {
+  cursor: pointer;
+}
+
+.github-form input[type="file"]::file-selector-button {
+  padding: 0.5rem 1rem;
+  background-color: #646cff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-right: 1rem;
+}
+
+.github-form input[type="file"]::file-selector-button:hover {
+  background-color: #535bf2;
+}
+
+.github-form small {
+  color: #666;
+  font-size: 0.8rem;
+  margin-top: -0.25rem;
+}
+
+.file-info {
+  color: #4caf50;
+  font-size: 0.9rem;
+  margin-top: 0.25rem;
+}
+
+.github-form .form-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.test-button {
+  padding: 0.5rem 1rem;
+  background-color: #2196f3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.test-button:hover:not(:disabled) {
+  background-color: #1976d2;
+}
+
+.test-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.delete-button {
+  padding: 0.5rem 1rem;
+  background-color: #f44336;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.delete-button:hover:not(:disabled) {
+  background-color: #d32f2f;
+}
+
+.delete-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.github-info {
+  margin-top: 2rem;
+  padding: 1rem;
+  background-color: #1a1a1a;
+  border-radius: 4px;
+  border-left: 3px solid #646cff;
+}
+
+.github-info h4 {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+  color: #646cff;
+}
+
+.github-info ul {
+  margin: 0;
+  padding-left: 1.5rem;
+  color: #ccc;
+  font-size: 0.9rem;
+}
+
+.github-info li {
+  margin-bottom: 0.5rem;
+  line-height: 1.5;
+}
+
+.github-info a {
+  color: #646cff;
+  text-decoration: none;
+}
+
+.github-info a:hover {
+  text-decoration: underline;
+}
+
+.github-connect-section {
+  background-color: #1a1a1a;
+  padding: 1.5rem;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+  text-align: center;
+  border: 2px solid #646cff;
+}
+
+.github-connect-section h4 {
+  margin-top: 0;
+  color: #646cff;
+  margin-bottom: 0.75rem;
+}
+
+.github-connect-section p {
+  color: #ccc;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.connect-github-button {
+  padding: 1rem 2rem;
+  background-color: #646cff;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1.1rem;
+  font-weight: 600;
+  transition: all 0.2s;
+  width: 100%;
+  max-width: 400px;
+}
+
+.connect-github-button:hover:not(:disabled) {
+  background-color: #535bf2;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(100, 108, 255, 0.3);
+}
+
+.connect-github-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.or-divider {
+  margin: 1.5rem 0;
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: #888;
+}
+
+.or-divider::before,
+.or-divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid #444;
+}
+
+.or-divider span {
+  padding: 0 1rem;
+  font-size: 0.9rem;
+}
+
+.github-manual-section {
+  background-color: #1a1a1a;
+  padding: 1rem;
+  border-radius: 4px;
+  margin-bottom: 1.5rem;
+  border-left: 3px solid #888;
+}
+
+.github-manual-section h4 {
+  margin-top: 0;
+  color: #888;
+  margin-bottom: 0.5rem;
+  font-size: 1rem;
+}
+
+.github-manual-section p {
+  color: #666;
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.github-flow-info {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background-color: #1a1a1a;
+  border-radius: 4px;
+  text-align: left;
+}
+
+.github-flow-info small {
+  color: #4caf50;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}

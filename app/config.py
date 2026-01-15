@@ -354,6 +354,15 @@ class Config:
     Beispiel: "http://localhost:3000" oder "https://fastflow.example.com"
     """
     
+    BASE_URL: Optional[str] = os.getenv("BASE_URL", os.getenv("FRONTEND_URL", "http://localhost:8000"))
+    """
+    Base URL für API-Callbacks (z.B. GitHub OAuth Callbacks).
+    
+    Wird verwendet für Callback-URLs in OAuth-Flows.
+    Standard: FRONTEND_URL oder http://localhost:8000
+    Beispiel: "http://localhost:8000" oder "https://fastflow.example.com"
+    """
+    
     @classmethod
     def ensure_directories(cls) -> None:
         """

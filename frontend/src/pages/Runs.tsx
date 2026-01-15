@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useState, useEffect, useRef } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import apiClient from '../api/client'
 import { MdInfo, MdCheckCircle, MdCancel, MdHourglassEmpty, MdPlayArrow, MdWarning, MdStop } from 'react-icons/md'
@@ -29,6 +29,7 @@ export default function Runs() {
     },
   })
 
+  const queryClient = useQueryClient()
   const { data: runs, isLoading } = useQuery<Run[]>({
     queryKey: ['runs', pipelineFilter, statusFilter, startDate, endDate],
     queryFn: async () => {
@@ -42,6 +43,41 @@ export default function Runs() {
     },
     refetchInterval: 5000,
   })
+
+  // Invalidate daily-stats when runs complete
+  const prevRunsRef = useRef<Run[]>([])
+  useEffect(() => {
+    if (runs && runs.length > 0) {
+      const prevRuns = prevRunsRef.current
+      
+      // Check if any run changed from RUNNING/PENDING to SUCCESS/FAILED
+      const completedRuns = runs.filter(run => {
+        const prevRun = prevRuns.find(pr => pr.id === run.id)
+        if (!prevRun) return false
+        return (prevRun.status === 'RUNNING' || prevRun.status === 'PENDING') &&
+               (run.status === 'SUCCESS' || run.status === 'FAILED')
+      })
+      
+      if (completedRuns.length > 0) {
+        // Invalidate daily-stats for all pipelines that had completed runs
+        const pipelineNames = new Set(completedRuns.map(r => r.pipeline_name))
+        queryClient.invalidateQueries({ queryKey: ['all-pipelines-daily-stats'] })
+        queryClient.invalidateQueries({ queryKey: ['pipeline-daily-stats'] })
+        pipelineNames.forEach(name => {
+          queryClient.invalidateQueries({ queryKey: ['pipeline-daily-stats', name] })
+          queryClient.invalidateQueries({ queryKey: ['pipeline-stats', name] })
+        })
+        queryClient.invalidateQueries({ queryKey: ['pipelines'] })
+        // Force immediate refetch
+        queryClient.refetchQueries({ queryKey: ['all-pipelines-daily-stats'] })
+        pipelineNames.forEach(name => {
+          queryClient.refetchQueries({ queryKey: ['pipeline-daily-stats', name] })
+        })
+      }
+      
+      prevRunsRef.current = runs
+    }
+  }, [runs, queryClient])
 
   if (isLoading) {
     return (

@@ -229,3 +229,7 @@ data/uv_cache/
 
 # Pipelines (wird als Volume gemountet)
 pipelines/.git/
+
+# GitHub Apps Private Key
+data/github_app_key.pem
+

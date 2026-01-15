@@ -69,9 +69,20 @@ export default function PipelineDetail() {
     queryKey: ['pipeline-daily-stats', name],
     queryFn: async () => {
       const response = await apiClient.get(`/pipelines/${name}/daily-stats?days=365`)
-      return response.data
+      return response.data as { 
+        daily_stats?: Array<{ 
+          date: string
+          total_runs: number
+          successful_runs: number
+          failed_runs: number
+          success_rate: number
+        }> 
+      }
     },
     enabled: !!name,
+    refetchInterval: 10000, // Refresh every 10 seconds to show new runs faster
+    staleTime: 0, // Always consider data stale to ensure fresh data
+    gcTime: 0, // Don't cache to always get fresh data (was cacheTime in v4)
   })
 
   const resetStatsMutation = useMutation({
@@ -281,7 +292,13 @@ export default function PipelineDetail() {
       )}
 
       {dailyStats && dailyStats.daily_stats && dailyStats.daily_stats.length > 0 && (
-        <CalendarHeatmap dailyStats={dailyStats.daily_stats} days={365} />
+        <>
+          <CalendarHeatmap dailyStats={dailyStats.daily_stats} days={365} />
+          {/* Debug: Zeige die letzten 5 Tage */}
+          <div style={{ marginTop: '10px', fontSize: '12px', color: '#666' }}>
+            Letzte 5 Tage: {dailyStats.daily_stats.slice(-5).map((s: { date: string; total_runs: number; successful_runs: number; failed_runs: number; success_rate: number }) => `${s.date}: ${s.total_runs} runs`).join(', ')}
+          </div>
+        </>
       )}
 
       {runs && runs.length > 0 && (

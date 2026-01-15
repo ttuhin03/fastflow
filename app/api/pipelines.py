@@ -466,8 +466,11 @@ async def get_pipeline_daily_stats(
             )
     else:
         # Standard: Letzte N Tage
-        end_dt = datetime.utcnow()
-        start_dt = end_dt - timedelta(days=days)
+        # Setze end_dt auf Ende des heutigen Tages (23:59:59.999999) in UTC
+        # um sicherzustellen, dass alle Runs von heute erfasst werden
+        now = datetime.utcnow()
+        end_dt = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+        start_dt = (now - timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)
     
     # Query: Alle Runs im Zeitraum abrufen
     stmt = (
@@ -479,21 +482,34 @@ async def get_pipeline_daily_stats(
     
     runs = session.exec(stmt).all()
     
-    # In Python nach Datum gruppieren und aggregieren
+    # Debug: Log heute's Datum und Anzahl gefundener Runs
+    from datetime import date as date_type
     from collections import defaultdict
+    import logging
+    logger = logging.getLogger(__name__)
+    today_utc = date_type.today()  # UTC date
+    logger.info(f"Daily stats for {name}: Found {len(runs)} runs, today UTC: {today_utc}, start_dt: {start_dt}, end_dt: {end_dt}")
     
+    # In Python nach Datum gruppieren und aggregieren
     daily_data = defaultdict(lambda: {"total": 0, "successful": 0, "failed": 0})
     
     for run in runs:
-        # Datum extrahieren (nur Datum, ohne Zeit)
+        # Datum extrahieren (nur Datum, ohne Zeit) - UTC-Datum verwenden
+        # started_at ist bereits in UTC gespeichert
         run_date = run.started_at.date()
         date_str = run_date.isoformat()
         
+        # Debug: Log Runs von heute
+        if run_date == today_utc:
+            logger.info(f"Today's run found: {run.id}, status: {run.status}, started_at: {run.started_at}")
+        
+        # Zähle ALLE Runs, unabhängig vom Status (auch RUNNING/PENDING)
         daily_data[date_str]["total"] += 1
         if run.status == RunStatus.SUCCESS:
             daily_data[date_str]["successful"] += 1
         elif run.status == RunStatus.FAILED:
             daily_data[date_str]["failed"] += 1
+        # RUNNING und PENDING Runs werden als "total" gezählt, aber nicht als successful/failed
     
     # In DailyStat-Objekte umwandeln und sortieren
     daily_stats = []
@@ -577,8 +593,11 @@ async def get_all_pipelines_daily_stats(
             )
     else:
         # Standard: Letzte N Tage
-        end_dt = datetime.utcnow()
-        start_dt = end_dt - timedelta(days=days)
+        # Setze end_dt auf Ende des heutigen Tages (23:59:59.999999) in UTC
+        # um sicherzustellen, dass alle Runs von heute erfasst werden
+        now = datetime.utcnow()
+        end_dt = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+        start_dt = (now - timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)
     
     # Query: Alle Runs im Zeitraum abrufen (alle Pipelines)
     stmt = (
@@ -589,21 +608,34 @@ async def get_all_pipelines_daily_stats(
     
     runs = session.exec(stmt).all()
     
-    # In Python nach Datum gruppieren und aggregieren
+    # Debug: Log heute's Datum und Anzahl gefundener Runs
+    from datetime import date as date_type
     from collections import defaultdict
+    import logging
+    logger = logging.getLogger(__name__)
+    today_utc = date_type.today()  # UTC date
+    logger.info(f"All pipelines daily stats: Found {len(runs)} runs, today UTC: {today_utc}, start_dt: {start_dt}, end_dt: {end_dt}")
     
+    # In Python nach Datum gruppieren und aggregieren
     daily_data = defaultdict(lambda: {"total": 0, "successful": 0, "failed": 0})
     
     for run in runs:
-        # Datum extrahieren (nur Datum, ohne Zeit)
+        # Datum extrahieren (nur Datum, ohne Zeit) - UTC-Datum verwenden
+        # started_at ist bereits in UTC gespeichert
         run_date = run.started_at.date()
         date_str = run_date.isoformat()
         
+        # Debug: Log Runs von heute
+        if run_date == today_utc:
+            logger.info(f"Today's run found: {run.id}, pipeline: {run.pipeline_name}, status: {run.status}, started_at: {run.started_at}")
+        
+        # Zähle ALLE Runs, unabhängig vom Status (auch RUNNING/PENDING)
         daily_data[date_str]["total"] += 1
         if run.status == RunStatus.SUCCESS:
             daily_data[date_str]["successful"] += 1
         elif run.status == RunStatus.FAILED:
             daily_data[date_str]["failed"] += 1
+        # RUNNING und PENDING Runs werden als "total" gezählt, aber nicht als successful/failed
     
     # In DailyStat-Objekte umwandeln und sortieren
     daily_stats = []

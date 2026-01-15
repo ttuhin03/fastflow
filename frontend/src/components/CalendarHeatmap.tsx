@@ -37,14 +37,16 @@ export default function CalendarHeatmap({ dailyStats, days = 365 }: CalendarHeat
   }, [dailyStats])
 
   // Generiere alle Tage für den gewählten Zeitraum
+  // WICHTIG: Verwende UTC-Datum, um mit Backend-Daten (UTC) übereinzustimmen
   const allDays = useMemo(() => {
     const daysArray: DayData[] = []
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    // Heute in UTC berechnen
+    const now = new Date()
+    const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0))
     
     for (let i = days - 1; i >= 0; i--) {
-      const date = new Date(today)
-      date.setDate(date.getDate() - i)
+      const date = new Date(todayUTC)
+      date.setUTCDate(date.getUTCDate() - i)
       const dateStr = date.toISOString().split('T')[0]
       
       const stat = statsMap.get(dateStr)
