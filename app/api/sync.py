@@ -418,17 +418,19 @@ async def delete_github_config_endpoint() -> Dict[str, Any]:
 
 # GitHub App Manifest Flow Endpoints
 
-@router.get("/github-manifest/authorize", response_model=Dict[str, Any])
-async def github_manifest_authorize() -> Dict[str, Any]:
+@router.get("/github-manifest/authorize")
+async def github_manifest_authorize():
     """
-    Generiert GitHub App Manifest Authorization URL.
+    Generiert HTML-Formular für GitHub App Manifest Flow (Coolify-Methode).
     
-    Erstellt ein Manifest JSON und gibt die URL zurück, zu der der Benutzer
-    weitergeleitet werden soll, um die GitHub App zu erstellen.
+    Erstellt ein HTML-Formular, das per POST an GitHub sendet.
+    Das Formular wird per JavaScript automatisch abgesendet für nahtlosen Flow.
     
     Returns:
-        Dictionary mit authorization_url und state
+        HTML-Seite mit automatisch absendendem Formular
     """
+    from fastapi.responses import HTMLResponse
+    
     try:
         # Generiere State Token für CSRF-Schutz
         state = generate_oauth_state()
@@ -436,29 +438,25 @@ async def github_manifest_authorize() -> Dict[str, Any]:
         # Base URL für Callbacks
         base_url = config.BASE_URL.rstrip('/')
         callback_url = f"{base_url}/api/sync/github-manifest/callback"
-        
-        # Erstelle Manifest JSON
-        # Permissions: Minimal - nur Read für Contents (für Git Pull)
-        # Setup URL: Wird nach Installation aufgerufen, um Installation ID automatisch zu erhalten
         setup_url = f"{base_url}/api/sync/github-installation/callback"
         
+        # Erstelle Manifest JSON
         manifest = {
             "name": "Fast-Flow Orchestrator",
             "url": base_url,
             "hook_attributes": {
                 "url": f"{base_url}/api/webhooks/github",
-                "active": False  # Webhooks optional
+                "active": False
             },
             "redirect_url": callback_url,
-            "setup_url": setup_url,  # Automatischer Callback nach Installation
+            "setup_url": setup_url,
             "callback_urls": [callback_url],
             "public": False,
             "default_permissions": {
-                "contents": "read",  # Nur Read - für Git Pull ausreichend
+                "contents": "read",
                 "metadata": "read"
             },
             "default_events": [],
-            # Wichtig: Keine OAuth-Anfrage während Installation (vereinfacht Flow)
             "request_oauth_on_install": False
         }
         
@@ -469,24 +467,68 @@ async def github_manifest_authorize() -> Dict[str, Any]:
             "setup_url": setup_url
         })
         
-        # Encode Manifest als URL-Parameter
+        # Encode Manifest als JSON-String
         manifest_json = json.dumps(manifest)
-        manifest_encoded = urllib.parse.quote(manifest_json)
         
-        # GitHub Manifest URL (OHNE setup_action - wir machen manuellen Redirect nach Code-Exchange)
-        # Für User: https://github.com/settings/apps/new
-        # Für Org: https://github.com/organizations/{org}/settings/apps/new
-        manifest_url = f"https://github.com/settings/apps/new?manifest={manifest_encoded}&state={state}"
+        # HTML-Formular mit automatischem Submit (Coolify-Methode)
+        html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>GitHub App erstellen...</title>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: #1a1a1a;
+            color: white;
+        }}
+        .container {{
+            text-align: center;
+        }}
+        .spinner {{
+            border: 3px solid #333;
+            border-top: 3px solid #646cff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }}
+        @keyframes spin {{
+            0% {{ transform: rotate(0deg); }}
+            100% {{ transform: rotate(360deg); }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="spinner"></div>
+        <p>Weiterleitung zu GitHub...</p>
+    </div>
+    <form id="githubForm" method="POST" action="https://github.com/settings/apps/new?setup_action=install">
+        <input type="hidden" name="manifest" value='{manifest_json.replace("'", "&#39;")}'>
+        <input type="hidden" name="state" value="{state}">
+    </form>
+    <script>
+        // Automatisches Absenden des Formulars (Coolify-Methode)
+        document.getElementById('githubForm').submit();
+    </script>
+</body>
+</html>
+        """
         
-        return {
-            "authorization_url": manifest_url,
-            "state": state
-        }
+        return HTMLResponse(content=html)
         
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Fehler beim Generieren der Manifest URL: {str(e)}"
+            detail=f"Fehler beim Generieren des Manifest-Formulars: {str(e)}"
         )
 
 
@@ -494,7 +536,7 @@ async def github_manifest_authorize() -> Dict[str, Any]:
 async def github_manifest_callback(
     code: str = Query(..., description="Temporärer Code von GitHub"),
     installation_id: Optional[str] = Query(None, description="Installation ID (wenn setup_action=install verwendet wurde)"),
-    state: str = Query(..., description="OAuth State Token")
+    state: Optional[str] = Query(None, description="OAuth State Token")
 ) -> RedirectResponse:
     """
     Callback-Endpoint für GitHub App Manifest Flow.
@@ -511,15 +553,12 @@ async def github_manifest_callback(
         Redirect zum Frontend
     """
     try:
-        # Validiere State
-        state_data = get_oauth_state(state)
-        if not state_data:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Ungültiger oder abgelaufener state token"
-            )
+        # Validiere State (optional, da GitHub manchmal ohne state redirectet)
+        state_data = None
+        if state:
+            state_data = get_oauth_state(state)
         
-        # Versuche Code-Exchange direkt (ohne User Token - GitHub akzeptiert das manchmal)
+        # Code-Exchange: Tausche Code gegen App-Credentials
         exchange_url = f"https://api.github.com/app-manifests/{code}/conversions"
         headers = {
             "Accept": "application/vnd.github+json",
@@ -535,35 +574,60 @@ async def github_manifest_callback(
                 
                 app_id = str(credentials.get("id"))
                 private_key = credentials.get("pem")
+                client_id = credentials.get("client_id")
+                client_secret = credentials.get("client_secret")
                 
                 if app_id and private_key:
-                    # Coolify-Methode: Speichere App-Daten zuerst, dann sofortiger Redirect zur Installation
-                    # Das gibt uns Sicherheit: App-Daten sind gespeichert, auch wenn User Installation abbricht
-                    save_github_config(
-                        app_id=app_id,
-                        installation_id="",  # Wird nach Installation gesetzt
-                        private_key=private_key
-                    )
-                    
-                    # Hole App Slug aus Credentials
-                    app_slug = credentials.get("slug")
-                    if not app_slug:
-                        # Fallback: Verwende App ID (weniger schön, aber funktioniert)
-                        app_slug = app_id
-                    
-                    # Speichere App ID im State für Installation Callback
-                    store_oauth_state(state, {
-                        "type": "installation",
-                        "app_id": app_id,
-                        "app_slug": app_slug
-                    })
-                    
-                    # SOFORTIGER Redirect zur Installation (Coolify-Methode)
-                    # User landet direkt in der Repository-Auswahl, ohne weitere Klicks
-                    install_url = f"https://github.com/apps/{app_slug}/installations/new?state={state}"
-                    
-                    # Redirect direkt zur Installation (User wählt nur Repos)
-                    return RedirectResponse(url=install_url)
+                    # Prüfe ob installation_id bereits vorhanden ist (dank setup_action=install!)
+                    if installation_id:
+                        # Perfekt! Alles in einem Schritt - App erstellt UND installiert
+                        save_github_config(
+                            app_id=app_id,
+                            installation_id=installation_id,
+                            private_key=private_key
+                        )
+                        
+                        # Lösche State falls vorhanden
+                        if state:
+                            delete_oauth_state(state)
+                        
+                        # Redirect zum Frontend mit Erfolgs-Message
+                        frontend_url = config.FRONTEND_URL or config.BASE_URL or "http://localhost:3000"
+                        redirect_url = f"{frontend_url}/sync?tab=github&setup_success=true"
+                        return RedirectResponse(url=redirect_url)
+                    else:
+                        # Installation ID fehlt - speichere App-Daten zuerst
+                        save_github_config(
+                            app_id=app_id,
+                            installation_id="",  # Wird nach Installation gesetzt
+                            private_key=private_key
+                        )
+                        
+                        # Hole App Slug aus Credentials
+                        app_slug = credentials.get("slug")
+                        if not app_slug:
+                            # Fallback: Extrahiere aus html_url oder verwende App ID
+                            html_url = credentials.get("html_url", "")
+                            if html_url:
+                                app_slug = html_url.split("/")[-1]
+                            else:
+                                app_slug = app_id
+                        
+                        # Speichere App ID im State für Installation Callback (falls state vorhanden)
+                        if state:
+                            store_oauth_state(state, {
+                                "type": "installation",
+                                "app_id": app_id,
+                                "app_slug": app_slug
+                            })
+                        
+                        # SOFORTIGER Redirect zur Installation (Coolify-Methode)
+                        # User landet direkt in der Repository-Auswahl
+                        install_url = f"https://github.com/apps/{app_slug}/installations/new"
+                        if state:
+                            install_url += f"?state={state}"
+                        
+                        return RedirectResponse(url=install_url)
             
             # Exchange fehlgeschlagen - weiterleiten mit Code für manuellen Exchange
             # (z.B. wenn User Token erforderlich ist)

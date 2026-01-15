@@ -536,7 +536,8 @@ export default function Sync() {
                   </p>
                   <button
                     onClick={() => {
-                      manifestAuthorizeMutation.mutate()
+                      // Öffne in neuem Fenster/Tab für nahtlosen Flow
+                      window.location.href = '/api/sync/github-manifest/authorize'
                     }}
                     disabled={manifestAuthorizeMutation.isPending}
                     className="connect-github-button"
