@@ -7,6 +7,10 @@ interface AuthContextType {
   login: (username: string, password: string) => Promise<void>
   logout: () => Promise<void>
   token: string | null
+  userRole: 'readonly' | 'write' | 'admin' | null
+  isReadonly: boolean
+  isWrite: boolean
+  isAdmin: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -15,6 +19,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [loading, setLoading] = useState(true)
   const [token, setToken] = useState<string | null>(null)
+  const [userRole, setUserRole] = useState<'readonly' | 'write' | 'admin' | null>(null)
+
+  const fetchUserInfo = async () => {
+    try {
+      const response = await apiClient.get('/auth/me')
+      const role = response.data.role?.toLowerCase() as 'readonly' | 'write' | 'admin'
+      setUserRole(role || 'readonly')
+    } catch (error) {
+      setUserRole(null)
+    }
+  }
 
   useEffect(() => {
     // Prüfe ob Token vorhanden ist
@@ -22,6 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (storedToken) {
       setToken(storedToken)
       setIsAuthenticated(true)
+      fetchUserInfo()
     }
     setLoading(false)
   }, [])
@@ -36,6 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('auth_token', access_token)
       setToken(access_token)
       setIsAuthenticated(true)
+      await fetchUserInfo()
     } catch (error: any) {
       throw new Error(error.response?.data?.detail || 'Login fehlgeschlagen')
     }
@@ -50,11 +67,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem('auth_token')
       setToken(null)
       setIsAuthenticated(false)
+      setUserRole(null)
     }
   }
 
+  const isReadonly = userRole === 'readonly'
+  const isWrite = userRole === 'write' || userRole === 'admin'
+  const isAdmin = userRole === 'admin'
+
   return (
-    <AuthContext.Provider value={{ isAuthenticated, loading, login, logout, token }}>
+    <AuthContext.Provider value={{ 
+      isAuthenticated, 
+      loading, 
+      login, 
+      logout, 
+      token,
+      userRole,
+      isReadonly,
+      isWrite,
+      isAdmin
+    }}>
       {children}
     </AuthContext.Provider>
   )

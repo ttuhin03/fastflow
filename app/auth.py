@@ -25,7 +25,7 @@ from sqlmodel import Session, select
 
 from app.config import config
 from app.database import get_session
-from app.models import User, Session as SessionModel
+from app.models import User, Session as SessionModel, UserRole
 
 logger = logging.getLogger(__name__)
 
@@ -183,16 +183,50 @@ def get_or_create_user(session: Session, username: str, password: str) -> User:
     statement = select(User).where(User.username == username)
     user = session.exec(statement).first()
     
+    # Prüfe ob dies der Standard-Admin-Nutzer ist
+    from app.config import config
+    is_default_admin = (username == config.AUTH_USERNAME)
+    
+    # Fix: Korrigiere alte lowercase enum-Werte zu UPPERCASE (für Migration)
+    if user and hasattr(user, 'role') and user.role:
+        role_str = str(user.role) if not isinstance(user.role, str) else user.role
+        if role_str in ['readonly', 'write', 'admin']:
+            # Konvertiere lowercase zu UPPERCASE
+            role_mapping = {'readonly': UserRole.READONLY, 'write': UserRole.WRITE, 'admin': UserRole.ADMIN}
+            user.role = role_mapping[role_str]
+            session.add(user)
+            session.commit()
+            session.refresh(user)
+            logger.info(f"Rolle für Benutzer '{username}' von '{role_str}' zu '{user.role.value}' korrigiert")
+    
     if user is None:
         # Erstelle neuen Benutzer
+        # Standard-Benutzer (aus Config) bekommt Admin-Rechte
         user = User(
             username=username,
-            password_hash=get_password_hash(password)
+            password_hash=get_password_hash(password),
+            role=UserRole.ADMIN if is_default_admin else UserRole.READONLY
         )
         session.add(user)
         session.commit()
         session.refresh(user)
-        logger.info(f"Benutzer '{username}' erstellt")
+        logger.info(f"Benutzer '{username}' erstellt (Rolle: {user.role.value})")
+    else:
+        # Wenn Benutzer existiert, aber keine Rolle hat (Migration), setze auf Admin für Standard-Benutzer
+        if not hasattr(user, 'role') or user.role is None:
+            user.role = UserRole.ADMIN if is_default_admin else UserRole.READONLY
+            session.add(user)
+            session.commit()
+            session.refresh(user)
+            logger.info(f"Rolle für Benutzer '{username}' gesetzt: {user.role.value}")
+        # WICHTIG: Stelle sicher, dass der Standard-Admin-Nutzer immer Admin-Rechte hat
+        elif is_default_admin and user.role != UserRole.ADMIN:
+            logger.warning(f"Standard-Admin-Nutzer '{username}' hatte Rolle '{user.role.value}', wird auf ADMIN gesetzt")
+            user.role = UserRole.ADMIN
+            session.add(user)
+            session.commit()
+            session.refresh(user)
+            logger.info(f"Rolle für Standard-Admin-Nutzer '{username}' auf ADMIN gesetzt")
     
     return user
 
@@ -338,6 +372,26 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    # Fix: Korrigiere alte lowercase enum-Werte zu UPPERCASE (für Migration)
+    if hasattr(user, 'role') and user.role:
+        role_str = str(user.role) if not isinstance(user.role, str) else user.role
+        if role_str in ['readonly', 'write', 'admin']:
+            # Konvertiere lowercase zu UPPERCASE
+            role_mapping = {'readonly': UserRole.READONLY, 'write': UserRole.WRITE, 'admin': UserRole.ADMIN}
+            user.role = role_mapping[role_str]
+            db_session.add(user)
+            db_session.commit()
+            db_session.refresh(user)
+            logger.info(f"Rolle für Benutzer '{username}' von '{role_str}' zu '{user.role.value}' korrigiert")
+    
+    # Prüfe ob Benutzer blockiert ist
+    if user.blocked:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Benutzer ist blockiert",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
     return user
 
 
@@ -394,4 +448,55 @@ def authenticate_user(session: Session, username: str, password: str) -> Optiona
         logger.error(f"Fehler bei Passwort-Verifizierung für Benutzer '{username}': {e}")
         return None
     
+    # Prüfe ob Benutzer blockiert ist
+    if user.blocked:
+        return None
+    
     return user
+
+
+def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    """
+    Dependency für FastAPI-Endpoints, die Admin-Rechte erfordern.
+    
+    Prüft ob der aktuelle Benutzer Admin-Rechte hat.
+    
+    Args:
+        current_user: Aktueller Benutzer (aus get_current_user Dependency)
+        
+    Returns:
+        User: Aktueller Benutzer (wenn Admin)
+        
+    Raises:
+        HTTPException: Wenn Benutzer kein Admin ist
+    """
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin-Rechte erforderlich"
+        )
+    return current_user
+
+
+def require_write(current_user: User = Depends(get_current_user)) -> User:
+    """
+    Dependency für FastAPI-Endpoints, die Write-Rechte erfordern.
+    
+    Prüft ob der aktuelle Benutzer Write- oder Admin-Rechte hat.
+    Readonly-Nutzer werden abgelehnt.
+    
+    Args:
+        current_user: Aktueller Benutzer (aus get_current_user Dependency)
+        
+    Returns:
+        User: Aktueller Benutzer (wenn Write oder Admin)
+        
+    Raises:
+        HTTPException: Wenn Benutzer nur Readonly-Rechte hat
+    """
+    if current_user.role == UserRole.READONLY:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Write-Rechte erforderlich. Readonly-Nutzer können keine Änderungen vornehmen."
+        )
+    return current_user

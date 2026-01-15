@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import './Sync.css'
 
@@ -26,6 +27,7 @@ interface GitHubConfig {
 
 export default function Sync() {
   const queryClient = useQueryClient()
+  const { isReadonly } = useAuth()
   const [syncBranch, setSyncBranch] = useState('')
   const [activeTab, setActiveTab] = useState<'status' | 'settings' | 'logs' | 'github'>('status')
   const [settingsForm, setSettingsForm] = useState<SyncSettings>({
@@ -401,13 +403,15 @@ export default function Sync() {
               placeholder={syncStatus?.branch || 'main'}
             />
           </div>
-          <button
-            onClick={handleSync}
-            disabled={syncMutation.isPending}
-            className="sync-button"
-          >
-            {syncMutation.isPending ? 'Sync läuft...' : 'Git Sync ausführen'}
-          </button>
+          {!isReadonly && (
+            <button
+              onClick={handleSync}
+              disabled={syncMutation.isPending}
+              className="sync-button"
+            >
+              {syncMutation.isPending ? 'Sync läuft...' : 'Git Sync ausführen'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -461,15 +465,17 @@ export default function Sync() {
                   disabled={!settingsForm.auto_sync_enabled}
                 />
               </div>
-              <div className="form-actions">
-                <button
-                  onClick={handleSaveSettings}
-                  disabled={updateSettingsMutation.isPending}
-                  className="save-button"
-                >
-                  {updateSettingsMutation.isPending ? 'Speichert...' : 'Einstellungen speichern'}
-                </button>
-              </div>
+              {!isReadonly && (
+                <div className="form-actions">
+                  <button
+                    onClick={handleSaveSettings}
+                    disabled={updateSettingsMutation.isPending}
+                    className="save-button"
+                  >
+                    {updateSettingsMutation.isPending ? 'Speichert...' : 'Einstellungen speichern'}
+                  </button>
+                </div>
+              )}
               <p className="settings-note">
                 Hinweis: Einstellungen werden nur für die laufende Instanz gespeichert.
                 Für persistente Änderungen die .env-Datei bearbeiten.
@@ -648,33 +654,35 @@ export default function Sync() {
                   <small>Private Key im PEM-Format (-----BEGIN ... -----END ...)</small>
                 </div>
 
-                <div className="form-actions">
-                  <button
-                    onClick={handleSaveGithubConfig}
-                    disabled={saveGithubConfigMutation.isPending}
-                    className="save-button"
-                  >
-                    {saveGithubConfigMutation.isPending ? 'Speichert...' : 'Speichern'}
-                  </button>
-                  {githubConfig?.configured && (
-                    <>
-                      <button
-                        onClick={handleTestGithubConfig}
-                        disabled={testGithubConfigMutation.isPending}
-                        className="test-button"
-                      >
-                        {testGithubConfigMutation.isPending ? 'Testet...' : 'Konfiguration testen'}
-                      </button>
-                      <button
-                        onClick={handleDeleteGithubConfig}
-                        disabled={deleteGithubConfigMutation.isPending}
-                        className="delete-button"
-                      >
-                        {deleteGithubConfigMutation.isPending ? 'Löscht...' : 'Löschen'}
-                      </button>
-                    </>
-                  )}
-                </div>
+                {!isReadonly && (
+                  <div className="form-actions">
+                    <button
+                      onClick={handleSaveGithubConfig}
+                      disabled={saveGithubConfigMutation.isPending}
+                      className="save-button"
+                    >
+                      {saveGithubConfigMutation.isPending ? 'Speichert...' : 'Speichern'}
+                    </button>
+                    {githubConfig?.configured && (
+                      <>
+                        <button
+                          onClick={handleTestGithubConfig}
+                          disabled={testGithubConfigMutation.isPending}
+                          className="test-button"
+                        >
+                          {testGithubConfigMutation.isPending ? 'Testet...' : 'Konfiguration testen'}
+                        </button>
+                        <button
+                          onClick={handleDeleteGithubConfig}
+                          disabled={deleteGithubConfigMutation.isPending}
+                          className="delete-button"
+                        >
+                          {deleteGithubConfigMutation.isPending ? 'Löscht...' : 'Löschen'}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
 
                 <div className="github-info">
                   <h4>Hilfe:</h4>

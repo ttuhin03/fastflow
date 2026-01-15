@@ -33,6 +33,13 @@ class TriggerType(str, Enum):
     INTERVAL = "INTERVAL"
 
 
+class UserRole(str, Enum):
+    """Rolle eines Benutzers."""
+    READONLY = "READONLY"
+    WRITE = "WRITE"
+    ADMIN = "ADMIN"
+
+
 class Pipeline(SQLModel, table=True):
     """
     Pipeline-Metadaten-Model.
@@ -211,6 +218,7 @@ class User(SQLModel, table=True):
     
     Speichert Benutzer-Informationen für Authentifizierung.
     Passwörter werden gehasht gespeichert (passlib bcrypt).
+    Unterstützt lokale Authentifizierung und Microsoft OAuth (zukünftig).
     """
     __tablename__ = "users"
     
@@ -224,8 +232,38 @@ class User(SQLModel, table=True):
         index=True,
         description="Benutzername (eindeutig)"
     )
-    password_hash: str = Field(
-        description="Gehashtes Passwort (bcrypt)"
+    password_hash: Optional[str] = Field(
+        default=None,
+        description="Gehashtes Passwort (bcrypt, optional für Microsoft-User)"
+    )
+    email: Optional[str] = Field(
+        default=None,
+        index=True,
+        description="E-Mail-Adresse (optional, für Microsoft-Auth)"
+    )
+    role: UserRole = Field(
+        default=UserRole.READONLY,
+        description="Benutzer-Rolle (readonly, write, admin)"
+    )
+    blocked: bool = Field(
+        default=False,
+        description="Ist der Benutzer blockiert?"
+    )
+    invitation_token: Optional[str] = Field(
+        default=None,
+        unique=True,
+        index=True,
+        description="Einladungs-Token (optional)"
+    )
+    invitation_expires_at: Optional[datetime] = Field(
+        default=None,
+        description="Ablauf-Zeitpunkt der Einladung (UTC, optional)"
+    )
+    microsoft_id: Optional[str] = Field(
+        default=None,
+        unique=True,
+        index=True,
+        description="Microsoft OAuth ID (optional, für zukünftige Microsoft-Auth)"
     )
     created_at: datetime = Field(
         default_factory=datetime.utcnow,

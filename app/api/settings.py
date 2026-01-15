@@ -23,6 +23,7 @@ from app.cleanup import cleanup_logs, cleanup_docker_resources
 from app.models import PipelineRun, RunStatus
 from app.notifications import send_email_notification, send_teams_notification
 from app.executor import _get_docker_client
+from app.auth import require_write
 from sqlmodel import text
 
 logger = logging.getLogger(__name__)
@@ -102,6 +103,7 @@ async def get_settings() -> SettingsResponse:
 @router.put("", response_model=Dict[str, str])
 async def update_settings(
     settings: SettingsUpdate,
+    current_user = Depends(require_write),
     session: Session = Depends(get_session)
 ) -> Dict[str, str]:
     """

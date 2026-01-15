@@ -105,6 +105,25 @@ async def login(
     )
 
 
+@router.get("/me", response_model=dict, status_code=status.HTTP_200_OK)
+async def get_current_user_info(
+    current_user: User = Depends(get_current_user)
+) -> dict:
+    """
+    Gibt Informationen über den aktuellen Benutzer zurück.
+    
+    Args:
+        current_user: Aktueller Benutzer (aus get_current_user Dependency)
+        
+    Returns:
+        Dictionary mit Benutzerinformationen (username, role)
+    """
+    return {
+        "username": current_user.username,
+        "role": current_user.role.value
+    }
+
+
 @router.post("/logout", response_model=LogoutResponse, status_code=status.HTTP_200_OK)
 async def logout(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
@@ -146,5 +165,6 @@ async def get_current_user_info(
     return {
         "username": current_user.username,
         "id": str(current_user.id),
-        "created_at": current_user.created_at.isoformat()
+        "created_at": current_user.created_at.isoformat(),
+        "role": current_user.role.value if hasattr(current_user, 'role') else 'readonly'
     }

@@ -11,6 +11,7 @@ import {
   MdLock, 
   MdSync,
   MdSettings,
+  MdPeople,
   MdLogout,
   MdCircle,
   MdPause
@@ -30,6 +31,7 @@ const navItems: NavItem[] = [
   { path: '/scheduler', label: 'Scheduler', icon: <MdSchedule /> },
   { path: '/secrets', label: 'Secrets', icon: <MdLock /> },
   { path: '/sync', label: 'Git Sync', icon: <MdSync /> },
+  { path: '/users', label: 'Nutzer', icon: <MdPeople /> },
   { path: '/settings', label: 'Einstellungen', icon: <MdSettings /> },
 ]
 
@@ -135,7 +137,8 @@ export default function Layout() {
                            item.path === '/runs' ? 'runs-icon' :
                            item.path === '/pipelines' ? 'pipelines-icon' :
                            item.path === '/' ? 'dashboard-icon' :
-                           item.path === '/secrets' ? 'secrets-icon' : 'default-icon'
+                           item.path === '/secrets' ? 'secrets-icon' :
+                           item.path === '/users' ? 'users-icon' : 'default-icon'
             
             // Für Runs: Pause-Icon während Animation zeigen
             const showPauseIcon = item.path === '/runs' && clickedIcons.has(item.path)

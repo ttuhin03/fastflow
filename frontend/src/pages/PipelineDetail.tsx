@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useState } from 'react'
+import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import CalendarHeatmap from '../components/CalendarHeatmap'
 import './PipelineDetail.css'
@@ -34,10 +36,18 @@ interface Pipeline {
   }
 }
 
+interface PipelineSourceFiles {
+  main_py: string | null
+  requirements_txt: string | null
+  pipeline_json: string | null
+}
+
 export default function PipelineDetail() {
   const { name } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { isReadonly } = useAuth()
+  const [activeTab, setActiveTab] = useState<'python' | 'requirements' | 'json'>('python')
 
   const { data: pipeline, isLoading: pipelineLoading } = useQuery<Pipeline>({
     queryKey: ['pipeline', name],
@@ -85,6 +95,15 @@ export default function PipelineDetail() {
     refetchInterval: 10000, // Refresh every 10 seconds to show new runs faster
     staleTime: 0, // Always consider data stale to ensure fresh data
     gcTime: 0, // Don't cache to always get fresh data (was cacheTime in v4)
+  })
+
+  const { data: sourceFiles, isLoading: sourceFilesLoading } = useQuery<PipelineSourceFiles>({
+    queryKey: ['pipeline-source', name],
+    queryFn: async () => {
+      const response = await apiClient.get(`/pipelines/${name}/source`)
+      return response.data
+    },
+    enabled: !!name,
   })
 
   const resetStatsMutation = useMutation({
@@ -247,13 +266,15 @@ export default function PipelineDetail() {
         <div className="stats-card">
           <div className="stats-header">
             <h3>Statistiken</h3>
-            <button
-              onClick={handleResetStats}
-              disabled={resetStatsMutation.isPending}
-              className="reset-button"
-            >
-              {resetStatsMutation.isPending ? 'Zurücksetzen...' : 'Statistiken zurücksetzen'}
-            </button>
+            {!isReadonly && (
+              <button
+                onClick={handleResetStats}
+                disabled={resetStatsMutation.isPending}
+                className="reset-button"
+              >
+                {resetStatsMutation.isPending ? 'Zurücksetzen...' : 'Statistiken zurücksetzen'}
+              </button>
+            )}
           </div>
           <div className="stats-grid">
             <div className="stat-box">
@@ -388,6 +409,71 @@ export default function PipelineDetail() {
           </table>
         </div>
       )}
+
+      <div className="source-files-card">
+        <h3>Quelldateien</h3>
+        <div className="tabs">
+          <button
+            className={`tab ${activeTab === 'python' ? 'active' : ''}`}
+            onClick={() => setActiveTab('python')}
+          >
+            Python (main.py)
+          </button>
+          <button
+            className={`tab ${activeTab === 'requirements' ? 'active' : ''}`}
+            onClick={() => setActiveTab('requirements')}
+          >
+            Requirements
+          </button>
+          <button
+            className={`tab ${activeTab === 'json' ? 'active' : ''}`}
+            onClick={() => setActiveTab('json')}
+          >
+            JSON (pipeline.json)
+          </button>
+        </div>
+        <div className="tab-content">
+          {sourceFilesLoading ? (
+            <div className="code-loading">Laden...</div>
+          ) : (
+            <>
+              {activeTab === 'python' && (
+                <div className="code-container">
+                  {sourceFiles?.main_py ? (
+                    <pre className="code-block"><code>{sourceFiles.main_py}</code></pre>
+                  ) : (
+                    <div className="code-empty">main.py nicht gefunden</div>
+                  )}
+                </div>
+              )}
+              {activeTab === 'requirements' && (
+                <div className="code-container">
+                  {sourceFiles?.requirements_txt ? (
+                    <pre className="code-block"><code>{sourceFiles.requirements_txt}</code></pre>
+                  ) : (
+                    <div className="code-empty">requirements.txt nicht gefunden</div>
+                  )}
+                </div>
+              )}
+              {activeTab === 'json' && (
+                <div className="code-container">
+                  {sourceFiles?.pipeline_json ? (
+                    <pre className="code-block"><code>{(() => {
+                      try {
+                        return JSON.stringify(JSON.parse(sourceFiles.pipeline_json), null, 2)
+                      } catch {
+                        return sourceFiles.pipeline_json
+                      }
+                    })()}</code></pre>
+                  ) : (
+                    <div className="code-empty">pipeline.json nicht gefunden</div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

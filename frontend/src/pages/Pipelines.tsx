@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import { MdInfo, MdRefresh, MdMemory } from 'react-icons/md'
 import RunStatusCircles from '../components/RunStatusCircles'
@@ -28,6 +29,7 @@ interface Pipeline {
 export default function Pipelines() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { isReadonly } = useAuth()
 
   const { data: pipelines, isLoading } = useQuery<Pipeline[]>({
     queryKey: ['pipelines'],
@@ -180,14 +182,16 @@ export default function Pipelines() {
                   <MdInfo />
                   Details
                 </button>
-                <button
-                  onClick={() => handleResetStats(pipeline.name)}
-                  className="btn btn-warning reset-button"
-                  disabled={resetStatsMutation.isPending}
-                >
-                  <MdRefresh />
-                  Stats zurücksetzen
-                </button>
+                {!isReadonly && (
+                  <button
+                    onClick={() => handleResetStats(pipeline.name)}
+                    className="btn btn-warning reset-button"
+                    disabled={resetStatsMutation.isPending}
+                  >
+                    <MdRefresh />
+                    Stats zurücksetzen
+                  </button>
+                )}
               </div>
             </div>
           ))}

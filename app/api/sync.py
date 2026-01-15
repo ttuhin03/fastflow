@@ -19,6 +19,7 @@ import requests
 from app.database import get_session
 from app.git_sync import sync_pipelines, get_sync_status, get_sync_logs, test_github_app_token
 from app.config import config
+from app.auth import require_write
 from app.github_config import (
     save_github_config,
     load_github_config,
@@ -43,6 +44,7 @@ class SyncRequest(BaseModel):
 @router.post("", response_model=Dict[str, Any])
 async def sync(
     request: SyncRequest,
+    current_user = Depends(require_write),
     session: Session = Depends(get_session)
 ) -> Dict[str, Any]:
     """
@@ -135,7 +137,8 @@ async def get_sync_settings() -> Dict[str, Any]:
 
 @router.put("/settings", response_model=Dict[str, Any])
 async def update_sync_settings(
-    request: SyncSettingsRequest
+    request: SyncSettingsRequest,
+    current_user = Depends(require_write)
 ) -> Dict[str, Any]:
     """
     Aktualisiert Sync-Einstellungen.
@@ -225,7 +228,8 @@ async def get_github_config() -> Dict[str, Any]:
 
 @router.post("/github-config", response_model=Dict[str, Any])
 async def save_github_config_endpoint(
-    request: GitHubConfigRequest
+    request: GitHubConfigRequest,
+    current_user = Depends(require_write)
 ) -> Dict[str, Any]:
     """
     Speichert GitHub Apps Konfiguration.

@@ -1,6 +1,143 @@
 # Fast-Flow Orchestrator
 
-Ein eigenes Workflow-Orchestrierungstool ähnlich Apache Airflow und Dagster, aber mit spezifischen Anforderungen für schnelle, isolierte Pipeline-Ausführungen.
+**The lightweight, Docker-native, Python-centric task orchestrator for 2026.**
+
+Fast-Flow ist die Antwort auf die Komplexität von Airflow und die Schwerfälligkeit traditioneller CI/CD-Tools. Er wurde für Entwickler gebaut, die echte Isolation wollen, ohne auf die Geschwindigkeit lokaler Skripte zu verzichten.
+
+## 🏗 Architektur: Das "Runner-Cache"-Prinzip
+
+Im Gegensatz zu klassischen Orchestratoren, die oft "Dependency Hell" in ihren Worker-Umgebungen erleben, nutzt Fast-Flow eine moderne JIT-Environment-Architektur.
+
+- **The Singleton Brain**: Ein einzelner FastAPI-Prozess verwaltet den Zustand, den Scheduler und den Git-Sync.
+- **Ephemeral Workers**: Jede Pipeline startet in einem isolierten Docker-Container. Keine Seiteneffekte, keine Rückstände.
+- **uv-Acceleration**: Durch das Mounten eines globalen uv-Caches vom Host in den Container werden Dependencies in Millisekunden bereitgestellt. Es fühlt sich an wie ein lokales venv, ist aber ein sauberer Container.
+- **Live-Streaming**: Logs und Ressourcen-Metriken (CPU/RAM) werden per SSE (Server-Sent Events) in Echtzeit direkt aus dem Docker-Socket an das React-Frontend gestreamt.
+
+## 🛠 Der Container-Prozess & Lifecycle
+
+Fast-Flow nutzt ein "Disposable Worker"-Modell. Anstatt langlebige Instanzen zu pflegen, wird für jede Ausführung ein frischer, isolierter Container erzeugt. Der gesamte Prozess folgt diesem Ablauf:
+
+### 1. Trigger & Initialisierung
+
+Sobald ein Run über das React-Frontend (manuell) oder den APScheduler (geplant) ausgelöst wird:
+
+- Die API validiert die Pipeline-Struktur und lädt die verschlüsselten Secrets.
+- Ein neuer Eintrag in der SQLite-Datenbank wird mit dem Status `PENDING` erstellt.
+
+### 2. Die "Zero-Build" Execution
+
+Hier liegt der Kern der Fast-Flow Performance. Statt ein Docker-Image zu bauen, wird ein generisches Basis-Image gestartet:
+
+- **Mounting**: Das spezifische Pipeline-Verzeichnis (read-only) und der globale uv-Cache des Hosts werden in den Container gemountet.
+- **Just-In-Time Environment**: Innerhalb des Containers führt `uv` den Befehl `uv run` aus.
+  - **Existieren die Abhängigkeiten im Cache?** Sie werden in Millisekunden per Hardlink verknüpft.
+  - **Neue Abhängigkeiten?** Sie werden einmalig geladen und sofort im Host-Cache für zukünftige Runs gesichert.
+
+### 3. Monitoring & Kommunikation (Headless Architecture)
+
+Während der Container läuft, fungiert die FastAPI als Vermittler:
+
+- **Logs**: Die API liest den stdout/stderr-Stream des Docker-Containers asynchron und stellt ihn über einen SSE-Endpunkt (Server-Sent Events) bereit.
+- **Metrics**: Die Docker-Stats-API wird abgegriffen, um CPU- und RAM-Werte in Echtzeit an das React-Dashboard zu senden.
+- **Security**: Die API kommuniziert nicht direkt mit dem Docker-Socket, sondern über einen Socket-Proxy, der nur lesende Zugriffe und begrenzte Start-Befehle erlaubt.
+
+### 4. Terminierung & Cleanup
+
+Nach Abschluss des Python-Skripts:
+
+- Der Exit-Code wird erfasst (z.B. 137 für OOM-Fehler).
+- Der Container wird automatisch entfernt (`--rm`), was das System absolut sauber hält.
+- Die Logs werden finalisiert und für die Langzeitarchivierung auf der Festplatte gespeichert.
+
+### 🏗 Architektur-Diagramm (Datenfluss)
+
+```mermaid
+graph LR
+    A[React Frontend] -- REST/SSE --> B[FastAPI Orchestrator]
+    B -- SQLModel --> C[(SQLite/Postgres)]
+    B -- Auth --> D[GitHub App / Secrets]
+    B -- Proxy --> E[Docker Socket Proxy]
+    E -- Spawns --> F[Pipeline Container]
+    F -- Mounts --> G[Shared uv-Cache]
+    F -- Mounts --> H[Pipeline Code]
+```
+
+### Warum dieser Ansatz?
+
+- **Geschwindigkeit**: Durch den Entfall von `docker build` Schritten startet eine Pipeline so schnell wie ein lokaler Prozess.
+- **Isolation**: Ein Fehler in `pipeline_a` kann niemals die Umgebung von `pipeline_b` beeinflussen.
+- **Skalierbarkeit**: Da der Controller (API) und die Worker (Container) entkoppelt sind, kann das System durch das Hinzufügen von Message-Queues (wie Redis) leicht auf mehrere Server verteilt werden.
+
+## 🚀 Warum Fast-Flow? (Vergleich)
+
+| Feature | Fast-Flow | Airflow | Dagster |
+|---------|-----------|---------|---------|
+| Setup | 🟢 1 Docker-Container | 🔴 Komplexes Cluster | 🟡 Mittel |
+| Isolation | 🟢 Strikt (Docker pro Task) | 🔴 Schwach (Shared Worker) | 🟡 Mittel |
+| Dependency-Speed | 🟢 Instant (uv JIT) | 🔴 Langsam (Image Builds) | 🟡 Mittel |
+| UI-Vibe | 🟢 Modern & Realtime (React) | 🔴 Altbacken / Statisch | 🟡 Modern |
+| Deployment | 🟢 Git Push + Auto-Sync | 🔴 Komplexe CI/CD Pipelines | 🟡 Code-Deployment |
+| **Onboarding-Zeit** | 🟢 **Minuten statt Tage** | 🔴 **Wochen** | 🟡 **Tage** |
+| **Pipeline-Struktur lernen** | 🟢 **Einfach: main.py + requirements.txt** | 🔴 **Komplex: DAGs, Operators, XComs** | 🟡 **Mittel: Assets, Ops, Resources** |
+
+## 🎯 Warum Fast-Flow gewinnt (The Python Advantage)
+
+### 1. 🐍 Simple Python Pipelines – No Context Switching
+
+In anderen Orchestratoren musst du oft YAML-Dateien schreiben oder dich mit komplexen DSLs herumschlagen.
+
+- **Die Pipelines**: Eine Pipeline ist ein simples Python-Skript. Wenn es lokal läuft, läuft es auch im Orchestrator. Keine speziellen Decorators, keine Operator-Klassen, keine komplexe Konfiguration.
+- **Das Frontend**: Modernes React-Dashboard mit Echtzeit-Monitoring. Das Backend bleibt 100% Python (FastAPI).
+
+### 2. ⚡️ Instant Onboarding (Developer Experience)
+
+**Keine proprietäre Logik**: Du musst keine speziellen Decorators (wie `@dag`) oder Operatoren (`PythonOperator`) lernen.
+
+- **"Write & Run"**: Neue Entwickler können innerhalb von 5 Minuten ihre erste Pipeline pushen. Wer Python versteht, versteht Fast-Flow.
+- **Lokales Debugging**: Da wir uv nutzen, können Entwickler exakt die gleiche Umgebung lokal mit einem Befehl nachbauen, die auch im Container läuft.
+
+**Onboarding bei Airflow**: Oft eine Sache von Tagen oder Wochen (wegen der DSL, Provider, Cluster-Logik) – bei Fast-Flow ist es eine Sache von Minuten.
+
+### 3. 🛠 Minimalistischer Footprint
+
+Während Airflow eine Postgres-DB, einen Redis-Broker, einen Scheduler, einen Webserver und mehrere Worker braucht, kommt Fast-Flow als Single-Container-Lösung aus.
+
+- **Wartungsarm**: Ein Update bedeutet `docker-compose pull`. Fertig.
+- **Ressourcenschonend**: Ideal für Edge-Server oder kleinere VM-Instanzen.
+
+### Die Fast-Flow Vorteile:
+
+- **Zero-Build Pipelines**: Du musst keine Docker-Images für deine Pipelines bauen. Ändere die requirements.txt im Git, und Fast-Flow wärmt den Cache automatisch im Hintergrund auf.
+- **Kein "Database is locked"**: Optimiert für SQLite mit WAL-Mode und asynchronem I/O.
+- **Ressourcen-Kontrolle**: Setze CPU- und RAM-Limits pro Pipeline direkt via JSON-Metadaten.
+- **Sicherheits-Fokus**: Verschlüsselte Secrets (Fernet) und nativer GitHub App Support.
+
+## 🛠 Technischer Stack
+
+- **Backend**: FastAPI (Python 3.11+)
+- **Frontend**: React + TypeScript (Vite)
+- **Database**: SQLModel (SQLite/PostgreSQL)
+- **Execution**: Docker Engine API + uv
+- **Scheduling**: APScheduler (Persistent)
+- **Auth**: JWT & Fernet Encryption
+
+## Hauptfunktionen
+
+- **Automatische Pipeline-Erkennung**: Pipelines werden automatisch aus einem Git-Repository erkannt
+- **Isolierte Ausführung**: Jede Pipeline läuft in einem eigenen Docker-Container
+- **Resource-Management**: Konfigurierbare CPU- und Memory-Limits pro Pipeline
+- **Scheduling**: Unterstützung für CRON- und Interval-basierte Jobs
+- **Webhooks**: Pipeline-Trigger via HTTP-Webhooks
+- **Live-Monitoring**: Echtzeit-Logs und Metriken während der Ausführung
+- **Git-Sync**: Automatische Synchronisation mit Git-Repositories
+- **Secrets-Management**: Sichere Verwaltung von Secrets und Parametern
+
+## Dokumentation
+
+- **[Quick Start Guide](docs/QUICKSTART.md)** - Schnellstart-Anleitung
+- **[API-Dokumentation](docs/api/API.md)** - Vollständige API-Referenz
+- **[Frontend-Dokumentation](docs/frontend/FRONTEND.md)** - Frontend-Komponenten und Seiten
+- **[Pipeline-Repository](docs/pipelines/PIPELINE_REPOSITORY.md)** - Detaillierte Anleitung für Pipeline-Repositories
 
 ## Pipeline-Repository-Struktur
 

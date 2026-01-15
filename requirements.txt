@@ -4,6 +4,7 @@ sqlmodel
 docker
 apscheduler
 pydantic
+email-validator
 python-multipart
 aiofiles
 alembic

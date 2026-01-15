@@ -10,6 +10,7 @@ Dieses Modul enthält alle REST-API-Endpoints für Pipeline-Management:
 from typing import List, Optional, Dict, Any
 from uuid import UUID
 from datetime import datetime, timedelta
+from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import JSONResponse
 from sqlmodel import Session, select, func, text
@@ -19,6 +20,7 @@ from app.database import get_session
 from app.models import Pipeline, PipelineRun, RunStatus
 from app.executor import run_pipeline
 from app.pipeline_discovery import discover_pipelines, get_pipeline as get_discovered_pipeline
+from app.auth import require_write
 
 router = APIRouter(prefix="/pipelines", tags=["pipelines"])
 
@@ -126,6 +128,7 @@ async def get_pipelines(
 async def start_pipeline(
     name: str,
     request: RunPipelineRequest,
+    current_user = Depends(require_write),
     session: Session = Depends(get_session)
 ) -> Dict[str, Any]:
     """
@@ -289,6 +292,7 @@ async def get_pipeline_stats(
 @router.post("/{name}/stats/reset", response_model=Dict[str, str])
 async def reset_pipeline_stats(
     name: str,
+    current_user = Depends(require_write),
     session: Session = Depends(get_session)
 ) -> Dict[str, str]:
     """
@@ -477,6 +481,76 @@ async def get_pipeline_daily_stats(
         ))
     
     return DailyStatsResponse(daily_stats=daily_stats)
+
+
+class PipelineSourceFilesResponse(BaseModel):
+    """Response-Model für Pipeline-Quelldateien."""
+    main_py: Optional[str] = None
+    requirements_txt: Optional[str] = None
+    pipeline_json: Optional[str] = None
+
+
+@router.get("/{name}/source", response_model=PipelineSourceFilesResponse)
+async def get_pipeline_source_files(
+    name: str
+) -> PipelineSourceFilesResponse:
+    """
+    Gibt die Quelldateien einer Pipeline zurück (main.py, requirements.txt, pipeline.json).
+    
+    Args:
+        name: Name der Pipeline
+        
+    Returns:
+        Dictionary mit den Quelldateien (als Strings)
+        
+    Raises:
+        HTTPException: Wenn Pipeline nicht existiert
+    """
+    # Prüfe ob Pipeline existiert
+    discovered = get_discovered_pipeline(name)
+    if discovered is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Pipeline nicht gefunden: {name}"
+        )
+    
+    pipeline_dir = discovered.path
+    result = PipelineSourceFilesResponse()
+    
+    # main.py lesen
+    main_py_path = pipeline_dir / "main.py"
+    if main_py_path.exists() and main_py_path.is_file():
+        try:
+            with open(main_py_path, "r", encoding="utf-8") as f:
+                result.main_py = f.read()
+        except Exception as e:
+            # Fehler beim Lesen: None lassen, aber nicht abbrechen
+            pass
+    
+    # requirements.txt lesen
+    requirements_path = pipeline_dir / "requirements.txt"
+    if requirements_path.exists() and requirements_path.is_file():
+        try:
+            with open(requirements_path, "r", encoding="utf-8") as f:
+                result.requirements_txt = f.read()
+        except Exception as e:
+            # Fehler beim Lesen: None lassen, aber nicht abbrechen
+            pass
+    
+    # pipeline.json lesen (oder {pipeline_name}.json)
+    metadata_path = pipeline_dir / "pipeline.json"
+    if not metadata_path.exists():
+        metadata_path = pipeline_dir / f"{name}.json"
+    
+    if metadata_path.exists() and metadata_path.is_file():
+        try:
+            with open(metadata_path, "r", encoding="utf-8") as f:
+                result.pipeline_json = f.read()
+        except Exception as e:
+            # Fehler beim Lesen: None lassen, aber nicht abbrechen
+            pass
+    
+    return result
 
 
 @router.get("/daily-stats/all", response_model=DailyStatsResponse)

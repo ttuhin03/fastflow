@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import { MdSave, MdRefresh, MdInfo, MdWarning, MdEmail, MdGroup } from 'react-icons/md'
 import StorageStats from '../components/StorageStats'
@@ -27,6 +28,7 @@ interface Settings {
 
 export default function Settings() {
   const queryClient = useQueryClient()
+  const { isReadonly } = useAuth()
   const [localSettings, setLocalSettings] = useState<Settings | null>(null)
   const [showCleanupInfo, setShowCleanupInfo] = useState(false)
 
@@ -252,6 +254,7 @@ export default function Settings() {
                   value={currentSettings.log_retention_runs || ''}
                   onChange={(e) => handleInputChange('log_retention_runs', e.target.value)}
                   placeholder="Unbegrenzt"
+                  disabled={isReadonly}
                 />
               </div>
 
@@ -268,6 +271,7 @@ export default function Settings() {
                   value={currentSettings.log_retention_days || ''}
                   onChange={(e) => handleInputChange('log_retention_days', e.target.value)}
                   placeholder="Unbegrenzt"
+                  disabled={isReadonly}
                 />
               </div>
 
@@ -284,6 +288,7 @@ export default function Settings() {
                   value={currentSettings.log_max_size_mb || ''}
                   onChange={(e) => handleInputChange('log_max_size_mb', e.target.value)}
                   placeholder="Unbegrenzt"
+                  disabled={isReadonly}
                 />
               </div>
             </div>
@@ -304,6 +309,7 @@ export default function Settings() {
                   className="form-input"
                   value={currentSettings.max_concurrent_runs}
                   onChange={(e) => handleInputChange('max_concurrent_runs', e.target.value)}
+                  disabled={isReadonly}
                 />
               </div>
 
@@ -320,6 +326,7 @@ export default function Settings() {
                   value={currentSettings.container_timeout || ''}
                   onChange={(e) => handleInputChange('container_timeout', e.target.value)}
                   placeholder="Unbegrenzt"
+                  disabled={isReadonly}
                 />
               </div>
 
@@ -334,6 +341,7 @@ export default function Settings() {
                   className="form-input"
                   value={currentSettings.retry_attempts}
                   onChange={(e) => handleInputChange('retry_attempts', e.target.value)}
+                  disabled={isReadonly}
                 />
               </div>
             </div>
@@ -350,6 +358,7 @@ export default function Settings() {
                     checked={currentSettings.auto_sync_enabled}
                     onChange={(e) => handleInputChange('auto_sync_enabled', e.target.checked)}
                     className="checkbox-input"
+                    disabled={isReadonly}
                   />
                   <span>Auto-Sync aktiviert</span>
                 </label>
@@ -368,7 +377,7 @@ export default function Settings() {
                   value={currentSettings.auto_sync_interval || ''}
                   onChange={(e) => handleInputChange('auto_sync_interval', e.target.value)}
                   placeholder="Deaktiviert"
-                  disabled={!currentSettings.auto_sync_enabled}
+                  disabled={isReadonly || !currentSettings.auto_sync_enabled}
                 />
               </div>
             </div>
@@ -388,6 +397,7 @@ export default function Settings() {
                     checked={currentSettings.email_enabled}
                     onChange={(e) => handleInputChange('email_enabled', e.target.checked)}
                     className="checkbox-input"
+                    disabled={isReadonly}
                   />
                   <span>E-Mail-Benachrichtigungen aktivieren</span>
                 </label>
@@ -404,7 +414,7 @@ export default function Settings() {
                   value={currentSettings.smtp_host || ''}
                   onChange={(e) => handleInputChange('smtp_host', e.target.value)}
                   placeholder="smtp.example.com"
-                  disabled={!currentSettings.email_enabled}
+                  disabled={isReadonly || !currentSettings.email_enabled}
                 />
               </div>
 
@@ -421,7 +431,7 @@ export default function Settings() {
                   value={currentSettings.smtp_port}
                   onChange={(e) => handleInputChange('smtp_port', e.target.value)}
                   placeholder="587"
-                  disabled={!currentSettings.email_enabled}
+                  disabled={isReadonly || !currentSettings.email_enabled}
                 />
               </div>
 
@@ -436,7 +446,7 @@ export default function Settings() {
                   value={currentSettings.smtp_user || ''}
                   onChange={(e) => handleInputChange('smtp_user', e.target.value)}
                   placeholder="user@example.com"
-                  disabled={!currentSettings.email_enabled}
+                  disabled={isReadonly || !currentSettings.email_enabled}
                 />
               </div>
 
@@ -466,7 +476,7 @@ export default function Settings() {
                   value={currentSettings.smtp_from || ''}
                   onChange={(e) => handleInputChange('smtp_from', e.target.value)}
                   placeholder="noreply@example.com"
-                  disabled={!currentSettings.email_enabled}
+                  disabled={isReadonly || !currentSettings.email_enabled}
                 />
               </div>
 
@@ -481,19 +491,21 @@ export default function Settings() {
                   value={currentSettings.email_recipients.join(', ')}
                   onChange={(e) => handleInputChange('email_recipients', e.target.value)}
                   placeholder="admin@example.com, team@example.com"
-                  disabled={!currentSettings.email_enabled}
+                  disabled={isReadonly || !currentSettings.email_enabled}
                 />
               </div>
 
               <div className="setting-item">
-                <button
-                  onClick={() => testEmailMutation.mutate()}
-                  disabled={!currentSettings.email_enabled || testEmailMutation.isPending}
-                  className="btn btn-primary"
-                >
+                {!isReadonly && (
+                  <button
+                    onClick={() => testEmailMutation.mutate()}
+                    disabled={!currentSettings.email_enabled || testEmailMutation.isPending}
+                    className="btn btn-primary"
+                  >
                   <MdEmail />
                   {testEmailMutation.isPending ? 'Sende...' : 'Test-E-Mail senden'}
-                </button>
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -512,6 +524,7 @@ export default function Settings() {
                     checked={currentSettings.teams_enabled}
                     onChange={(e) => handleInputChange('teams_enabled', e.target.checked)}
                     className="checkbox-input"
+                    disabled={isReadonly}
                   />
                   <span>Teams-Benachrichtigungen aktivieren</span>
                 </label>
@@ -529,53 +542,57 @@ export default function Settings() {
                   value={currentSettings.teams_webhook_url || ''}
                   onChange={(e) => handleInputChange('teams_webhook_url', e.target.value)}
                   placeholder="https://outlook.office.com/webhook/..."
-                  disabled={!currentSettings.teams_enabled}
+                  disabled={isReadonly || !currentSettings.teams_enabled}
                 />
               </div>
 
               <div className="setting-item">
-                <button
-                  onClick={() => testTeamsMutation.mutate()}
-                  disabled={!currentSettings.teams_enabled || testTeamsMutation.isPending}
-                  className="btn btn-primary"
-                >
-                  <MdGroup />
-                  {testTeamsMutation.isPending ? 'Sende...' : 'Test-Teams-Nachricht senden'}
-                </button>
+                {!isReadonly && (
+                  <button
+                    onClick={() => testTeamsMutation.mutate()}
+                    disabled={!currentSettings.teams_enabled || testTeamsMutation.isPending}
+                    className="btn btn-primary"
+                  >
+                    <MdGroup />
+                    {testTeamsMutation.isPending ? 'Sende...' : 'Test-Teams-Nachricht senden'}
+                  </button>
+                )}
               </div>
             </div>
           </div>
 
           {/* Actions */}
-          <div className="settings-actions card">
-            <h3 className="section-title">Aktionen</h3>
-            <div className="actions-grid">
-              <button
-                onClick={handleSave}
-                disabled={updateSettingsMutation.isPending || !localSettings}
-                className="btn btn-primary"
-              >
-                <MdSave />
-                Einstellungen speichern
-              </button>
-              <button
-                onClick={handleForceCleanup}
-                disabled={forceCleanupMutation.isPending}
-                className="btn btn-warning"
-              >
-                <MdRefresh />
-                {forceCleanupMutation.isPending ? 'Cleanup läuft...' : 'Force Flush (Cleanup)'}
-              </button>
+          {!isReadonly && (
+            <div className="settings-actions card">
+              <h3 className="section-title">Aktionen</h3>
+              <div className="actions-grid">
+                <button
+                  onClick={handleSave}
+                  disabled={updateSettingsMutation.isPending || !localSettings}
+                  className="btn btn-primary"
+                >
+                  <MdSave />
+                  Einstellungen speichern
+                </button>
+                <button
+                  onClick={handleForceCleanup}
+                  disabled={forceCleanupMutation.isPending}
+                  className="btn btn-warning"
+                >
+                  <MdRefresh />
+                  {forceCleanupMutation.isPending ? 'Cleanup läuft...' : 'Force Flush (Cleanup)'}
+                </button>
+              </div>
+              <div className="warning-box">
+                <MdWarning />
+                <p>
+                  <strong>Hinweis:</strong> Einstellungen werden aktuell nur aus Environment-Variablen geladen.
+                  Um Einstellungen dauerhaft zu ändern, bearbeiten Sie die .env-Datei oder setzen Sie
+                  Environment-Variablen. Ein Neustart der Anwendung ist erforderlich.
+                </p>
+              </div>
             </div>
-            <div className="warning-box">
-              <MdWarning />
-              <p>
-                <strong>Hinweis:</strong> Einstellungen werden aktuell nur aus Environment-Variablen geladen.
-                Um Einstellungen dauerhaft zu ändern, bearbeiten Sie die .env-Datei oder setzen Sie
-                Environment-Variablen. Ein Neustart der Anwendung ist erforderlich.
-              </p>
-            </div>
-          </div>
+          )}
         </div>
       )}
 
