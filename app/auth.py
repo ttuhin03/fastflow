@@ -14,7 +14,7 @@ UI darf NIEMALS ohne Login erreichbar sein.
 import logging
 from datetime import datetime, timedelta
 from typing import Optional
-from uuid import uuid4
+from uuid import uuid4, UUID
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -290,6 +290,35 @@ def delete_session(session: Session, token: str) -> None:
     if db_session:
         session.delete(db_session)
         session.commit()
+
+
+def delete_all_user_sessions(session: Session, user_id: UUID) -> int:
+    """
+    Löscht alle Sessions eines Benutzers aus der Datenbank.
+    
+    Wird verwendet bei:
+    - Passwort-Reset (Sicherheit: Alle bestehenden Sessions invalidiert)
+    - Benutzer-Blockierung (Benutzer wird sofort ausgeloggt)
+    
+    Args:
+        session: Datenbank-Session
+        user_id: Benutzer-ID (UUID)
+        
+    Returns:
+        int: Anzahl der gelöschten Sessions
+    """
+    statement = select(SessionModel).where(SessionModel.user_id == user_id)
+    user_sessions = session.exec(statement).all()
+    
+    count = len(user_sessions)
+    for db_session in user_sessions:
+        session.delete(db_session)
+    
+    if user_sessions:
+        session.commit()
+        logger.info(f"{count} Sessions für Benutzer {user_id} gelöscht")
+    
+    return count
 
 
 def cleanup_expired_sessions(session: Session) -> None:

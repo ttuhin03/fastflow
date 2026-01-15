@@ -4,6 +4,9 @@ Log Streaming API Endpoints.
 Dieses Modul enthält alle REST-API-Endpoints für Log-Streaming:
 - Logs aus Datei lesen
 - Server-Sent Events für Live-Logs
+
+Sicherheit: Alle Endpunkte erfordern Authentifizierung.
+Alle authentifizierten Benutzer (READONLY, WRITE, ADMIN) können Logs lesen.
 """
 
 import asyncio
@@ -19,6 +22,11 @@ from app.database import get_session
 from app.models import PipelineRun
 from app.executor import get_log_queue
 from app.config import config
+from app.auth import get_current_user
+from app.models import User
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/runs", tags=["logs"])
 
@@ -27,7 +35,8 @@ router = APIRouter(prefix="/runs", tags=["logs"])
 async def get_run_logs(
     run_id: UUID,
     tail: Optional[int] = None,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
 ) -> PlainTextResponse:
     """
     Gibt Logs aus Datei lesen (für abgeschlossene Runs).
@@ -53,13 +62,39 @@ async def get_run_logs(
         )
     
     # Pfad auflösen (falls relativ, wird relativ zu LOGS_DIR aufgelöst)
+    # Path Traversal-Schutz: Sicherstellen dass Pfad innerhalb LOGS_DIR liegt
     log_file_path = Path(run.log_file)
     if not log_file_path.is_absolute():
         # Relativer Pfad: Auflösen relativ zu LOGS_DIR
-        log_file_path = config.LOGS_DIR / log_file_path
+        # Normalisiere den Pfad um .. zu entfernen
+        normalized_log_file = log_file_path.resolve()
+        log_file_path = config.LOGS_DIR / normalized_log_file
     else:
-        # Absoluter Pfad: Verwende direkt
+        # Absoluter Pfad: Verwende direkt, aber prüfe dass er innerhalb LOGS_DIR liegt
         log_file_path = log_file_path
+    
+    # Sicherstellen dass der finale Pfad wirklich innerhalb LOGS_DIR liegt
+    # Verhindert Path Traversal-Angriffe
+    try:
+        logs_dir_abs = config.LOGS_DIR.resolve()
+        log_file_path_abs = log_file_path.resolve()
+        
+        # Prüfe dass log_file_path innerhalb logs_dir liegt
+        if not str(log_file_path_abs).startswith(str(logs_dir_abs)):
+            logger.warning(
+                f"Path Traversal-Versuch erkannt bei Log-Zugriff: "
+                f"Run {run_id}, Pfad {run.log_file} -> {log_file_path_abs}"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Zugriff auf Log-Datei verweigert"
+            )
+    except (ValueError, OSError) as e:
+        logger.error(f"Fehler bei Pfad-Validierung für Log-Datei: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Fehler beim Validieren des Log-Pfads"
+        )
     
     if not log_file_path.exists():
         raise HTTPException(
@@ -89,7 +124,8 @@ async def get_run_logs(
 @router.get("/{run_id}/logs/stream")
 async def stream_run_logs(
     run_id: UUID,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
 ) -> StreamingResponse:
     """
     Server-Sent Events für Live-Logs (für laufende Runs).
@@ -125,8 +161,28 @@ async def stream_run_logs(
         # Versuche Logs aus Datei zu lesen (für abgeschlossene Runs)
         log_file_path = Path(run.log_file)
         # Pfad auflösen (falls relativ, wird relativ zu LOGS_DIR aufgelöst)
+        # Path Traversal-Schutz: Sicherstellen dass Pfad innerhalb LOGS_DIR liegt
         if not log_file_path.is_absolute():
-            log_file_path = config.LOGS_DIR / log_file_path
+            normalized_log_file = log_file_path.resolve()
+            log_file_path = config.LOGS_DIR / normalized_log_file
+        
+        # Sicherstellen dass der finale Pfad wirklich innerhalb LOGS_DIR liegt
+        try:
+            logs_dir_abs = config.LOGS_DIR.resolve()
+            log_file_path_abs = log_file_path.resolve()
+            
+            if not str(log_file_path_abs).startswith(str(logs_dir_abs)):
+                logger.warning(
+                    f"Path Traversal-Versuch erkannt bei Log-Stream: "
+                    f"Run {run_id}, Pfad {run.log_file} -> {log_file_path_abs}"
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Zugriff auf Log-Datei verweigert"
+                )
+        except (ValueError, OSError) as e:
+            logger.error(f"Fehler bei Pfad-Validierung für Log-Datei: {e}")
+            # Nicht weiterwerfen, da wir im Fallback sind
         if log_file_path.exists():
             try:
                 async with aiofiles.open(log_file_path, "r", encoding="utf-8") as f:

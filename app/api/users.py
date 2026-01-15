@@ -14,12 +14,13 @@ import logging
 from typing import List, Optional
 from uuid import UUID, uuid4
 from datetime import datetime, timedelta
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from sqlmodel import Session, select
 
-from app.auth import get_current_user, require_admin, get_password_hash
+from app.auth import get_current_user, require_admin, get_password_hash, delete_all_user_sessions
 from app.database import get_session
 from app.models import User, UserRole
 
@@ -43,12 +44,41 @@ class UserResponse(BaseModel):
         from_attributes = True
 
 
+def validate_password_strength(password: str) -> None:
+    """
+    Validiert Passwort-Stärke.
+    
+    Anforderungen:
+    - Mindestlänge: 8 Zeichen
+    - Optional: Empfehlung für stärkere Passwörter (12+ Zeichen)
+    
+    Args:
+        password: Passwort zum Validieren
+        
+    Raises:
+        ValueError: Wenn Passwort zu schwach ist
+    """
+    if len(password) < 8:
+        raise ValueError("Passwort muss mindestens 8 Zeichen lang sein")
+    
+    # Optional: Warnung für schwache Passwörter (aber nicht blockieren)
+    if len(password) < 12:
+        logger.warning("Passwort ist weniger als 12 Zeichen lang. Für bessere Sicherheit wird ein längeres Passwort empfohlen.")
+
+
 class CreateUserRequest(BaseModel):
     """Request-Model für Benutzer-Erstellung."""
     username: str
     password: str
     email: Optional[EmailStr] = None
     role: UserRole = UserRole.READONLY
+    
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        """Validiert Passwort-Stärke."""
+        validate_password_strength(v)
+        return v
 
 
 class UpdateUserRequest(BaseModel):
@@ -70,11 +100,25 @@ class AcceptInviteRequest(BaseModel):
     username: str
     password: str
     token: str
+    
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        """Validiert Passwort-Stärke."""
+        validate_password_strength(v)
+        return v
 
 
 class ResetPasswordRequest(BaseModel):
     """Request-Model für Passwort-Reset."""
     new_password: str
+    
+    @field_validator("new_password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        """Validiert Passwort-Stärke."""
+        validate_password_strength(v)
+        return v
 
 
 @router.get("", response_model=List[UserResponse])
@@ -443,7 +487,12 @@ async def reset_password(
     session.add(user)
     session.commit()
     
-    logger.info(f"Admin '{current_user.username}' hat Passwort für Benutzer '{user.username}' zurückgesetzt")
+    # Alle Sessions des Benutzers löschen (Sicherheit: Passwort wurde geändert)
+    deleted_sessions = delete_all_user_sessions(session, user.id)
+    logger.info(
+        f"Admin '{current_user.username}' hat Passwort für Benutzer '{user.username}' zurückgesetzt. "
+        f"{deleted_sessions} Sessions wurden invalidiert."
+    )
     
     return {"message": "Passwort erfolgreich zurückgesetzt"}
 
@@ -486,9 +535,15 @@ async def block_user(
     user.blocked = True
     session.add(user)
     session.commit()
+    
+    # Alle Sessions des Benutzers löschen (Benutzer wird sofort ausgeloggt)
+    deleted_sessions = delete_all_user_sessions(session, user.id)
     session.refresh(user)
     
-    logger.info(f"Admin '{current_user.username}' hat Benutzer '{user.username}' blockiert")
+    logger.info(
+        f"Admin '{current_user.username}' hat Benutzer '{user.username}' blockiert. "
+        f"{deleted_sessions} Sessions wurden invalidiert."
+    )
     
     return UserResponse(
         id=str(user.id),

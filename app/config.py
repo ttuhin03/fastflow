@@ -363,6 +363,36 @@ class Config:
     Beispiel: "http://localhost:8000" oder "https://fastflow.example.com"
     """
     
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development").lower()
+    """
+    Umgebungsmodus der App (development oder production).
+    
+    Standard: development
+    In Produktion sollte dies auf "production" gesetzt werden.
+    Beeinflusst Sicherheitsvalidierungen beim Start:
+    - In Produktion werden Standardwerte für JWT_SECRET_KEY und AUTH_PASSWORD blockiert
+    - In Development werden nur Warnungen ausgegeben
+    """
+    
+    CORS_ORIGINS: List[str] = (
+        [origin.strip() for origin in os.getenv("CORS_ORIGINS", "").split(",") if origin.strip()]
+        if os.getenv("CORS_ORIGINS")
+        else [
+            "http://localhost:3000",
+            "http://localhost:8000",
+            "http://0.0.0.0:8000",
+            "http://127.0.0.1:8000",
+            "http://127.0.0.1:3000",
+        ]
+    )
+    """
+    Liste der erlaubten CORS-Origins.
+    
+    Standard: Localhost-Origins für Entwicklung.
+    In Produktion sollte dies über die CORS_ORIGINS Environment-Variable gesetzt werden.
+    Format: Komma-separierte Liste, z.B. "https://example.com,https://app.example.com"
+    """
+    
     @classmethod
     def ensure_directories(cls) -> None:
         """

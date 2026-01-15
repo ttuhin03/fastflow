@@ -46,6 +46,9 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Fast-Flow Orchestrator startet...")
     
+    # Sicherheits-Validierungen beim Start
+    _validate_security_config()
+    
     # Verzeichnisse erstellen
     config.ensure_directories()
     logger.info("Verzeichnisse erstellt/geprüft")
@@ -138,6 +141,89 @@ async def lifespan(app: FastAPI):
     logger.info("Fast-Flow Orchestrator heruntergefahren")
 
 
+def _validate_security_config() -> None:
+    """
+    Validiert Sicherheits-Konfiguration beim App-Start.
+    
+    Prüft dass keine unsicheren Standardwerte in Produktion verwendet werden.
+    Raises:
+        RuntimeError: Wenn kritische Sicherheitsprobleme erkannt werden
+    """
+    from app.config import config
+    
+    # Prüfe ob wir in Produktion sind
+    is_production = config.ENVIRONMENT == "production"
+    
+    errors = []
+    warnings = []
+    
+    # 1. ENCRYPTION_KEY muss gesetzt sein (kritisch)
+    if config.ENCRYPTION_KEY is None:
+        errors.append(
+            "ENCRYPTION_KEY ist nicht gesetzt. "
+            "Bitte setze ENCRYPTION_KEY in der .env-Datei. "
+            "Generierung: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+        )
+    else:
+        # Validiere dass ENCRYPTION_KEY gültig ist
+        try:
+            from cryptography.fernet import Fernet
+            Fernet(config.ENCRYPTION_KEY.encode() if isinstance(config.ENCRYPTION_KEY, str) else config.ENCRYPTION_KEY)
+        except Exception as e:
+            errors.append(
+                f"ENCRYPTION_KEY ist ungültig: {str(e)}. "
+                "Bitte generiere einen neuen Key: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+            )
+    
+    # 2. JWT_SECRET_KEY sollte nicht der Standardwert sein (kritisch in Produktion)
+    if config.JWT_SECRET_KEY == "change-me-in-production":
+        if is_production:
+            errors.append(
+                "JWT_SECRET_KEY verwendet den unsicheren Standardwert 'change-me-in-production'. "
+                "Bitte setze einen sicheren, zufälligen Wert (mindestens 32 Zeichen) in der .env-Datei."
+            )
+        else:
+            warnings.append(
+                "JWT_SECRET_KEY verwendet den Standardwert 'change-me-in-production'. "
+                "Dies sollte in Produktion geändert werden."
+            )
+    
+    # 3. AUTH_PASSWORD sollte nicht "admin" sein (kritisch in Produktion)
+    if config.AUTH_PASSWORD == "admin":
+        if is_production:
+            errors.append(
+                "AUTH_PASSWORD verwendet den unsicheren Standardwert 'admin'. "
+                "Bitte setze ein starkes Passwort in der .env-Datei."
+            )
+        else:
+            warnings.append(
+                "AUTH_PASSWORD verwendet den Standardwert 'admin'. "
+                "Dies sollte in Produktion geändert werden."
+            )
+    
+    # 4. AUTH_USERNAME sollte nicht "admin" sein (Warnung in Produktion)
+    if config.AUTH_USERNAME == "admin" and is_production:
+        warnings.append(
+            "AUTH_USERNAME verwendet den Standardwert 'admin'. "
+            "Es wird empfohlen, einen anderen Benutzernamen zu verwenden."
+        )
+    
+    # Logge Warnungen
+    for warning in warnings:
+        logger.warning(f"⚠️  Sicherheitswarnung: {warning}")
+    
+    # Wirf Fehler für kritische Probleme
+    if errors:
+        error_msg = "Kritische Sicherheitsprobleme gefunden:\n" + "\n".join(f"  - {e}" for e in errors)
+        logger.error(error_msg)
+        if is_production:
+            # In Produktion: Fehler sind fatal
+            raise RuntimeError(error_msg)
+        else:
+            # In Entwicklung: Nur warnen
+            logger.error("⚠️  In Produktion würden diese Fehler die App am Start verhindern.")
+
+
 def setup_signal_handlers() -> None:
     """
     Konfiguriert Signal-Handler für Graceful Shutdown.
@@ -170,15 +256,10 @@ app = FastAPI(
 )
 
 # CORS konfigurieren für React-Frontend
+# Origins können über CORS_ORIGINS Environment-Variable konfiguriert werden
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:8000",
-        "http://0.0.0.0:8000",
-        "http://127.0.0.1:8000",
-        "http://127.0.0.1:3000",
-    ],  # Development
+    allow_origins=config.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -242,25 +323,54 @@ if os.path.exists(static_dir):
     # Serve React-App für alle nicht-API-Routen
     # Diese Route muss als letzte registriert werden, damit API-Routen zuerst matchen
     from fastapi.responses import FileResponse
+    from pathlib import Path as PathLib
     @app.get("/{full_path:path}")
     async def serve_react_app(full_path: str):
         """
         Serve React-App für alle Routen, die nicht mit /api beginnen.
         Diese Route wird als Fallback verwendet für React Router.
+        
+        Sicherheit: Path Traversal wird verhindert durch Validierung dass
+        der finale Pfad innerhalb von static_dir liegt.
         """
         # Ignoriere API-Routen, health-check und static assets
         if full_path.startswith("api") or full_path == "health" or full_path.startswith("static"):
             return JSONResponse({"detail": "Not found"}, status_code=404)
         
-        # Prüfe ob Datei existiert (für static assets wie JS/CSS)
-        file_path = os.path.join(static_dir, full_path)
-        if os.path.exists(file_path) and os.path.isfile(file_path):
-            return FileResponse(file_path)
-        
-        # Ansonsten serve index.html (für React Router)
-        index_path = os.path.join(static_dir, "index.html")
-        if os.path.exists(index_path):
-            return FileResponse(index_path)
+        # Path Traversal-Schutz: Normalisiere Pfad und prüfe dass er innerhalb static_dir liegt
+        try:
+            # Normalisiere den Pfad (entfernt .. und .)
+            normalized_path = os.path.normpath(full_path)
+            
+            # Verhindere absolute Pfade oder Pfade die mit .. beginnen
+            if os.path.isabs(normalized_path) or normalized_path.startswith(".."):
+                return JSONResponse({"detail": "Not found"}, status_code=404)
+            
+            # Konstruiere finalen Pfad
+            file_path = os.path.join(static_dir, normalized_path)
+            file_path = os.path.normpath(file_path)
+            
+            # WICHTIG: Sicherstellen dass der finale Pfad wirklich innerhalb static_dir liegt
+            # Verhindert Path Traversal auch wenn normalized_path bereits normalisiert war
+            static_dir_abs = os.path.abspath(static_dir)
+            file_path_abs = os.path.abspath(file_path)
+            
+            if not file_path_abs.startswith(static_dir_abs):
+                logger.warning(f"Path Traversal-Versuch erkannt: {full_path} -> {file_path_abs}")
+                return JSONResponse({"detail": "Not found"}, status_code=404)
+            
+            # Prüfe ob Datei existiert (für static assets wie JS/CSS)
+            if os.path.exists(file_path) and os.path.isfile(file_path):
+                return FileResponse(file_path)
+            
+            # Ansonsten serve index.html (für React Router)
+            index_path = os.path.join(static_dir, "index.html")
+            if os.path.exists(index_path):
+                return FileResponse(index_path)
+            
+        except Exception as e:
+            logger.error(f"Fehler beim Servieren von {full_path}: {e}")
+            return JSONResponse({"detail": "Not found"}, status_code=404)
         
         return JSONResponse({"detail": "Not found"}, status_code=404)
 
