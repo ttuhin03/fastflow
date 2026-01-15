@@ -370,6 +370,81 @@
   max-width: 1400px;
   width: 100%;
   margin: 0 auto;
+  position: relative;
+  padding-bottom: calc(var(--spacing-xl) + 60px); /* Space for footer */
+}
+
+/* Layout Footer */
+.layout-footer {
+  position: fixed;
+  bottom: var(--spacing-md);
+  left: calc(var(--sidebar-width) + var(--spacing-md));
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  z-index: var(--z-header) - 1;
+  pointer-events: none;
+}
+
+.footer-github-link {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: rgba(42, 42, 42, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  text-decoration: none;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  transition: all var(--transition-base);
+  backdrop-filter: blur(10px);
+  pointer-events: auto;
+  width: fit-content;
+}
+
+.footer-github-link:hover {
+  background: rgba(42, 42, 42, 0.95);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.footer-github-link svg {
+  font-size: 1.25rem;
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.footer-text {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  pointer-events: none;
+}
+
+.footer-text .heart {
+  color: #f44336;
+  animation: heartBeat 1.5s ease-in-out infinite;
+  display: inline-block;
+}
+
+@keyframes heartBeat {
+  0%, 100% {
+    transform: scale(1);
+  }
+  10%, 30% {
+    transform: scale(1.2);
+  }
+  20%, 40% {
+    transform: scale(1);
+  }
+}
+
+.footer-text strong {
+  color: var(--color-primary);
+  font-weight: var(--font-weight-bold);
 }
 
 /* Mobile Menu Button */
@@ -459,5 +534,13 @@
   /* Touch-optimized icons */
   .nav-icon {
     font-size: 1.75rem; /* Larger icons for touch */
+  }
+
+  .layout-footer {
+    left: var(--spacing-md);
+  }
+
+  .main-content {
+    padding-bottom: calc(var(--spacing-md) + 60px);
   }
 }
