@@ -23,12 +23,43 @@
   border-bottom: 1px solid var(--color-border);
 }
 
+.sidebar-logo-container {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.sidebar-logo-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(33, 150, 243, 0.2), rgba(156, 39, 176, 0.2));
+  border-radius: var(--radius-full);
+  color: var(--color-primary);
+  box-shadow: 
+    0 2px 8px rgba(33, 150, 243, 0.2),
+    0 0 0 2px rgba(33, 150, 243, 0.1);
+  flex-shrink: 0;
+}
+
+.sidebar-logo-icon svg {
+  font-size: 1.25rem;
+  position: relative;
+  z-index: 1;
+}
+
 .sidebar-logo {
   font-size: var(--font-size-xl);
   font-weight: var(--font-weight-bold);
   color: var(--color-primary);
   margin: 0;
   letter-spacing: -0.5px;
+  background: linear-gradient(135deg, var(--color-primary), #9c27b0);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 /* Navigation */

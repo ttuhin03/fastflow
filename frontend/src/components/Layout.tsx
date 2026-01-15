@@ -16,7 +16,8 @@ import {
   MdCircle,
   MdPause,
   MdMenu,
-  MdClose
+  MdClose,
+  MdCode
 } from 'react-icons/md'
 import NotificationCenter from './NotificationCenter'
 import './Layout.css'
@@ -147,7 +148,12 @@ export default function Layout() {
 
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
-          <h1 className="sidebar-logo">Fast-Flow</h1>
+          <div className="sidebar-logo-container">
+            <div className="sidebar-logo-icon">
+              <MdCode />
+            </div>
+            <h1 className="sidebar-logo">Fast-Flow</h1>
+          </div>
         </div>
         
         <nav className="sidebar-nav">
