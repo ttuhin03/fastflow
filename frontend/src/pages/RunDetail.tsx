@@ -411,10 +411,19 @@ export default function RunDetail() {
       
       setLogConnectionStatus('reconnecting')
       // EventSource unterstützt keine Custom Headers
+      // Daher Token als Query-Parameter übergeben
+      const token = sessionStorage.getItem('auth_token')
+      if (!token) {
+        console.error('Kein Auth-Token gefunden, kann Log-Stream nicht verbinden')
+        setLogConnectionStatus('disconnected')
+        return
+      }
+      
       // Konstruiere URL - baseURL enthält bereits /api, daher direkt anhängen
       const baseURL = apiClient.defaults.baseURL || 'http://localhost:8000/api'
-      const streamURL = `${baseURL}/runs/${runId}/logs/stream`
-      console.log('Connecting to log stream:', streamURL)
+      // Token als Query-Parameter hinzufügen (URL-encoded)
+      const streamURL = `${baseURL}/runs/${runId}/logs/stream?token=${encodeURIComponent(token)}`
+      console.log('Connecting to log stream:', streamURL.replace(token, '[TOKEN]')) // Token in Log ausblenden
       
       const eventSource = new EventSource(streamURL)
       eventSourceRef.current = eventSource
@@ -517,50 +526,79 @@ export default function RunDetail() {
       
       setMetricsConnectionStatus('reconnecting')
       // EventSource unterstützt keine Custom Headers
+      // Daher Token als Query-Parameter übergeben
+      const token = sessionStorage.getItem('auth_token')
+      if (!token) {
+        console.error('Kein Auth-Token gefunden, kann Metrics-Stream nicht verbinden')
+        setMetricsConnectionStatus('disconnected')
+        return
+      }
+      
       // Konstruiere URL - baseURL enthält bereits /api, daher direkt anhängen
       const baseURL = apiClient.defaults.baseURL || 'http://localhost:8000/api'
-      const streamURL = `${baseURL}/runs/${runId}/metrics/stream`
+      // Token als Query-Parameter hinzufügen (URL-encoded)
+      const streamURL = `${baseURL}/runs/${runId}/metrics/stream?token=${encodeURIComponent(token)}`
+      console.log('Connecting to metrics stream:', streamURL.replace(token, '[TOKEN]')) // Token in Log ausblenden
       
       const eventSource = new EventSource(streamURL)
       metricsEventSourceRef.current = eventSource
 
       eventSource.onopen = () => {
+        console.log('Metrics stream connected, readyState:', eventSource.readyState)
         setMetricsConnectionStatus('connected')
         setMetricsReconnectAttempts(0)
       }
 
       eventSource.onmessage = (event) => {
         setMetricsConnectionStatus('connected')
+        // Ignoriere Keep-Alive-Nachrichten
+        if (event.data.trim() === '' || event.data.startsWith(':')) {
+          return
+        }
         try {
           const metric = JSON.parse(event.data)
           if (metric.timestamp) {
             setMetrics((prev) => [...prev, metric])
+          } else if (metric.error) {
+            console.error('Metrics stream error from server:', metric.error)
           }
         } catch (e) {
           console.error('Fehler beim Parsen der Metrics:', e)
         }
       }
 
-      eventSource.onerror = () => {
-        setMetricsConnectionStatus('disconnected')
-        eventSource.close()
-        
-        // Re-Connect versuchen
-        if (metricsReconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-          reconnectTimeout = setTimeout(() => {
-            setMetricsReconnectAttempts((prev) => prev + 1)
-            connectMetricsStream()
-          }, RECONNECT_DELAY)
+      eventSource.onerror = (error) => {
+        console.error('Metrics stream error:', error)
+        console.log('EventSource readyState:', eventSource.readyState)
+        // readyState: 0 = CONNECTING, 1 = OPEN, 2 = CLOSED
+        if (eventSource.readyState === EventSource.CLOSED) {
+          setMetricsConnectionStatus('disconnected')
+          eventSource.close()
+          
+          // Re-Connect versuchen nur wenn noch nicht zu viele Versuche
+          if (metricsReconnectAttempts < MAX_RECONNECT_ATTEMPTS && isRunning) {
+            reconnectTimeout = setTimeout(() => {
+              setMetricsReconnectAttempts((prev) => prev + 1)
+              console.log(`Reconnecting metrics stream (attempt ${metricsReconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})`)
+              connectMetricsStream()
+            }, RECONNECT_DELAY)
+          }
         }
       }
     }
     
     if (isRunning) {
+      // Für laufende Runs: Starte Metrics-Stream
+      console.log('Starting metrics stream for running run')
+      setMetrics([]) // Leere Metrics zuerst
       connectMetricsStream()
+      
       return () => {
         if (reconnectTimeout) clearTimeout(reconnectTimeout)
         if (metricsEventSourceRef.current) {
+          console.log('Closing metrics stream')
           metricsEventSourceRef.current.close()
+          metricsEventSourceRef.current = null
         }
       }
     } else if (run.metrics_file) {

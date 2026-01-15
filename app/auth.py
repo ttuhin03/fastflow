@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 from uuid import uuid4, UUID
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -350,6 +350,7 @@ def cleanup_expired_sessions(session: Session) -> None:
 
 async def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    token: Optional[str] = Query(None, description="JWT-Token als Query-Parameter (für EventSource/SSE)"),
     db_session: Session = Depends(get_session)
 ) -> User:
     """
@@ -358,8 +359,13 @@ async def get_current_user(
     Verifiziert JWT-Token und gibt den aktuellen Benutzer zurück.
     Muss als Dependency in Protected Routes verwendet werden.
     
+    Unterstützt zwei Methoden für Token-Übergabe:
+    1. Authorization Header (Standard für REST-APIs)
+    2. Query-Parameter "token" (für EventSource/SSE, da EventSource keine Custom Headers unterstützt)
+    
     Args:
-        credentials: HTTPBearer Credentials (JWT-Token)
+        credentials: HTTPBearer Credentials (JWT-Token aus Header)
+        token: JWT-Token als Query-Parameter (optional, für EventSource)
         db_session: Datenbank-Session
         
     Returns:
@@ -368,14 +374,24 @@ async def get_current_user(
     Raises:
         HTTPException: Wenn Token fehlt, ungültig oder abgelaufen
     """
-    if credentials is None:
+    # Token aus Header oder Query-Parameter holen
+    auth_token = None
+    
+    if credentials is not None:
+        # Standard: Token aus Authorization Header
+        auth_token = credentials.credentials
+    elif token is not None:
+        # Fallback: Token aus Query-Parameter (für EventSource/SSE)
+        auth_token = token
+    
+    if auth_token is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentifizierung erforderlich",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    token = credentials.credentials
+    token = auth_token
     
     # Verifiziere Token
     username = verify_token(token)
