@@ -159,13 +159,43 @@ async def stream_run_logs(
         
         Liest Log-Zeilen aus Queue und sendet sie als SSE-Events.
         Rate-Limiting: Maximal LOG_STREAM_RATE_LIMIT Zeilen pro Sekunde.
+        
+        WICHTIG: Liest zuerst alle vorhandenen Logs aus der Queue (falls vorhanden),
+        dann wartet es auf neue Logs.
         """
         rate_limit = config.LOG_STREAM_RATE_LIMIT
         min_interval = 1.0 / rate_limit if rate_limit > 0 else 0.01
         
         last_send_time = 0.0
+        import json
         
         try:
+            # SCHRITT 1: Lese alle bereits vorhandenen Logs aus der Queue
+            # (falls Logs bereits geschrieben wurden, bevor SSE-Stream verbunden hat)
+            pending_logs = []
+            try:
+                while True:
+                    # Versuche Log ohne Warten zu holen
+                    log_line = log_queue.get_nowait()
+                    pending_logs.append(log_line)
+            except asyncio.QueueEmpty:
+                # Queue ist leer, weiter mit normalem Streaming
+                pass
+            
+            # Sende alle vorhandenen Logs (mit Rate-Limiting)
+            for log_line in pending_logs:
+                # Rate-Limiting
+                current_time = asyncio.get_event_loop().time()
+                time_since_last_send = current_time - last_send_time
+                
+                if time_since_last_send < min_interval:
+                    await asyncio.sleep(min_interval - time_since_last_send)
+                
+                event_data = json.dumps({"line": log_line})
+                yield f"data: {event_data}\n\n"
+                last_send_time = asyncio.get_event_loop().time()
+            
+            # SCHRITT 2: Warte auf neue Logs (Streaming)
             while True:
                 try:
                     # Warte auf nächste Log-Zeile (mit Timeout für Keep-Alive)
@@ -180,7 +210,6 @@ async def stream_run_logs(
                     
                     # SSE-Event senden
                     # Format: data: {json}\n\n
-                    import json
                     event_data = json.dumps({"line": log_line})
                     yield f"data: {event_data}\n\n"
                     
@@ -196,7 +225,6 @@ async def stream_run_logs(
             pass
         except Exception as e:
             # Fehler: Sende Fehler-Event
-            import json
             error_data = json.dumps({"error": str(e)})
             yield f"data: {error_data}\n\n"
     

@@ -1,7 +1,11 @@
 {
   "enabled": true,
   "description": "Einfache Test-Pipeline ohne Dependencies zum Testen der UI",
-  "tags": ["test", "simple", "demo"],
+  "tags": [
+    "test",
+    "simple",
+    "demo"
+  ],
   "timeout": 60,
   "retry_attempts": 2,
   "cpu_hard_limit": 2,

@@ -207,7 +207,7 @@ async def health_check() -> JSONResponse:
 
 # API-Router registrieren (Phase 6)
 # Alle API-Router haben /api-Präfix für klare Trennung von Frontend-Routen
-from app.api import pipelines, runs, logs, metrics, sync, secrets
+from app.api import pipelines, runs, logs, metrics, sync, secrets, settings
 
 app.include_router(pipelines.router, prefix="/api")
 app.include_router(runs.router, prefix="/api")
@@ -215,6 +215,7 @@ app.include_router(logs.router, prefix="/api")
 app.include_router(metrics.router, prefix="/api")
 app.include_router(sync.router, prefix="/api")
 app.include_router(secrets.router, prefix="/api")
+app.include_router(settings.router, prefix="/api")
 
 # Scheduler-Endpoints (Phase 8)
 from app.api import scheduler as scheduler_api

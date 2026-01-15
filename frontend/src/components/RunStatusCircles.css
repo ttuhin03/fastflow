@@ -1,0 +1,77 @@
+.run-status-circles {
+  display: flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+}
+
+.run-status-circle {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform var(--transition-base), box-shadow var(--transition-base);
+  cursor: help;
+  position: relative;
+}
+
+.run-status-circle:hover {
+  transform: scale(1.1);
+  z-index: 10;
+}
+
+.run-status-icon {
+  font-size: 16px;
+  color: var(--color-text-primary);
+}
+
+/* Status Colors */
+.run-status-circle.status-success {
+  background-color: var(--color-success);
+}
+
+.run-status-circle.status-failed {
+  background-color: var(--color-error);
+}
+
+.run-status-circle.status-warning {
+  background-color: var(--color-warning);
+}
+
+.run-status-circle.status-interrupted {
+  background-color: var(--color-text-secondary);
+}
+
+.run-status-circle.status-running {
+  background-color: var(--color-primary);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.run-status-circle.status-pending {
+  background-color: var(--color-text-secondary);
+  opacity: 0.6;
+}
+
+.run-status-circle.status-empty {
+  background-color: var(--color-surface-variant);
+  border: 1px dashed var(--color-border);
+  opacity: 0.4;
+}
+
+.run-status-skeleton {
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-surface-variant);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}

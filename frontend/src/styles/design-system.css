@@ -1,0 +1,233 @@
+/* Material Design System - Reusable Components */
+
+/* Cards */
+.card {
+  background-color: var(--color-card);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-md);
+  transition: box-shadow var(--transition-base);
+}
+
+.card:hover {
+  box-shadow: var(--shadow-lg);
+}
+
+.card-elevated {
+  box-shadow: var(--shadow-lg);
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-family);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  text-decoration: none;
+  outline: none;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background-color: var(--color-primary);
+  color: var(--color-text-primary);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--color-primary-dark);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background-color: var(--color-secondary);
+  color: var(--color-text-primary);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: var(--color-secondary-dark);
+}
+
+.btn-outlined {
+  background-color: transparent;
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+}
+
+.btn-outlined:hover:not(:disabled) {
+  background-color: rgba(33, 150, 243, 0.1);
+  transform: translateY(-1px);
+}
+
+.btn-success {
+  background-color: var(--color-success);
+  color: var(--color-text-primary);
+}
+
+.btn-success:hover:not(:disabled) {
+  background-color: var(--color-success-dark);
+}
+
+.btn-error {
+  background-color: var(--color-error);
+  color: var(--color-text-primary);
+}
+
+.btn-error:hover:not(:disabled) {
+  background-color: var(--color-error-dark);
+}
+
+.btn-warning {
+  background-color: var(--color-warning);
+  color: var(--color-text-primary);
+}
+
+.btn-warning:hover:not(:disabled) {
+  background-color: var(--color-warning-dark);
+}
+
+/* Badges / Chips */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+}
+
+.badge-primary {
+  background-color: var(--color-primary);
+  color: var(--color-text-primary);
+}
+
+.badge-success {
+  background-color: var(--color-success);
+  color: var(--color-text-primary);
+}
+
+.badge-error {
+  background-color: var(--color-error);
+  color: var(--color-text-primary);
+}
+
+.badge-warning {
+  background-color: var(--color-warning);
+  color: var(--color-text-primary);
+}
+
+.badge-info {
+  background-color: var(--color-info);
+  color: var(--color-text-primary);
+}
+
+.badge-secondary {
+  background-color: var(--color-surface-variant);
+  color: var(--color-text-secondary);
+}
+
+/* Form Elements */
+.form-input {
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-base);
+  transition: border-color var(--transition-base);
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
+}
+
+.form-input::placeholder {
+  color: var(--color-text-disabled);
+}
+
+.form-label {
+  display: block;
+  margin-bottom: var(--spacing-xs);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.form-group {
+  margin-bottom: var(--spacing-lg);
+}
+
+/* Status Indicators */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  display: inline-block;
+}
+
+.status-dot.online {
+  background-color: var(--color-success);
+  box-shadow: 0 0 4px var(--color-success);
+}
+
+.status-dot.offline {
+  background-color: var(--color-error);
+  box-shadow: 0 0 4px var(--color-error);
+}
+
+.status-dot.checking {
+  background-color: var(--color-warning);
+  box-shadow: 0 0 4px var(--color-warning);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Utility Classes */
+.fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Enhanced Button Hover Effects */
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(0);
+}
