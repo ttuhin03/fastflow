@@ -4,14 +4,16 @@
 }
 
 .tooltip {
-  position: absolute;
+  position: fixed;
   background-color: var(--color-surface);
   color: var(--color-text-primary);
   padding: var(--spacing-xs) var(--spacing-sm);
   border-radius: var(--radius-sm);
   font-size: var(--font-size-xs);
-  white-space: nowrap;
-  z-index: var(--z-tooltip);
+  white-space: normal;
+  max-width: 300px;
+  word-wrap: break-word;
+  z-index: var(--z-tooltip, 9999);
   box-shadow: var(--shadow-lg);
   border: 1px solid var(--color-border);
   pointer-events: none;

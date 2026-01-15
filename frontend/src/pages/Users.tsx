@@ -11,6 +11,8 @@ import {
   MdEmail,
   MdClose
 } from 'react-icons/md'
+import Tooltip from '../components/Tooltip'
+import InfoIcon from '../components/InfoIcon'
 import './Users.css'
 
 interface User {
@@ -380,7 +382,10 @@ export default function Users() {
                 />
               </div>
               <div className="form-group">
-                <label>Rolle:</label>
+                <label>
+                  Rolle:
+                  <InfoIcon content="Readonly: Nur Leserechte (Pipelines anschauen, Runs ansehen). Write: Schreibrechte (Pipelines starten, Secrets verwalten). Admin: Vollzugriff (User-Verwaltung, Einstellungen)" />
+                </label>
                 <select
                   value={formRole}
                   onChange={(e) => setFormRole(e.target.value as 'readonly' | 'write' | 'admin')}
@@ -421,7 +426,10 @@ export default function Users() {
                 />
               </div>
               <div className="form-group">
-                <label>Rolle:</label>
+                <label>
+                  Rolle:
+                  <InfoIcon content="Readonly: Nur Leserechte (Pipelines anschauen, Runs ansehen). Write: Schreibrechte (Pipelines starten, Secrets verwalten). Admin: Vollzugriff (User-Verwaltung, Einstellungen)" />
+                </label>
                 <select
                   value={inviteRole}
                   onChange={(e) => setInviteRole(e.target.value as 'readonly' | 'write' | 'admin')}
@@ -433,7 +441,10 @@ export default function Users() {
                 </select>
               </div>
               <div className="form-group">
-                <label>Gültig für (Stunden):</label>
+                <label>
+                  Gültig für (Stunden):
+                  <InfoIcon content="Gültigkeitsdauer des Einladungslinks (Standard: 168h = 7 Tage)" />
+                </label>
                 <input
                   type="number"
                   value={inviteExpiresHours}
@@ -486,16 +497,24 @@ export default function Users() {
                     <td>{user.username}</td>
                     <td>{user.email || '-'}</td>
                     <td>
-                      <span className={`badge badge-${normalizeRole(user.role) === 'admin' ? 'admin' : normalizeRole(user.role) === 'write' ? 'write' : 'readonly'}`}>
-                        {normalizeRole(user.role)}
-                      </span>
+                      <Tooltip content={
+                        normalizeRole(user.role) === 'admin' ? 'Admin: Vollzugriff (User-Verwaltung, Einstellungen)' :
+                        normalizeRole(user.role) === 'write' ? 'Write: Schreibrechte (Pipelines starten, Secrets verwalten)' :
+                        'Readonly: Nur Leserechte (Pipelines anschauen, Runs ansehen)'
+                      }>
+                        <span className={`badge badge-${normalizeRole(user.role) === 'admin' ? 'admin' : normalizeRole(user.role) === 'write' ? 'write' : 'readonly'}`}>
+                          {normalizeRole(user.role)}
+                        </span>
+                      </Tooltip>
                     </td>
                     <td>
-                      {user.blocked ? (
-                        <span className="badge badge-error">Blockiert</span>
-                      ) : (
-                        <span className="badge badge-success">Aktiv</span>
-                      )}
+                      <Tooltip content={user.blocked ? 'Blockierte User können sich nicht anmelden' : 'User ist aktiv und kann sich anmelden'}>
+                        {user.blocked ? (
+                          <span className="badge badge-error">Blockiert</span>
+                        ) : (
+                          <span className="badge badge-success">Aktiv</span>
+                        )}
+                      </Tooltip>
                     </td>
                     <td>{new Date(user.created_at).toLocaleDateString('de-DE')}</td>
                     <td>

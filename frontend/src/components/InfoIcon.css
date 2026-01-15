@@ -1,0 +1,20 @@
+.info-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary, #666);
+  cursor: help;
+  margin-left: 0.25rem;
+  vertical-align: middle;
+  font-size: 1rem;
+  transition: color var(--transition-base, 0.2s ease);
+}
+
+.info-icon:hover {
+  color: var(--color-primary, #007bff);
+}
+
+.info-icon svg {
+  width: 1em;
+  height: 1em;
+}

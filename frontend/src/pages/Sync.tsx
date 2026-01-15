@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import { showError, showSuccess, showConfirm } from '../utils/toast'
+import Tooltip from '../components/Tooltip'
+import InfoIcon from '../components/InfoIcon'
 import './Sync.css'
 
 interface SyncStatus {
@@ -359,18 +361,27 @@ export default function Sync() {
         <h3>Status</h3>
         <div className="status-info">
           <div className="status-row">
-            <span className="status-label">Branch:</span>
+            <span className="status-label">
+              Branch:
+              <InfoIcon content="Der Git-Branch, der für den Sync verwendet wird" />
+            </span>
             <span className="status-value">{syncStatus?.branch || '-'}</span>
           </div>
           {syncStatus?.remote_url && (
             <div className="status-row">
-              <span className="status-label">Remote URL:</span>
+              <span className="status-label">
+                Remote URL:
+                <InfoIcon content="URL des Git-Repositories" />
+              </span>
               <span className="status-value">{syncStatus.remote_url}</span>
             </div>
           )}
           {syncStatus?.last_commit && (
             <div className="status-row">
-              <span className="status-label">Letzter Commit:</span>
+              <span className="status-label">
+                Letzter Commit:
+                <InfoIcon content="Commit-Hash des letzten synchronisierten Commits" />
+              </span>
               <span className="status-value">{syncStatus.last_commit}</span>
             </div>
           )}
@@ -420,7 +431,10 @@ export default function Sync() {
 
       {syncStatus?.pipelines_cached && syncStatus.pipelines_cached.length > 0 && (
         <div className="cache-status-card">
-          <h3>Gecachte Pipelines (Pre-Heated)</h3>
+          <h3>
+            Gecachte Pipelines (Pre-Heated)
+            <InfoIcon content="Diese Pipelines wurden beim Sync bereits vorgewärmt (pre-heated) für schnellere Ausführung" />
+          </h3>
           <div className="cached-pipelines">
             {syncStatus.pipelines_cached.map((pipeline) => (
               <span key={pipeline} className="cached-badge">
@@ -450,10 +464,14 @@ export default function Sync() {
                     }
                   />
                   Automatisches Sync aktivieren
+                  <InfoIcon content="Wenn aktiviert, wird automatisch in regelmäßigen Abständen synchronisiert" />
                 </label>
               </div>
               <div className="form-group">
-                <label htmlFor="sync-interval">Auto-Sync-Intervall (Sekunden, min. 60):</label>
+                <label htmlFor="sync-interval">
+                  Auto-Sync-Intervall (Sekunden, min. 60):
+                  <InfoIcon content="Intervall in Sekunden (Minimum: 60). Beispiel: 300 = alle 5 Minuten" />
+                </label>
                 <input
                   id="sync-interval"
                   type="number"
@@ -538,7 +556,10 @@ export default function Sync() {
               {/* Zeige Connect Button immer wenn nicht konfiguriert */}
               {(!githubConfig || !githubConfig.configured) && (
                 <div className="github-connect-section">
-                  <h4>Ein-Klick GitHub Integration</h4>
+                  <h4>
+                    Ein-Klick GitHub Integration
+                    <InfoIcon content="Ein-Klick-Setup: 1. App wird automatisch erstellt 2. Sie wählen Ihre Repositories aus 3. Alles wird automatisch konfiguriert" />
+                  </h4>
                   <p>
                     Klicken Sie auf den Button und wählen Sie Ihre Repositories aus.
                     Alles andere passiert automatisch - App-Erstellung, Konfiguration und Installation.
@@ -611,7 +632,10 @@ export default function Sync() {
 
               <div className="github-form">
                 <div className="form-group">
-                  <label htmlFor="github-app-id">GitHub App ID:</label>
+                  <label htmlFor="github-app-id">
+                    GitHub App ID:
+                    <InfoIcon content="Numerische ID der GitHub App (wird automatisch konfiguriert)" />
+                  </label>
                   <input
                     id="github-app-id"
                     type="text"
@@ -628,7 +652,10 @@ export default function Sync() {
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="github-installation-id">Installation ID:</label>
+                  <label htmlFor="github-installation-id">
+                    Installation ID:
+                    <InfoIcon content="Numerische ID der Installation in Ihrem Repository/Organisation" />
+                  </label>
                   <input
                     id="github-installation-id"
                     type="text"
@@ -642,7 +669,10 @@ export default function Sync() {
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="github-private-key">Private Key (.pem Datei):</label>
+                  <label htmlFor="github-private-key">
+                    Private Key (.pem Datei):
+                    <InfoIcon content="PEM-formatierte Private Key Datei. Wird verschlüsselt gespeichert." />
+                  </label>
                   <input
                     id="github-private-key"
                     type="file"
@@ -668,13 +698,15 @@ export default function Sync() {
                     </button>
                     {githubConfig?.configured && (
                       <>
-                        <button
-                          onClick={handleTestGithubConfig}
-                          disabled={testGithubConfigMutation.isPending}
-                          className="test-button"
-                        >
-                          {testGithubConfigMutation.isPending ? 'Testet...' : 'Konfiguration testen'}
-                        </button>
+                        <Tooltip content="Testet die Verbindung zur GitHub API">
+                          <button
+                            onClick={handleTestGithubConfig}
+                            disabled={testGithubConfigMutation.isPending}
+                            className="test-button"
+                          >
+                            {testGithubConfigMutation.isPending ? 'Testet...' : 'Konfiguration testen'}
+                          </button>
+                        </Tooltip>
                         <button
                           onClick={handleDeleteGithubConfig}
                           disabled={deleteGithubConfigMutation.isPending}

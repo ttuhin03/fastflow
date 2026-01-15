@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import { showError, showSuccess, showConfirm } from '../utils/toast'
+import Tooltip from '../components/Tooltip'
+import InfoIcon from '../components/InfoIcon'
 import './Secrets.css'
 
 interface Secret {
@@ -142,7 +144,10 @@ export default function Secrets() {
           <h3>{editingKey ? 'Secret bearbeiten' : 'Neues Secret/Parameter'}</h3>
           <form onSubmit={handleSubmit}>
             <div className="form-group">
-              <label htmlFor="secret-key">Key:</label>
+              <label htmlFor="secret-key">
+                Key:
+                <InfoIcon content="Eindeutiger Schlüssel für das Secret/Parameter" />
+              </label>
               <input
                 id="secret-key"
                 type="text"
@@ -153,7 +158,10 @@ export default function Secrets() {
               />
             </div>
             <div className="form-group">
-              <label htmlFor="secret-value">Value:</label>
+              <label htmlFor="secret-value">
+                Value:
+                <InfoIcon content="Der Wert des Secrets. Bei Secrets wird dieser verschlüsselt gespeichert." />
+              </label>
               <textarea
                 id="secret-value"
                 value={formValue}
@@ -170,6 +178,7 @@ export default function Secrets() {
                   onChange={(e) => setIsParameter(e.target.checked)}
                 />
                 Als Parameter (nicht verschlüsselt)
+                <InfoIcon content="Parameter werden NICHT verschlüsselt gespeichert. Verwenden Sie Parameter für nicht-sensitive Konfigurationswerte. Secrets werden verschlüsselt und sind für sensible Daten gedacht." />
               </label>
             </div>
             <div className="form-actions">
@@ -211,9 +220,13 @@ export default function Secrets() {
               <tr key={secret.key}>
                 <td>{secret.key}</td>
                 <td>
-                  <span className={`type-badge ${secret.is_parameter ? 'parameter' : 'secret'}`}>
-                    {secret.is_parameter ? 'Parameter' : 'Secret'}
-                  </span>
+                  <Tooltip content={secret.is_parameter 
+                    ? "Nicht verschlüsselt, für Konfiguration"
+                    : "Verschlüsselt gespeichert"}>
+                    <span className={`type-badge ${secret.is_parameter ? 'parameter' : 'secret'}`}>
+                      {secret.is_parameter ? 'Parameter' : 'Secret'}
+                    </span>
+                  </Tooltip>
                 </td>
                 <td>
                   <div className="value-cell">
@@ -222,12 +235,14 @@ export default function Secrets() {
                     ) : (
                       <span className="secret-value-hidden">••••••••</span>
                     )}
-                    <button
-                      onClick={() => toggleShowValue(secret.key)}
-                      className="toggle-button"
-                    >
-                      {showValues[secret.key] ? 'Verbergen' : 'Anzeigen'}
-                    </button>
+                    <Tooltip content="Tippen, um den Wert anzuzeigen/zu verbergen">
+                      <button
+                        onClick={() => toggleShowValue(secret.key)}
+                        className="toggle-button"
+                      >
+                        {showValues[secret.key] ? 'Verbergen' : 'Anzeigen'}
+                      </button>
+                    </Tooltip>
                   </div>
                 </td>
                 <td>{new Date(secret.created_at).toLocaleString('de-DE')}</td>

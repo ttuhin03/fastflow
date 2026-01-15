@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import { showError, showSuccess, showConfirm } from '../utils/toast'
+import Tooltip from '../components/Tooltip'
+import InfoIcon from '../components/InfoIcon'
 import CalendarHeatmap from '../components/CalendarHeatmap'
 import SuccessRateTrendChart from '../components/SuccessRateTrendChart'
 import AverageRuntimeChart from '../components/AverageRuntimeChart'
@@ -168,6 +170,7 @@ export default function PipelineDetail() {
           <span className={`status-badge ${pipeline.enabled ? 'enabled' : 'disabled'}`}>
             {pipeline.enabled ? 'Aktiv' : 'Inaktiv'}
           </span>
+          <InfoIcon content="Status wird in pipeline.json konfiguriert. 'Aktiv' bedeutet, dass die Pipeline ausgeführt werden kann." />
           <span className="info-hint" style={{ fontSize: '0.75rem', color: '#888', marginLeft: '0.5rem' }}>
             (Konfiguriert in pipeline.json)
           </span>
@@ -177,6 +180,7 @@ export default function PipelineDetail() {
             <span className="info-value">
               {pipeline.has_requirements ? 'Ja' : 'Nein'}
             </span>
+            <InfoIcon content="Zeigt an, ob eine requirements.txt Datei vorhanden ist" />
           </div>
           {pipeline.last_cache_warmup && (
             <div className="info-item">
@@ -184,6 +188,7 @@ export default function PipelineDetail() {
               <span className="info-value">
                 {new Date(pipeline.last_cache_warmup).toLocaleString('de-DE')}
               </span>
+              <InfoIcon content="Zeitpunkt des letzten Pre-Heating. Pipelines mit Cache starten schneller." />
             </div>
           )}
           {pipeline.metadata.description && (
@@ -212,35 +217,49 @@ export default function PipelineDetail() {
           <h3>Resource-Limits</h3>
           <div className="limits-grid">
             <div className="limit-section">
-              <h4>Hard Limits</h4>
+              <h4>
+                Hard Limits
+                <InfoIcon content="Harte Limits - Pipeline wird beendet, wenn diese überschritten werden" />
+              </h4>
               <div className="limit-items">
-                <div className="limit-item">
-                  <span className="limit-label">CPU:</span>
-                  <span className="limit-value">{pipeline.metadata.cpu_hard_limit}</span>
-                </div>
-                {pipeline.metadata.mem_hard_limit && (
+                <Tooltip content="Anzahl der CPU-Kerne">
                   <div className="limit-item">
-                    <span className="limit-label">RAM:</span>
-                    <span className="limit-value">{pipeline.metadata.mem_hard_limit}</span>
+                    <span className="limit-label">CPU:</span>
+                    <span className="limit-value">{pipeline.metadata.cpu_hard_limit}</span>
                   </div>
+                </Tooltip>
+                {pipeline.metadata.mem_hard_limit && (
+                  <Tooltip content="Speicher-Limit (z.B. '512M', '2G')">
+                    <div className="limit-item">
+                      <span className="limit-label">RAM:</span>
+                      <span className="limit-value">{pipeline.metadata.mem_hard_limit}</span>
+                    </div>
+                  </Tooltip>
                 )}
               </div>
             </div>
             {(pipeline.metadata.cpu_soft_limit || pipeline.metadata.mem_soft_limit) && (
               <div className="limit-section">
-                <h4>Soft Limits (Monitoring)</h4>
+                <h4>
+                  Soft Limits (Monitoring)
+                  <InfoIcon content="Weiche Limits - Nur für Monitoring, Pipeline läuft weiter bei Überschreitung" />
+                </h4>
                 <div className="limit-items">
                   {pipeline.metadata.cpu_soft_limit && (
-                    <div className="limit-item">
-                      <span className="limit-label">CPU:</span>
-                      <span className="limit-value">{pipeline.metadata.cpu_soft_limit}</span>
-                    </div>
+                    <Tooltip content="Anzahl der CPU-Kerne">
+                      <div className="limit-item">
+                        <span className="limit-label">CPU:</span>
+                        <span className="limit-value">{pipeline.metadata.cpu_soft_limit}</span>
+                      </div>
+                    </Tooltip>
                   )}
                   {pipeline.metadata.mem_soft_limit && (
-                    <div className="limit-item">
-                      <span className="limit-label">RAM:</span>
-                      <span className="limit-value">{pipeline.metadata.mem_soft_limit}</span>
-                    </div>
+                    <Tooltip content="Speicher-Limit (z.B. '512M', '2G')">
+                      <div className="limit-item">
+                        <span className="limit-label">RAM:</span>
+                        <span className="limit-value">{pipeline.metadata.mem_soft_limit}</span>
+                      </div>
+                    </Tooltip>
                   )}
                 </div>
               </div>
@@ -250,13 +269,19 @@ export default function PipelineDetail() {
               <div className="limit-items">
                 {pipeline.metadata.timeout && (
                   <div className="limit-item">
-                    <span className="limit-label">Timeout:</span>
+                    <span className="limit-label">
+                      Timeout:
+                      <InfoIcon content="Maximale Laufzeit in Sekunden. Pipeline wird beendet bei Überschreitung." />
+                    </span>
                     <span className="limit-value">{pipeline.metadata.timeout}s</span>
                   </div>
                 )}
                 {pipeline.metadata.retry_attempts !== undefined && (
                   <div className="limit-item">
-                    <span className="limit-label">Retry-Versuche:</span>
+                    <span className="limit-label">
+                      Retry-Versuche:
+                      <InfoIcon content="Anzahl der Wiederholungsversuche bei Fehlschlag" />
+                    </span>
                     <span className="limit-value">{pipeline.metadata.retry_attempts}</span>
                   </div>
                 )}
@@ -271,13 +296,15 @@ export default function PipelineDetail() {
           <div className="stats-header">
             <h3>Statistiken</h3>
             {!isReadonly && (
-              <button
-                onClick={handleResetStats}
-                disabled={resetStatsMutation.isPending}
-                className="reset-button"
-              >
-                {resetStatsMutation.isPending ? 'Zurücksetzen...' : 'Statistiken zurücksetzen'}
-              </button>
+              <Tooltip content="Setzt alle Statistiken dieser Pipeline zurück. Läufe und Daten bleiben erhalten.">
+                <button
+                  onClick={handleResetStats}
+                  disabled={resetStatsMutation.isPending}
+                  className="reset-button"
+                >
+                  {resetStatsMutation.isPending ? 'Zurücksetzen...' : 'Statistiken zurücksetzen'}
+                </button>
+              </Tooltip>
             )}
           </div>
           <div className="stats-grid">
@@ -319,18 +346,23 @@ export default function PipelineDetail() {
                 </span>
               </div>
               <div className="webhook-url-section">
-                <label className="webhook-url-label">Webhook-URL:</label>
+                <label className="webhook-url-label">
+                  Webhook-URL:
+                  <InfoIcon content="Diese URL kann verwendet werden, um die Pipeline von außen zu triggern" />
+                </label>
                 <div className="webhook-url-container">
                   <code className="webhook-url">
                     {typeof window !== 'undefined' && `${window.location.origin}/api/webhooks/${name}/${pipeline.metadata.webhook_key}`}
                   </code>
-                  <button
-                    onClick={handleCopyWebhookUrl}
-                    className="copy-button"
-                    title="URL kopieren"
-                  >
-                    📋
-                  </button>
+                  <Tooltip content="Webhook-URL in Zwischenablage kopieren">
+                    <button
+                      onClick={handleCopyWebhookUrl}
+                      className="copy-button"
+                      title="URL kopieren"
+                    >
+                      📋
+                    </button>
+                  </Tooltip>
                 </div>
               </div>
               {stats && stats.webhook_runs > 0 && (

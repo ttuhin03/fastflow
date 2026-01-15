@@ -4,6 +4,8 @@ import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import { MdSave, MdRefresh, MdInfo, MdWarning, MdEmail, MdGroup } from 'react-icons/md'
 import { showError, showSuccess } from '../utils/toast'
+import Tooltip from '../components/Tooltip'
+import InfoIcon from '../components/InfoIcon'
 import StorageStats from '../components/StorageStats'
 import SystemMetrics from '../components/SystemMetrics'
 import './Settings.css'
@@ -246,6 +248,7 @@ export default function Settings() {
                 <label htmlFor="log_retention_runs" className="setting-label">
                   Maximale Runs pro Pipeline
                   <span className="setting-hint">(None = unbegrenzt)</span>
+                  <InfoIcon content="Maximale Anzahl Runs, die pro Pipeline behalten werden. Ältere werden gelöscht." />
                 </label>
                 <input
                   id="log_retention_runs"
@@ -263,6 +266,7 @@ export default function Settings() {
                 <label htmlFor="log_retention_days" className="setting-label">
                   Maximale Alter in Tagen
                   <span className="setting-hint">(None = unbegrenzt)</span>
+                  <InfoIcon content="Runs älter als X Tage werden automatisch gelöscht" />
                 </label>
                 <input
                   id="log_retention_days"
@@ -280,6 +284,7 @@ export default function Settings() {
                 <label htmlFor="log_max_size_mb" className="setting-label">
                   Maximale Log-Größe (MB)
                   <span className="setting-hint">(None = unbegrenzt)</span>
+                  <InfoIcon content="Log-Dateien größer als X MB werden gekürzt oder gelöscht" />
                 </label>
                 <input
                   id="log_max_size_mb"
@@ -302,6 +307,7 @@ export default function Settings() {
               <div className="setting-item">
                 <label htmlFor="max_concurrent_runs" className="setting-label">
                   Maximale gleichzeitige Runs
+                  <InfoIcon content="Wie viele Pipelines gleichzeitig ausgeführt werden können" />
                 </label>
                 <input
                   id="max_concurrent_runs"
@@ -318,6 +324,7 @@ export default function Settings() {
                 <label htmlFor="container_timeout" className="setting-label">
                   Container Timeout (Sekunden)
                   <span className="setting-hint">(None = unbegrenzt)</span>
+                  <InfoIcon content="Maximale Laufzeit eines Containers in Sekunden. None = unbegrenzt." />
                 </label>
                 <input
                   id="container_timeout"
@@ -334,6 +341,7 @@ export default function Settings() {
               <div className="setting-item">
                 <label htmlFor="retry_attempts" className="setting-label">
                   Retry-Versuche
+                  <InfoIcon content="Anzahl automatischer Wiederholungsversuche bei Fehlschlag" />
                 </label>
                 <input
                   id="retry_attempts"
@@ -362,6 +370,7 @@ export default function Settings() {
                     disabled={isReadonly}
                   />
                   <span>Auto-Sync aktiviert</span>
+                  <InfoIcon content="Aktiviert automatisches Git-Sync in konfigurierten Intervallen" />
                 </label>
               </div>
 
@@ -369,6 +378,7 @@ export default function Settings() {
                 <label htmlFor="auto_sync_interval" className="setting-label">
                   Auto-Sync Intervall (Sekunden)
                   <span className="setting-hint">(None = deaktiviert)</span>
+                  <InfoIcon content="Intervall in Sekunden (Minimum: 60)" />
                 </label>
                 <input
                   id="auto_sync_interval"
@@ -455,6 +465,7 @@ export default function Settings() {
                 <label htmlFor="smtp_password" className="setting-label">
                   SMTP Passwort
                   <span className="setting-hint">(über Environment-Variable SMTP_PASSWORD setzen)</span>
+                  <InfoIcon content="Passwort muss über Environment-Variable SMTP_PASSWORD gesetzt werden" />
                 </label>
                 <input
                   id="smtp_password"
@@ -484,6 +495,7 @@ export default function Settings() {
               <div className="setting-item full-width">
                 <label htmlFor="email_recipients" className="setting-label">
                   Empfänger (komma-separiert)
+                  <InfoIcon content="Komma-separierte Liste von E-Mail-Adressen für Benachrichtigungen" />
                 </label>
                 <textarea
                   id="email_recipients"
@@ -535,6 +547,7 @@ export default function Settings() {
                 <label htmlFor="teams_webhook_url" className="setting-label">
                   Teams Webhook-URL
                   <span className="setting-hint">(aus Teams-Kanal Connectors)</span>
+                  <InfoIcon content="Webhook-URL aus Teams-Kanal Connectors. Wird für Benachrichtigungen verwendet." />
                 </label>
                 <input
                   id="teams_webhook_url"
@@ -575,14 +588,16 @@ export default function Settings() {
                   <MdSave />
                   Einstellungen speichern
                 </button>
-                <button
-                  onClick={handleForceCleanup}
-                  disabled={forceCleanupMutation.isPending}
-                  className="btn btn-warning"
-                >
-                  <MdRefresh />
-                  {forceCleanupMutation.isPending ? 'Cleanup läuft...' : 'Force Flush (Cleanup)'}
-                </button>
+                <Tooltip content="Führt sofortiges Cleanup durch: Löscht alte Logs gemäß Retention-Regeln, bereinigt verwaiste Docker-Container. Kann nicht rückgängig gemacht werden.">
+                  <button
+                    onClick={handleForceCleanup}
+                    disabled={forceCleanupMutation.isPending}
+                    className="btn btn-warning"
+                  >
+                    <MdRefresh />
+                    {forceCleanupMutation.isPending ? 'Cleanup läuft...' : 'Force Flush (Cleanup)'}
+                  </button>
+                </Tooltip>
               </div>
               <div className="warning-box">
                 <MdWarning />

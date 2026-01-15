@@ -3,6 +3,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import apiClient from '../api/client'
 import { MdInfo, MdCheckCircle, MdCancel, MdHourglassEmpty, MdPlayArrow, MdWarning, MdStop } from 'react-icons/md'
+import Tooltip from '../components/Tooltip'
+import InfoIcon from '../components/InfoIcon'
 import './Runs.css'
 
 interface Run {
@@ -171,7 +173,10 @@ export default function Runs() {
         </div>
 
         <div className="filter-group">
-          <label htmlFor="status-filter" className="form-label">Status:</label>
+          <label htmlFor="status-filter" className="form-label">
+            Status:
+            <InfoIcon content="Filtern Sie Runs nach Status: PENDING = Wartet auf Start, RUNNING = Läuft aktuell, SUCCESS = Erfolgreich abgeschlossen, FAILED = Fehlgeschlagen" />
+          </label>
           <select
             id="status-filter"
             value={statusFilter}
@@ -262,20 +267,36 @@ export default function Runs() {
                     <td className="run-id">{run.id.substring(0, 8)}...</td>
                     <td>{run.pipeline_name}</td>
                     <td>
-                      <div className="status-cell">
-                        {getStatusIcon(run.status)}
-                        <span className={`status-badge status-${run.status.toLowerCase()}`}>
-                          {run.status}
-                        </span>
-                      </div>
+                      <Tooltip content={
+                        run.status === 'SUCCESS' ? '✓ SUCCESS: Run erfolgreich abgeschlossen' :
+                        run.status === 'FAILED' ? '✗ FAILED: Run mit Fehler beendet' :
+                        run.status === 'RUNNING' ? '▶ RUNNING: Run läuft aktuell' :
+                        run.status === 'PENDING' ? '⏳ PENDING: Wartet auf Start' :
+                        run.status === 'WARNING' ? '⚠ WARNING: Run mit Warnung beendet' :
+                        run.status === 'INTERRUPTED' ? '⏹ INTERRUPTED: Run wurde unterbrochen' :
+                        run.status
+                      }>
+                        <div className="status-cell">
+                          {getStatusIcon(run.status)}
+                          <span className={`status-badge status-${run.status.toLowerCase()}`}>
+                            {run.status}
+                          </span>
+                        </div>
+                      </Tooltip>
                     </td>
                     <td>{new Date(run.started_at).toLocaleString('de-DE')}</td>
-                    <td>{getDuration(run)}</td>
+                    <td>
+                      <Tooltip content="Berechnet aus Start- und Endzeit">
+                        {getDuration(run)}
+                      </Tooltip>
+                    </td>
                     <td>
                       {run.exit_code !== null ? (
-                        <span className={run.exit_code === 0 ? 'exit-success' : 'exit-error'}>
-                          {run.exit_code}
-                        </span>
+                        <Tooltip content="0 = erfolgreich, != 0 = Fehler. Standard UNIX Exit Code.">
+                          <span className={run.exit_code === 0 ? 'exit-success' : 'exit-error'}>
+                            {run.exit_code}
+                          </span>
+                        </Tooltip>
                       ) : (
                         '-'
                       )}
@@ -316,14 +337,18 @@ export default function Runs() {
                   </div>
                   <div className="run-card-row">
                     <span className="run-card-label">Dauer:</span>
-                    <span className="run-card-value">{getDuration(run)}</span>
+                    <Tooltip content="Berechnet aus Start- und Endzeit">
+                      <span className="run-card-value">{getDuration(run)}</span>
+                    </Tooltip>
                   </div>
                   {run.exit_code !== null && (
                     <div className="run-card-row">
                       <span className="run-card-label">Exit Code:</span>
-                      <span className={`run-card-value ${run.exit_code === 0 ? 'exit-success' : 'exit-error'}`}>
-                        {run.exit_code}
-                      </span>
+                      <Tooltip content="0 = erfolgreich, != 0 = Fehler. Standard UNIX Exit Code.">
+                        <span className={`run-card-value ${run.exit_code === 0 ? 'exit-success' : 'exit-error'}`}>
+                          {run.exit_code}
+                        </span>
+                      </Tooltip>
                     </div>
                   )}
                 </div>

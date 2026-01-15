@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import './Tooltip.css'
 
 interface TooltipProps {
@@ -28,7 +28,6 @@ export default function Tooltip({
     }
     timeoutRef.current = setTimeout(() => {
       setIsVisible(true)
-      updateTooltipPosition()
     }, delay)
   }
 
@@ -40,50 +39,75 @@ export default function Tooltip({
     setTooltipPosition(null)
   }
 
-  const updateTooltipPosition = () => {
+  const updateTooltipPosition = useCallback(() => {
     if (!triggerRef.current || !tooltipRef.current) return
 
     const triggerRect = triggerRef.current.getBoundingClientRect()
     const tooltipRect = tooltipRef.current.getBoundingClientRect()
-    const scrollX = window.scrollX || window.pageXOffset
-    const scrollY = window.scrollY || window.pageYOffset
+    
+    // Prüfe ob Tooltip-Element bereits gemessen werden kann (width > 0)
+    if (tooltipRect.width === 0 || tooltipRect.height === 0) {
+      // Versuche es nochmal nach kurzer Verzögerung
+      setTimeout(() => updateTooltipPosition(), 10)
+      return
+    }
 
+    // Verwende position: fixed mit viewport-koordinaten (getBoundingClientRect)
+    // Keine Scroll-Offsets nötig, da fixed relativ zum Viewport ist
     let top = 0
     let left = 0
 
     switch (position) {
       case 'top':
-        top = triggerRect.top + scrollY - tooltipRect.height - 8
-        left = triggerRect.left + scrollX + triggerRect.width / 2 - tooltipRect.width / 2
+        top = triggerRect.top - tooltipRect.height - 8
+        left = triggerRect.left + triggerRect.width / 2 - tooltipRect.width / 2
         break
       case 'bottom':
-        top = triggerRect.bottom + scrollY + 8
-        left = triggerRect.left + scrollX + triggerRect.width / 2 - tooltipRect.width / 2
+        top = triggerRect.bottom + 8
+        left = triggerRect.left + triggerRect.width / 2 - tooltipRect.width / 2
         break
       case 'left':
-        top = triggerRect.top + scrollY + triggerRect.height / 2 - tooltipRect.height / 2
-        left = triggerRect.left + scrollX - tooltipRect.width - 8
+        top = triggerRect.top + triggerRect.height / 2 - tooltipRect.height / 2
+        left = triggerRect.left - tooltipRect.width - 8
         break
       case 'right':
-        top = triggerRect.top + scrollY + triggerRect.height / 2 - tooltipRect.height / 2
-        left = triggerRect.right + scrollX + 8
+        top = triggerRect.top + triggerRect.height / 2 - tooltipRect.height / 2
+        left = triggerRect.right + 8
         break
     }
 
     setTooltipPosition({ top, left })
-  }
+  }, [position])
 
   useEffect(() => {
     if (isVisible) {
-      updateTooltipPosition()
-      window.addEventListener('scroll', updateTooltipPosition)
+      // Warte bis das Tooltip-Element im DOM gerendert ist
+      // Verwende mehrfache requestAnimationFrame für zuverlässiges Rendering
+      let rafId: number
+      const updatePosition = () => {
+        rafId = requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            updateTooltipPosition()
+            // Nochmal nach kurzer Verzögerung für Sicherheit
+            setTimeout(() => {
+              updateTooltipPosition()
+            }, 0)
+          })
+        })
+      }
+      
+      updatePosition()
+      
+      window.addEventListener('scroll', updateTooltipPosition, true)
       window.addEventListener('resize', updateTooltipPosition)
+      
       return () => {
-        window.removeEventListener('scroll', updateTooltipPosition)
+        if (rafId) cancelAnimationFrame(rafId)
+        window.removeEventListener('scroll', updateTooltipPosition, true)
         window.removeEventListener('resize', updateTooltipPosition)
       }
     }
-  }, [isVisible])
+  }, [isVisible, content, position, updateTooltipPosition])
 
   useEffect(() => {
     return () => {
@@ -112,8 +136,13 @@ export default function Tooltip({
               ? {
                   top: `${tooltipPosition.top}px`,
                   left: `${tooltipPosition.left}px`,
+                  visibility: 'visible',
                 }
-              : undefined
+              : {
+                  visibility: 'hidden',
+                  top: '-9999px',
+                  left: '-9999px',
+                }
           }
         >
           {content}

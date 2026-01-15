@@ -4,6 +4,8 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import { showError, showSuccess, showConfirm } from '../utils/toast'
+import Tooltip from '../components/Tooltip'
+import InfoIcon from '../components/InfoIcon'
 import './Scheduler.css'
 
 interface Job {
@@ -216,7 +218,10 @@ export default function Scheduler() {
               </select>
             </div>
             <div className="form-group">
-              <label htmlFor="job-trigger-type">Trigger-Typ:</label>
+              <label htmlFor="job-trigger-type">
+                Trigger-Typ:
+                <InfoIcon content="CRON: Zeitplan-basiert (z.B. '0 0 * * *' = täglich um Mitternacht). INTERVAL: Sekunden-basiert (z.B. '3600' = alle Stunde)." />
+              </label>
               <select
                 id="job-trigger-type"
                 value={formTriggerType}
@@ -232,6 +237,9 @@ export default function Scheduler() {
                 {formTriggerType === 'CRON'
                   ? 'Cron-Expression (z.B. "0 0 * * *"):'
                   : 'Interval in Sekunden (z.B. "3600"):'}
+                <InfoIcon content={formTriggerType === 'CRON' 
+                  ? "Format: min hour day month weekday (z.B. '0 0 * * *' = täglich um Mitternacht)"
+                  : "Wert in Sekunden (z.B. '3600' für 1 Stunde)"} />
               </label>
               <input
                 id="job-trigger-value"
@@ -250,6 +258,7 @@ export default function Scheduler() {
                   onChange={(e) => setFormEnabled(e.target.checked)}
                 />
                 Aktiviert
+                <InfoIcon content="Wenn aktiviert, wird der Job automatisch ausgeführt" />
               </label>
             </div>
             <div className="form-actions">
@@ -294,17 +303,23 @@ export default function Scheduler() {
                   <td>{job.pipeline_name}</td>
                   <td>{job.trigger_type}</td>
                   <td>
-                    <code className="trigger-value">{job.trigger_value}</code>
+                    <Tooltip content={job.trigger_type === 'CRON' 
+                      ? "Format: min hour day month weekday (z.B. '0 0 * * *' = täglich um Mitternacht)"
+                      : `Intervall: alle ${job.trigger_value} Sekunden`}>
+                      <code className="trigger-value">{job.trigger_value}</code>
+                    </Tooltip>
                   </td>
                   <td>
                     {!isReadonly && (
-                      <button
-                        onClick={() => handleToggleEnabled(job)}
-                        className={`status-toggle ${job.enabled ? 'enabled' : 'disabled'}`}
-                        disabled={toggleEnabledMutation.isPending}
-                      >
-                        {job.enabled ? 'Aktiv' : 'Inaktiv'}
-                      </button>
+                      <Tooltip content="Klicken, um Job zu aktivieren/deaktivieren">
+                        <button
+                          onClick={() => handleToggleEnabled(job)}
+                          className={`status-toggle ${job.enabled ? 'enabled' : 'disabled'}`}
+                          disabled={toggleEnabledMutation.isPending}
+                        >
+                          {job.enabled ? 'Aktiv' : 'Inaktiv'}
+                        </button>
+                      </Tooltip>
                     )}
                     {isReadonly && (
                       <span className={`status-badge ${job.enabled ? 'enabled' : 'disabled'}`}>
@@ -313,31 +328,39 @@ export default function Scheduler() {
                     )}
                   </td>
                   <td>
-                    {job.next_run_time ? (
-                      new Date(job.next_run_time).toLocaleString('de-DE')
-                    ) : (
-                      <span className="no-data">-</span>
-                    )}
+                    <Tooltip content="Wird basierend auf der CRON/INTERVAL Expression berechnet">
+                      {job.next_run_time ? (
+                        new Date(job.next_run_time).toLocaleString('de-DE')
+                      ) : (
+                        <span className="no-data">-</span>
+                      )}
+                    </Tooltip>
                   </td>
                   <td>
-                    {job.last_run_time ? (
-                      new Date(job.last_run_time).toLocaleString('de-DE')
-                    ) : (
-                      <span className="no-data">-</span>
-                    )}
+                    <Tooltip content="Zeitpunkt des letzten erfolgreichen oder fehlgeschlagenen Runs">
+                      {job.last_run_time ? (
+                        new Date(job.last_run_time).toLocaleString('de-DE')
+                      ) : (
+                        <span className="no-data">-</span>
+                      )}
+                    </Tooltip>
                   </td>
                   <td>
-                    <span className="run-count">{job.run_count || 0}</span>
+                    <Tooltip content="Anzahl der bisher ausgeführten Jobs">
+                      <span className="run-count">{job.run_count || 0}</span>
+                    </Tooltip>
                   </td>
                   <td>{new Date(job.created_at).toLocaleString('de-DE')}</td>
                   <td>
                     <div className="action-buttons">
-                      <button
-                        onClick={() => setExpandedJob(expandedJob === job.id ? null : job.id)}
-                        className="details-button"
-                      >
-                        {expandedJob === job.id ? 'Details ▲' : 'Details ▼'}
-                      </button>
+                      <Tooltip content="Zeige letzte 10 Runs dieses Jobs">
+                        <button
+                          onClick={() => setExpandedJob(expandedJob === job.id ? null : job.id)}
+                          className="details-button"
+                        >
+                          {expandedJob === job.id ? 'Details ▲' : 'Details ▼'}
+                        </button>
+                      </Tooltip>
                       {!isReadonly && (
                         <>
                           <button

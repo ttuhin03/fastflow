@@ -14,6 +14,8 @@ import {
   MdMemory,
   MdViewList
 } from 'react-icons/md'
+import Tooltip from '../components/Tooltip'
+import InfoIcon from '../components/InfoIcon'
 import RunStatusCircles from '../components/RunStatusCircles'
 import StorageStats from '../components/StorageStats'
 import CalendarHeatmap from '../components/CalendarHeatmap'
@@ -174,11 +176,17 @@ export default function Dashboard() {
       {syncStatus && (
         <div className="sync-status card">
           <div className="sync-status-item">
-            <strong>Branch:</strong> {syncStatus.branch}
+            <strong>
+              Branch:
+              <InfoIcon content="Aktueller Git-Branch" />
+            </strong> {syncStatus.branch}
           </div>
           {syncStatus.last_sync && (
             <div className="sync-status-item">
-              <strong>Letzter Sync:</strong> {new Date(syncStatus.last_sync).toLocaleString('de-DE')}
+              <strong>
+                Letzter Sync:
+                <InfoIcon content="Zeitpunkt des letzten Git-Syncs" />
+              </strong> {new Date(syncStatus.last_sync).toLocaleString('de-DE')}
             </div>
           )}
         </div>
@@ -252,9 +260,11 @@ export default function Dashboard() {
               <div key={pipeline.name} className="pipeline-card card">
                 <div className="pipeline-header">
                   <h4 className="pipeline-name">{pipeline.name}</h4>
-                  <span className={`badge ${pipeline.enabled ? 'badge-success' : 'badge-secondary'}`}>
-                    {pipeline.enabled ? 'Aktiv' : 'Inaktiv'}
-                  </span>
+                  <Tooltip content="Aktiv: Pipeline kann ausgeführt werden | Inaktiv: Pipeline ist deaktiviert">
+                    <span className={`badge ${pipeline.enabled ? 'badge-success' : 'badge-secondary'}`}>
+                      {pipeline.enabled ? 'Aktiv' : 'Inaktiv'}
+                    </span>
+                  </Tooltip>
                 </div>
                 
                 {pipeline.metadata.description && (
@@ -283,31 +293,40 @@ export default function Dashboard() {
                 </div>
                 
                 {pipeline.metadata.cpu_hard_limit && (
-                  <div className="resource-limits">
-                    <div className="resource-item">
-                      <MdMemory />
-                      <span>CPU: {pipeline.metadata.cpu_hard_limit}</span>
-                    </div>
-                    {pipeline.metadata.mem_hard_limit && (
+                  <Tooltip content="Hard Limits für diese Pipeline">
+                    <div className="resource-limits">
                       <div className="resource-item">
                         <MdMemory />
-                        <span>RAM: {pipeline.metadata.mem_hard_limit}</span>
+                        <span>CPU: {pipeline.metadata.cpu_hard_limit}</span>
                       </div>
-                    )}
-                  </div>
+                      {pipeline.metadata.mem_hard_limit && (
+                        <div className="resource-item">
+                          <MdMemory />
+                          <span>RAM: {pipeline.metadata.mem_hard_limit}</span>
+                        </div>
+                      )}
+                    </div>
+                  </Tooltip>
                 )}
                 
                 <div className="pipeline-badges">
                   {pipeline.has_requirements && (
-                    <span className="badge badge-info">requirements.txt</span>
+                    <Tooltip content="Pipeline hat eigene Python-Dependencies">
+                      <span className="badge badge-info">requirements.txt</span>
+                    </Tooltip>
                   )}
                   {pipeline.last_cache_warmup && (
-                    <span className="badge badge-success">Cached</span>
+                    <Tooltip content="Pipeline wurde vorab geladen (pre-heated) für schnellere Ausführung">
+                      <span className="badge badge-success">Cached</span>
+                    </Tooltip>
                   )}
                 </div>
 
                 <div className="pipeline-recent-runs">
-                  <span className="recent-runs-label">Letzte Runs:</span>
+                  <span className="recent-runs-label">
+                    Letzte Runs:
+                    <InfoIcon content="Zeigt die Status der letzten Runs (grün=erfolgreich, rot=fehlgeschlagen, gelb=läuft)" />
+                  </span>
                   <RunStatusCircles pipelineName={pipeline.name} />
                 </div>
 
