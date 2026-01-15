@@ -10,7 +10,7 @@ Dieses Modul enthält alle REST-API-Endpoints für System-Einstellungen:
 import os
 import shutil
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlmodel import Session
@@ -18,6 +18,8 @@ from sqlmodel import Session
 from app.database import get_session
 from app.config import config
 from app.cleanup import cleanup_logs, cleanup_docker_resources
+from app.models import PipelineRun, RunStatus
+from app.notifications import send_email_notification, send_teams_notification
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -32,6 +34,14 @@ class SettingsResponse(BaseModel):
     retry_attempts: int
     auto_sync_enabled: bool
     auto_sync_interval: Optional[int]
+    email_enabled: bool
+    smtp_host: Optional[str]
+    smtp_port: int
+    smtp_user: Optional[str]
+    smtp_from: Optional[str]
+    email_recipients: List[str]
+    teams_enabled: bool
+    teams_webhook_url: Optional[str]
 
 
 class SettingsUpdate(BaseModel):
@@ -44,6 +54,15 @@ class SettingsUpdate(BaseModel):
     retry_attempts: Optional[int] = None
     auto_sync_enabled: Optional[bool] = None
     auto_sync_interval: Optional[int] = None
+    email_enabled: Optional[bool] = None
+    smtp_host: Optional[str] = None
+    smtp_port: Optional[int] = None
+    smtp_user: Optional[str] = None
+    smtp_password: Optional[str] = None
+    smtp_from: Optional[str] = None
+    email_recipients: Optional[str] = None  # Komma-separiert als String
+    teams_enabled: Optional[bool] = None
+    teams_webhook_url: Optional[str] = None
 
 
 @router.get("", response_model=SettingsResponse)
@@ -63,6 +82,14 @@ async def get_settings() -> SettingsResponse:
         retry_attempts=config.RETRY_ATTEMPTS,
         auto_sync_enabled=config.AUTO_SYNC_ENABLED,
         auto_sync_interval=config.AUTO_SYNC_INTERVAL,
+        email_enabled=config.EMAIL_ENABLED,
+        smtp_host=config.SMTP_HOST,
+        smtp_port=config.SMTP_PORT,
+        smtp_user=config.SMTP_USER,
+        smtp_from=config.SMTP_FROM,
+        email_recipients=config.EMAIL_RECIPIENTS,
+        teams_enabled=config.TEAMS_ENABLED,
+        teams_webhook_url=config.TEAMS_WEBHOOK_URL,
     )
 
 
@@ -179,6 +206,102 @@ async def get_storage_stats() -> Dict[str, Any]:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Fehler beim Abrufen der Speicherplatz-Statistiken: {str(e)}"
+        )
+
+
+@router.post("/test-email", response_model=Dict[str, str])
+async def test_email() -> Dict[str, str]:
+    """
+    Sendet eine Test-E-Mail mit aktuellen E-Mail-Einstellungen.
+    
+    Returns:
+        Dictionary mit Erfolgs- oder Fehlermeldung
+    """
+    if not config.EMAIL_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="E-Mail-Benachrichtigungen sind nicht aktiviert"
+        )
+    
+    if not config.SMTP_HOST or not config.SMTP_FROM or not config.EMAIL_RECIPIENTS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="E-Mail-Konfiguration unvollständig (SMTP_HOST, SMTP_FROM, EMAIL_RECIPIENTS erforderlich)"
+        )
+    
+    try:
+        # Erstelle einen Mock-Run für Test-E-Mail
+        from datetime import datetime
+        from uuid import uuid4
+        
+        test_run = PipelineRun(
+            id=uuid4(),
+            pipeline_name="test-pipeline",
+            status=RunStatus.FAILED,
+            log_file="test.log",
+            started_at=datetime.utcnow(),
+            finished_at=datetime.utcnow(),
+            exit_code=1
+        )
+        
+        await send_email_notification(test_run, RunStatus.FAILED)
+        
+        return {
+            "status": "success",
+            "message": f"Test-E-Mail erfolgreich an {', '.join(config.EMAIL_RECIPIENTS)} gesendet"
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Fehler beim Senden der Test-E-Mail: {str(e)}"
+        )
+
+
+@router.post("/test-teams", response_model=Dict[str, str])
+async def test_teams() -> Dict[str, str]:
+    """
+    Sendet eine Test-Teams-Nachricht mit aktuellen Teams-Einstellungen.
+    
+    Returns:
+        Dictionary mit Erfolgs- oder Fehlermeldung
+    """
+    if not config.TEAMS_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Teams-Benachrichtigungen sind nicht aktiviert"
+        )
+    
+    if not config.TEAMS_WEBHOOK_URL:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Teams-Webhook-URL ist nicht konfiguriert"
+        )
+    
+    try:
+        # Erstelle einen Mock-Run für Test-Teams-Nachricht
+        from datetime import datetime
+        from uuid import uuid4
+        
+        test_run = PipelineRun(
+            id=uuid4(),
+            pipeline_name="test-pipeline",
+            status=RunStatus.FAILED,
+            log_file="test.log",
+            started_at=datetime.utcnow(),
+            finished_at=datetime.utcnow(),
+            exit_code=1
+        )
+        
+        await send_teams_notification(test_run, RunStatus.FAILED)
+        
+        return {
+            "status": "success",
+            "message": "Test-Teams-Nachricht erfolgreich gesendet"
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Fehler beim Senden der Test-Teams-Nachricht: {str(e)}"
         )
 
 

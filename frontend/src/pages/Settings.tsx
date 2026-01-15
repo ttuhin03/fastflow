@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../api/client'
-import { MdSave, MdRefresh, MdInfo, MdWarning } from 'react-icons/md'
+import { MdSave, MdRefresh, MdInfo, MdWarning, MdEmail, MdGroup } from 'react-icons/md'
 import StorageStats from '../components/StorageStats'
 import './Settings.css'
 
@@ -14,6 +14,14 @@ interface Settings {
   retry_attempts: number
   auto_sync_enabled: boolean
   auto_sync_interval: number | null
+  email_enabled: boolean
+  smtp_host: string | null
+  smtp_port: number
+  smtp_user: string | null
+  smtp_from: string | null
+  email_recipients: string[]
+  teams_enabled: boolean
+  teams_webhook_url: string | null
 }
 
 export default function Settings() {
@@ -59,13 +67,54 @@ export default function Settings() {
     },
   })
 
+  const testEmailMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiClient.post('/settings/test-email')
+      return response.data
+    },
+    onSuccess: (data) => {
+      alert(data.message || 'Test-E-Mail erfolgreich gesendet')
+    },
+    onError: (error: any) => {
+      alert(`Fehler beim Senden der Test-E-Mail: ${error.response?.data?.detail || error.message}`)
+    },
+  })
+
+  const testTeamsMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiClient.post('/settings/test-teams')
+      return response.data
+    },
+    onSuccess: (data) => {
+      alert(data.message || 'Test-Teams-Nachricht erfolgreich gesendet')
+    },
+    onError: (error: any) => {
+      alert(`Fehler beim Senden der Test-Teams-Nachricht: ${error.response?.data?.detail || error.message}`)
+    },
+  })
+
   const handleInputChange = (field: keyof Settings, value: string | number | boolean | null) => {
     if (!settings) return
     
-    let processedValue: number | boolean | null
+    let processedValue: number | boolean | null | string | string[]
     
-    if (field === 'auto_sync_enabled') {
+    if (field === 'auto_sync_enabled' || field === 'email_enabled' || field === 'teams_enabled') {
       processedValue = typeof value === 'boolean' ? value : value === 'true'
+    } else if (field === 'email_recipients') {
+      // Komma-separierte Liste verarbeiten
+      if (typeof value === 'string') {
+        processedValue = value.split(',').map(email => email.trim()).filter(email => email.length > 0)
+      } else {
+        processedValue = value
+      }
+    } else if (field === 'smtp_port') {
+      processedValue = typeof value === 'string' && value !== '' ? parseInt(value, 10) : 587
+      if (isNaN(processedValue as number)) {
+        processedValue = 587
+      }
+    } else if (typeof value === 'string' && (field === 'smtp_host' || field === 'smtp_user' || field === 'smtp_from' || field === 'teams_webhook_url')) {
+      // String-Felder direkt übernehmen
+      processedValue = value === '' ? null : value
     } else if (typeof value === 'string') {
       processedValue = value === '' ? null : parseInt(value, 10)
       if (isNaN(processedValue as number)) {
@@ -83,7 +132,17 @@ export default function Settings() {
 
   const handleSave = () => {
     if (!localSettings) return
-    updateSettingsMutation.mutate(localSettings)
+    // Konvertiere email_recipients Array zu komma-separiertem String für API
+    const { email_recipients, ...restSettings } = localSettings
+    const settingsToSave: Partial<Omit<Settings, 'email_recipients'>> & { email_recipients?: string } = {
+      ...restSettings,
+      email_recipients: Array.isArray(email_recipients)
+        ? email_recipients.join(', ')
+        : typeof email_recipients === 'string'
+        ? email_recipients
+        : ''
+    }
+    updateSettingsMutation.mutate(settingsToSave as Partial<Settings>)
   }
 
   const handleForceCleanup = () => {
@@ -256,6 +315,178 @@ export default function Settings() {
                   placeholder="Deaktiviert"
                   disabled={!currentSettings.auto_sync_enabled}
                 />
+              </div>
+            </div>
+          </div>
+
+          {/* Email Notifications */}
+          <div className="settings-section card">
+            <h3 className="section-title">
+              <MdEmail />
+              E-Mail-Benachrichtigungen
+            </h3>
+            <div className="settings-grid">
+              <div className="setting-item">
+                <label className="setting-label checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={currentSettings.email_enabled}
+                    onChange={(e) => handleInputChange('email_enabled', e.target.checked)}
+                    className="checkbox-input"
+                  />
+                  <span>E-Mail-Benachrichtigungen aktivieren</span>
+                </label>
+              </div>
+
+              <div className="setting-item">
+                <label htmlFor="smtp_host" className="setting-label">
+                  SMTP Host
+                </label>
+                <input
+                  id="smtp_host"
+                  type="text"
+                  className="form-input"
+                  value={currentSettings.smtp_host || ''}
+                  onChange={(e) => handleInputChange('smtp_host', e.target.value)}
+                  placeholder="smtp.example.com"
+                  disabled={!currentSettings.email_enabled}
+                />
+              </div>
+
+              <div className="setting-item">
+                <label htmlFor="smtp_port" className="setting-label">
+                  SMTP Port
+                </label>
+                <input
+                  id="smtp_port"
+                  type="number"
+                  min="1"
+                  max="65535"
+                  className="form-input"
+                  value={currentSettings.smtp_port}
+                  onChange={(e) => handleInputChange('smtp_port', e.target.value)}
+                  placeholder="587"
+                  disabled={!currentSettings.email_enabled}
+                />
+              </div>
+
+              <div className="setting-item">
+                <label htmlFor="smtp_user" className="setting-label">
+                  SMTP Benutzername
+                </label>
+                <input
+                  id="smtp_user"
+                  type="text"
+                  className="form-input"
+                  value={currentSettings.smtp_user || ''}
+                  onChange={(e) => handleInputChange('smtp_user', e.target.value)}
+                  placeholder="user@example.com"
+                  disabled={!currentSettings.email_enabled}
+                />
+              </div>
+
+              <div className="setting-item">
+                <label htmlFor="smtp_password" className="setting-label">
+                  SMTP Passwort
+                  <span className="setting-hint">(über Environment-Variable SMTP_PASSWORD setzen)</span>
+                </label>
+                <input
+                  id="smtp_password"
+                  type="password"
+                  className="form-input"
+                  placeholder="Wird nicht angezeigt - über .env setzen"
+                  disabled={true}
+                  title="SMTP-Passwort muss über Environment-Variable SMTP_PASSWORD gesetzt werden"
+                />
+              </div>
+
+              <div className="setting-item">
+                <label htmlFor="smtp_from" className="setting-label">
+                  Absender-E-Mail
+                </label>
+                <input
+                  id="smtp_from"
+                  type="email"
+                  className="form-input"
+                  value={currentSettings.smtp_from || ''}
+                  onChange={(e) => handleInputChange('smtp_from', e.target.value)}
+                  placeholder="noreply@example.com"
+                  disabled={!currentSettings.email_enabled}
+                />
+              </div>
+
+              <div className="setting-item full-width">
+                <label htmlFor="email_recipients" className="setting-label">
+                  Empfänger (komma-separiert)
+                </label>
+                <textarea
+                  id="email_recipients"
+                  className="form-input"
+                  rows={3}
+                  value={currentSettings.email_recipients.join(', ')}
+                  onChange={(e) => handleInputChange('email_recipients', e.target.value)}
+                  placeholder="admin@example.com, team@example.com"
+                  disabled={!currentSettings.email_enabled}
+                />
+              </div>
+
+              <div className="setting-item">
+                <button
+                  onClick={() => testEmailMutation.mutate()}
+                  disabled={!currentSettings.email_enabled || testEmailMutation.isPending}
+                  className="btn btn-primary"
+                >
+                  <MdEmail />
+                  {testEmailMutation.isPending ? 'Sende...' : 'Test-E-Mail senden'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Teams Notifications */}
+          <div className="settings-section card">
+            <h3 className="section-title">
+              <MdGroup />
+              Microsoft Teams-Benachrichtigungen
+            </h3>
+            <div className="settings-grid">
+              <div className="setting-item">
+                <label className="setting-label checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={currentSettings.teams_enabled}
+                    onChange={(e) => handleInputChange('teams_enabled', e.target.checked)}
+                    className="checkbox-input"
+                  />
+                  <span>Teams-Benachrichtigungen aktivieren</span>
+                </label>
+              </div>
+
+              <div className="setting-item full-width">
+                <label htmlFor="teams_webhook_url" className="setting-label">
+                  Teams Webhook-URL
+                  <span className="setting-hint">(aus Teams-Kanal Connectors)</span>
+                </label>
+                <input
+                  id="teams_webhook_url"
+                  type="url"
+                  className="form-input"
+                  value={currentSettings.teams_webhook_url || ''}
+                  onChange={(e) => handleInputChange('teams_webhook_url', e.target.value)}
+                  placeholder="https://outlook.office.com/webhook/..."
+                  disabled={!currentSettings.teams_enabled}
+                />
+              </div>
+
+              <div className="setting-item">
+                <button
+                  onClick={() => testTeamsMutation.mutate()}
+                  disabled={!currentSettings.teams_enabled || testTeamsMutation.isPending}
+                  className="btn btn-primary"
+                >
+                  <MdGroup />
+                  {testTeamsMutation.isPending ? 'Sende...' : 'Test-Teams-Nachricht senden'}
+                </button>
               </div>
             </div>
           </div>

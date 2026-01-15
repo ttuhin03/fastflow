@@ -59,6 +59,14 @@
   margin: 0;
   padding-bottom: var(--spacing-sm);
   border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.section-title svg {
+  font-size: 1.25rem;
+  color: var(--color-primary);
 }
 
 .settings-grid {
@@ -71,6 +79,10 @@
   display: flex;
   flex-direction: column;
   gap: var(--spacing-xs);
+}
+
+.setting-item.full-width {
+  grid-column: 1 / -1;
 }
 
 .setting-label {
@@ -145,6 +157,17 @@
 
 .warning-box strong {
   color: var(--color-text-primary);
+}
+
+textarea.form-input {
+  resize: vertical;
+  min-height: 80px;
+  font-family: var(--font-family);
+}
+
+.form-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .loading-container {
