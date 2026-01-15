@@ -161,16 +161,26 @@
 .pipeline-actions {
   display: flex;
   gap: var(--spacing-sm);
-  margin-top: var(--spacing-xs);
+  margin-top: var(--spacing-md);
+  flex-wrap: wrap;
 }
 
-.details-button,
-.reset-button {
+.details-button {
   flex: 1;
+  min-width: 120px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: var(--spacing-xs);
+}
+
+.reset-button {
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  min-width: fit-content;
 }
 
 .empty-state {

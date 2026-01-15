@@ -10,6 +10,7 @@ import Scheduler from './pages/Scheduler'
 import Secrets from './pages/Secrets'
 import Sync from './pages/Sync'
 import Settings from './pages/Settings'
+import Users from './pages/Users'
 import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import './App.css'
@@ -58,6 +59,7 @@ function AppRoutes() {
         <Route path="secrets" element={<Secrets />} />
         <Route path="sync" element={<Sync />} />
         <Route path="settings" element={<Settings />} />
+        <Route path="users" element={<Users />} />
       </Route>
     </Routes>
   )

@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from app.database import get_session
 from app.models import Secret
 from app.secrets import encrypt, decrypt
+from app.auth import require_write
 
 router = APIRouter(prefix="/secrets", tags=["secrets"])
 
@@ -88,6 +89,7 @@ async def get_secrets(
 @router.post("", response_model=Dict[str, Any])
 async def create_secret(
     request: SecretCreateRequest,
+    current_user = Depends(require_write),
     session: Session = Depends(get_session)
 ) -> Dict[str, Any]:
     """
@@ -155,6 +157,7 @@ async def create_secret(
 async def update_secret(
     key: str,
     request: SecretUpdateRequest,
+    current_user = Depends(require_write),
     session: Session = Depends(get_session)
 ) -> Dict[str, Any]:
     """
@@ -222,6 +225,7 @@ async def update_secret(
 @router.delete("/{key}")
 async def delete_secret(
     key: str,
+    current_user = Depends(require_write),
     session: Session = Depends(get_session)
 ) -> Dict[str, Any]:
     """

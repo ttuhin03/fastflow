@@ -295,6 +295,33 @@ export default function RunDetail() {
     enabled: !!run?.pipeline_name,
   })
 
+  // Invalidate daily-stats when run completes
+  const prevStatusRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (run && run.pipeline_name) {
+      const currentStatus = run.status
+      const prevStatus = prevStatusRef.current
+      
+      // Only invalidate when status changes from RUNNING/PENDING to SUCCESS/FAILED
+      if (prevStatus && 
+          (prevStatus === 'RUNNING' || prevStatus === 'PENDING') &&
+          (currentStatus === 'SUCCESS' || currentStatus === 'FAILED')) {
+        // Invalidate all daily-stats queries immediately
+        queryClient.invalidateQueries({ queryKey: ['all-pipelines-daily-stats'] })
+        queryClient.invalidateQueries({ queryKey: ['pipeline-daily-stats'] })
+        queryClient.invalidateQueries({ queryKey: ['pipeline-stats', run.pipeline_name] })
+        queryClient.invalidateQueries({ queryKey: ['pipeline-stats'] })
+        queryClient.invalidateQueries({ queryKey: ['pipelines'] })
+        queryClient.invalidateQueries({ queryKey: ['pipeline', run.pipeline_name] })
+        // Force refetch immediately with fresh data
+        queryClient.refetchQueries({ queryKey: ['all-pipelines-daily-stats'], exact: false })
+        queryClient.refetchQueries({ queryKey: ['pipeline-daily-stats', run.pipeline_name], exact: false })
+      }
+      
+      prevStatusRef.current = currentStatus
+    }
+  }, [run?.status, run?.pipeline_name, queryClient])
+
   // Hilfsfunktion zum Parsen von Memory-Strings (z.B. "512M" -> 512)
   const parseMemoryString = (memStr: string): number => {
     if (!memStr) return 0
@@ -318,6 +345,10 @@ export default function RunDetail() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['run', runId] })
       queryClient.invalidateQueries({ queryKey: ['runs'] })
+      if (run?.pipeline_name) {
+        queryClient.invalidateQueries({ queryKey: ['all-pipelines-daily-stats'] })
+        queryClient.invalidateQueries({ queryKey: ['pipeline-daily-stats', run.pipeline_name] })
+      }
       alert('Run wurde erfolgreich abgebrochen')
     },
     onError: (error: any) => {
@@ -335,6 +366,8 @@ export default function RunDetail() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['runs'] })
+      queryClient.invalidateQueries({ queryKey: ['all-pipelines-daily-stats'] })
+      queryClient.invalidateQueries({ queryKey: ['pipeline-daily-stats'] })
       navigate(`/runs/${data.id}`)
     },
     onError: (error: any) => {

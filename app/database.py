@@ -8,7 +8,10 @@ Features:
 - SQLite WAL-Mode für bessere Concurrency
 - WAL-Checkpointing für SQLite
 - Unterstützung für PostgreSQL
-- Alembic-Integration für Migrationen
+- Alembic-Integration für Migrationen (manuelle Ausführung)
+
+Hinweis: Migrationen werden nicht automatisch ausgeführt.
+Siehe docs/DATABASE_MIGRATIONS.md für Anleitung zur manuellen Ausführung.
 """
 
 from typing import Generator
@@ -107,15 +110,45 @@ def _ensure_secret_is_parameter_column() -> None:
         # Nicht kritisch, Migration kann später ausgeführt werden
 
 
+# Migrationen werden nicht automatisch ausgeführt
+# Siehe docs/DATABASE_MIGRATIONS.md für Anleitung zur manuellen Ausführung
+
+
+def _ensure_default_admin_role() -> None:
+    """
+    Stellt sicher, dass der Standard-Admin-Nutzer (aus Config) Admin-Rechte hat.
+    
+    Wird beim Start aufgerufen, um sicherzustellen, dass der Standard-Admin-Nutzer
+    immer Admin-Rechte hat, auch wenn er bereits existiert.
+    """
+    try:
+        from app.auth import get_or_create_user
+        from app.config import config
+        
+        with Session(engine) as session:
+            # Rufe get_or_create_user auf, um sicherzustellen, dass der Standard-Admin-Nutzer
+            # existiert und die richtige Rolle hat
+            get_or_create_user(
+                session,
+                config.AUTH_USERNAME,
+                config.AUTH_PASSWORD
+            )
+            logger.info(f"Standard-Admin-Nutzer '{config.AUTH_USERNAME}' initialisiert/geprüft")
+    except Exception as e:
+        logger.warning(f"Fehler beim Initialisieren des Standard-Admin-Nutzers: {e}")
+        # Nicht kritisch, wird beim Login korrigiert
+
+
 def init_db() -> None:
     """
     Initialisiert die Datenbank und erstellt alle Tabellen.
     
     Wird beim App-Start aufgerufen, um sicherzustellen, dass alle
     Datenbank-Tabellen existieren. Aktiviert WAL-Mode für SQLite.
-    """
-    SQLModel.metadata.create_all(engine)
     
+    Hinweis: Migrationen werden nicht automatisch ausgeführt.
+    Siehe docs/DATABASE_MIGRATIONS.md für Anleitung zur manuellen Ausführung.
+    """
     # SQLite WAL-Mode aktivieren (für bessere Concurrency)
     if database_url.startswith("sqlite"):
         with Session(engine) as session:
@@ -123,8 +156,18 @@ def init_db() -> None:
             session.commit()
         logger.info("SQLite WAL-Mode aktiviert")
     
+    # Erstelle Tabellen (für neue Datenbanken)
+    SQLModel.metadata.create_all(engine)
+    
     # Stelle sicher, dass is_parameter-Spalte existiert (für bestehende DBs)
+    # Diese Funktion wird in Zukunft durch Migrationen ersetzt
     _ensure_secret_is_parameter_column()
+    
+    # Stelle sicher, dass der Standard-Admin-Nutzer die richtige Rolle hat
+    _ensure_default_admin_role()
+    
+    # Migrationen werden nicht automatisch ausgeführt
+    # Siehe docs/DATABASE_MIGRATIONS.md für Anleitung zur manuellen Ausführung
 
 
 def get_session() -> Generator[Session, None, None]:

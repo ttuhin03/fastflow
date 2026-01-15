@@ -111,6 +111,26 @@ async def get_sync_logs(limit: int = 100) -> List[Dict[str, Any]]:
         return []
 
 
+def test_github_app_token() -> Tuple[bool, str]:
+    """
+    Testet die GitHub Apps Konfiguration durch Token-Generierung.
+    
+    Versucht ein Installation Access Token zu generieren ohne Git-Operationen.
+    Nützlich zum Validieren der Konfiguration.
+    
+    Returns:
+        Tuple (success: bool, message: str)
+    """
+    try:
+        token = get_github_app_token()
+        if token:
+            return (True, "GitHub Apps Konfiguration erfolgreich. Token wurde generiert.")
+        else:
+            return (False, "GitHub Apps ist nicht konfiguriert oder Konfiguration ist unvollständig.")
+    except Exception as e:
+        return (False, f"Fehler bei Token-Generierung: {str(e)}")
+
+
 def get_github_app_token() -> Optional[str]:
     """
     Generiert ein GitHub Installation Access Token via GitHub Apps API.

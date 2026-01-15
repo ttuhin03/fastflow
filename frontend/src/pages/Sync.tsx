@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import './Sync.css'
 
@@ -17,13 +18,29 @@ interface SyncSettings {
   auto_sync_interval: number | null
 }
 
+interface GitHubConfig {
+  app_id: string | null
+  installation_id: string | null
+  configured: boolean
+  has_private_key: boolean
+}
+
 export default function Sync() {
   const queryClient = useQueryClient()
+  const { isReadonly } = useAuth()
   const [syncBranch, setSyncBranch] = useState('')
-  const [activeTab, setActiveTab] = useState<'status' | 'settings' | 'logs'>('status')
+  const [activeTab, setActiveTab] = useState<'status' | 'settings' | 'logs' | 'github'>('status')
   const [settingsForm, setSettingsForm] = useState<SyncSettings>({
     auto_sync_enabled: false,
     auto_sync_interval: null,
+  })
+
+  // GitHub Config State
+  const [githubForm, setGithubForm] = useState({
+    app_id: '',
+    installation_id: '',
+    private_key: '',
+    private_key_file: null as File | null,
   })
 
   const { data: syncStatus, isLoading } = useQuery<SyncStatus>({
@@ -59,6 +76,54 @@ export default function Sync() {
     refetchInterval: activeTab === 'logs' ? 5000 : false,
   })
 
+  // GitHub Config Query - immer laden, nicht nur wenn Tab aktiv
+  const { data: githubConfig, isLoading: githubConfigLoading } = useQuery<GitHubConfig>({
+    queryKey: ['github-config'],
+    queryFn: async () => {
+      const response = await apiClient.get('/sync/github-config')
+      return response.data
+    },
+  })
+
+  useEffect(() => {
+    if (githubConfig && activeTab === 'github') {
+      setGithubForm({
+        app_id: githubConfig.app_id || '',
+        installation_id: githubConfig.installation_id || '',
+        private_key: '',
+        private_key_file: null,
+      })
+    }
+  }, [githubConfig, activeTab])
+
+  // Handle Callbacks (URL-Parameter)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const setupSuccess = params.get('setup_success')
+    const installationSuccess = params.get('installation_success')
+    const manifestCode = params.get('manifest_code')
+    const state = params.get('state')
+    const exchangeError = params.get('exchange_error')
+    const tab = params.get('tab')
+
+    if (setupSuccess === 'true' && tab === 'github') {
+      // Erfolgreiche App-Erstellung UND Installation in einem Schritt!
+      queryClient.invalidateQueries({ queryKey: ['github-config'] })
+      alert('✓ GitHub App erfolgreich erstellt und installiert!\n\nDie App ist jetzt bereit für Git-Sync.')
+      // Entferne URL-Parameter
+      window.history.replaceState({}, '', window.location.pathname + '?tab=github')
+    } else if (installationSuccess === 'true' && tab === 'github') {
+      // Erfolgreiche Installation (Fallback für manuellen Flow)
+      queryClient.invalidateQueries({ queryKey: ['github-config'] })
+      alert('✓ GitHub App erfolgreich installiert und konfiguriert!\n\nDie App ist jetzt bereit für Git-Sync.')
+      // Entferne URL-Parameter
+      window.history.replaceState({}, '', window.location.pathname + '?tab=github')
+    } else if (manifestCode && state && tab === 'github' && exchangeError === 'true') {
+      // Automatischer Exchange fehlgeschlagen - versuche manuellen Exchange
+      manifestExchangeMutation.mutate({ code: manifestCode, state })
+    }
+  }, [])
+
   const syncMutation = useMutation({
     mutationFn: async (branch?: string) => {
       const response = await apiClient.post('/sync', branch ? { branch } : {})
@@ -88,6 +153,92 @@ export default function Sync() {
     },
   })
 
+  // GitHub Config Mutations
+  const saveGithubConfigMutation = useMutation({
+    mutationFn: async (data: { app_id: string; installation_id: string; private_key: string }) => {
+      const response = await apiClient.post('/sync/github-config', data)
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['github-config'] })
+      alert('GitHub Apps Konfiguration erfolgreich gespeichert')
+      setGithubForm({ ...githubForm, private_key: '', private_key_file: null })
+    },
+    onError: (error: any) => {
+      alert(`Fehler beim Speichern: ${error.response?.data?.detail || error.message}`)
+    },
+  })
+
+  const testGithubConfigMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiClient.post('/sync/github-config/test')
+      return response.data
+    },
+    onSuccess: (data) => {
+      if (data.success) {
+        alert('✓ Konfiguration erfolgreich getestet!')
+      } else {
+        alert(`✗ Test fehlgeschlagen: ${data.message}`)
+      }
+    },
+    onError: (error: any) => {
+      alert(`Fehler beim Testen: ${error.response?.data?.detail || error.message}`)
+    },
+  })
+
+  const deleteGithubConfigMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiClient.delete('/sync/github-config')
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['github-config'] })
+      alert('GitHub Apps Konfiguration gelöscht')
+      setGithubForm({
+        app_id: '',
+        installation_id: '',
+        private_key: '',
+        private_key_file: null,
+      })
+    },
+    onError: (error: any) => {
+      alert(`Fehler beim Löschen: ${error.response?.data?.detail || error.message}`)
+    },
+  })
+
+  // Manifest Flow Mutations
+  const manifestAuthorizeMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiClient.get('/sync/github-manifest/authorize')
+      return response.data
+    },
+    onSuccess: (data) => {
+      // Redirect zu GitHub
+      window.location.href = data.authorization_url
+    },
+    onError: (error: any) => {
+      alert(`Fehler: ${error.response?.data?.detail || error.message}`)
+    },
+  })
+
+  const manifestExchangeMutation = useMutation({
+    mutationFn: async (data: { code: string; state: string }) => {
+      const response = await apiClient.post('/sync/github-manifest/exchange', data)
+      return response.data
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['github-config'] })
+      alert(`✓ ${data.message}\n\n${data.next_step || ''}`)
+      // Entferne URL-Parameter
+      window.history.replaceState({}, '', window.location.pathname + '?tab=github')
+    },
+    onError: (error: any) => {
+      alert(`Fehler beim Code-Exchange: ${error.response?.data?.detail || error.message}`)
+      // Entferne URL-Parameter auch bei Fehler
+      window.history.replaceState({}, '', window.location.pathname + '?tab=github')
+    },
+  })
+
   const handleSync = () => {
     if (syncMutation.isPending) return
     if (confirm('Git-Sync ausführen? Dies kann einige Zeit dauern.')) {
@@ -101,6 +252,67 @@ export default function Sync() {
       return
     }
     updateSettingsMutation.mutate(settingsForm)
+  }
+
+  // GitHub Config Handlers
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      if (!file.name.endsWith('.pem')) {
+        alert('Bitte wählen Sie eine .pem Datei aus')
+        return
+      }
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const content = e.target?.result as string
+        setGithubForm({
+          ...githubForm,
+          private_key: content,
+          private_key_file: file,
+        })
+      }
+      reader.readAsText(file)
+    }
+  }
+
+  const handleSaveGithubConfig = () => {
+    if (!githubForm.app_id || !githubForm.installation_id || !githubForm.private_key) {
+      alert('Bitte füllen Sie alle Felder aus')
+      return
+    }
+
+    // Validiere numerische IDs
+    if (!/^\d+$/.test(githubForm.app_id.trim())) {
+      alert('GitHub App ID muss eine Zahl sein')
+      return
+    }
+
+    if (!/^\d+$/.test(githubForm.installation_id.trim())) {
+      alert('Installation ID muss eine Zahl sein')
+      return
+    }
+
+    // Validiere Private Key Format
+    if (!githubForm.private_key.includes('-----BEGIN') || !githubForm.private_key.includes('-----END')) {
+      alert('Private Key muss PEM-Format haben (-----BEGIN ... -----END ...)')
+      return
+    }
+
+    saveGithubConfigMutation.mutate({
+      app_id: githubForm.app_id.trim(),
+      installation_id: githubForm.installation_id.trim(),
+      private_key: githubForm.private_key,
+    })
+  }
+
+  const handleTestGithubConfig = () => {
+    testGithubConfigMutation.mutate()
+  }
+
+  const handleDeleteGithubConfig = () => {
+    if (confirm('GitHub Apps Konfiguration wirklich löschen?')) {
+      deleteGithubConfigMutation.mutate()
+    }
   }
 
   if (isLoading) {
@@ -129,6 +341,12 @@ export default function Sync() {
           onClick={() => setActiveTab('logs')}
         >
           Logs
+        </button>
+        <button
+          className={activeTab === 'github' ? 'active' : ''}
+          onClick={() => setActiveTab('github')}
+        >
+          GitHub Apps
         </button>
       </div>
 
@@ -185,13 +403,15 @@ export default function Sync() {
               placeholder={syncStatus?.branch || 'main'}
             />
           </div>
-          <button
-            onClick={handleSync}
-            disabled={syncMutation.isPending}
-            className="sync-button"
-          >
-            {syncMutation.isPending ? 'Sync läuft...' : 'Git Sync ausführen'}
-          </button>
+          {!isReadonly && (
+            <button
+              onClick={handleSync}
+              disabled={syncMutation.isPending}
+              className="sync-button"
+            >
+              {syncMutation.isPending ? 'Sync läuft...' : 'Git Sync ausführen'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -245,15 +465,17 @@ export default function Sync() {
                   disabled={!settingsForm.auto_sync_enabled}
                 />
               </div>
-              <div className="form-actions">
-                <button
-                  onClick={handleSaveSettings}
-                  disabled={updateSettingsMutation.isPending}
-                  className="save-button"
-                >
-                  {updateSettingsMutation.isPending ? 'Speichert...' : 'Einstellungen speichern'}
-                </button>
-              </div>
+              {!isReadonly && (
+                <div className="form-actions">
+                  <button
+                    onClick={handleSaveSettings}
+                    disabled={updateSettingsMutation.isPending}
+                    className="save-button"
+                  >
+                    {updateSettingsMutation.isPending ? 'Speichert...' : 'Einstellungen speichern'}
+                  </button>
+                </div>
+              )}
               <p className="settings-note">
                 Hinweis: Einstellungen werden nur für die laufende Instanz gespeichert.
                 Für persistente Änderungen die .env-Datei bearbeiten.
@@ -299,6 +521,191 @@ export default function Sync() {
             </div>
           ) : (
             <p className="no-logs">Keine Sync-Logs gefunden</p>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'github' && (
+        <div className="sync-github-card">
+          <h3>GitHub Apps Konfiguration</h3>
+          {githubConfigLoading ? (
+            <div>Lade Konfiguration...</div>
+          ) : (
+            <>
+              {/* Zeige Connect Button immer wenn nicht konfiguriert */}
+              {(!githubConfig || !githubConfig.configured) && (
+                <div className="github-connect-section">
+                  <h4>Ein-Klick GitHub Integration</h4>
+                  <p>
+                    Klicken Sie auf den Button und wählen Sie Ihre Repositories aus.
+                    Alles andere passiert automatisch - App-Erstellung, Konfiguration und Installation.
+                  </p>
+                  <button
+                    onClick={() => {
+                      // Öffne in neuem Fenster/Tab für nahtlosen Flow
+                      window.location.href = '/api/sync/github-manifest/authorize'
+                    }}
+                    disabled={manifestAuthorizeMutation.isPending}
+                    className="connect-github-button"
+                  >
+                    {manifestAuthorizeMutation.isPending
+                      ? 'Wird weitergeleitet...'
+                      : '🔗 Mit GitHub verbinden'}
+                  </button>
+                  <div className="github-flow-info">
+                    <small>
+                      ✓ App wird automatisch erstellt<br />
+                      ✓ Sie wählen nur Ihre Repositories aus<br />
+                      ✓ Alles wird automatisch konfiguriert
+                    </small>
+                  </div>
+                  <div className="or-divider">
+                    <span>oder</span>
+                  </div>
+                </div>
+              )}
+              
+              {githubConfig?.configured && (
+                <div className="github-success-message">
+                  ✓ GitHub App ist bereits konfiguriert!
+                </div>
+              )}
+
+              <div className="github-status">
+                <div className="status-row">
+                  <span className="status-label">Status:</span>
+                  <span
+                    className={`status-badge ${githubConfig?.configured ? 'configured' : 'not-configured'}`}
+                  >
+                    {githubConfig?.configured ? 'Konfiguriert' : 'Nicht konfiguriert'}
+                  </span>
+                </div>
+                {githubConfig?.app_id && (
+                  <div className="status-row">
+                    <span className="status-label">App ID:</span>
+                    <span className="status-value">{githubConfig.app_id}</span>
+                  </div>
+                )}
+                {githubConfig?.installation_id && (
+                  <div className="status-row">
+                    <span className="status-label">Installation ID:</span>
+                    <span className="status-value">{githubConfig.installation_id}</span>
+                  </div>
+                )}
+                {githubConfig?.configured && !githubConfig?.has_private_key && (
+                  <div className="status-warning">
+                    ⚠️ Warnung: Private Key Datei fehlt
+                  </div>
+                )}
+              </div>
+
+              {!githubConfig?.configured && (
+                <div className="github-manual-section">
+                  <h4>Manuelle Konfiguration</h4>
+                  <p>Falls Sie bereits eine GitHub App haben, können Sie die Daten manuell eingeben.</p>
+                </div>
+              )}
+
+              <div className="github-form">
+                <div className="form-group">
+                  <label htmlFor="github-app-id">GitHub App ID:</label>
+                  <input
+                    id="github-app-id"
+                    type="text"
+                    value={githubForm.app_id}
+                    onChange={(e) => setGithubForm({ ...githubForm, app_id: e.target.value })}
+                    placeholder="123456"
+                    disabled={!!githubConfig?.app_id}
+                  />
+                  <small>
+                    {githubConfig?.app_id
+                      ? 'App ID wurde automatisch konfiguriert'
+                      : 'Numerische App ID von GitHub'}
+                  </small>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="github-installation-id">Installation ID:</label>
+                  <input
+                    id="github-installation-id"
+                    type="text"
+                    value={githubForm.installation_id}
+                    onChange={(e) =>
+                      setGithubForm({ ...githubForm, installation_id: e.target.value })
+                    }
+                    placeholder="12345678"
+                  />
+                  <small>Numerische Installation ID von GitHub</small>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="github-private-key">Private Key (.pem Datei):</label>
+                  <input
+                    id="github-private-key"
+                    type="file"
+                    accept=".pem"
+                    onChange={handleFileUpload}
+                  />
+                  {githubForm.private_key_file && (
+                    <div className="file-info">
+                      ✓ Datei ausgewählt: {githubForm.private_key_file.name}
+                    </div>
+                  )}
+                  <small>Private Key im PEM-Format (-----BEGIN ... -----END ...)</small>
+                </div>
+
+                {!isReadonly && (
+                  <div className="form-actions">
+                    <button
+                      onClick={handleSaveGithubConfig}
+                      disabled={saveGithubConfigMutation.isPending}
+                      className="save-button"
+                    >
+                      {saveGithubConfigMutation.isPending ? 'Speichert...' : 'Speichern'}
+                    </button>
+                    {githubConfig?.configured && (
+                      <>
+                        <button
+                          onClick={handleTestGithubConfig}
+                          disabled={testGithubConfigMutation.isPending}
+                          className="test-button"
+                        >
+                          {testGithubConfigMutation.isPending ? 'Testet...' : 'Konfiguration testen'}
+                        </button>
+                        <button
+                          onClick={handleDeleteGithubConfig}
+                          disabled={deleteGithubConfigMutation.isPending}
+                          className="delete-button"
+                        >
+                          {deleteGithubConfigMutation.isPending ? 'Löscht...' : 'Löschen'}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                <div className="github-info">
+                  <h4>Hilfe:</h4>
+                  <ul>
+                    <li>
+                      Erstellen Sie eine GitHub App unter{' '}
+                      <a
+                        href="https://github.com/settings/apps/new"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        GitHub Settings
+                      </a>
+                    </li>
+                    <li>Laden Sie den Private Key herunter (.pem Datei)</li>
+                    <li>Installieren Sie die App in Ihrer Organisation/Repository</li>
+                    <li>Geben Sie App ID und Installation ID ein</li>
+                    <li>Laden Sie den Private Key hoch</li>
+                    <li>Testen Sie die Konfiguration mit dem Test-Button</li>
+                  </ul>
+                </div>
+              </div>
+            </>
           )}
         </div>
       )}

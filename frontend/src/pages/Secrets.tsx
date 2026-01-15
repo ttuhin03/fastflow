@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import './Secrets.css'
 
@@ -13,6 +14,7 @@ interface Secret {
 
 export default function Secrets() {
   const queryClient = useQueryClient()
+  const { isReadonly } = useAuth()
   const [isAdding, setIsAdding] = useState(false)
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [formKey, setFormKey] = useState('')
@@ -114,18 +116,20 @@ export default function Secrets() {
     <div className="secrets">
       <div className="secrets-header">
         <h2>Secrets & Parameter</h2>
-        <button
-          onClick={() => {
-            setIsAdding(true)
-            setEditingKey(null)
-            setFormKey('')
-            setFormValue('')
-            setIsParameter(false)
-          }}
-          className="add-button"
-        >
-          + Neues Secret/Parameter
-        </button>
+        {!isReadonly && (
+          <button
+            onClick={() => {
+              setIsAdding(true)
+              setEditingKey(null)
+              setFormKey('')
+              setFormValue('')
+              setIsParameter(false)
+            }}
+            className="add-button"
+          >
+            + Neues Secret/Parameter
+          </button>
+        )}
       </div>
 
       {isAdding && (
@@ -224,20 +228,22 @@ export default function Secrets() {
                 <td>{new Date(secret.created_at).toLocaleString('de-DE')}</td>
                 <td>{new Date(secret.updated_at).toLocaleString('de-DE')}</td>
                 <td>
-                  <div className="action-buttons">
-                    <button
-                      onClick={() => handleEdit(secret)}
-                      className="edit-button"
-                    >
-                      Bearbeiten
-                    </button>
-                    <button
-                      onClick={() => handleDelete(secret.key)}
-                      className="delete-button"
-                    >
-                      Löschen
-                    </button>
-                  </div>
+                  {!isReadonly && (
+                    <div className="action-buttons">
+                      <button
+                        onClick={() => handleEdit(secret)}
+                        className="edit-button"
+                      >
+                        Bearbeiten
+                      </button>
+                      <button
+                        onClick={() => handleDelete(secret.key)}
+                        className="delete-button"
+                      >
+                        Löschen
+                      </button>
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}

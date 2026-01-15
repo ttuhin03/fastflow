@@ -225,6 +225,14 @@ app.include_router(scheduler_api.router, prefix="/api")
 from app.api import auth as auth_api
 app.include_router(auth_api.router, prefix="/api")
 
+# User Management-Endpoints
+from app.api import users as users_api
+app.include_router(users_api.router, prefix="/api")
+
+# Webhook-Endpoints
+from app.api import webhooks as webhooks_api
+app.include_router(webhooks_api.router, prefix="/api")
+
 # Static Files für React-Frontend
 # Prüfe ob static-Verzeichnis existiert (nach Build)
 static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")

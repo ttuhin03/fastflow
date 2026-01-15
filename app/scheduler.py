@@ -317,7 +317,7 @@ def _create_job_function(pipeline_name: str):
         # asyncio.run() verwenden, um die async run_pipeline-Funktion aufzurufen
         # run_pipeline erstellt intern eine Session wenn keine übergeben wird
         try:
-            asyncio.run(run_pipeline(pipeline_name))
+            asyncio.run(run_pipeline(pipeline_name, triggered_by="scheduler"))
             logger.info(f"Geplante Pipeline ausgeführt: {pipeline_name}")
         except Exception as e:
             logger.error(f"Fehler bei geplanter Pipeline-Ausführung {pipeline_name}: {e}")

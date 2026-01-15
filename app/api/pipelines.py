@@ -10,6 +10,7 @@ Dieses Modul enthält alle REST-API-Endpoints für Pipeline-Management:
 from typing import List, Optional, Dict, Any
 from uuid import UUID
 from datetime import datetime, timedelta
+from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import JSONResponse
 from sqlmodel import Session, select, func, text
@@ -18,7 +19,8 @@ from pydantic import BaseModel
 from app.database import get_session
 from app.models import Pipeline, PipelineRun, RunStatus
 from app.executor import run_pipeline
-from app.pipeline_discovery import discover_pipelines, get_pipeline as get_discovered_pipeline, set_pipeline_enabled
+from app.pipeline_discovery import discover_pipelines, get_pipeline as get_discovered_pipeline
+from app.auth import require_write
 
 router = APIRouter(prefix="/pipelines", tags=["pipelines"])
 
@@ -48,6 +50,7 @@ class PipelineStatsResponse(BaseModel):
     successful_runs: int
     failed_runs: int
     success_rate: float
+    webhook_runs: int
 
 
 class DailyStat(BaseModel):
@@ -99,6 +102,7 @@ async def get_pipelines(
                 session.refresh(pipeline)
             
             # Response-Objekt erstellen
+            # Metadata dict enthält bereits webhook_key (wenn gesetzt)
             response = PipelineResponse(
                 name=discovered.name,
                 has_requirements=pipeline.has_requirements,
@@ -107,7 +111,7 @@ async def get_pipelines(
                 successful_runs=pipeline.successful_runs,
                 failed_runs=pipeline.failed_runs,
                 enabled=discovered.is_enabled(),
-                metadata=discovered.metadata.to_dict()
+                metadata=discovered.metadata.to_dict()  # Enthält webhook_key wenn gesetzt
             )
             pipelines_response.append(response)
         
@@ -124,6 +128,7 @@ async def get_pipelines(
 async def start_pipeline(
     name: str,
     request: RunPipelineRequest,
+    current_user = Depends(require_write),
     session: Session = Depends(get_session)
 ) -> Dict[str, Any]:
     """
@@ -141,12 +146,13 @@ async def start_pipeline(
         HTTPException: Wenn Pipeline nicht existiert, deaktiviert ist oder Concurrency-Limit erreicht ist
     """
     try:
-        # Pipeline-Start
+        # Pipeline-Start (manuell getriggert)
         run = await run_pipeline(
             name=name,
             env_vars=request.env_vars,
             parameters=request.parameters,
-            session=session
+            session=session,
+            triggered_by="manual"
         )
         
         return {
@@ -278,13 +284,15 @@ async def get_pipeline_stats(
         total_runs=pipeline.total_runs,
         successful_runs=pipeline.successful_runs,
         failed_runs=pipeline.failed_runs,
-        success_rate=success_rate
+        success_rate=success_rate,
+        webhook_runs=pipeline.webhook_runs
     )
 
 
 @router.post("/{name}/stats/reset", response_model=Dict[str, str])
 async def reset_pipeline_stats(
     name: str,
+    current_user = Depends(require_write),
     session: Session = Depends(get_session)
 ) -> Dict[str, str]:
     """
@@ -323,6 +331,7 @@ async def reset_pipeline_stats(
     pipeline.total_runs = 0
     pipeline.successful_runs = 0
     pipeline.failed_runs = 0
+    pipeline.webhook_runs = 0
     
     session.add(pipeline)
     session.commit()
@@ -330,67 +339,6 @@ async def reset_pipeline_stats(
     return {
         "message": f"Statistiken für Pipeline '{name}' wurden zurückgesetzt"
     }
-
-
-class PipelineEnabledRequest(BaseModel):
-    """Request-Model für Pipeline Enable/Disable."""
-    enabled: bool
-
-
-@router.put("/{name}/enabled", response_model=Dict[str, Any])
-async def set_pipeline_enabled_endpoint(
-    name: str,
-    request: PipelineEnabledRequest,
-    session: Session = Depends(get_session)
-) -> Dict[str, Any]:
-    """
-    Aktiviert oder deaktiviert eine Pipeline.
-    
-    Aktualisiert das `enabled` Feld in pipeline.json oder {pipeline_name}.json.
-    
-    Args:
-        name: Name der Pipeline
-        request: Request-Body mit enabled (bool)
-        session: SQLModel Session
-        
-    Returns:
-        Bestätigungs-Message
-        
-    Raises:
-        HTTPException: Wenn Pipeline nicht existiert oder Datei nicht geschrieben werden kann
-    """
-    # Prüfe ob Pipeline existiert
-    discovered = get_discovered_pipeline(name)
-    if discovered is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Pipeline nicht gefunden: {name}"
-        )
-    
-    try:
-        # Pipeline enabled/disabled setzen
-        set_pipeline_enabled(name, request.enabled)
-        
-        return {
-            "message": f"Pipeline '{name}' wurde {'aktiviert' if request.enabled else 'deaktiviert'}",
-            "pipeline_name": name,
-            "enabled": request.enabled
-        }
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
-    except IOError as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Fehler beim Aktualisieren der Pipeline-Metadaten: {str(e)}"
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unerwarteter Fehler: {str(e)}"
-        )
 
 
 @router.get("/{name}/daily-stats", response_model=DailyStatsResponse)
@@ -466,8 +414,11 @@ async def get_pipeline_daily_stats(
             )
     else:
         # Standard: Letzte N Tage
-        end_dt = datetime.utcnow()
-        start_dt = end_dt - timedelta(days=days)
+        # Setze end_dt auf Ende des heutigen Tages (23:59:59.999999) in UTC
+        # um sicherzustellen, dass alle Runs von heute erfasst werden
+        now = datetime.utcnow()
+        end_dt = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+        start_dt = (now - timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)
     
     # Query: Alle Runs im Zeitraum abrufen
     stmt = (
@@ -479,21 +430,34 @@ async def get_pipeline_daily_stats(
     
     runs = session.exec(stmt).all()
     
-    # In Python nach Datum gruppieren und aggregieren
+    # Debug: Log heute's Datum und Anzahl gefundener Runs
+    from datetime import date as date_type
     from collections import defaultdict
+    import logging
+    logger = logging.getLogger(__name__)
+    today_utc = date_type.today()  # UTC date
+    logger.info(f"Daily stats for {name}: Found {len(runs)} runs, today UTC: {today_utc}, start_dt: {start_dt}, end_dt: {end_dt}")
     
+    # In Python nach Datum gruppieren und aggregieren
     daily_data = defaultdict(lambda: {"total": 0, "successful": 0, "failed": 0})
     
     for run in runs:
-        # Datum extrahieren (nur Datum, ohne Zeit)
+        # Datum extrahieren (nur Datum, ohne Zeit) - UTC-Datum verwenden
+        # started_at ist bereits in UTC gespeichert
         run_date = run.started_at.date()
         date_str = run_date.isoformat()
         
+        # Debug: Log Runs von heute
+        if run_date == today_utc:
+            logger.info(f"Today's run found: {run.id}, status: {run.status}, started_at: {run.started_at}")
+        
+        # Zähle ALLE Runs, unabhängig vom Status (auch RUNNING/PENDING)
         daily_data[date_str]["total"] += 1
         if run.status == RunStatus.SUCCESS:
             daily_data[date_str]["successful"] += 1
         elif run.status == RunStatus.FAILED:
             daily_data[date_str]["failed"] += 1
+        # RUNNING und PENDING Runs werden als "total" gezählt, aber nicht als successful/failed
     
     # In DailyStat-Objekte umwandeln und sortieren
     daily_stats = []
@@ -517,6 +481,76 @@ async def get_pipeline_daily_stats(
         ))
     
     return DailyStatsResponse(daily_stats=daily_stats)
+
+
+class PipelineSourceFilesResponse(BaseModel):
+    """Response-Model für Pipeline-Quelldateien."""
+    main_py: Optional[str] = None
+    requirements_txt: Optional[str] = None
+    pipeline_json: Optional[str] = None
+
+
+@router.get("/{name}/source", response_model=PipelineSourceFilesResponse)
+async def get_pipeline_source_files(
+    name: str
+) -> PipelineSourceFilesResponse:
+    """
+    Gibt die Quelldateien einer Pipeline zurück (main.py, requirements.txt, pipeline.json).
+    
+    Args:
+        name: Name der Pipeline
+        
+    Returns:
+        Dictionary mit den Quelldateien (als Strings)
+        
+    Raises:
+        HTTPException: Wenn Pipeline nicht existiert
+    """
+    # Prüfe ob Pipeline existiert
+    discovered = get_discovered_pipeline(name)
+    if discovered is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Pipeline nicht gefunden: {name}"
+        )
+    
+    pipeline_dir = discovered.path
+    result = PipelineSourceFilesResponse()
+    
+    # main.py lesen
+    main_py_path = pipeline_dir / "main.py"
+    if main_py_path.exists() and main_py_path.is_file():
+        try:
+            with open(main_py_path, "r", encoding="utf-8") as f:
+                result.main_py = f.read()
+        except Exception as e:
+            # Fehler beim Lesen: None lassen, aber nicht abbrechen
+            pass
+    
+    # requirements.txt lesen
+    requirements_path = pipeline_dir / "requirements.txt"
+    if requirements_path.exists() and requirements_path.is_file():
+        try:
+            with open(requirements_path, "r", encoding="utf-8") as f:
+                result.requirements_txt = f.read()
+        except Exception as e:
+            # Fehler beim Lesen: None lassen, aber nicht abbrechen
+            pass
+    
+    # pipeline.json lesen (oder {pipeline_name}.json)
+    metadata_path = pipeline_dir / "pipeline.json"
+    if not metadata_path.exists():
+        metadata_path = pipeline_dir / f"{name}.json"
+    
+    if metadata_path.exists() and metadata_path.is_file():
+        try:
+            with open(metadata_path, "r", encoding="utf-8") as f:
+                result.pipeline_json = f.read()
+        except Exception as e:
+            # Fehler beim Lesen: None lassen, aber nicht abbrechen
+            pass
+    
+    return result
 
 
 @router.get("/daily-stats/all", response_model=DailyStatsResponse)
@@ -577,8 +611,11 @@ async def get_all_pipelines_daily_stats(
             )
     else:
         # Standard: Letzte N Tage
-        end_dt = datetime.utcnow()
-        start_dt = end_dt - timedelta(days=days)
+        # Setze end_dt auf Ende des heutigen Tages (23:59:59.999999) in UTC
+        # um sicherzustellen, dass alle Runs von heute erfasst werden
+        now = datetime.utcnow()
+        end_dt = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+        start_dt = (now - timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)
     
     # Query: Alle Runs im Zeitraum abrufen (alle Pipelines)
     stmt = (
@@ -589,21 +626,34 @@ async def get_all_pipelines_daily_stats(
     
     runs = session.exec(stmt).all()
     
-    # In Python nach Datum gruppieren und aggregieren
+    # Debug: Log heute's Datum und Anzahl gefundener Runs
+    from datetime import date as date_type
     from collections import defaultdict
+    import logging
+    logger = logging.getLogger(__name__)
+    today_utc = date_type.today()  # UTC date
+    logger.info(f"All pipelines daily stats: Found {len(runs)} runs, today UTC: {today_utc}, start_dt: {start_dt}, end_dt: {end_dt}")
     
+    # In Python nach Datum gruppieren und aggregieren
     daily_data = defaultdict(lambda: {"total": 0, "successful": 0, "failed": 0})
     
     for run in runs:
-        # Datum extrahieren (nur Datum, ohne Zeit)
+        # Datum extrahieren (nur Datum, ohne Zeit) - UTC-Datum verwenden
+        # started_at ist bereits in UTC gespeichert
         run_date = run.started_at.date()
         date_str = run_date.isoformat()
         
+        # Debug: Log Runs von heute
+        if run_date == today_utc:
+            logger.info(f"Today's run found: {run.id}, pipeline: {run.pipeline_name}, status: {run.status}, started_at: {run.started_at}")
+        
+        # Zähle ALLE Runs, unabhängig vom Status (auch RUNNING/PENDING)
         daily_data[date_str]["total"] += 1
         if run.status == RunStatus.SUCCESS:
             daily_data[date_str]["successful"] += 1
         elif run.status == RunStatus.FAILED:
             daily_data[date_str]["failed"] += 1
+        # RUNNING und PENDING Runs werden als "total" gezählt, aber nicht als successful/failed
     
     # In DailyStat-Objekte umwandeln und sortieren
     daily_stats = []

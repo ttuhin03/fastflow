@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import { 
   MdPlayArrow, 
@@ -42,6 +43,7 @@ interface SyncStatus {
 export default function Dashboard() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { isReadonly } = useAuth()
   const [startingPipeline, setStartingPipeline] = useState<string | null>(null)
 
   const { data: pipelines, isLoading } = useQuery<Pipeline[]>({
@@ -66,9 +68,19 @@ export default function Dashboard() {
     queryKey: ['all-pipelines-daily-stats'],
     queryFn: async () => {
       const response = await apiClient.get('/pipelines/daily-stats/all?days=365')
-      return response.data
+      return response.data as { 
+        daily_stats?: Array<{ 
+          date: string
+          total_runs: number
+          successful_runs: number
+          failed_runs: number
+          success_rate: number
+        }> 
+      }
     },
-    refetchInterval: 30000,
+    refetchInterval: 10000, // Refresh every 10 seconds to show new runs faster
+    staleTime: 0, // Always consider data stale to ensure fresh data
+    gcTime: 0, // Don't cache to always get fresh data (was cacheTime in v4)
   })
 
   const startPipelineMutation = useMutation({
@@ -79,9 +91,13 @@ export default function Dashboard() {
       })
       return response.data
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ['pipelines'] })
       queryClient.invalidateQueries({ queryKey: ['runs'] })
+      queryClient.invalidateQueries({ queryKey: ['all-pipelines-daily-stats'] })
+      queryClient.invalidateQueries({ queryKey: ['pipeline-daily-stats'] })
+      // Force immediate refetch of daily stats with fresh data
+      await queryClient.refetchQueries({ queryKey: ['all-pipelines-daily-stats'], exact: false })
       setStartingPipeline(null)
       navigate(`/runs/${data.id}`)
     },
@@ -106,22 +122,6 @@ export default function Dashboard() {
     },
   })
 
-  const togglePipelineEnabledMutation = useMutation({
-    mutationFn: async ({ name, enabled }: { name: string; enabled: boolean }) => {
-      const response = await apiClient.put(`/pipelines/${name}/enabled`, { enabled })
-      return response.data
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['pipelines'] })
-    },
-    onError: (error: any) => {
-      alert(`Fehler beim Umschalten: ${error.response?.data?.detail || error.message}`)
-    },
-  })
-
-  const handleTogglePipeline = (name: string, currentEnabled: boolean) => {
-    togglePipelineEnabledMutation.mutate({ name, enabled: !currentEnabled })
-  }
 
   const handleStartPipeline = (name: string) => {
     if (startingPipeline) return
@@ -156,16 +156,18 @@ export default function Dashboard() {
 
   return (
     <div className="dashboard">
-      <div className="dashboard-header">
-        <button
-          onClick={handleSync}
-          disabled={syncMutation.isPending}
-          className="btn btn-primary sync-button"
-        >
-          <MdSync />
-          {syncMutation.isPending ? 'Sync läuft...' : 'Git Sync'}
-        </button>
-      </div>
+      {!isReadonly && (
+        <div className="dashboard-header">
+          <button
+            onClick={handleSync}
+            disabled={syncMutation.isPending}
+            className="btn btn-primary sync-button"
+          >
+            <MdSync />
+            {syncMutation.isPending ? 'Sync läuft...' : 'Git Sync'}
+          </button>
+        </div>
+      )}
 
       {syncStatus && (
         <div className="sync-status card">
@@ -228,6 +230,10 @@ export default function Dashboard() {
           <div className="dashboard-calendar-wrapper">
             <CalendarHeatmap dailyStats={allPipelinesDailyStats.daily_stats} days={365} />
           </div>
+          {/* Debug: Zeige die letzten 5 Tage */}
+          <div style={{ marginTop: '10px', fontSize: '12px', color: '#666' }}>
+            Letzte 5 Tage: {allPipelinesDailyStats.daily_stats.slice(-5).map((s: { date: string; total_runs: number; successful_runs: number; failed_runs: number; success_rate: number }) => `${s.date}: ${s.total_runs} runs`).join(', ')}
+          </div>
         </div>
       )}
 
@@ -244,20 +250,9 @@ export default function Dashboard() {
               <div key={pipeline.name} className="pipeline-card card">
                 <div className="pipeline-header">
                   <h4 className="pipeline-name">{pipeline.name}</h4>
-                  <div className="pipeline-status-controls">
-                    <label className="toggle-switch">
-                      <input
-                        type="checkbox"
-                        checked={pipeline.enabled}
-                        onChange={() => handleTogglePipeline(pipeline.name, pipeline.enabled)}
-                        disabled={togglePipelineEnabledMutation.isPending}
-                      />
-                      <span className="toggle-slider"></span>
-                    </label>
-                    <span className={`badge ${pipeline.enabled ? 'badge-success' : 'badge-secondary'}`}>
-                      {pipeline.enabled ? 'Aktiv' : 'Inaktiv'}
-                    </span>
-                  </div>
+                  <span className={`badge ${pipeline.enabled ? 'badge-success' : 'badge-secondary'}`}>
+                    {pipeline.enabled ? 'Aktiv' : 'Inaktiv'}
+                  </span>
                 </div>
                 
                 {pipeline.metadata.description && (
@@ -315,14 +310,16 @@ export default function Dashboard() {
                 </div>
                 
                 <div className="pipeline-actions">
-                  <button
-                    onClick={() => handleStartPipeline(pipeline.name)}
-                    disabled={!pipeline.enabled || startingPipeline === pipeline.name}
-                    className="btn btn-success start-button"
-                  >
-                    <MdPlayArrow />
-                    {startingPipeline === pipeline.name ? 'Startet...' : 'Starten'}
-                  </button>
+                  {!isReadonly && (
+                    <button
+                      onClick={() => handleStartPipeline(pipeline.name)}
+                      disabled={!pipeline.enabled || startingPipeline === pipeline.name}
+                      className="btn btn-success start-button"
+                    >
+                      <MdPlayArrow />
+                      {startingPipeline === pipeline.name ? 'Startet...' : 'Starten'}
+                    </button>
+                  )}
                   <button
                     onClick={() => navigate(`/pipelines/${pipeline.name}`)}
                     className="btn btn-outlined details-button"

@@ -24,6 +24,7 @@ from app.scheduler import (
     get_scheduler
 )
 from app.pipeline_discovery import get_pipeline
+from app.auth import require_write
 
 router = APIRouter(prefix="/scheduler", tags=["scheduler"])
 
@@ -126,6 +127,7 @@ async def get_job_by_id(
 @router.post("/jobs", response_model=JobResponse, status_code=status.HTTP_201_CREATED)
 async def create_job(
     job_data: JobCreate,
+    current_user = Depends(require_write),
     session: Session = Depends(get_session)
 ) -> JobResponse:
     """
@@ -196,6 +198,7 @@ async def create_job(
 async def update_job_by_id(
     job_id: UUID,
     job_data: JobUpdate,
+    current_user = Depends(require_write),
     session: Session = Depends(get_session)
 ) -> JobResponse:
     """
@@ -324,6 +327,7 @@ async def get_job_runs(
 @router.delete("/jobs/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_job_by_id(
     job_id: UUID,
+    current_user = Depends(require_write),
     session: Session = Depends(get_session)
 ) -> None:
     """

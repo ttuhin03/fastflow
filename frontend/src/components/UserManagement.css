@@ -1,0 +1,269 @@
+.user-management-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm, 8px);
+  padding: var(--spacing-sm, 8px) var(--spacing-md, 16px);
+  background-color: var(--color-primary, #007bff);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md, 4px);
+  cursor: pointer;
+  font-size: var(--font-size-base, 14px);
+  font-weight: var(--font-weight-medium, 500);
+  transition: all var(--transition-base, 0.2s);
+  width: 100%;
+}
+
+.user-management-btn:hover {
+  background-color: var(--color-primary-hover, #0056b3);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.user-management-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.user-management-modal {
+  background: white;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 1000px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.user-management-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.user-management-header h2 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.close-btn:hover {
+  background: #f0f0f0;
+}
+
+.user-management-actions {
+  display: flex;
+  gap: 12px;
+  padding: 20px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.user-form {
+  padding: 20px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.user-form h3 {
+  margin-top: 0;
+  margin-bottom: 20px;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 500;
+  color: #333;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: var(--primary-color, #007bff);
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.users-list {
+  padding: 20px;
+}
+
+.users-list h3 {
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+.users-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.users-table thead {
+  background: #f5f5f5;
+}
+
+.users-table th,
+.users-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.users-table th {
+  font-weight: 600;
+  color: #333;
+}
+
+.users-table tr.blocked {
+  opacity: 0.6;
+  background: #f9f9f9;
+}
+
+.user-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-icon {
+  background: none;
+  border: 1px solid #ddd;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #666;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  font-size: 18px;
+}
+
+.btn-icon:hover {
+  background: #f0f0f0;
+  border-color: #999;
+}
+
+.btn-icon.btn-danger {
+  color: #dc3545;
+  border-color: #dc3545;
+}
+
+.btn-icon.btn-danger:hover {
+  background: #dc3545;
+  color: white;
+}
+
+.badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.badge-secondary {
+  background: #6c757d;
+  color: white;
+}
+
+.badge-warning {
+  background: #ffc107;
+  color: #000;
+}
+
+.badge-danger {
+  background: #dc3545;
+  color: white;
+}
+
+.badge-success {
+  background: #28a745;
+  color: white;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+}
+
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background: var(--primary-color, #007bff);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: var(--primary-hover, #0056b3);
+}
+
+.btn-success {
+  background: #28a745;
+  color: white;
+}
+
+.btn-success:hover {
+  background: #218838;
+}
+
+.btn-secondary {
+  background: #6c757d;
+  color: white;
+}
+
+.btn-secondary:hover {
+  background: #5a6268;
+}

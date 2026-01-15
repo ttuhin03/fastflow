@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import './Scheduler.css'
 
@@ -18,6 +19,7 @@ interface Job {
 
 export default function Scheduler() {
   const queryClient = useQueryClient()
+  const { isReadonly } = useAuth()
   const [isAdding, setIsAdding] = useState(false)
   const [editingJob, setEditingJob] = useState<Job | null>(null)
   const [expandedJob, setExpandedJob] = useState<string | null>(null)
@@ -174,16 +176,18 @@ export default function Scheduler() {
     <div className="scheduler">
       <div className="scheduler-header">
         <h2>Scheduler</h2>
-        <button
-          onClick={() => {
-            setIsAdding(true)
-            setEditingJob(null)
-            resetForm()
-          }}
-          className="add-button"
-        >
-          + Neuer Job
-        </button>
+        {!isReadonly && (
+          <button
+            onClick={() => {
+              setIsAdding(true)
+              setEditingJob(null)
+              resetForm()
+            }}
+            className="add-button"
+          >
+            + Neuer Job
+          </button>
+        )}
       </div>
 
       {isAdding && (
@@ -288,13 +292,20 @@ export default function Scheduler() {
                     <code className="trigger-value">{job.trigger_value}</code>
                   </td>
                   <td>
-                    <button
-                      onClick={() => handleToggleEnabled(job)}
-                      className={`status-toggle ${job.enabled ? 'enabled' : 'disabled'}`}
-                      disabled={toggleEnabledMutation.isPending}
-                    >
-                      {job.enabled ? 'Aktiv' : 'Inaktiv'}
-                    </button>
+                    {!isReadonly && (
+                      <button
+                        onClick={() => handleToggleEnabled(job)}
+                        className={`status-toggle ${job.enabled ? 'enabled' : 'disabled'}`}
+                        disabled={toggleEnabledMutation.isPending}
+                      >
+                        {job.enabled ? 'Aktiv' : 'Inaktiv'}
+                      </button>
+                    )}
+                    {isReadonly && (
+                      <span className={`status-badge ${job.enabled ? 'enabled' : 'disabled'}`}>
+                        {job.enabled ? 'Aktiv' : 'Inaktiv'}
+                      </span>
+                    )}
                   </td>
                   <td>
                     {job.next_run_time ? (
@@ -322,18 +333,22 @@ export default function Scheduler() {
                       >
                         {expandedJob === job.id ? 'Details ▲' : 'Details ▼'}
                       </button>
-                      <button
-                        onClick={() => handleEdit(job)}
-                        className="edit-button"
-                      >
-                        Bearbeiten
-                      </button>
-                      <button
-                        onClick={() => handleDelete(job.id, job.pipeline_name)}
-                        className="delete-button"
-                      >
-                        Löschen
-                      </button>
+                      {!isReadonly && (
+                        <>
+                          <button
+                            onClick={() => handleEdit(job)}
+                            className="edit-button"
+                          >
+                            Bearbeiten
+                          </button>
+                          <button
+                            onClick={() => handleDelete(job.id, job.pipeline_name)}
+                            className="delete-button"
+                          >
+                            Löschen
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>

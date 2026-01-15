@@ -1,7 +1,11 @@
 {
   "enabled": true,
   "description": "Test-Pipeline mit externen Dependencies (requests) zum Testen des Pre-Heating",
-  "tags": ["test", "dependencies", "pre-heat"],
+  "tags": [
+    "test",
+    "dependencies",
+    "pre-heat"
+  ],
   "timeout": 120,
   "retry_attempts": 2,
   "cpu_hard_limit": 2,
@@ -12,5 +16,6 @@
     "API_URL": "https://httpbin.org/get",
     "REQUEST_TIMEOUT": "10",
     "LOG_LEVEL": "DEBUG"
-  }
+  },
+  "webhook_key": "test"
 }
