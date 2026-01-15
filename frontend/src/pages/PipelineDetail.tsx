@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
 import apiClient from '../api/client'
+import CalendarHeatmap from '../components/CalendarHeatmap'
 import './PipelineDetail.css'
 
 interface PipelineStats {
@@ -59,6 +60,15 @@ export default function PipelineDetail() {
     queryKey: ['pipeline-runs', name],
     queryFn: async () => {
       const response = await apiClient.get(`/pipelines/${name}/runs?limit=10`)
+      return response.data
+    },
+    enabled: !!name,
+  })
+
+  const { data: dailyStats } = useQuery({
+    queryKey: ['pipeline-daily-stats', name],
+    queryFn: async () => {
+      const response = await apiClient.get(`/pipelines/${name}/daily-stats?days=365`)
       return response.data
     },
     enabled: !!name,
@@ -268,6 +278,10 @@ export default function PipelineDetail() {
             </div>
           </div>
         </div>
+      )}
+
+      {dailyStats && dailyStats.daily_stats && dailyStats.daily_stats.length > 0 && (
+        <CalendarHeatmap dailyStats={dailyStats.daily_stats} days={365} />
       )}
 
       {runs && runs.length > 0 && (

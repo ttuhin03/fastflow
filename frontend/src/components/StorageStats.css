@@ -45,6 +45,11 @@
   flex-shrink: 0;
 }
 
+.storage-stat-card .stat-icon.database-icon {
+  background-color: rgba(156, 39, 176, 0.15);
+  color: #9c27b0;
+}
+
 .storage-stat-card .stat-content {
   flex: 1;
   min-width: 0;
@@ -87,6 +92,29 @@
   margin: 0;
 }
 
+.storage-stat-card .stat-detail-small {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--spacing-xs) 0;
+  opacity: 0.8;
+}
+
+.storage-stat-card .stat-detail.percentage {
+  font-weight: var(--font-weight-medium);
+}
+
+.storage-stat-card .stat-detail.percentage.low {
+  color: var(--color-success);
+}
+
+.storage-stat-card .stat-detail.percentage.medium {
+  color: var(--color-warning);
+}
+
+.storage-stat-card .stat-detail.percentage.high {
+  color: var(--color-error);
+}
+
 .disk-usage-bar {
   width: 100%;
   height: 8px;
@@ -101,6 +129,10 @@
   background: linear-gradient(90deg, var(--color-primary), var(--color-primary-light));
   border-radius: var(--radius-full);
   transition: width var(--transition-slow);
+}
+
+.disk-usage-fill.database {
+  background: linear-gradient(90deg, #9c27b0, #ba68c8);
 }
 
 .spinner {

@@ -14,7 +14,9 @@ cryptography
 PyJWT
 requests
 httpx
+aiosmtplib
 psycopg2-binary
+psutil
 pytest
 pytest-asyncio
 pytest-cov

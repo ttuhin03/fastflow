@@ -608,6 +608,11 @@ async def _run_container_task(
         # Pipeline-Statistiken aktualisieren (atomar)
         await _update_pipeline_stats(pipeline.name, exit_code_value == 0, session)
         
+        # Benachrichtigungen senden (nur bei Fehlern)
+        if exit_code_value != 0:
+            from app.notifications import send_notifications
+            await send_notifications(run, RunStatus.FAILED)
+        
     except Exception as e:
         logger.error(f"Fehler bei Container-Ausführung für Run {run_id}: {e}", exc_info=True)
         
@@ -622,6 +627,10 @@ async def _run_container_task(
             
             # Pipeline-Statistiken aktualisieren (Fehler)
             await _update_pipeline_stats(run.pipeline_name, False, session)
+            
+            # Benachrichtigungen senden
+            from app.notifications import send_notifications
+            await send_notifications(run, RunStatus.FAILED)
         
     finally:
         # Container-Cleanup
@@ -1165,6 +1174,10 @@ async def cancel_run(run_id: UUID, session: Session) -> bool:
             run.finished_at = datetime.utcnow()
             session.add(run)
             session.commit()
+            
+            # Benachrichtigungen senden
+            from app.notifications import send_notifications
+            await send_notifications(run, RunStatus.INTERRUPTED)
         
         return True
         

@@ -9,9 +9,10 @@ Dieses Modul enthält alle REST-API-Endpoints für Pipeline-Management:
 
 from typing import List, Optional, Dict, Any
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime, timedelta
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import JSONResponse
-from sqlmodel import Session, select
+from sqlmodel import Session, select, func, text
 from pydantic import BaseModel
 
 from app.database import get_session
@@ -47,6 +48,20 @@ class PipelineStatsResponse(BaseModel):
     successful_runs: int
     failed_runs: int
     success_rate: float
+
+
+class DailyStat(BaseModel):
+    """Response-Model für tägliche Pipeline-Statistiken."""
+    date: str  # ISO format: YYYY-MM-DD
+    total_runs: int
+    successful_runs: int
+    failed_runs: int
+    success_rate: float
+
+
+class DailyStatsResponse(BaseModel):
+    """Response-Model für tägliche Pipeline-Statistiken."""
+    daily_stats: List[DailyStat]
 
 
 @router.get("", response_model=List[PipelineResponse])
@@ -376,3 +391,239 @@ async def set_pipeline_enabled_endpoint(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Unerwarteter Fehler: {str(e)}"
         )
+
+
+@router.get("/{name}/daily-stats", response_model=DailyStatsResponse)
+async def get_pipeline_daily_stats(
+    name: str,
+    days: int = Query(365, ge=1, le=3650, description="Anzahl der Tage zurück (Standard: 365, Max: 3650)"),
+    start_date: Optional[str] = Query(None, description="Startdatum für Filterung (ISO-Format: YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="Enddatum für Filterung (ISO-Format: YYYY-MM-DD)"),
+    session: Session = Depends(get_session)
+) -> DailyStatsResponse:
+    """
+    Gibt tägliche Pipeline-Statistiken zurück, gruppiert nach Datum.
+    
+    Aggregiert Pipeline-Runs nach Tag und berechnet Erfolgsraten pro Tag.
+    
+    Args:
+        name: Name der Pipeline
+        days: Anzahl der Tage zurück (Standard: 365)
+        start_date: Optionales Startdatum (ISO-Format: YYYY-MM-DD)
+        end_date: Optionales Enddatum (ISO-Format: YYYY-MM-DD)
+        session: SQLModel Session
+        
+    Returns:
+        Tägliche Statistiken mit Erfolgsraten
+        
+    Raises:
+        HTTPException: Wenn Pipeline nicht existiert oder Datum ungültig ist
+    """
+    # Prüfe ob Pipeline existiert
+    discovered = get_discovered_pipeline(name)
+    if discovered is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Pipeline nicht gefunden: {name}"
+        )
+    
+    # Datum-Bereich bestimmen
+    if start_date and end_date:
+        try:
+            start_dt = datetime.fromisoformat(start_date)
+            end_dt = datetime.fromisoformat(end_date)
+            # End-Datum auf Ende des Tages setzen (23:59:59)
+            end_dt = end_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+            if start_dt > end_dt:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Startdatum muss vor Enddatum liegen"
+                )
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Ungültiges Datumsformat. Erwartet: YYYY-MM-DD"
+            )
+    elif start_date:
+        try:
+            start_dt = datetime.fromisoformat(start_date)
+            end_dt = datetime.utcnow()
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Ungültiges Datumsformat. Erwartet: YYYY-MM-DD"
+            )
+    elif end_date:
+        try:
+            end_dt = datetime.fromisoformat(end_date)
+            # End-Datum auf Ende des Tages setzen
+            end_dt = end_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+            start_dt = end_dt - timedelta(days=days)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Ungültiges Datumsformat. Erwartet: YYYY-MM-DD"
+            )
+    else:
+        # Standard: Letzte N Tage
+        end_dt = datetime.utcnow()
+        start_dt = end_dt - timedelta(days=days)
+    
+    # Query: Alle Runs im Zeitraum abrufen
+    stmt = (
+        select(PipelineRun)
+        .where(PipelineRun.pipeline_name == name)
+        .where(PipelineRun.started_at >= start_dt)
+        .where(PipelineRun.started_at <= end_dt)
+    )
+    
+    runs = session.exec(stmt).all()
+    
+    # In Python nach Datum gruppieren und aggregieren
+    from collections import defaultdict
+    
+    daily_data = defaultdict(lambda: {"total": 0, "successful": 0, "failed": 0})
+    
+    for run in runs:
+        # Datum extrahieren (nur Datum, ohne Zeit)
+        run_date = run.started_at.date()
+        date_str = run_date.isoformat()
+        
+        daily_data[date_str]["total"] += 1
+        if run.status == RunStatus.SUCCESS:
+            daily_data[date_str]["successful"] += 1
+        elif run.status == RunStatus.FAILED:
+            daily_data[date_str]["failed"] += 1
+    
+    # In DailyStat-Objekte umwandeln und sortieren
+    daily_stats = []
+    for date_str in sorted(daily_data.keys()):
+        data = daily_data[date_str]
+        total = data["total"]
+        successful = data["successful"]
+        failed = data["failed"]
+        
+        # Erfolgsrate berechnen
+        success_rate = 0.0
+        if total > 0:
+            success_rate = (successful / total) * 100.0
+        
+        daily_stats.append(DailyStat(
+            date=date_str,
+            total_runs=total,
+            successful_runs=successful,
+            failed_runs=failed,
+            success_rate=success_rate
+        ))
+    
+    return DailyStatsResponse(daily_stats=daily_stats)
+
+
+@router.get("/daily-stats/all", response_model=DailyStatsResponse)
+async def get_all_pipelines_daily_stats(
+    days: int = Query(365, ge=1, le=3650, description="Anzahl der Tage zurück (Standard: 365, Max: 3650)"),
+    start_date: Optional[str] = Query(None, description="Startdatum für Filterung (ISO-Format: YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="Enddatum für Filterung (ISO-Format: YYYY-MM-DD)"),
+    session: Session = Depends(get_session)
+) -> DailyStatsResponse:
+    """
+    Gibt tägliche Statistiken für alle Pipelines kombiniert zurück.
+    
+    Aggregiert Pipeline-Runs aller Pipelines nach Tag und berechnet Erfolgsraten pro Tag.
+    
+    Args:
+        days: Anzahl der Tage zurück (Standard: 365)
+        start_date: Optionales Startdatum (ISO-Format: YYYY-MM-DD)
+        end_date: Optionales Enddatum (ISO-Format: YYYY-MM-DD)
+        session: SQLModel Session
+        
+    Returns:
+        Tägliche Statistiken mit Erfolgsraten für alle Pipelines kombiniert
+    """
+    # Datum-Bereich bestimmen
+    if start_date and end_date:
+        try:
+            start_dt = datetime.fromisoformat(start_date)
+            end_dt = datetime.fromisoformat(end_date)
+            end_dt = end_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+            if start_dt > end_dt:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Startdatum muss vor Enddatum liegen"
+                )
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Ungültiges Datumsformat. Erwartet: YYYY-MM-DD"
+            )
+    elif start_date:
+        try:
+            start_dt = datetime.fromisoformat(start_date)
+            end_dt = datetime.utcnow()
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Ungültiges Datumsformat. Erwartet: YYYY-MM-DD"
+            )
+    elif end_date:
+        try:
+            end_dt = datetime.fromisoformat(end_date)
+            end_dt = end_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+            start_dt = end_dt - timedelta(days=days)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Ungültiges Datumsformat. Erwartet: YYYY-MM-DD"
+            )
+    else:
+        # Standard: Letzte N Tage
+        end_dt = datetime.utcnow()
+        start_dt = end_dt - timedelta(days=days)
+    
+    # Query: Alle Runs im Zeitraum abrufen (alle Pipelines)
+    stmt = (
+        select(PipelineRun)
+        .where(PipelineRun.started_at >= start_dt)
+        .where(PipelineRun.started_at <= end_dt)
+    )
+    
+    runs = session.exec(stmt).all()
+    
+    # In Python nach Datum gruppieren und aggregieren
+    from collections import defaultdict
+    
+    daily_data = defaultdict(lambda: {"total": 0, "successful": 0, "failed": 0})
+    
+    for run in runs:
+        # Datum extrahieren (nur Datum, ohne Zeit)
+        run_date = run.started_at.date()
+        date_str = run_date.isoformat()
+        
+        daily_data[date_str]["total"] += 1
+        if run.status == RunStatus.SUCCESS:
+            daily_data[date_str]["successful"] += 1
+        elif run.status == RunStatus.FAILED:
+            daily_data[date_str]["failed"] += 1
+    
+    # In DailyStat-Objekte umwandeln und sortieren
+    daily_stats = []
+    for date_str in sorted(daily_data.keys()):
+        data = daily_data[date_str]
+        total = data["total"]
+        successful = data["successful"]
+        failed = data["failed"]
+        
+        # Erfolgsrate berechnen
+        success_rate = 0.0
+        if total > 0:
+            success_rate = (successful / total) * 100.0
+        
+        daily_stats.append(DailyStat(
+            date=date_str,
+            total_runs=total,
+            successful_runs=successful,
+            failed_runs=failed,
+            success_rate=success_rate
+        ))
+    
+    return DailyStatsResponse(daily_stats=daily_stats)
