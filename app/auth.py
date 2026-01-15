@@ -399,8 +399,9 @@ def authenticate_user(session: Session, username: str, password: str) -> Optiona
     """
     Authentifiziert einen Benutzer mit Benutzername und Passwort.
     
-    Repariert automatisch ungültige Hashes beim Login, falls der Hash
-    nicht im erwarteten Format ist (z.B. nach einem Hash-Format-Wechsel).
+    Repariert automatisch ungültige Hashes für den Standard-Admin-Nutzer,
+    wenn das eingegebene Passwort mit dem Config-Passwort übereinstimmt.
+    Dies ermöglicht die Wiederherstellung nach Hash-Korruption.
     
     Args:
         session: Datenbank-Session
@@ -427,22 +428,33 @@ def authenticate_user(session: Session, username: str, password: str) -> Optiona
         if not verify_password(password, user.password_hash):
             return None
     except UnknownHashError:
-        # Hash ist ungültig - repariere ihn automatisch mit dem eingegebenen Passwort
-        logger.warning(
-            f"Passwort-Hash für Benutzer '{username}' ist ungültig. "
-            "Repariere Hash automatisch..."
-        )
-        try:
-            # Setze neuen Hash mit dem eingegebenen Passwort
-            user.password_hash = get_password_hash(password)
-            session.add(user)
-            session.commit()
-            session.refresh(user)
-            logger.info(f"Passwort-Hash für Benutzer '{username}' erfolgreich repariert")
-            # Hash wurde repariert, Login ist erfolgreich
-            return user
-        except Exception as e:
-            logger.error(f"Fehler beim Reparieren des Passwort-Hash für Benutzer '{username}': {e}")
+        # Hash ist ungültig - prüfe ob wir ihn reparieren können
+        # Nur für Standard-Admin-Nutzer und nur wenn Passwort mit Config übereinstimmt
+        is_default_admin = (username == config.AUTH_USERNAME)
+        
+        if is_default_admin and password == config.AUTH_PASSWORD:
+            # Sichere Hash-Reparatur: Nur für Standard-Admin mit korrektem Config-Passwort
+            logger.warning(
+                f"Passwort-Hash für Standard-Admin-Nutzer '{username}' ist ungültig. "
+                "Repariere Hash mit Config-Passwort..."
+            )
+            try:
+                user.password_hash = get_password_hash(password)
+                session.add(user)
+                session.commit()
+                session.refresh(user)
+                logger.info(f"Passwort-Hash für Benutzer '{username}' erfolgreich repariert")
+                # Hash wurde repariert, Login ist erfolgreich
+                return user
+            except Exception as e:
+                logger.error(f"Fehler beim Reparieren des Passwort-Hash für Benutzer '{username}': {e}")
+                return None
+        else:
+            # Hash ist ungültig und kann nicht repariert werden
+            logger.error(
+                f"Passwort-Hash für Benutzer '{username}' ist ungültig. "
+                "Login abgelehnt aus Sicherheitsgründen."
+            )
             return None
     except Exception as e:
         logger.error(f"Fehler bei Passwort-Verifizierung für Benutzer '{username}': {e}")
