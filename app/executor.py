@@ -653,6 +653,9 @@ def _build_container_command(pipeline: DiscoveredPipeline) -> List[str]:
     """
     Baut den Container-Befehl für Pipeline-Ausführung.
     
+    WICHTIG: Fügt Python-Flags hinzu für unbuffered output (-u),
+    damit Logs sofort ausgegeben werden und nicht gepuffert werden.
+    
     Args:
         pipeline: DiscoveredPipeline-Objekt
     
@@ -665,11 +668,13 @@ def _build_container_command(pipeline: DiscoveredPipeline) -> List[str]:
         return [
             "uv", "run",
             "--with-requirements", requirements_path,
-            main_py_path
+            # Python unbuffered mode: -u Flag für sofortige Ausgabe
+            "python", "-u", main_py_path
         ]
     else:
         main_py_path = f"/app/{pipeline.name}/main.py"
-        return ["uv", "run", main_py_path]
+        # Python unbuffered mode: -u Flag für sofortige Ausgabe
+        return ["uv", "run", "python", "-u", main_py_path]
 
 
 async def _get_uv_version(container: docker.models.containers.Container) -> Optional[str]:
@@ -731,64 +736,105 @@ async def _stream_logs(
             line_count = 0
             last_size_check = time.time()
             first_log_received = False
+            should_break = False
+            
+            # Puffer für unvollständige Zeilen (falls Chunks mitten in Zeilen enden)
+            line_buffer = b""
             
             async for log_chunk in _iter_log_stream(log_stream):
-                # Log-Zeile dekodieren
-                try:
-                    log_line = log_chunk.decode("utf-8").rstrip()
-                except UnicodeDecodeError:
-                    log_line = log_chunk.decode("utf-8", errors="replace").rstrip()
+                # Prüfe ob wir abbrechen sollen
+                if should_break:
+                    break
                 
-                # Docker JSON-Log-Format verarbeiten (falls verwendet)
-                # Docker kann Logs im JSON-Format ausgeben: {"log":"...","stream":"stdout","time":"..."}
-                if log_line.startswith("{"):
-                    try:
-                        log_json = json.loads(log_line)
-                        log_line = log_json.get("log", log_line).rstrip()
-                    except (json.JSONDecodeError, AttributeError):
-                        # Kein JSON, verwende direkt
-                        pass
+                # Füge Chunk zum Buffer hinzu
+                line_buffer += log_chunk
                 
-                # Nur schreiben wenn Zeile nicht leer ist
-                if log_line:
-                    if not first_log_received:
-                        logger.info(f"Erste Log-Zeile für Run {run_id} empfangen: {log_line[:100]}")
-                        first_log_received = True
+                # Verarbeite vollständige Zeilen (getrennt durch \n)
+                while b"\n" in line_buffer:
+                    if should_break:
+                        break
                     
-                    # Zeitstempel hinzufügen (Format: YYYY-MM-DD HH:MM:SS.mmm)
+                    line_part, line_buffer = line_buffer.split(b"\n", 1)
+                    
+                    # Log-Zeile dekodieren
+                    try:
+                        log_line = line_part.decode("utf-8").rstrip()
+                    except UnicodeDecodeError:
+                        log_line = line_part.decode("utf-8", errors="replace").rstrip()
+                    
+                    # Docker JSON-Log-Format verarbeiten (falls verwendet)
+                    # Docker kann Logs im JSON-Format ausgeben: {"log":"...","stream":"stdout","time":"..."}
+                    if log_line.startswith("{"):
+                        try:
+                            log_json = json.loads(log_line)
+                            log_line = log_json.get("log", log_line).rstrip()
+                        except (json.JSONDecodeError, AttributeError):
+                            # Kein JSON, verwende direkt
+                            pass
+                    
+                    # Nur schreiben wenn Zeile nicht leer ist
+                    if log_line:
+                        if not first_log_received:
+                            logger.info(f"Erste Log-Zeile für Run {run_id} empfangen: {log_line[:100]}")
+                            first_log_received = True
+                        
+                        # Zeitstempel hinzufügen (Format: YYYY-MM-DD HH:MM:SS.mmm)
+                        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+                        log_line_with_timestamp = f"[{timestamp}] {log_line}"
+                        
+                        # In Datei schreiben (asynchron)
+                        await log_file.write(log_line_with_timestamp + "\n")
+                        await log_file.flush()
+                        
+                        # In Queue für SSE-Streaming (mit Zeitstempel)
+                        try:
+                            log_queue.put_nowait(log_line_with_timestamp)
+                        except asyncio.QueueFull:
+                            # Queue voll, alte Einträge entfernen (Ring-Buffer-Verhalten)
+                            try:
+                                log_queue.get_nowait()
+                                log_queue.put_nowait(log_line_with_timestamp)
+                            except asyncio.QueueEmpty:
+                                pass
+                        
+                        line_count += 1
+                        
+                        # Log-Spam-Schutz: Dateigröße prüfen (alle 1000 Zeilen oder alle 10 Sekunden)
+                        if line_count % 1000 == 0 or (time.time() - last_size_check) > 10:
+                            last_size_check = time.time()
+                            
+                            if config.LOG_MAX_SIZE_MB:
+                                file_size_mb = log_file_path.stat().st_size / (1024 * 1024)
+                                if file_size_mb > config.LOG_MAX_SIZE_MB:
+                                    logger.warning(
+                                        f"Log-Datei für Run {run_id} überschreitet "
+                                        f"LOG_MAX_SIZE_MB ({config.LOG_MAX_SIZE_MB} MB): {file_size_mb:.2f} MB"
+                                    )
+                                    # Stream kappen (keine weiteren Logs schreiben)
+                                    should_break = True
+                                    break
+            
+            # Verarbeite verbleibenden Buffer am Ende (letzte unvollständige Zeile)
+            if line_buffer and not should_break:
+                try:
+                    log_line = line_buffer.decode("utf-8").rstrip()
+                except UnicodeDecodeError:
+                    log_line = line_buffer.decode("utf-8", errors="replace").rstrip()
+                
+                if log_line:
                     timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
                     log_line_with_timestamp = f"[{timestamp}] {log_line}"
-                    
-                    # In Datei schreiben (asynchron)
                     await log_file.write(log_line_with_timestamp + "\n")
                     await log_file.flush()
-                    
-                    # In Queue für SSE-Streaming (mit Zeitstempel)
                     try:
                         log_queue.put_nowait(log_line_with_timestamp)
                     except asyncio.QueueFull:
-                        # Queue voll, alte Einträge entfernen (Ring-Buffer-Verhalten)
                         try:
                             log_queue.get_nowait()
                             log_queue.put_nowait(log_line_with_timestamp)
                         except asyncio.QueueEmpty:
                             pass
-                
-                line_count += 1
-                
-                # Log-Spam-Schutz: Dateigröße prüfen (alle 1000 Zeilen oder alle 10 Sekunden)
-                if line_count % 1000 == 0 or (time.time() - last_size_check) > 10:
-                    last_size_check = time.time()
-                    
-                    if config.LOG_MAX_SIZE_MB:
-                        file_size_mb = log_file_path.stat().st_size / (1024 * 1024)
-                        if file_size_mb > config.LOG_MAX_SIZE_MB:
-                            logger.warning(
-                                f"Log-Datei für Run {run_id} überschreitet "
-                                f"LOG_MAX_SIZE_MB ({config.LOG_MAX_SIZE_MB} MB): {file_size_mb:.2f} MB"
-                            )
-                            # Stream kappen (keine weiteren Logs schreiben)
-                            break
+                    line_count += 1
         
     except asyncio.CancelledError:
         # Task wurde abgebrochen (normal bei Container-Ende)
@@ -809,26 +855,47 @@ async def _iter_log_stream(stream):
     """
     Iterator für Docker-Log-Stream (asynchron).
     
+    Liest kontinuierlich aus dem Docker-Log-Stream und gibt Chunks zurück.
+    Verwendet einen separaten Thread, um Blocking zu vermeiden.
+    
     Args:
-        stream: Docker-Log-Stream
+        stream: Docker-Log-Stream (Generator)
     
     Yields:
         Bytes: Log-Chunk
     """
+    loop = asyncio.get_event_loop()
+    
     while True:
         try:
-            chunk = await asyncio.get_event_loop().run_in_executor(
+            # Lese Chunk im Executor (non-blocking)
+            chunk = await loop.run_in_executor(
                 _executor,
                 lambda: next(stream, None)
             )
             if chunk is None:
+                # Stream ist beendet
                 break
             yield chunk
         except StopIteration:
+            # Generator ist erschöpft
             break
         except Exception as e:
             logger.warning(f"Fehler beim Lesen aus Log-Stream: {e}")
-            break
+            # Warte kurz vor erneutem Versuch (falls temporärer Fehler)
+            await asyncio.sleep(0.1)
+            try:
+                # Versuche nochmal
+                chunk = await loop.run_in_executor(
+                    _executor,
+                    lambda: next(stream, None)
+                )
+                if chunk is None:
+                    break
+                yield chunk
+            except (StopIteration, Exception):
+                # Bei erneutem Fehler: beende Loop
+                break
 
 
 async def _monitor_metrics(

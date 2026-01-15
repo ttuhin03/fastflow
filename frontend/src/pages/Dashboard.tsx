@@ -2,6 +2,16 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import apiClient from '../api/client'
+import { 
+  MdPlayArrow, 
+  MdInfo, 
+  MdCheckCircle, 
+  MdCancel, 
+  MdSync,
+  MdSchedule,
+  MdMemory,
+  MdViewList
+} from 'react-icons/md'
 import './Dashboard.css'
 
 interface Pipeline {
@@ -37,7 +47,7 @@ export default function Dashboard() {
       const response = await apiClient.get('/pipelines')
       return response.data
     },
-    refetchInterval: 5000, // Auto-refresh alle 5 Sekunden
+    refetchInterval: 5000,
   })
 
   const { data: syncStatus } = useQuery<SyncStatus>({
@@ -46,7 +56,7 @@ export default function Dashboard() {
       const response = await apiClient.get('/sync/status')
       return response.data
     },
-    refetchInterval: 10000, // Auto-refresh alle 10 Sekunden
+    refetchInterval: 10000,
   })
 
   const startPipelineMutation = useMutation({
@@ -115,7 +125,12 @@ export default function Dashboard() {
   }
 
   if (isLoading) {
-    return <div>Laden...</div>
+    return (
+      <div className="loading-container">
+        <div className="spinner"></div>
+        <p>Laden...</p>
+      </div>
+    )
   }
 
   const successRate = (pipeline: Pipeline) => {
@@ -123,61 +138,86 @@ export default function Dashboard() {
     return ((pipeline.successful_runs / pipeline.total_runs) * 100).toFixed(1)
   }
 
+  const totalRuns = pipelines?.reduce((sum, p) => sum + p.total_runs, 0) || 0
+  const totalSuccessful = pipelines?.reduce((sum, p) => sum + p.successful_runs, 0) || 0
+  const totalFailed = pipelines?.reduce((sum, p) => sum + p.failed_runs, 0) || 0
+
   return (
     <div className="dashboard">
       <div className="dashboard-header">
-        <h2>Dashboard</h2>
         <button
           onClick={handleSync}
           disabled={syncMutation.isPending}
-          className="sync-button"
+          className="btn btn-primary sync-button"
         >
+          <MdSync />
           {syncMutation.isPending ? 'Sync läuft...' : 'Git Sync'}
         </button>
       </div>
 
       {syncStatus && (
-        <div className="sync-status">
-          <span>Branch: {syncStatus.branch}</span>
+        <div className="sync-status card">
+          <div className="sync-status-item">
+            <strong>Branch:</strong> {syncStatus.branch}
+          </div>
           {syncStatus.last_sync && (
-            <span>Letzter Sync: {new Date(syncStatus.last_sync).toLocaleString('de-DE')}</span>
+            <div className="sync-status-item">
+              <strong>Letzter Sync:</strong> {new Date(syncStatus.last_sync).toLocaleString('de-DE')}
+            </div>
           )}
         </div>
       )}
 
       <div className="stats-grid">
-        <div className="stat-card">
-          <h3>Pipelines</h3>
-          <p className="stat-value">{pipelines?.length || 0}</p>
+        <div className="stat-card card">
+          <div className="stat-icon pipelines">
+            <MdViewList />
+          </div>
+          <div className="stat-content">
+            <h3 className="stat-label">Pipelines</h3>
+            <p className="stat-value">{pipelines?.length || 0}</p>
+          </div>
         </div>
-        <div className="stat-card">
-          <h3>Gesamt Runs</h3>
-          <p className="stat-value">
-            {pipelines?.reduce((sum, p) => sum + p.total_runs, 0) || 0}
-          </p>
+        
+        <div className="stat-card card">
+          <div className="stat-icon runs">
+            <MdSchedule />
+          </div>
+          <div className="stat-content">
+            <h3 className="stat-label">Gesamt Runs</h3>
+            <p className="stat-value">{totalRuns}</p>
+          </div>
         </div>
-        <div className="stat-card">
-          <h3>Erfolgreich</h3>
-          <p className="stat-value success">
-            {pipelines?.reduce((sum, p) => sum + p.successful_runs, 0) || 0}
-          </p>
+        
+        <div className="stat-card card">
+          <div className="stat-icon success">
+            <MdCheckCircle />
+          </div>
+          <div className="stat-content">
+            <h3 className="stat-label">Erfolgreich</h3>
+            <p className="stat-value success">{totalSuccessful}</p>
+          </div>
         </div>
-        <div className="stat-card">
-          <h3>Fehlgeschlagen</h3>
-          <p className="stat-value error">
-            {pipelines?.reduce((sum, p) => sum + p.failed_runs, 0) || 0}
-          </p>
+        
+        <div className="stat-card card">
+          <div className="stat-icon error">
+            <MdCancel />
+          </div>
+          <div className="stat-content">
+            <h3 className="stat-label">Fehlgeschlagen</h3>
+            <p className="stat-value error">{totalFailed}</p>
+          </div>
         </div>
       </div>
 
-      <div className="pipelines-list">
-        <h3>Pipelines</h3>
+      <div className="pipelines-section">
+        <h3 className="section-title">Pipelines</h3>
         {pipelines && pipelines.length > 0 ? (
           <div className="pipeline-grid">
             {pipelines.map((pipeline) => (
-              <div key={pipeline.name} className="pipeline-card">
+              <div key={pipeline.name} className="pipeline-card card">
                 <div className="pipeline-header">
-                  <h4>{pipeline.name}</h4>
+                  <h4 className="pipeline-name">{pipeline.name}</h4>
                   <div className="pipeline-status-controls">
                     <label className="toggle-switch">
                       <input
@@ -188,52 +228,75 @@ export default function Dashboard() {
                       />
                       <span className="toggle-slider"></span>
                     </label>
-                    <span className={`status-badge ${pipeline.enabled ? 'enabled' : 'disabled'}`}>
+                    <span className={`badge ${pipeline.enabled ? 'badge-success' : 'badge-secondary'}`}>
                       {pipeline.enabled ? 'Aktiv' : 'Inaktiv'}
                     </span>
                   </div>
                 </div>
-                <div className="pipeline-stats">
-                  <span>Runs: {pipeline.total_runs}</span>
-                  <span className="success">✓ {pipeline.successful_runs}</span>
-                  <span className="error">✗ {pipeline.failed_runs}</span>
-                  {pipeline.total_runs > 0 && (
-                    <span className="success-rate">
-                      {successRate(pipeline)}% Erfolg
-                    </span>
-                  )}
-                </div>
+                
                 {pipeline.metadata.description && (
                   <p className="pipeline-description">{pipeline.metadata.description}</p>
                 )}
+                
+                <div className="pipeline-stats">
+                  <div className="stat-row">
+                    <span className="stat-label-small">Runs:</span>
+                    <span className="stat-value-small">{pipeline.total_runs}</span>
+                  </div>
+                  <div className="stat-row">
+                    <span className="stat-label-small success">Erfolgreich:</span>
+                    <span className="stat-value-small success">{pipeline.successful_runs}</span>
+                  </div>
+                  <div className="stat-row">
+                    <span className="stat-label-small error">Fehlgeschlagen:</span>
+                    <span className="stat-value-small error">{pipeline.failed_runs}</span>
+                  </div>
+                  {pipeline.total_runs > 0 && (
+                    <div className="stat-row">
+                      <span className="stat-label-small">Erfolgsrate:</span>
+                      <span className="stat-value-small">{successRate(pipeline)}%</span>
+                    </div>
+                  )}
+                </div>
+                
                 {pipeline.metadata.cpu_hard_limit && (
                   <div className="resource-limits">
-                    <span>CPU: {pipeline.metadata.cpu_hard_limit}</span>
+                    <div className="resource-item">
+                      <MdMemory />
+                      <span>CPU: {pipeline.metadata.cpu_hard_limit}</span>
+                    </div>
                     {pipeline.metadata.mem_hard_limit && (
-                      <span>RAM: {pipeline.metadata.mem_hard_limit}</span>
+                      <div className="resource-item">
+                        <MdMemory />
+                        <span>RAM: {pipeline.metadata.mem_hard_limit}</span>
+                      </div>
                     )}
                   </div>
                 )}
+                
                 <div className="pipeline-badges">
                   {pipeline.has_requirements && (
-                    <span className="badge">requirements.txt</span>
+                    <span className="badge badge-info">requirements.txt</span>
                   )}
                   {pipeline.last_cache_warmup && (
-                    <span className="badge cache">Cached</span>
+                    <span className="badge badge-success">Cached</span>
                   )}
                 </div>
+                
                 <div className="pipeline-actions">
                   <button
                     onClick={() => handleStartPipeline(pipeline.name)}
                     disabled={!pipeline.enabled || startingPipeline === pipeline.name}
-                    className="start-button"
+                    className="btn btn-success start-button"
                   >
+                    <MdPlayArrow />
                     {startingPipeline === pipeline.name ? 'Startet...' : 'Starten'}
                   </button>
                   <button
                     onClick={() => navigate(`/pipelines/${pipeline.name}`)}
-                    className="details-button"
+                    className="btn btn-outlined details-button"
                   >
+                    <MdInfo />
                     Details
                   </button>
                 </div>
@@ -241,7 +304,9 @@ export default function Dashboard() {
             ))}
           </div>
         ) : (
-          <p>Keine Pipelines gefunden</p>
+          <div className="empty-state card">
+            <p>Keine Pipelines gefunden</p>
+          </div>
         )}
       </div>
     </div>

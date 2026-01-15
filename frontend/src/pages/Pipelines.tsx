@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import apiClient from '../api/client'
+import { MdInfo, MdRefresh, MdMemory } from 'react-icons/md'
 import './Pipelines.css'
 
 interface Pipeline {
@@ -60,19 +61,23 @@ export default function Pipelines() {
   }
 
   if (isLoading) {
-    return <div>Laden...</div>
+    return (
+      <div className="loading-container">
+        <div className="spinner"></div>
+        <p>Laden...</p>
+      </div>
+    )
   }
 
   return (
     <div className="pipelines">
-      <h2>Pipelines</h2>
       {pipelines && pipelines.length > 0 ? (
         <div className="pipelines-grid">
           {pipelines.map((pipeline) => (
-            <div key={pipeline.name} className="pipeline-card">
+            <div key={pipeline.name} className="pipeline-card card">
               <div className="pipeline-header">
-                <h3>{pipeline.name}</h3>
-                <span className={`status-badge ${pipeline.enabled ? 'enabled' : 'disabled'}`}>
+                <h3 className="pipeline-name">{pipeline.name}</h3>
+                <span className={`badge ${pipeline.enabled ? 'badge-success' : 'badge-secondary'}`}>
                   {pipeline.enabled ? 'Aktiv' : 'Inaktiv'}
                 </span>
               </div>
@@ -105,13 +110,19 @@ export default function Pipelines() {
               {pipeline.metadata.cpu_hard_limit && (
                 <div className="resource-limits">
                   <div className="limit-item">
-                    <span className="limit-label">CPU:</span>
-                    <span className="limit-value">{pipeline.metadata.cpu_hard_limit}</span>
+                    <MdMemory />
+                    <div>
+                      <span className="limit-label">CPU:</span>
+                      <span className="limit-value">{pipeline.metadata.cpu_hard_limit}</span>
+                    </div>
                   </div>
                   {pipeline.metadata.mem_hard_limit && (
                     <div className="limit-item">
-                      <span className="limit-label">RAM:</span>
-                      <span className="limit-value">{pipeline.metadata.mem_hard_limit}</span>
+                      <MdMemory />
+                      <div>
+                        <span className="limit-label">RAM:</span>
+                        <span className="limit-value">{pipeline.metadata.mem_hard_limit}</span>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -119,15 +130,15 @@ export default function Pipelines() {
 
               <div className="pipeline-badges">
                 {pipeline.has_requirements && (
-                  <span className="badge">requirements.txt</span>
+                  <span className="badge badge-info">requirements.txt</span>
                 )}
                 {pipeline.last_cache_warmup && (
-                  <span className="badge cache">Cached</span>
+                  <span className="badge badge-success">Cached</span>
                 )}
                 {pipeline.metadata.tags && pipeline.metadata.tags.length > 0 && (
                   <>
                     {pipeline.metadata.tags.map((tag) => (
-                      <span key={tag} className="badge tag">
+                      <span key={tag} className="badge badge-secondary">
                         {tag}
                       </span>
                     ))}
@@ -138,15 +149,17 @@ export default function Pipelines() {
               <div className="pipeline-actions">
                 <button
                   onClick={() => navigate(`/pipelines/${pipeline.name}`)}
-                  className="details-button"
+                  className="btn btn-primary details-button"
                 >
+                  <MdInfo />
                   Details
                 </button>
                 <button
                   onClick={() => handleResetStats(pipeline.name)}
-                  className="reset-button"
+                  className="btn btn-warning reset-button"
                   disabled={resetStatsMutation.isPending}
                 >
+                  <MdRefresh />
                   Stats zurücksetzen
                 </button>
               </div>
@@ -154,7 +167,9 @@ export default function Pipelines() {
           ))}
         </div>
       ) : (
-        <p>Keine Pipelines gefunden</p>
+        <div className="empty-state card">
+          <p>Keine Pipelines gefunden</p>
+        </div>
       )}
     </div>
   )

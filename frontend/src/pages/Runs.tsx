@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import apiClient from '../api/client'
+import { MdInfo, MdCheckCircle, MdCancel, MdHourglassEmpty, MdPlayArrow } from 'react-icons/md'
 import './Runs.css'
 
 interface Run {
@@ -39,11 +40,16 @@ export default function Runs() {
       const response = await apiClient.get(`/runs?${params.toString()}`)
       return response.data
     },
-    refetchInterval: 5000, // Auto-refresh alle 5 Sekunden
+    refetchInterval: 5000,
   })
 
   if (isLoading) {
-    return <div>Laden...</div>
+    return (
+      <div className="loading-container">
+        <div className="spinner"></div>
+        <p>Laden...</p>
+      </div>
+    )
   }
 
   const filteredAndSortedRuns = runs
@@ -68,17 +74,31 @@ export default function Runs() {
     return `${hours}h ${remainingMinutes}m`
   }
 
+  const getStatusIcon = (status: string) => {
+    switch (status.toUpperCase()) {
+      case 'SUCCESS':
+        return <MdCheckCircle className="status-icon success" />
+      case 'FAILED':
+        return <MdCancel className="status-icon error" />
+      case 'RUNNING':
+        return <MdPlayArrow className="status-icon running" />
+      case 'PENDING':
+        return <MdHourglassEmpty className="status-icon pending" />
+      default:
+        return null
+    }
+  }
+
   return (
     <div className="runs">
-      <h2>Runs</h2>
-      
-      <div className="runs-filters">
+      <div className="runs-filters card">
         <div className="filter-group">
-          <label htmlFor="pipeline-filter">Pipeline:</label>
+          <label htmlFor="pipeline-filter" className="form-label">Pipeline:</label>
           <select
             id="pipeline-filter"
             value={pipelineFilter}
             onChange={(e) => setPipelineFilter(e.target.value)}
+            className="form-input"
           >
             <option value="">Alle</option>
             {pipelines?.map((p: any) => (
@@ -90,11 +110,12 @@ export default function Runs() {
         </div>
 
         <div className="filter-group">
-          <label htmlFor="status-filter">Status:</label>
+          <label htmlFor="status-filter" className="form-label">Status:</label>
           <select
             id="status-filter"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
+            className="form-input"
           >
             <option value="">Alle</option>
             <option value="PENDING">Pending</option>
@@ -105,11 +126,12 @@ export default function Runs() {
         </div>
 
         <div className="filter-group">
-          <label htmlFor="sort-order">Sortierung:</label>
+          <label htmlFor="sort-order" className="form-label">Sortierung:</label>
           <select
             id="sort-order"
             value={sortOrder}
             onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
+            className="form-input"
           >
             <option value="desc">Neueste zuerst</option>
             <option value="asc">Älteste zuerst</option>
@@ -117,69 +139,81 @@ export default function Runs() {
         </div>
 
         <div className="filter-group">
-          <label htmlFor="start-date">Von:</label>
+          <label htmlFor="start-date" className="form-label">Von:</label>
           <input
             id="start-date"
             type="datetime-local"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
+            className="form-input"
           />
         </div>
 
         <div className="filter-group">
-          <label htmlFor="end-date">Bis:</label>
+          <label htmlFor="end-date" className="form-label">Bis:</label>
           <input
             id="end-date"
             type="datetime-local"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
+            className="form-input"
           />
         </div>
       </div>
 
       {filteredAndSortedRuns.length > 0 ? (
-        <table className="runs-table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Pipeline</th>
-              <th>Status</th>
-              <th>Gestartet</th>
-              <th>Dauer</th>
-              <th>Exit Code</th>
-              <th>Aktionen</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredAndSortedRuns.map((run) => (
-              <tr key={run.id}>
-                <td>{run.id.substring(0, 8)}...</td>
-                <td>{run.pipeline_name}</td>
-                <td>
-                  <span className={`status status-${run.status.toLowerCase()}`}>
-                    {run.status}
-                  </span>
-                </td>
-                <td>{new Date(run.started_at).toLocaleString('de-DE')}</td>
-                <td>{getDuration(run)}</td>
-                <td>
-                  {run.exit_code !== null ? (
-                    <span className={run.exit_code === 0 ? 'exit-success' : 'exit-error'}>
-                      {run.exit_code}
-                    </span>
-                  ) : (
-                    '-'
-                  )}
-                </td>
-                <td>
-                  <Link to={`/runs/${run.id}`}>Details</Link>
-                </td>
+        <div className="runs-table-container card">
+          <table className="runs-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Pipeline</th>
+                <th>Status</th>
+                <th>Gestartet</th>
+                <th>Dauer</th>
+                <th>Exit Code</th>
+                <th>Aktionen</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filteredAndSortedRuns.map((run) => (
+                <tr key={run.id}>
+                  <td className="run-id">{run.id.substring(0, 8)}...</td>
+                  <td>{run.pipeline_name}</td>
+                  <td>
+                    <div className="status-cell">
+                      {getStatusIcon(run.status)}
+                      <span className={`status-badge status-${run.status.toLowerCase()}`}>
+                        {run.status}
+                      </span>
+                    </div>
+                  </td>
+                  <td>{new Date(run.started_at).toLocaleString('de-DE')}</td>
+                  <td>{getDuration(run)}</td>
+                  <td>
+                    {run.exit_code !== null ? (
+                      <span className={run.exit_code === 0 ? 'exit-success' : 'exit-error'}>
+                        {run.exit_code}
+                      </span>
+                    ) : (
+                      '-'
+                    )}
+                  </td>
+                  <td>
+                    <Link to={`/runs/${run.id}`} className="btn btn-outlined btn-sm details-link">
+                      <MdInfo />
+                      Details
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : (
-        <p>Keine Runs gefunden</p>
+        <div className="empty-state card">
+          <p>Keine Runs gefunden</p>
+        </div>
       )}
     </div>
   )

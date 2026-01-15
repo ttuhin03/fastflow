@@ -344,22 +344,29 @@ export default function RunDetail() {
 
   // Log-Streaming mit SSE (mit Re-Connect-Handling)
   useEffect(() => {
-    if (!run || activeTab !== 'logs') return
+    if (!run || activeTab !== 'logs') {
+      // Cleanup wenn Tab gewechselt wird
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close()
+        eventSourceRef.current = null
+      }
+      return
+    }
 
     const isRunning = run.status === 'RUNNING' || run.status === 'PENDING'
     let reconnectTimeout: ReturnType<typeof setTimeout> | null = null
     const MAX_RECONNECT_ATTEMPTS = 5
     const RECONNECT_DELAY = 3000 // 3 Sekunden
     
-    // Lade historische Logs beim Start (auch für laufende Runs)
+    // Lade historische Logs nur für abgeschlossene Runs
     const loadHistoricalLogs = async () => {
       try {
-        const response = await apiClient.get(`/runs/${runId}/logs?tail=100`, { responseType: 'text' })
+        const response = await apiClient.get(`/runs/${runId}/logs?tail=1000`, { responseType: 'text' })
         const lines = response.data.split('\n').filter((line: string) => line.trim())
         setLogs(lines)
       } catch (error) {
-        // Ignoriere Fehler beim Laden historischer Logs
         console.warn('Konnte historische Logs nicht laden:', error)
+        setLogs([])
       }
     }
     
@@ -369,10 +376,17 @@ export default function RunDetail() {
       }
       
       setLogConnectionStatus('reconnecting')
-      const eventSource = new EventSource(`${apiClient.defaults.baseURL}/runs/${runId}/logs/stream`)
+      // EventSource unterstützt keine Custom Headers
+      // Konstruiere URL - baseURL enthält bereits /api, daher direkt anhängen
+      const baseURL = apiClient.defaults.baseURL || 'http://localhost:8000/api'
+      const streamURL = `${baseURL}/runs/${runId}/logs/stream`
+      console.log('Connecting to log stream:', streamURL)
+      
+      const eventSource = new EventSource(streamURL)
       eventSourceRef.current = eventSource
 
       eventSource.onopen = () => {
+        console.log('Log stream connected, readyState:', eventSource.readyState)
         setLogConnectionStatus('connected')
         setLogReconnectAttempts(0)
       }
@@ -386,6 +400,7 @@ export default function RunDetail() {
         try {
           const data = JSON.parse(event.data)
           if (data.line) {
+            console.log('Received log line:', data.line.substring(0, 100))
             setLogs((prev) => {
               // Verhindere Duplikate
               if (prev.length > 0 && prev[prev.length - 1] === data.line) {
@@ -393,10 +408,13 @@ export default function RunDetail() {
               }
               return [...prev, data.line]
             })
+          } else if (data.error) {
+            console.error('Log stream error from server:', data.error)
           }
         } catch (e) {
           // Fallback: Direkt als Text behandeln
           if (event.data && !event.data.startsWith(':')) {
+            console.log('Received log line (fallback):', event.data.substring(0, 100))
             setLogs((prev) => {
               if (prev.length > 0 && prev[prev.length - 1] === event.data) {
                 return prev
@@ -407,46 +425,44 @@ export default function RunDetail() {
         }
       }
 
-      eventSource.onerror = () => {
-        setLogConnectionStatus('disconnected')
-        eventSource.close()
-        
-        // Re-Connect versuchen
-        if (logReconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-          reconnectTimeout = setTimeout(() => {
-            setLogReconnectAttempts((prev) => prev + 1)
-            // Letzte 50 Zeilen nachladen beim Re-Connect
-            apiClient
-              .get(`/runs/${runId}/logs?tail=50`, { responseType: 'text' })
-              .then((response) => {
-                const lines = response.data.split('\n').filter((line: string) => line.trim())
-                setLogs((prev) => {
-                  // Verhindere Duplikate
-                  const existingLines = new Set(prev)
-                  const newLines = lines.filter((line: string) => !existingLines.has(line))
-                  return [...prev, ...newLines]
-                })
-              })
-              .catch(() => {})
-            connectLogStream()
-          }, RECONNECT_DELAY)
+      eventSource.onerror = (error) => {
+        console.error('Log stream error:', error)
+        console.log('EventSource readyState:', eventSource.readyState)
+        // readyState: 0 = CONNECTING, 1 = OPEN, 2 = CLOSED
+        if (eventSource.readyState === EventSource.CLOSED) {
+          setLogConnectionStatus('disconnected')
+          eventSource.close()
+          
+          // Re-Connect versuchen nur wenn noch nicht zu viele Versuche
+          if (logReconnectAttempts < MAX_RECONNECT_ATTEMPTS && isRunning) {
+            reconnectTimeout = setTimeout(() => {
+              setLogReconnectAttempts((prev) => prev + 1)
+              console.log(`Reconnecting log stream (attempt ${logReconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})`)
+              connectLogStream()
+            }, RECONNECT_DELAY)
+          }
         }
       }
     }
     
     if (isRunning) {
-      // Lade historische Logs zuerst, dann starte Stream
-      loadHistoricalLogs().then(() => {
-        connectLogStream()
-      })
+      // Für laufende Runs: Lade zuerst vorhandene Logs, dann starte Stream
+      // Das Backend sendet alle vorhandenen Logs aus der Queue beim Connect
+      console.log('Starting log stream for running run')
+      setLogs([]) // Leere Logs zuerst
+      connectLogStream()
+      
       return () => {
         if (reconnectTimeout) clearTimeout(reconnectTimeout)
         if (eventSourceRef.current) {
+          console.log('Closing log stream')
           eventSourceRef.current.close()
+          eventSourceRef.current = null
         }
       }
     } else {
-      // Logs aus Datei laden für abgeschlossene Runs
+      // Für abgeschlossene Runs: Lade Logs aus Datei
+      console.log('Loading historical logs for finished run')
       loadHistoricalLogs()
     }
   }, [runId, run, activeTab, logReconnectAttempts])
@@ -466,7 +482,12 @@ export default function RunDetail() {
       }
       
       setMetricsConnectionStatus('reconnecting')
-      const eventSource = new EventSource(`${apiClient.defaults.baseURL}/runs/${runId}/metrics/stream`)
+      // EventSource unterstützt keine Custom Headers
+      // Konstruiere URL - baseURL enthält bereits /api, daher direkt anhängen
+      const baseURL = apiClient.defaults.baseURL || 'http://localhost:8000/api'
+      const streamURL = `${baseURL}/runs/${runId}/metrics/stream`
+      
+      const eventSource = new EventSource(streamURL)
       metricsEventSourceRef.current = eventSource
 
       eventSource.onopen = () => {
