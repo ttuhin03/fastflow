@@ -151,6 +151,9 @@ export default function Login() {
           </a>
           <p className="login-footer-text">
             Made with <Tooltip content="Made with heart... and fueled by the healthy desire to never see a broken DAG again. Life is too short for over-engineering."><span className="heart">❤️</span></Tooltip> by <strong>ttuhin03</strong>
+            <span style={{ marginLeft: '8px', opacity: 0.5, fontSize: '10px' }}>
+              v{__APP_VERSION__}
+            </span>
           </p>
         </div>
       </div>
