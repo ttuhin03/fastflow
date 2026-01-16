@@ -6,6 +6,65 @@
 
 Fast-Flow ist die Antwort auf die Komplexität von Airflow und die Schwerfälligkeit traditioneller CI/CD-Tools. Er wurde für Entwickler gebaut, die echte Isolation wollen, ohne auf die Geschwindigkeit lokaler Skripte zu verzichten.
 
+## 🚀 Schnellstart
+
+Starten Sie Fast-Flow in wenigen Minuten.
+
+### Voraussetzungen
+
+- **Docker** & Docker Compose
+- **Python 3.11+** (nur für lokale Entwicklung)
+
+### Option 1: Docker (Empfohlen für Produktion)
+
+Der einfachste Weg, Fast-Flow zu starten.
+
+```bash
+# 1. .env Datei vorbereiten
+cp .env.example .env
+
+# 2. Encryption Key generieren (WICHTIG!)
+# Generiert einen Key und gibt ihn aus. Füge diesen in .env unter ENCRYPTION_KEY ein.
+python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+
+# 3. Starten
+docker-compose up -d
+
+# 4. Logs ansehen
+docker-compose logs -f orchestrator
+```
+
+**UI öffnen:** [http://localhost:8000](http://localhost:8000)
+
+### Option 2: Lokal (Für Entwicklung)
+
+Nutzt ein lokales venv, startet aber Container via Docker.
+
+```bash
+# 1. Setup
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+# 2. Konfiguration
+cp .env.example .env
+# -> ENCRYPTION_KEY in .env setzen (siehe oben)
+
+# 3. Starten
+./start.sh
+# oder manuell: uvicorn app.main:app --reload
+```
+
+### 🔐 Standard-Login
+
+- **User:** `admin`
+- **Passwort:** `admin`
+
+> [!WARNING]
+> Ändern Sie diese Zugangsdaten in der `.env` Datei für den Produktionseinsatz! Siehe [Konfiguration](docs/CONFIGURATION.md).
+
+---
+
 ## 🏗 Architektur: Das "Runner-Cache"-Prinzip
 
 Im Gegensatz zu klassischen Orchestratoren, die oft "Dependency Hell" in ihren Worker-Umgebungen erleben, nutzt Fast-Flow eine moderne JIT-Environment-Architektur.
@@ -207,7 +266,7 @@ Der Orchestrator kommuniziert mit dem Proxy über `http://docker-proxy:2375` sta
 
 ## Dokumentation
 
-- **[Quick Start Guide](docs/QUICKSTART.md)** - Schnellstart-Anleitung
+- **[Konfiguration](docs/CONFIGURATION.md)** - Detaillierte Erklärung aller Environment-Variablen
 - **[Docker Socket Proxy](docs/DOCKER_PROXY.md)** - Sicherheitsarchitektur und Proxy-Konfiguration
 - **[API-Dokumentation](docs/api/API.md)** - Vollständige API-Referenz
 - **[Frontend-Dokumentation](docs/frontend/FRONTEND.md)** - Frontend-Komponenten und Seiten
@@ -429,4 +488,21 @@ requests==2.31.0
 
 ---
 
-*Weitere Dokumentation siehe `plan.md` und `IMPLEMENTATION_PLAN.md`*
+*Weitere Dokumentation siehe `docs/CONFIGURATION.md`*
+
+## ❓ Troubleshooting
+
+### "Docker läuft nicht" / "Connection refused"
+Stellen Sie sicher, dass Docker Desktop läuft. 
+Prüfen Sie: `docker ps`
+
+### "Docker-Proxy / 403 Forbidden"
+Der Orchestrator darf nur bestimmte Befehle ausführen. Prüfen Sie die Proxy-Logs:
+`docker-compose logs docker-proxy`
+Stellen Sie sicher, dass `POST=1` (für Container-Start) gesetzt ist.
+
+### "Port 8000 belegt"
+Ändern Sie den `PORT` in der `.env` Datei.
+
+### "ENCRYPTION_KEY fehlt"
+Die Anwendung startet nicht ohne Key. Generieren Sie einen (siehe Schnellstart) und setzen Sie ihn in der `.env`.
