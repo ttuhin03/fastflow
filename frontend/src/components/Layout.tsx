@@ -21,6 +21,7 @@ import {
 } from 'react-icons/md'
 import NotificationCenter from './NotificationCenter'
 import Tooltip from './Tooltip'
+import VersionInfo from './VersionInfo'
 import './Layout.css'
 
 interface NavItem {
@@ -191,6 +192,7 @@ export default function Layout() {
           })}
         </nav>
 
+
         <div className="sidebar-footer">
           <div className={`backend-status ${backendStatus} ${healthPulse ? 'pulse' : ''}`} title={backendStatus === 'online' ? 'Backend online' : 'Backend offline'}>
             <MdCircle className="status-dot-icon" />
@@ -198,6 +200,7 @@ export default function Layout() {
               {backendStatus === 'online' ? 'Online' : backendStatus === 'offline' ? 'Offline' : 'Prüfe...'}
             </span>
           </div>
+
           <a
             href="https://github.com/ttuhin03/fastflow"
             target="_blank"
@@ -209,8 +212,12 @@ export default function Layout() {
             </svg>
             <span>View on GitHub</span>
           </a>
+
           <p className="sidebar-footer-text">
             Made with <Tooltip content="Made with heart... and fueled by the healthy desire to never see a broken DAG again. Life is too short for over-engineering."><span className="heart">❤️</span></Tooltip> by <strong>ttuhin03</strong>
+            <span style={{ marginLeft: '8px', opacity: 0.5, fontSize: '10px' }}>
+              <VersionInfo />
+            </span>
           </p>
           <button onClick={handleLogout} className="logout-btn">
             <MdLogout />

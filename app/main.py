@@ -359,6 +359,10 @@ app.include_router(users_api.router, prefix="/api")
 from app.api import webhooks as webhooks_api
 app.include_router(webhooks_api.router, prefix="/api")
 
+# System/Version-Endpoints
+from app.api import version as version_api
+app.include_router(version_api.router, prefix="/api")
+
 # Static Files für React-Frontend
 # Prüfe ob static-Verzeichnis existiert (nach Build)
 static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
