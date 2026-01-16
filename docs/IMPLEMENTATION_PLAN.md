@@ -221,12 +221,16 @@ fastflow/
 
 ## Phase 5: Docker Executor
 
-### 5.1 Docker Client Setup (UV-basiert)
+### 5.1 Docker Client Setup (UV-basiert mit Socket-Proxy)
 - [ ] `app/executor.py`: Docker Client initialisieren
-- [ ] **Docker-Daemon-Error-Handling**: Retry-Logik mit Exponential Backoff für Docker-Operationen
-  - Health-Check für Docker-Socket-Verbindung
-  - Klare Fehlermeldungen wenn Docker-Daemon nicht erreichbar
-  - Graceful Degradation: Pipeline-Starts ablehnen wenn Docker nicht verfügbar
+  - **WICHTIG**: Client verbindet sich mit Docker Socket Proxy (`http://docker-proxy:2375`)
+  - Kein direkter Zugriff auf `/var/run/docker.sock` mehr
+  - Proxy-URL konfigurierbar über `DOCKER_PROXY_URL` Environment-Variable
+- [ ] **Docker-Proxy-Error-Handling**: Retry-Logik mit Exponential Backoff für Docker-Operationen
+  - Health-Check für Docker-Proxy-Verbindung (via `client.ping()`)
+  - Klare Fehlermeldungen wenn Docker-Proxy nicht erreichbar
+  - Unterscheidung zwischen Infrastructure-Fehlern (Proxy nicht erreichbar) und Pipeline-Fehlern
+  - Graceful Degradation: Pipeline-Starts ablehnen wenn Docker-Proxy nicht verfügbar
 - [ ] **Worker-Image-Pull**: Worker-Image (`WORKER_BASE_IMAGE`) beim App-Start prüfen/pullen
   - Falls Image nicht vorhanden: Versuch es zu pullen
   - Fehler-Handling: Klare Fehlermeldung wenn Registry nicht erreichbar

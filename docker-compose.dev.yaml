@@ -1,4 +1,36 @@
 services:
+  # Docker Socket Proxy (Security Layer)
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    container_name: fastflow-docker-proxy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      # Allow container operations (create, start, stop, remove, logs, stats)
+      - CONTAINERS=1
+      # Allow image pulling and inspection
+      - IMAGES=1
+      # Allow build operations (might be needed for some operations)
+      - BUILD=1
+      # Disable network management (not needed)
+      - NETWORKS=0
+      # Allow volume operations (needed for volume mounts in containers)
+      - VOLUMES=1
+      # Disable system operations (not needed)
+      - SYSTEM=0
+      # Allow exec operations (for container inspection)
+      - EXEC=1
+      # HTTP Verb permissions (CRITICAL for container creation)
+      - POST=1        # Allows /create, /start, /stop, /pull etc.
+      - DELETE=1      # Allows container removal after run
+      - STATS=1       # Explicitly needed for resource monitoring
+    networks:
+      - fastflow-network
+    restart: unless-stopped
+    # Expose proxy on port 2375 (Docker API port)
+    ports:
+      - "2375:2375"
+
   # Backend (FastAPI)
   orchestrator:
     build:
@@ -7,10 +39,10 @@ services:
     container_name: fastflow-orchestrator
     image: fastflow-orchestrator:latest
     
-    # Docker-Socket-Mount (KRITISCH für Container-Management)
-    # ⚠️ SECURITY-WARNUNG: Docker-Socket gibt Root-Zugriff auf Host-System!
+    # Docker-Socket-Mount entfernt - Kommunikation erfolgt über docker-proxy
+    # ⚠️ SECURITY: Docker-Socket wird nur noch vom docker-proxy-Service gemountet
+    # Der Orchestrator kommuniziert über HTTP mit dem Proxy (http://docker-proxy:2375)
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - ${PIPELINES_DIR:-./pipelines}:/app/pipelines:rw
       - ${LOGS_DIR:-./logs}:/app/logs:rw
       - ${DATA_DIR:-./data}:/app/data:rw
@@ -70,6 +102,7 @@ services:
     
     depends_on:
       - orchestrator
+      - docker-proxy
     
     networks:
       - fastflow-network

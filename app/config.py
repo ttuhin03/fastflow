@@ -89,6 +89,15 @@ class Config:
     """
     
     # Docker & UV-Konfiguration
+    DOCKER_PROXY_URL: str = os.getenv("DOCKER_PROXY_URL", "http://docker-proxy:2375")
+    """
+    Docker Socket Proxy URL.
+    
+    URL des docker-socket-proxy Services für sichere Docker-API-Kommunikation.
+    Standard: http://docker-proxy:2375 (für Docker Compose Setup)
+    Kann über Environment-Variable DOCKER_PROXY_URL überschrieben werden.
+    """
+    
     WORKER_BASE_IMAGE: str = os.getenv(
         "WORKER_BASE_IMAGE",
         "ghcr.io/astral-sh/uv:python3.11-bookworm-slim"

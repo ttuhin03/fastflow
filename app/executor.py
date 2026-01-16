@@ -1,11 +1,25 @@
 """
 Docker Container Execution Module.
 
-Dieses Modul verwaltet die Ausführung von Pipeline-Containers:
-- Container-Start mit Resource-Limits
-- Log-Streaming und Persistenz
-- Metrics-Monitoring (CPU/RAM)
-- Container-Cleanup
+Dieses Modul verwaltet die Ausführung von Pipeline-Containers über einen
+sicheren Docker-Socket-Proxy (tecnativa/docker-socket-proxy).
+
+Hauptfunktionen:
+- Container-Start mit Resource-Limits (CPU/RAM Hard/Soft Limits)
+- Log-Streaming und Persistenz (asynchron, Echtzeit)
+- Metrics-Monitoring (CPU/RAM) mit Live-Streaming via SSE
+- Container-Cleanup und Error-Handling (OOM Detection, Exit-Code-Klassifizierung)
+- Pre-Heating für UV-Cache (optional)
+
+Sicherheit:
+- Alle Docker-API-Zugriffe erfolgen über docker-socket-proxy
+- Proxy filtert und erlaubt nur konfigurierte Operationen
+- Kein direkter Zugriff auf Docker-Socket
+
+Architektur:
+- Asynchrone Tasks für Log-Streaming und Metrics-Monitoring
+- ThreadPoolExecutor für synchrone Docker-API-Calls
+- Queue-basiertes SSE-Streaming für Live-Updates
 """
 
 import asyncio
@@ -55,29 +69,31 @@ def init_docker_client() -> None:
     Initialisiert den Docker-Client und prüft die Verbindung.
     
     Wird beim App-Start aufgerufen, um sicherzustellen, dass Docker
-    verfügbar ist. Pullt das Worker-Image falls nötig.
+    verfügbar ist. Kommuniziert über docker-socket-proxy für sichere
+    Docker-API-Zugriffe. Pullt das Worker-Image falls nötig.
     
     Raises:
-        RuntimeError: Wenn Docker-Daemon nicht erreichbar ist
+        RuntimeError: Wenn Docker-Proxy nicht erreichbar ist
         docker.errors.APIError: Wenn Image-Pull fehlschlägt
     """
     global _docker_client
     
     try:
-        # Docker-Client initialisieren
-        _docker_client = docker.from_env()
+        # Docker-Client initialisieren - Verbindung über Proxy
+        proxy_url = config.DOCKER_PROXY_URL
+        _docker_client = docker.DockerClient(base_url=proxy_url)
         
-        # Health-Check: Docker-Daemon-Verbindung prüfen
+        # Health-Check: Docker-Proxy-Verbindung prüfen
         _docker_client.ping()
-        logger.info("Docker-Daemon-Verbindung erfolgreich")
+        logger.info(f"Docker-Proxy-Verbindung erfolgreich ({proxy_url})")
         
         # Worker-Image prüfen/pullen
         _ensure_worker_image()
         
     except DockerException as e:
         error_msg = (
-            f"Docker-Daemon ist nicht erreichbar: {e}. "
-            "Stelle sicher, dass Docker läuft und der Socket verfügbar ist."
+            f"Docker-Proxy ist nicht erreichbar ({config.DOCKER_PROXY_URL}): {e}. "
+            "Stelle sicher, dass der docker-proxy Service läuft und erreichbar ist."
         )
         logger.error(error_msg)
         raise RuntimeError(error_msg) from e
@@ -402,19 +418,23 @@ async def _run_container_task(
         # Host-Pfade für Volume-Mounts verwenden (falls in Docker-Container)
         # WICHTIG: Host-Pfade müssen absolut sein und vom Host-System stammen, nicht vom Container
         # Versuche, Host-Pfade aus den gemounteten Volumes zu extrahieren
-        pipelines_host_path = _get_host_path_for_volume(
+        pipelines_base_path = _get_host_path_for_volume(
             client, str(config.PIPELINES_DIR), config.PIPELINES_HOST_DIR
         )
+        # Mount spezifisches Pipeline-Verzeichnis (nicht gesamtes pipelines-Verzeichnis)
+        pipeline_host_path = str(Path(pipelines_base_path) / pipeline.name)
         uv_cache_host_path = _get_host_path_for_volume(
             client, str(config.UV_CACHE_DIR), config.UV_CACHE_HOST_DIR
         )
         
+        # Container-Konfiguration für docker-socket-proxy
         container_config = {
             "image": config.WORKER_BASE_IMAGE,
             "command": _build_container_command(pipeline),
             "environment": env_vars,
+            # Volumes als Dictionary (korrektes Format für docker Python library)
             "volumes": {
-                pipelines_host_path: {"bind": "/app", "mode": "ro"},
+                pipeline_host_path: {"bind": "/app", "mode": "ro"},
                 uv_cache_host_path: {"bind": "/root/.cache/uv", "mode": "rw"}
             },
             "labels": {
@@ -443,10 +463,25 @@ async def _run_container_task(
             container_config["nano_cpus"] = int(cpu_hard_limit * 1e9)
         
         # Container starten
-        container = await asyncio.get_event_loop().run_in_executor(
-            _executor,
-            lambda: client.containers.run(**container_config)
+        logger.info(
+            f"Starte Container für Run {run_id} (Pipeline: {pipeline.name}, "
+            f"CPU-Limit: {cpu_hard_limit or 'unbegrenzt'}, RAM-Limit: {mem_hard_limit or 'unbegrenzt'})"
         )
+        try:
+            container = await asyncio.get_event_loop().run_in_executor(
+                _executor,
+                lambda: client.containers.run(**container_config)
+            )
+            logger.info(f"Container {container.id[:12]} erfolgreich gestartet für Run {run_id}")
+        except APIError as e:
+            # Infrastructure-Fehler: Docker-Proxy blockiert Request
+            logger.error(
+                f"Infrastructure-Fehler bei Container-Erstellung für Run {run_id}: {e}. "
+                f"Prüfe docker-proxy Konfiguration (POST=1, CONTAINERS=1, VOLUMES=1)."
+            )
+            raise
+        
+        logger.info(f"Container {container.id[:12]} erfolgreich gestartet für Run {run_id}")
         
         # Container in Tracking-Dictionary speichern
         async with _concurrency_lock:
@@ -459,16 +494,21 @@ async def _run_container_task(
         
         # WICHTIG: Log-Streaming SOFORT starten, damit keine Logs verloren gehen
         # Laut IMPLEMENTATION_PLAN sollen Logs während des gesamten Container-Laufs gestreamt werden
+        logger.debug(f"Starte Log-Streaming für Run {run_id}")
         log_task = asyncio.create_task(
             _stream_logs(container, log_file_path, log_queue, run_id)
         )
+        
+        logger.debug(f"Starte Metrics-Monitoring für Run {run_id}")
         metrics_task = asyncio.create_task(
             _monitor_metrics(
                 container,
                 metrics_file_path,
                 metrics_queue,
                 pipeline,
-                run_id
+                run_id,
+                session,
+                env_vars
             )
         )
         
@@ -581,8 +621,21 @@ async def _run_container_task(
         # Exit-Code extrahieren
         exit_code_value = exit_code.get("StatusCode", -1) if isinstance(exit_code, dict) else exit_code
         
+        # OOM Detection: Prüfe container.attrs["State"]["OOMKilled"] und exit_code 137
+        oom_killed = False
+        if container:
+            try:
+                container.reload()
+                oom_killed = container.attrs.get("State", {}).get("OOMKilled", False)
+            except Exception as e:
+                logger.warning(f"Fehler beim Prüfen von OOMKilled für Run {run_id}: {e}")
+        
+        # Exit-Code 137 (SIGKILL) deutet oft auf OOM hin
+        if exit_code_value == 137:
+            oom_killed = True
+        
         # Spezielle Exit-Code-Erkennung
-        error_type = _classify_exit_code(exit_code_value)
+        error_type = _classify_exit_code(exit_code_value, oom_killed)
         
         # Run-Objekt aktualisieren
         run = session.get(PipelineRun, run_id)
@@ -598,9 +651,13 @@ async def _run_container_task(
             run.status = RunStatus.SUCCESS
         else:
             run.status = RunStatus.FAILED
-            # Error-Type in Log-Datei schreiben (für UI-Anzeige)
+            # Pipeline Error: Script-Fehler (nicht Infrastructure)
+            if run.env_vars is None:
+                run.env_vars = {}
+            run.env_vars["_fastflow_error_type"] = "pipeline_error"
             if error_type:
-                logger.warning(f"Run {run_id} fehlgeschlagen: {error_type} (Exit-Code: {exit_code_value})")
+                run.env_vars["_fastflow_error_message"] = error_type
+                logger.warning(f"Run {run_id} fehlgeschlagen: {error_type} (Exit-Code: {exit_code_value}, OOMKilled: {oom_killed})")
         
         # Metrics-Datei-Pfad speichern
         if metrics_file_path.exists():
@@ -658,8 +715,9 @@ async def _run_container_task(
             from app.notifications import send_notifications
             await send_notifications(run, RunStatus.FAILED)
         
-    except Exception as e:
-        logger.error(f"Fehler bei Container-Ausführung für Run {run_id}: {e}", exc_info=True)
+    except (docker.errors.APIError, docker.errors.DockerException, ConnectionError, OSError) as e:
+        # Infrastructure Error: Docker-Proxy-Verbindungsfehler oder Docker-API-Fehler
+        logger.error(f"Infrastructure-Fehler bei Container-Ausführung für Run {run_id}: {e}", exc_info=True)
         
         # Status auf FAILED setzen
         run = session.get(PipelineRun, run_id)
@@ -667,6 +725,29 @@ async def _run_container_task(
             run.status = RunStatus.FAILED
             run.finished_at = datetime.utcnow()
             run.exit_code = -1
+            # Error-Type als Infrastructure Error markieren (in env_vars für Frontend)
+            if run.env_vars is None:
+                run.env_vars = {}
+            run.env_vars["_fastflow_error_type"] = "infrastructure_error"
+            run.env_vars["_fastflow_error_message"] = str(e)
+            session.add(run)
+            session.commit()
+    except Exception as e:
+        # Andere Exceptions (könnten auch Infrastructure-Fehler sein)
+        logger.error(f"Unerwarteter Fehler bei Container-Ausführung für Run {run_id}: {e}", exc_info=True)
+        
+        # Status auf FAILED setzen
+        run = session.get(PipelineRun, run_id)
+        if run:
+            run.status = RunStatus.FAILED
+            run.finished_at = datetime.utcnow()
+            run.exit_code = -1
+            # Prüfe ob es ein Connection-Error ist (Infrastructure)
+            if "connection" in str(e).lower() or "proxy" in str(e).lower() or "unreachable" in str(e).lower():
+                if run.env_vars is None:
+                    run.env_vars = {}
+                run.env_vars["_fastflow_error_type"] = "infrastructure_error"
+                run.env_vars["_fastflow_error_message"] = str(e)
             session.add(run)
             session.commit()
             
@@ -745,15 +826,18 @@ def _build_container_command(pipeline: DiscoveredPipeline) -> List[str]:
     WICHTIG: Fügt Python-Flags hinzu für unbuffered output (-u),
     damit Logs sofort ausgegeben werden und nicht gepuffert werden.
     
+    Das Pipeline-Verzeichnis wird nach /app gemountet, daher sind die Pfade
+    relativ zu /app (z.B. /app/main.py, /app/requirements.txt).
+    
     Args:
         pipeline: DiscoveredPipeline-Objekt
     
     Returns:
-        Liste mit Container-Befehl (uv run --with-requirements ...)
+        Liste mit Container-Befehl (uv run main.py)
     """
     if pipeline.has_requirements:
-        requirements_path = f"/app/{pipeline.name}/requirements.txt"
-        main_py_path = f"/app/{pipeline.name}/main.py"
+        requirements_path = "/app/requirements.txt"
+        main_py_path = "/app/main.py"
         return [
             "uv", "run",
             "--with-requirements", requirements_path,
@@ -761,7 +845,7 @@ def _build_container_command(pipeline: DiscoveredPipeline) -> List[str]:
             "python", "-u", main_py_path
         ]
     else:
-        main_py_path = f"/app/{pipeline.name}/main.py"
+        main_py_path = "/app/main.py"
         # Python unbuffered mode: -u Flag für sofortige Ausgabe
         return ["uv", "run", "python", "-u", main_py_path]
 
@@ -992,41 +1076,60 @@ async def _monitor_metrics(
     metrics_file_path: Path,
     metrics_queue: asyncio.Queue,
     pipeline: DiscoveredPipeline,
-    run_id: UUID
+    run_id: UUID,
+    session: Session,
+    env_vars: Dict[str, str]
 ) -> None:
     """
     Überwacht Container-Metrics (CPU & RAM) und speichert sie.
     
+    Sammelt kontinuierlich CPU- und RAM-Usage-Daten vom Container und speichert
+    sie sowohl in einer JSONL-Datei als auch in einer Queue für Live-Streaming
+    via Server-Sent Events.
+    
     Args:
         container: Docker-Container-Objekt
-        metrics_file_path: Pfad zur Metrics-Datei
-        metrics_queue: Queue für SSE-Streaming
-        pipeline: DiscoveredPipeline-Objekt
-        run_id: Run-ID
+        metrics_file_path: Pfad zur Metrics-Datei (JSONL-Format)
+        metrics_queue: Queue für SSE-Streaming (pro Run-ID)
+        pipeline: DiscoveredPipeline-Objekt (für Soft-Limit-Überwachung)
+        run_id: Run-ID (UUID)
+        session: SQLModel Session (für DB-Zugriffe bei Notifications)
+        env_vars: Environment-Variablen-Dictionary (für Notification-Flag)
+    
+    Notes:
+        - CPU-Berechnung verwendet Delta-Vergleich mit precpu_stats
+        - RAM-Werte werden direkt aus memory_stats extrahiert
+        - Metrics werden alle 2 Sekunden gesammelt (Rate-Limiting)
+        - Soft-Limit-Überschreitungen werden einmalig per Notification gemeldet
     """
     import aiofiles
     
     try:
+        logger.debug(f"Starte Stats-Stream für Container {container.id[:12]} (Run {run_id})")
         # Stats-Stream aus Container abrufen
         stats_stream = await asyncio.get_event_loop().run_in_executor(
             _executor,
             lambda: container.stats(stream=True, decode=True)
         )
         
+        logger.info(f"Metrics-Monitoring gestartet für Run {run_id} (Datei: {metrics_file_path})")
+        metrics_count = 0
+        
         # Datei-Handle öffnen (asynchron)
         async with aiofiles.open(metrics_file_path, "w", encoding="utf-8") as metrics_file:
-            prev_cpu_stats = None
-            prev_system_cpu = None
-            
             async for stats in _iter_stats_stream(stats_stream):
                 try:
-                    # CPU-Usage berechnen (Delta-Vergleich)
-                    cpu_percent = _calculate_cpu_percent(stats, prev_cpu_stats, prev_system_cpu)
-                    
-                    # RAM-Usage erfassen
+                    # RAM-Usage erfassen (in MB) - immer verfügbar
                     memory_stats = stats.get("memory_stats", {})
-                    ram_usage_mb = memory_stats.get("usage", 0) / (1024 * 1024)
-                    ram_limit_mb = memory_stats.get("limit", 0) / (1024 * 1024)
+                    ram_usage_mb = round(memory_stats.get("usage", 0) / (1024 * 1024), 2)
+                    ram_limit_mb = round(memory_stats.get("limit", 0) / (1024 * 1024), 2)
+                    
+                    # CPU-Usage berechnen (Delta-Vergleich mit precpu_stats aus aktuellen stats)
+                    # Docker liefert precpu_stats automatisch in jedem stats-Objekt
+                    cpu_percent = _calculate_cpu_percent(stats, None, None)
+                    # Wenn CPU-Berechnung nicht möglich (erste Iteration oder system_delta = 0), verwende 0.0
+                    if cpu_percent is None:
+                        cpu_percent = 0.0
                     
                     # Soft-Limit-Überwachung
                     soft_limit_exceeded = False
@@ -1054,10 +1157,11 @@ async def _monitor_metrics(
                                 exceeded_limit = mem_soft_limit_mb
                     
                     # Metrics-Objekt erstellen
+                    # WICHTIG: Frontend erwartet 'ram_mb', nicht 'mem_usage_mb'
                     metric = {
                         "timestamp": datetime.utcnow().isoformat(),
-                        "cpu_percent": cpu_percent,
-                        "ram_mb": ram_usage_mb,
+                        "cpu_percent": cpu_percent if cpu_percent is not None else 0.0,
+                        "ram_mb": ram_usage_mb,  # Frontend erwartet 'ram_mb'
                         "ram_limit_mb": ram_limit_mb,
                         "soft_limit_exceeded": soft_limit_exceeded
                     }
@@ -1086,35 +1190,49 @@ async def _monitor_metrics(
                     try:
                         metrics_queue.put_nowait(metric)
                     except asyncio.QueueFull:
-                        # Queue voll, alte Einträge entfernen
+                        # Queue voll, alte Einträge entfernen (FIFO)
+                        logger.debug(f"Metrics-Queue voll für Run {run_id}, entferne ältesten Eintrag")
                         try:
                             metrics_queue.get_nowait()
                             metrics_queue.put_nowait(metric)
                         except asyncio.QueueEmpty:
                             pass
                     
-                    # Stats für nächste Iteration speichern
-                    prev_cpu_stats = stats.get("cpu_stats", {})
-                    prev_system_cpu = stats.get("precpu_stats", {})
+                    metrics_count += 1
+                    if metrics_count % 10 == 0:  # Alle 20 Sekunden (10 * 2s)
+                        logger.debug(
+                            f"Metrics-Monitoring für Run {run_id}: {metrics_count} Samples gesammelt "
+                            f"(CPU: {cpu_percent:.1f}%, RAM: {ram_usage_mb:.1f}MB/{ram_limit_mb:.1f}MB)"
+                        )
                     
                     # Rate-Limiting: Alle 2 Sekunden messen
                     await asyncio.sleep(2)
                     
                 except Exception as e:
-                    logger.warning(f"Fehler beim Verarbeiten von Container-Stats für Run {run_id}: {e}")
+                    logger.warning(
+                        f"Fehler beim Verarbeiten von Container-Stats für Run {run_id}: {e}",
+                        exc_info=True
+                    )
         
     except asyncio.CancelledError:
         # Task wurde abgebrochen (normal bei Container-Ende)
+        logger.debug(f"Metrics-Monitoring-Task für Run {run_id} wurde abgebrochen (Container beendet)")
         pass
     except Exception as e:
-        logger.error(f"Fehler beim Metrics-Monitoring für Run {run_id}: {e}", exc_info=True)
+        logger.error(
+            f"Fehler beim Metrics-Monitoring für Run {run_id}: {e}",
+            exc_info=True
+        )
     finally:
         # Stream explizit schließen
         try:
-            if hasattr(stats_stream, 'close'):
+            if 'stats_stream' in locals() and hasattr(stats_stream, 'close'):
                 stats_stream.close()
-        except Exception:
-            pass
+                logger.debug(f"Stats-Stream für Run {run_id} geschlossen")
+        except Exception as e:
+            logger.warning(f"Fehler beim Schließen des Stats-Streams für Run {run_id}: {e}")
+        
+        logger.info(f"Metrics-Monitoring beendet für Run {run_id} ({metrics_count if 'metrics_count' in locals() else 0} Samples gesammelt)")
 
 
 async def _iter_stats_stream(stream):
@@ -1187,17 +1305,19 @@ async def _send_soft_limit_notification_async(
         logger.error(f"Fehler beim Senden der Soft-Limit-Notification für Run {run.id}: {e}")
 
 
-def _classify_exit_code(exit_code: int) -> Optional[str]:
+def _classify_exit_code(exit_code: int, oom_killed: bool = False) -> Optional[str]:
     """
     Klassifiziert Exit-Code in Fehler-Typ.
     
     Args:
         exit_code: Exit-Code des Container-Prozesses
+        oom_killed: True wenn Container wegen OOM gekillt wurde
     
     Returns:
         Fehler-Typ-String oder None wenn nicht klassifizierbar
     """
-    if exit_code == 137:
+    # OOM Detection: Prüfe OOMKilled Flag oder Exit-Code 137
+    if oom_killed or exit_code == 137:
         return "OOM (Out of Memory) - Container wurde wegen Memory-Limit gekillt"
     elif exit_code == 125:
         return "Docker-Fehler - Container-Start fehlgeschlagen (z.B. Image nicht gefunden)"
@@ -1221,44 +1341,52 @@ def _calculate_cpu_percent(
     """
     Berechnet CPU-Usage-Prozentsatz aus Docker-Stats.
     
+    Verwendet die Delta-Berechnung zwischen aktuellen und vorherigen CPU-Stats.
+    Docker liefert automatisch 'precpu_stats' in jedem Stats-Objekt, daher werden
+    die prev_cpu_stats Parameter nicht verwendet (für zukünftige Erweiterungen).
+    
+    Formel: (cpu_delta / system_delta) * online_cpus * 100.0
+    
     Args:
-        stats: Aktuelle Container-Stats
-        prev_cpu_stats: Vorherige CPU-Stats (für Delta-Berechnung)
-        prev_system_cpu: Vorherige System-CPU-Stats
+        stats: Aktuelle Container-Stats (enthält cpu_stats und precpu_stats)
+        prev_cpu_stats: Vorherige CPU-Stats (wird nicht verwendet, da precpu_stats in stats enthalten ist)
+        prev_system_cpu: Vorherige System-CPU-Stats (wird nicht verwendet)
     
     Returns:
-        CPU-Usage in Prozent oder None wenn Berechnung nicht möglich
-    """
-    if prev_cpu_stats is None or prev_system_cpu is None:
-        return None
+        CPU-Usage in Prozent (0.0-100.0) oder None wenn Berechnung nicht möglich
+        (z.B. bei system_delta <= 0 oder fehlenden Stats)
     
+    Notes:
+        - Erste Iteration kann None zurückgeben, wenn precpu_stats noch leer ist
+        - system_delta muss > 0 sein, sonst wird None zurückgegeben
+    """
     cpu_stats = stats.get("cpu_stats", {})
     precpu_stats = stats.get("precpu_stats", {})
     
-    # CPU-Delta berechnen
+    # CPU-Delta berechnen (exakte Formel aus Plan)
     cpu_delta = (
         cpu_stats.get("cpu_usage", {}).get("total_usage", 0) -
-        prev_cpu_stats.get("cpu_usage", {}).get("total_usage", 0)
+        precpu_stats.get("cpu_usage", {}).get("total_usage", 0)
     )
     
-    # System-CPU-Delta berechnen
+    # System-CPU-Delta berechnen (exakte Formel aus Plan)
     system_delta = (
         cpu_stats.get("system_cpu_usage", 0) -
         precpu_stats.get("system_cpu_usage", 0)
     )
     
-    if system_delta == 0:
+    if system_delta <= 0.0:
         return None
     
-    # Online-CPUs
+    # Online-CPUs aus cpu_stats
     online_cpus = cpu_stats.get("online_cpus", 1)
     if online_cpus == 0:
         online_cpus = 1
     
-    # CPU-Prozentsatz berechnen
-    cpu_percent = (cpu_delta / system_delta) * online_cpus * 100.0
+    # CPU-Prozentsatz berechnen (exakte Formel aus Plan)
+    cpu_pct = (cpu_delta / system_delta) * online_cpus * 100.0
     
-    return max(0.0, min(100.0, cpu_percent))  # Clamp zwischen 0 und 100
+    return round(max(0.0, min(100.0, cpu_pct)), 2)  # Clamp zwischen 0 und 100, auf 2 Dezimalstellen runden
 
 
 async def _update_pipeline_stats(
@@ -1454,8 +1582,13 @@ async def reconcile_zombie_containers(session: Session) -> None:
                     container.reload()
                     exit_code = container.attrs.get("State", {}).get("ExitCode", -1)
                     
+                    # OOM Detection
+                    oom_killed = container.attrs.get("State", {}).get("OOMKilled", False)
+                    if exit_code == 137:
+                        oom_killed = True
+                    
                     # Spezielle Exit-Code-Erkennung
-                    error_type = _classify_exit_code(exit_code)
+                    error_type = _classify_exit_code(exit_code, oom_killed)
                     
                     run.exit_code = exit_code
                     run.finished_at = datetime.utcnow()
@@ -1568,7 +1701,8 @@ async def _re_attach_container(
         exit_code_value = exit_code.get("StatusCode", -1) if isinstance(exit_code, dict) else exit_code
         
         # Spezielle Exit-Code-Erkennung
-        error_type = _classify_exit_code(exit_code_value)
+        # OOM Detection wird bereits in _run_container_task durchgeführt
+        error_type = _classify_exit_code(exit_code_value, False)
         
         # Status aktualisieren
         run = session.get(PipelineRun, run_id)

@@ -41,7 +41,7 @@ Während der Container läuft, fungiert die FastAPI als Vermittler:
 
 - **Logs**: Die API liest den stdout/stderr-Stream des Docker-Containers asynchron und stellt ihn über einen SSE-Endpunkt (Server-Sent Events) bereit.
 - **Metrics**: Die Docker-Stats-API wird abgegriffen, um CPU- und RAM-Werte in Echtzeit an das React-Dashboard zu senden.
-- **Security**: Die API kommuniziert nicht direkt mit dem Docker-Socket, sondern über einen Socket-Proxy, der nur lesende Zugriffe und begrenzte Start-Befehle erlaubt.
+- **Security**: Die API kommuniziert nicht direkt mit dem Docker-Socket, sondern über einen sicheren Docker-Socket-Proxy (`tecnativa/docker-socket-proxy`), der nur konfigurierte Operationen erlaubt und den direkten Root-Zugriff auf den Docker-Socket verhindert.
 
 ### 4. Terminierung & Cleanup
 
@@ -54,14 +54,54 @@ Nach Abschluss des Python-Skripts:
 ### 🏗 Architektur-Diagramm (Datenfluss)
 
 ```mermaid
-graph LR
-    A[React Frontend] -- REST/SSE --> B[FastAPI Orchestrator]
-    B -- SQLModel --> C[(SQLite/Postgres)]
-    B -- Auth --> D[GitHub App / Secrets]
-    B -- Proxy --> E[Docker Socket Proxy]
-    E -- Spawns --> F[Pipeline Container]
-    F -- Mounts --> G[Shared uv-Cache]
-    F -- Mounts --> H[Pipeline Code]
+graph TB
+    subgraph "Client Layer"
+        A["🌐 React Frontend<br/><small>TypeScript + Vite</small>"]
+    end
+    
+    subgraph "Application Layer"
+        B["⚡ FastAPI Orchestrator<br/><small>Python 3.11+</small>"]
+        C[("💾 Database<br/><small>SQLite/PostgreSQL</small>")]
+        D["🔐 Auth & Secrets<br/><small>GitHub App / Fernet</small>"]
+    end
+    
+    subgraph "Security Layer"
+        E["🛡️ Docker Socket Proxy<br/><small>tecnativa/docker-socket-proxy</small>"]
+    end
+    
+    subgraph "Infrastructure Layer"
+        F["🐳 Docker Daemon<br/><small>Host System</small>"]
+    end
+    
+    subgraph "Execution Layer"
+        G["📦 Pipeline Container<br/><small>ghcr.io/astral-sh/uv</small>"]
+        H["📚 Shared uv-Cache<br/><small>/data/uv_cache</small>"]
+        I["📝 Pipeline Code<br/><small>/app:ro</small>"]
+    end
+    
+    A -->|"REST/SSE<br/>Live Updates"| B
+    B -->|"SQLModel<br/>ORM"| C
+    B -->|"JWT & Encryption"| D
+    B -->|"HTTP API<br/>http://docker-proxy:2375"| E
+    E -->|"Unix Socket<br/>/var/run/docker.sock:ro"| F
+    F -->|"Creates & Manages"| G
+    G -.->|"Read/Write"| H
+    G -.->|"Read-Only"| I
+    B -.->|"Logs & Stats<br/>via Proxy"| G
+    
+    classDef frontend fill:#61dafb,stroke:#20232a,stroke-width:2px,color:#000
+    classDef backend fill:#009688,stroke:#004d40,stroke-width:2px,color:#fff
+    classDef security fill:#ff9800,stroke:#e65100,stroke-width:2px,color:#000
+    classDef infra fill:#2196f3,stroke:#0d47a1,stroke-width:2px,color:#fff
+    classDef execution fill:#9c27b0,stroke:#4a148c,stroke-width:2px,color:#fff
+    classDef storage fill:#607d8b,stroke:#263238,stroke-width:2px,color:#fff
+    
+    class A frontend
+    class B,C,D backend
+    class E security
+    class F infra
+    class G execution
+    class H,I storage
 ```
 
 ### Warum dieser Ansatz?
@@ -120,6 +160,7 @@ Während Airflow eine Postgres-DB, einen Redis-Broker, einen Scheduler, einen We
 - **Frontend**: React + TypeScript (Vite)
 - **Database**: SQLModel (SQLite/PostgreSQL)
 - **Execution**: Docker Engine API + uv
+- **Security**: Docker Socket Proxy (tecnativa/docker-socket-proxy) für sichere Docker-API-Zugriffe
 - **Scheduling**: APScheduler (Persistent)
 - **Auth**: JWT & Fernet Encryption
 
@@ -134,9 +175,40 @@ Während Airflow eine Postgres-DB, einen Redis-Broker, einen Scheduler, einen We
 - **Git-Sync**: Automatische Synchronisation mit Git-Repositories
 - **Secrets-Management**: Sichere Verwaltung von Secrets und Parametern
 
+## 🔒 Sicherheit: Docker Socket Proxy
+
+Fast-Flow nutzt einen **Docker Socket Proxy** (`tecnativa/docker-socket-proxy`) als Sicherheitsschicht zwischen dem Orchestrator und dem Docker-Daemon. Dies verhindert direkten Root-Zugriff auf den Docker-Socket und schränkt die verfügbaren Docker-API-Operationen ein.
+
+### Warum ein Proxy?
+
+- **Sicherheit**: Der Docker-Socket (`/var/run/docker.sock`) gibt effektiv Root-Zugriff auf das gesamte Host-System. Ein Proxy filtert und erlaubt nur konfigurierte Operationen.
+- **Kontrollierte Zugriffe**: Nur Container-Erstellung, Logs, Stats und Image-Pulls sind erlaubt. Netzwerk- und Volume-Management sind deaktiviert.
+- **Isolation**: Selbst bei einem kompromittierten Orchestrator ist der Schaden begrenzt.
+
+### Konfiguration
+
+Der Proxy wird automatisch in `docker-compose.yaml` konfiguriert:
+
+```yaml
+docker-proxy:
+  image: tecnativa/docker-socket-proxy:latest
+  environment:
+    - CONTAINERS=1    # Container-Operationen erlauben
+    - IMAGES=1        # Image-Pulls erlauben
+    - VOLUMES=1       # Volume-Mounts erlauben
+    - POST=1          # HTTP POST (Container-Erstellung) erlauben
+    - DELETE=1        # Container-Entfernung erlauben
+    - STATS=1         # Resource-Monitoring erlauben
+    - NETWORKS=0       # Netzwerk-Management deaktiviert
+    - SYSTEM=0        # System-Operationen deaktiviert
+```
+
+Der Orchestrator kommuniziert mit dem Proxy über `http://docker-proxy:2375` statt direkt mit dem Docker-Socket.
+
 ## Dokumentation
 
 - **[Quick Start Guide](docs/QUICKSTART.md)** - Schnellstart-Anleitung
+- **[Docker Socket Proxy](docs/DOCKER_PROXY.md)** - Sicherheitsarchitektur und Proxy-Konfiguration
 - **[API-Dokumentation](docs/api/API.md)** - Vollständige API-Referenz
 - **[Frontend-Dokumentation](docs/frontend/FRONTEND.md)** - Frontend-Komponenten und Seiten
 - **[Pipeline-Repository](docs/pipelines/PIPELINE_REPOSITORY.md)** - Detaillierte Anleitung für Pipeline-Repositories

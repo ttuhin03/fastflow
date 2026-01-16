@@ -14,18 +14,34 @@ Fast-Flow ist ein On-Demand Pipeline-Orchestrator, der jede Pipeline in einem se
 
 ---
 
-## 1. Infrastruktur-Setup (Docker-in-Docker)
+## 1. Infrastruktur-Setup (Docker-in-Docker mit Socket-Proxy)
 
 ### Konzept
-Damit der Orchestrator (FastAPI) andere Docker-Container starten kann, muss der Docker-Socket des Host-Systems in den Orchestrator-Container gemountet werden.
+Damit der Orchestrator (FastAPI) andere Docker-Container starten kann, nutzt Fast-Flow einen **Docker Socket Proxy** als Sicherheitsschicht. Der Orchestrator kommuniziert nicht direkt mit dem Docker-Socket, sondern über einen Proxy-Service, der nur konfigurierte Operationen erlaubt.
 
 ### Docker-Compose Setup
 ```yaml
 services:
+  # Docker Socket Proxy (Security Layer)
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # Nur Proxy hat Zugriff
+    environment:
+      - CONTAINERS=1    # Container-Operationen erlauben
+      - IMAGES=1        # Image-Pulls erlauben
+      - VOLUMES=1       # Volume-Mounts erlauben
+      - POST=1          # HTTP POST (Container-Erstellung) erlauben
+      - DELETE=1        # Container-Entfernung erlauben
+      - STATS=1         # Resource-Monitoring erlauben
+      - NETWORKS=0      # Netzwerk-Management deaktiviert
+      - SYSTEM=0        # System-Operationen deaktiviert
+    networks:
+      - fastflow-network
+
   orchestrator:
     build: .
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock # Zugriff auf Docker-Engine
       - ./pipelines:/app/pipelines                # Git-Repo mit Pipelines
       - ./logs:/app/persistent_logs               # Dauerhafte Logs
       - ./data:/app/data                          # SQLite DB
@@ -33,31 +49,46 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - WORKER_BASE_IMAGE=ghcr.io/astral-sh/uv:python3.11-bookworm-slim  # UV Worker Image
+      - DOCKER_PROXY_URL=http://docker-proxy:2375  # Proxy-URL statt direkter Socket
+      - WORKER_BASE_IMAGE=ghcr.io/astral-sh/uv:python3.11-bookworm-slim
+    networks:
+      - fastflow-network
+    # KEIN Docker-Socket-Mount mehr - Kommunikation über Proxy
 ```
 
 ### Feature-Erklärung
-- **Docker Socket Mount**: Ermöglicht dem Orchestrator-Container, Docker-Befehle auszuführen und Container zu starten
+- **Docker Socket Proxy**: Sicherheitsschicht zwischen Orchestrator und Docker-Daemon
+  - Nur der Proxy-Service hat direkten Zugriff auf `/var/run/docker.sock`
+  - Orchestrator kommuniziert über HTTP mit dem Proxy (`http://docker-proxy:2375`)
+  - Proxy filtert und erlaubt nur konfigurierte Operationen
 - **Volume Mounts**: 
   - `pipelines`: Git-Repository mit den Pipeline-Skripten
   - `logs`: Persistente Speicherung von Log-Dateien
   - `data`: SQLite-Datenbank für Metadaten
   - `data/uv_cache`: Shared UV Cache für alle Pipeline-Dependencies (dedupliziert, effizient)
-- **UV-basierte Architektur**: Ein einziges Standard-Worker-Image (`fastflow-worker`) mit `uv` vorinstalliert, statt custom Images pro Pipeline
+- **UV-basierte Architektur**: Ein einziges Standard-Worker-Image mit `uv` vorinstalliert, statt custom Images pro Pipeline
 
-### Docker-in-Docker (DinD) Security-Warnung
+### Sicherheits-Architektur
 
-**⚠️ WICHTIG: Security-Risiko**
+**✅ Sichere Implementierung mit Docker Socket Proxy**
 
-Der Docker-Socket (`/var/run/docker.sock`) gibt effektiv Root-Zugriff auf das gesamte Host-System. Wer Zugriff auf den Socket hat, kann:
+Der Docker-Socket (`/var/run/docker.sock`) gibt effektiv Root-Zugriff auf das gesamte Host-System. Fast-Flow nutzt einen **Docker Socket Proxy** (`tecnativa/docker-socket-proxy`), um dieses Risiko zu minimieren:
 
-- **Privilege Escalation**: Container mit Root-Mounts starten und das Host-System manipulieren
-- **Container-Escape**: Alle Container auf dem System sehen, stoppen oder deren Daten (Secrets) stehlen
+**Vorteile des Proxy-Ansatzes:**
 
-**Sicherheitsmaßnahmen:**
+1. **Isolation**: Der Orchestrator hat keinen direkten Zugriff auf den Docker-Socket
+2. **Kontrollierte Operationen**: Nur konfigurierte Docker-API-Operationen sind erlaubt:
+   - Container-Erstellung, Start, Stop, Entfernung
+   - Log-Streaming und Stats-Monitoring
+   - Image-Pulls
+   - Volume-Mounts (nur für Pipeline-Code und UV-Cache)
+3. **Deaktivierte Operationen**: Netzwerk-Management, System-Operationen und privilegierte Container sind blockiert
+4. **Defense in Depth**: Selbst bei einem kompromittierten Orchestrator ist der Schaden begrenzt
+
+**Zusätzliche Sicherheitsmaßnahmen:**
 
 1. **Authentifizierung (Phase 9) - WICHTIGSTER SCHUTZ**: Die UI muss immer mit Login geschützt sein. Niemals ohne Authentifizierung erreichbar machen!
-2. **User Namespaces (Optional)**: Docker kann so konfiguriert werden, dass der User im Container nicht die gleiche ID wie Root auf dem Host hat.
+2. **HTTPS für Produktion**: Für Internet-Deployment sollte ein Reverse-Proxy (Nginx/Traefik) mit HTTPS vor den Orchestrator geschaltet werden
 
 ---
 

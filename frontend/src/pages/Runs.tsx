@@ -14,6 +14,8 @@ interface Run {
   started_at: string
   finished_at: string | null
   exit_code: number | null
+  error_type?: string | null  // "pipeline_error" oder "infrastructure_error"
+  error_message?: string | null
 }
 
 interface RunsResponse {
@@ -281,6 +283,11 @@ export default function Runs() {
                           <span className={`status-badge status-${run.status.toLowerCase()}`}>
                             {run.status}
                           </span>
+                          {run.error_type && (
+                            <span className={`error-type-badge error-type-${run.error_type}`}>
+                              {run.error_type === 'pipeline_error' ? 'Pipeline' : 'Infrastructure'}
+                            </span>
+                          )}
                         </div>
                       </Tooltip>
                     </td>
@@ -325,6 +332,11 @@ export default function Runs() {
                   <span className={`status-badge status-${run.status.toLowerCase()}`}>
                     {run.status}
                   </span>
+                  {run.error_type && (
+                    <span className={`error-type-badge error-type-${run.error_type}`}>
+                      {run.error_type === 'pipeline_error' ? 'Pipeline' : 'Infrastructure'}
+                    </span>
+                  )}
                 </div>
                 <div className="run-card-body">
                   <div className="run-card-row">

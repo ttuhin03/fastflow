@@ -223,6 +223,8 @@ interface Run {
   parameters: Record<string, string>
   log_file: string
   metrics_file: string | null
+  error_type?: string | null  // "pipeline_error" oder "infrastructure_error"
+  error_message?: string | null
 }
 
 interface Pipeline {
@@ -720,6 +722,22 @@ export default function RunDetail() {
             {run.status}
           </span>
         </div>
+        {run.error_type && (
+          <div className="info-row">
+            <span className="info-label">Fehler-Typ:</span>
+            <span className={`error-type-badge error-type-${run.error_type}`}>
+              {run.error_type === 'pipeline_error' ? 'Pipeline Error' : 'Infrastructure Error'}
+            </span>
+          </div>
+        )}
+        {run.error_message && (
+          <div className="info-row">
+            <span className="info-label">Fehler-Details:</span>
+            <span className={`error-message error-message-${run.error_type || 'unknown'}`}>
+              {run.error_message}
+            </span>
+          </div>
+        )}
         <div className="info-row">
           <span className="info-label">Gestartet:</span>
           <span className="info-value">
