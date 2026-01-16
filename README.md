@@ -61,7 +61,7 @@ cp .env.example .env
 - **Passwort:** `admin`
 
 > [!WARNING]
-> Ändern Sie diese Zugangsdaten in der `.env` Datei für den Produktionseinsatz! Siehe [Konfiguration](docs/CONFIGURATION.md).
+> Ändern Sie diese Zugangsdaten in der `.env` Datei für den Produktionseinsatz! Siehe [Konfiguration](docs/deployment/CONFIGURATION.md).
 
 ---
 
@@ -266,8 +266,10 @@ Der Orchestrator kommuniziert mit dem Proxy über `http://docker-proxy:2375` sta
 
 ## Dokumentation
 
-- **[Konfiguration](docs/CONFIGURATION.md)** - Detaillierte Erklärung aller Environment-Variablen
-- **[Docker Socket Proxy](docs/DOCKER_PROXY.md)** - Sicherheitsarchitektur und Proxy-Konfiguration
+- **[Konfiguration](docs/deployment/CONFIGURATION.md)** - Detaillierte Erklärung aller Environment-Variablen
+- **[Deployment](docs/deployment/PRODUCTION.md)** - Produktions-Setup Guide
+- **[Database](docs/database/SCHEMA.md)** - Schema und [Migrationen](docs/database/MIGRATIONS.md)
+- **[Docker Socket Proxy](docs/deployment/DOCKER_PROXY.md)** - Sicherheitsarchitektur und Proxy-Konfiguration
 - **[API-Dokumentation](docs/api/API.md)** - Vollständige API-Referenz
 - **[Frontend-Dokumentation](docs/frontend/FRONTEND.md)** - Frontend-Komponenten und Seiten
 - **[Pipeline-Repository](docs/pipelines/PIPELINE_REPOSITORY.md)** - Detaillierte Anleitung für Pipeline-Repositories
@@ -488,7 +490,7 @@ requests==2.31.0
 
 ---
 
-*Weitere Dokumentation siehe `docs/CONFIGURATION.md`*
+*Weitere Dokumentation siehe `docs/deployment/CONFIGURATION.md`*
 
 ## ❓ Troubleshooting
 
