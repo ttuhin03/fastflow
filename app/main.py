@@ -28,6 +28,22 @@ logger = logging.getLogger(__name__)
 shutdown_event = asyncio.Event()
 
 
+# Startup Banner
+STARTUP_BANNER = r"""
+________                 __     ___________.__                     
+\______   \_____    ______/  |_  \_   _____/|  |   ______  _  __     
+ |    |  _/\__  \  /  ___/\   __\  |    __)  |  |  /  _ \ \/ \/ /     
+ |    |   \ / __ \_\___ \  |  |    |     \   |  |_|  <_> )     /      
+ |______  /(____  /____  > |__|    \___  /   |____/____/ \/\_/       
+        \/      \/     \/              \/                            
+
+[SYSTEM] Fast-Flow v1.0.0 initialized.
+[INFO]   Philosophy: Complexity is a bug, not a feature.
+[INFO]   Status: 100% Free of Air-Castles, Daggers, and Magic Spells.
+[INFO]   Mode: Pure Python Execution.
+---------------------------------------------------------------------
+"""
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -44,6 +60,7 @@ async def lifespan(app: FastAPI):
         None: App läuft während des Context-Managers
     """
     # Startup
+    print(STARTUP_BANNER)
     logger.info("Fast-Flow Orchestrator startet...")
     
     # Sicherheits-Validierungen beim Start
