@@ -7,6 +7,9 @@ Fast-Flow ist die Antwort auf die Komplexität von Airflow und die Schwerfällig
 > [!NOTE]
 >  Lies unser [Anti-Overhead Manifesto](docs/manifesto.md), um zu verstehen, warum Fast-Flow die bessere Alternative zu Airflow, Dagster & Co. ist.
 
+> [!TIP]
+> Verwenden Sie unser **[fastflow-pipeline-template](https://github.com/ttuhin03/fastflow-pipeline-template)** für einen schnellen Start und eine optimale Struktur Ihrer Pipelines.
+
 ## 📖 Inhaltsverzeichnis
 - [🚀 Schnellstart](#-schnellstart)
 - [🏗 Architektur: Das "Runner-Cache"-Prinzip](#-architektur-das-runner-cache-prinzip)
