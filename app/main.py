@@ -122,6 +122,18 @@ async def lifespan(app: FastAPI):
         logger.error(f"Fehler bei Cleanup-Service-Initialisierung: {e}")
         # Nicht kritisch, App kann trotzdem starten
     
+    # Version Check initialisieren und planen (Phase 12)
+    try:
+        from app.version_checker import check_version_update, schedule_version_check
+        # Initiale Version-Prüfung beim Start
+        await check_version_update()
+        # Version-Check planen (täglich um 2 Uhr)
+        schedule_version_check()
+        logger.info("Version Check initialisiert und geplant")
+    except Exception as e:
+        logger.error(f"Fehler bei Version-Check-Initialisierung: {e}")
+        # Nicht kritisch, App kann trotzdem starten
+    
     # bcrypt_sha256 wird beim ersten Login automatisch initialisiert
     # Initialisierung beim Start wird übersprungen, da passlib beim Initialisieren
     # ein Test-Passwort verwendet, das das 72-Byte-Limit überschreitet

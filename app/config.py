@@ -56,7 +56,7 @@ class Config:
     """
     
     # Version aus Datei lesen
-    VERSION: str = Path("VERSION").read_text().strip() if Path("VERSION").exists() else "0.0.0"
+    VERSION: str = Path("VERSION").read_text().strip().lstrip("v") if Path("VERSION").exists() else "0.0.0"
 
     # Datenbank-Konfiguration
     DATABASE_URL: Optional[str] = os.getenv("DATABASE_URL", None)

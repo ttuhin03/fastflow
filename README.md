@@ -268,11 +268,56 @@ Der Orchestrator kommuniziert mit dem Proxy über `http://docker-proxy:2375` sta
 
 - **[Konfiguration](docs/deployment/CONFIGURATION.md)** - Detaillierte Erklärung aller Environment-Variablen
 - **[Deployment](docs/deployment/PRODUCTION.md)** - Produktions-Setup Guide
+- **[Versioning & Releases](docs/deployment/VERSIONING.md)** - Version-Management und Release-Prozess
 - **[Database](docs/database/SCHEMA.md)** - Schema und [Migrationen](docs/database/MIGRATIONS.md)
 - **[Docker Socket Proxy](docs/deployment/DOCKER_PROXY.md)** - Sicherheitsarchitektur und Proxy-Konfiguration
 - **[API-Dokumentation](docs/api/API.md)** - Vollständige API-Referenz
 - **[Frontend-Dokumentation](docs/frontend/FRONTEND.md)** - Frontend-Komponenten und Seiten
 - **[Pipeline-Repository](docs/pipelines/PIPELINE_REPOSITORY.md)** - Detaillierte Anleitung für Pipeline-Repositories
+
+## 📦 Versioning & Releases
+
+Fast-Flow verwendet einen automatisierten Versions-Check, der täglich prüft, ob neue Releases verfügbar sind.
+
+### Version-Format
+
+Die Version wird in der `VERSION`-Datei im Projekt-Root gespeichert:
+
+```
+v0.1.0
+```
+
+### GitHub Releases erstellen
+
+Um eine neue Version zu veröffentlichen:
+
+1. **VERSION-Datei aktualisieren:**
+   ```bash
+   echo "v0.2.0" > VERSION
+   git add VERSION
+   git commit -m "Bump version to v0.2.0"
+   ```
+
+2. **Tag erstellen (muss VERSION-Datei exakt entsprechen):**
+   ```bash
+   git tag v0.2.0
+   git push origin v0.2.0
+   ```
+
+3. **GitHub Release erstellen:**
+   - Gehe zu: https://github.com/ttuhin03/fastflow/releases/new
+   - Wähle Tag: `v0.2.0`
+   - Füge Release Notes hinzu
+   - Veröffentliche das Release
+
+> **Wichtig:** Das Tag-Format muss exakt der VERSION-Datei entsprechen (beide mit "v" Präfix)
+
+Die Version-Check läuft automatisch:
+- ✅ Beim API-Start
+- ✅ Täglich um 2:00 Uhr (zusammen mit Log-Cleanup)
+- ✅ On-Demand via API: `GET /api/system/version?force_check=true`
+
+Weitere Details: [docs/deployment/VERSIONING.md](docs/deployment/VERSIONING.md)
 
 ## Pipeline-Repository-Struktur
 
