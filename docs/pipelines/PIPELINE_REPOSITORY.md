@@ -2,6 +2,9 @@
 
 Diese Dokumentation beschreibt detailliert, wie ein Pipeline-Repository strukturiert sein muss und welche Konfigurationsmöglichkeiten in der `pipeline.json` verfügbar sind.
 
+> [!IMPORTANT]
+> **Schnellstart-Template:** Wir haben ein offizielles Template-Repository erstellt, das Sie als Basis für Ihre eigenen Pipelines nutzen können: **[fastflow-pipeline-template](https://github.com/ttuhin03/fastflow-pipeline-template)**.
+
 ## Repository-Struktur
 
 Ein Pipeline-Repository ist ein Git-Repository, das Pipeline-Definitionen enthält. Jede Pipeline ist ein eigenes Verzeichnis mit mindestens einer `main.py` Datei.

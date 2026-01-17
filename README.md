@@ -337,6 +337,9 @@ Weitere Details: [docs/deployment/VERSIONING.md](docs/deployment/VERSIONING.md)
 
 Das Pipeline-Repository wird als Volume in den Orchestrator-Container gemountet. Pipelines werden automatisch erkannt und ausgeführt.
 
+> [!TIP]
+> Verwenden Sie unser **[fastflow-pipeline-template](https://github.com/ttuhin03/fastflow-pipeline-template)** für einen schnellen Start und eine optimale Struktur Ihrer Pipelines.
+
 ### Verzeichnisstruktur
 
 ```

@@ -134,3 +134,9 @@ Wir haben Fast-Flow nicht gebaut, weil wir mehr Features wollten. Wir haben es g
 - Kein Warten auf DevOps.
 
 Fast-Flow ist für Leute, die ihren Job lieben (das Coden), aber das Drumherum hassen.
+
+---
+
+### 🚀 Bereit für den nächsten Schritt?
+
+Wenn du die Philosophie teilst, ist es an der Zeit, sie in die Tat umzusetzen. Nutze unser **[Fast-Flow Pipeline Template](https://github.com/ttuhin03/fastflow-pipeline-template)**, um in Sekunden deine erste, saubere Pipeline zu starten.
