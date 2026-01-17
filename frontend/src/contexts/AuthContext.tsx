@@ -26,8 +26,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await apiClient.get('/auth/me')
       const role = response.data.role?.toLowerCase() as 'readonly' | 'write' | 'admin'
       setUserRole(role || 'readonly')
-    } catch (error) {
+    } catch (error: any) {
+      // Wenn Session abgelaufen ist, wird der Interceptor in client.ts
+      // automatisch den User ausloggen und zur Login-Seite weiterleiten
       setUserRole(null)
+      // Wenn es ein 401-Fehler ist, wird der Token bereits vom Interceptor entfernt
+      if (error?.response?.status === 401) {
+        setIsAuthenticated(false)
+        setToken(null)
+      }
     }
   }
 

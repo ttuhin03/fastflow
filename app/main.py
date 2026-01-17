@@ -28,6 +28,23 @@ logger = logging.getLogger(__name__)
 shutdown_event = asyncio.Event()
 
 
+
+# Startup Banner (version will be inserted dynamically)
+STARTUP_BANNER_TEMPLATE = r"""
+________                 __     ___________.__                     
+\______   \_____    ______/  |_  \_   _____/|  |   ______  _  __     
+ |    |  _/\__  \  /  ___/\   __\  |    __)  |  |  /  _ \ \/ \/ /     
+ |    |   \ / __ \_\___ \  |  |    |     \   |  |_|  <_> )     /      
+ |______  /(____  /____  > |__|    \___  /   |____/____/ \/\_/       
+        \/      \/     \/              \/                            
+
+[SYSTEM] Fast-Flow v{version} initialized.
+[INFO]   Philosophy: Complexity is a bug, not a feature.
+[INFO]   Status: 100% Free of Air-Castles, Daggers, and Magic Spells.
+[INFO]   Mode: Pure Python Execution.
+---------------------------------------------------------------------
+"""
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -44,6 +61,7 @@ async def lifespan(app: FastAPI):
         None: App läuft während des Context-Managers
     """
     # Startup
+    print(STARTUP_BANNER_TEMPLATE.format(version=config.VERSION))
     logger.info("Fast-Flow Orchestrator startet...")
     
     # Sicherheits-Validierungen beim Start
@@ -102,6 +120,18 @@ async def lifespan(app: FastAPI):
         logger.info("Cleanup-Service initialisiert")
     except Exception as e:
         logger.error(f"Fehler bei Cleanup-Service-Initialisierung: {e}")
+        # Nicht kritisch, App kann trotzdem starten
+    
+    # Version Check initialisieren und planen (Phase 12)
+    try:
+        from app.version_checker import check_version_update, schedule_version_check
+        # Initiale Version-Prüfung beim Start
+        await check_version_update()
+        # Version-Check planen (täglich um 2 Uhr)
+        schedule_version_check()
+        logger.info("Version Check initialisiert und geplant")
+    except Exception as e:
+        logger.error(f"Fehler bei Version-Check-Initialisierung: {e}")
         # Nicht kritisch, App kann trotzdem starten
     
     # bcrypt_sha256 wird beim ersten Login automatisch initialisiert
@@ -341,6 +371,10 @@ app.include_router(users_api.router, prefix="/api")
 # Webhook-Endpoints
 from app.api import webhooks as webhooks_api
 app.include_router(webhooks_api.router, prefix="/api")
+
+# System/Version-Endpoints
+from app.api import version as version_api
+app.include_router(version_api.router, prefix="/api")
 
 # Static Files für React-Frontend
 # Prüfe ob static-Verzeichnis existiert (nach Build)

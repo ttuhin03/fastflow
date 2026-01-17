@@ -149,6 +149,27 @@
   color: var(--color-text-secondary);
 }
 
+/* Error Type Badges */
+.error-type-badge {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  margin-left: 0.5rem;
+  text-transform: uppercase;
+}
+
+.error-type-badge.error-type-pipeline_error {
+  background-color: #f44336;
+  color: white;
+}
+
+.error-type-badge.error-type-infrastructure_error {
+  background-color: #ff9800;
+  color: white;
+}
+
 .status-icon.warning {
   color: var(--color-warning);
 }

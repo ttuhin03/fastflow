@@ -115,6 +115,13 @@ async def get_runs(
     # Response-Objekte erstellen
     runs_response = []
     for run in runs:
+        # Error-Type aus env_vars extrahieren
+        error_type = None
+        error_message = None
+        if run.env_vars:
+            error_type = run.env_vars.get("_fastflow_error_type")
+            error_message = run.env_vars.get("_fastflow_error_message")
+        
         runs_response.append({
             "id": str(run.id),
             "pipeline_name": run.pipeline_name,
@@ -125,7 +132,9 @@ async def get_runs(
             "log_file": run.log_file,
             "metrics_file": run.metrics_file,
             "uv_version": run.uv_version,
-            "setup_duration": run.setup_duration
+            "setup_duration": run.setup_duration,
+            "error_type": error_type,  # "pipeline_error" oder "infrastructure_error"
+            "error_message": error_message
         })
     
     page = (offset // limit) + 1 if limit > 0 else 1
@@ -165,6 +174,13 @@ async def get_run_details(
             detail=f"Run nicht gefunden: {run_id}"
         )
     
+    # Error-Type aus env_vars extrahieren
+    error_type = None
+    error_message = None
+    if run.env_vars:
+        error_type = run.env_vars.get("_fastflow_error_type")
+        error_message = run.env_vars.get("_fastflow_error_message")
+    
     return {
         "id": str(run.id),
         "pipeline_name": run.pipeline_name,
@@ -177,6 +193,8 @@ async def get_run_details(
         "env_vars": run.env_vars,
         "parameters": run.parameters,
         "uv_version": run.uv_version,
+        "error_type": error_type,  # "pipeline_error" oder "infrastructure_error"
+        "error_message": error_message,
         "setup_duration": run.setup_duration
     }
 

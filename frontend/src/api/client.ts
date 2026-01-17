@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios'
+import { showError } from '../utils/toast'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
@@ -40,7 +41,7 @@ const processQueue = (error: any, token: string | null = null) => {
       prom.resolve(token)
     }
   })
-  
+
   failedQueue = []
 }
 
@@ -48,18 +49,18 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config
-    
+
     // Ignoriere 401-Fehler für Login-Endpoint (sollte von Login-Komponente behandelt werden)
     const isLoginEndpoint = originalRequest?.url?.includes('/auth/login')
     const isRefreshEndpoint = originalRequest?.url?.includes('/auth/refresh')
-    
+
     // Wenn 401 und nicht bereits Refresh-Versuch
     if (error.response?.status === 401 && !originalRequest._retry) {
       // Für Login-Endpoint: Fehler einfach weiterwerfen (wird von Login-Komponente behandelt)
       if (isLoginEndpoint) {
         return Promise.reject(error)
       }
-      
+
       if (isRefreshing) {
         // Wenn bereits Refresh läuft, warte auf Ergebnis
         return new Promise((resolve, reject) => {
@@ -78,7 +79,7 @@ apiClient.interceptors.response.use(
       isRefreshing = true
 
       const token = sessionStorage.getItem('auth_token')
-      
+
       if (token && !isRefreshEndpoint) {
         try {
           // Versuche Token-Refresh
@@ -87,24 +88,38 @@ apiClient.interceptors.response.use(
               Authorization: `Bearer ${token}`
             }
           })
-          
+
           const { access_token } = response.data
           sessionStorage.setItem('auth_token', access_token)
-          
+
           // Aktualisiere Authorization Header für ursprüngliche Request
           originalRequest.headers.Authorization = `Bearer ${access_token}`
-          
+
           // Prozessiere Warteschlange
           processQueue(null, access_token)
           isRefreshing = false
-          
+
           // Wiederhole ursprüngliche Request mit neuem Token
           return apiClient(originalRequest)
-        } catch (refreshError) {
+        } catch (refreshError: any) {
+          // Refresh fehlgeschlagen - prüfe ob Session abgelaufen ist
+          const errorDetail = refreshError?.response?.data?.detail || ''
+          const isSessionExpired =
+            errorDetail.includes('Session nicht gefunden') ||
+            errorDetail.includes('abgelaufen') ||
+            errorDetail.includes('nach 24 Stunden') ||
+            errorDetail.includes('Bitte melden Sie sich erneut an')
+
           // Refresh fehlgeschlagen - logge User aus
           processQueue(refreshError, null)
           isRefreshing = false
           sessionStorage.removeItem('auth_token')
+
+          // Zeige benutzerfreundliche Nachricht wenn Session abgelaufen ist
+          if (isSessionExpired && window.location.pathname !== '/login') {
+            showError('Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.')
+          }
+
           // Nur redirecten wenn nicht bereits auf Login-Seite
           if (window.location.pathname !== '/login') {
             window.location.href = '/login'
@@ -123,7 +138,7 @@ apiClient.interceptors.response.use(
         return Promise.reject(error)
       }
     }
-    
+
     return Promise.reject(error)
   }
 )

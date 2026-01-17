@@ -44,7 +44,7 @@ export default function Tooltip({
 
     const triggerRect = triggerRef.current.getBoundingClientRect()
     const tooltipRect = tooltipRef.current.getBoundingClientRect()
-    
+
     // Prüfe ob Tooltip-Element bereits gemessen werden kann (width > 0)
     if (tooltipRect.width === 0 || tooltipRect.height === 0) {
       // Versuche es nochmal nach kurzer Verzögerung
@@ -57,6 +57,10 @@ export default function Tooltip({
     let top = 0
     let left = 0
 
+    // Ensure tooltip stays within viewport
+    const padding = 8
+
+    // Initial calculation
     switch (position) {
       case 'top':
         top = triggerRect.top - tooltipRect.height - 8
@@ -74,6 +78,20 @@ export default function Tooltip({
         top = triggerRect.top + triggerRect.height / 2 - tooltipRect.height / 2
         left = triggerRect.right + 8
         break
+    }
+
+    // Horizontal clamping
+    if (left < padding) {
+      left = padding
+    } else if (left + tooltipRect.width > window.innerWidth - padding) {
+      left = window.innerWidth - padding - tooltipRect.width
+    }
+
+    // Vertical clamping
+    if (top < padding) {
+      top = padding
+    } else if (top + tooltipRect.height > window.innerHeight - padding) {
+      top = window.innerHeight - padding - tooltipRect.height
     }
 
     setTooltipPosition({ top, left })
@@ -95,12 +113,12 @@ export default function Tooltip({
           })
         })
       }
-      
+
       updatePosition()
-      
+
       window.addEventListener('scroll', updateTooltipPosition, true)
       window.addEventListener('resize', updateTooltipPosition)
-      
+
       return () => {
         if (rafId) cancelAnimationFrame(rafId)
         window.removeEventListener('scroll', updateTooltipPosition, true)
@@ -134,15 +152,15 @@ export default function Tooltip({
           style={
             tooltipPosition
               ? {
-                  top: `${tooltipPosition.top}px`,
-                  left: `${tooltipPosition.left}px`,
-                  visibility: 'visible',
-                }
+                top: `${tooltipPosition.top}px`,
+                left: `${tooltipPosition.left}px`,
+                visibility: 'visible',
+              }
               : {
-                  visibility: 'hidden',
-                  top: '-9999px',
-                  left: '-9999px',
-                }
+                visibility: 'hidden',
+                top: '-9999px',
+                left: '-9999px',
+              }
           }
         >
           {content}

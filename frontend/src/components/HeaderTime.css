@@ -1,0 +1,65 @@
+.header-time-container {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 6px var(--spacing-md);
+  background-color: var(--color-surface-variant);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  margin-right: var(--spacing-sm);
+  transition: all var(--transition-base);
+  height: 36px;
+  /* Match height of other controls roughly or let it size naturally */
+}
+
+.header-time-container:hover {
+  border-color: var(--color-border);
+  background-color: var(--color-surface);
+}
+
+.header-time-content {
+  display: flex;
+  align-items: center;
+}
+
+.header-time-clock {
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.5px;
+}
+
+.header-time-toggle {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  transition: all var(--transition-base);
+  margin-left: var(--spacing-xs);
+  min-width: 34px;
+  text-align: center;
+}
+
+.header-time-toggle.utc {
+  color: var(--color-info);
+  border-color: rgba(33, 150, 243, 0.3);
+  background-color: rgba(33, 150, 243, 0.1);
+}
+
+.header-time-toggle.cet {
+  color: var(--color-warning);
+  /* Use warning color (orange) for CET to distinguish or maybe just text-secondary */
+  border-color: var(--color-border);
+  color: var(--color-text-secondary);
+}
+
+.header-time-toggle:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.2);
+}

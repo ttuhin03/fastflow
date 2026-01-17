@@ -174,8 +174,10 @@ async def refresh_token(
     Erstellt ein neues Access Token basierend auf dem bestehenden Token.
     
     Ermöglicht Token-Refresh ohne erneuten Login. Erstellt ein neues
-    Access Token mit erweiterter Laufzeit, solange das bestehende Token
-    noch gültig ist und die Session in der Datenbank existiert.
+    Access Token mit erweiterter Laufzeit, solange die Session in der
+    Datenbank existiert und gültig ist. Das bestehende Token kann bereits
+    abgelaufen sein (Access Token läuft nach 15 Minuten ab), solange die
+    Datenbank-Session noch gültig ist (24 Stunden).
     
     Args:
         request: FastAPI Request (für Rate Limiting)
@@ -186,7 +188,7 @@ async def refresh_token(
         LoginResponse: Neues JWT-Access-Token
         
     Raises:
-        HTTPException: Wenn Token ungültig oder Session nicht gefunden
+        HTTPException: Wenn Session nicht gefunden oder abgelaufen
     """
     if credentials is None:
         raise HTTPException(
@@ -197,26 +199,18 @@ async def refresh_token(
     
     token = credentials.credentials
     
-    # Verifiziere bestehendes Token
-    username = verify_token(token)
-    if username is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Ungültiger oder abgelaufener Token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    # Prüfe Session in Datenbank
+    # Prüfe zuerst Session in Datenbank (auch wenn Token abgelaufen ist)
+    # Die Session kann noch gültig sein (24h), auch wenn das Access Token abgelaufen ist (15min)
     db_session_obj = get_session_by_token(session, token)
     if db_session_obj is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Session nicht gefunden oder abgelaufen",
+            detail="Ihre Sitzung ist nach 24 Stunden abgelaufen. Bitte melden Sie sich erneut an.",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # Hole Benutzer
-    statement = select(User).where(User.username == username)
+    # Hole Benutzer aus Session
+    statement = select(User).where(User.id == db_session_obj.user_id)
     user = session.exec(statement).first()
     
     if user is None or user.blocked:

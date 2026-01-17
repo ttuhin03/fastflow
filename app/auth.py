@@ -407,7 +407,7 @@ async def get_current_user(
     if db_session_obj is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Session nicht gefunden oder abgelaufen",
+            detail="Ihre Sitzung ist nach 24 Stunden abgelaufen. Bitte melden Sie sich erneut an.",
             headers={"WWW-Authenticate": "Bearer"},
         )
     

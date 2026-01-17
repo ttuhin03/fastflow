@@ -18,6 +18,7 @@ from typing import Optional, List
 from pathlib import Path
 from dotenv import load_dotenv
 
+
 # Lade .env-Datei falls vorhanden
 load_dotenv()
 
@@ -31,6 +32,7 @@ class Config:
     Modul-Import initialisiert.
     
     Attributes:
+        VERSION: Aktuelle Version der Anwendung aus VERSION-Datei
         DATABASE_URL: Datenbank-URL (None = SQLite, PostgreSQL-Format: postgresql://...)
         PIPELINES_DIR: Verzeichnis für Pipeline-Repository
         LOGS_DIR: Verzeichnis für Log-Dateien
@@ -53,6 +55,9 @@ class Config:
         GITHUB_PRIVATE_KEY_PATH: Pfad zur GitHub App Private Key .pem Datei (optional)
     """
     
+    # Version aus Datei lesen
+    VERSION: str = Path("VERSION").read_text().strip().lstrip("v") if Path("VERSION").exists() else "0.0.0"
+
     # Datenbank-Konfiguration
     DATABASE_URL: Optional[str] = os.getenv("DATABASE_URL", None)
     """
@@ -89,6 +94,15 @@ class Config:
     """
     
     # Docker & UV-Konfiguration
+    DOCKER_PROXY_URL: str = os.getenv("DOCKER_PROXY_URL", "http://docker-proxy:2375")
+    """
+    Docker Socket Proxy URL.
+    
+    URL des docker-socket-proxy Services für sichere Docker-API-Kommunikation.
+    Standard: http://docker-proxy:2375 (für Docker Compose Setup)
+    Kann über Environment-Variable DOCKER_PROXY_URL überschrieben werden.
+    """
+    
     WORKER_BASE_IMAGE: str = os.getenv(
         "WORKER_BASE_IMAGE",
         "ghcr.io/astral-sh/uv:python3.11-bookworm-slim"

@@ -14,6 +14,8 @@ WORKDIR /app/frontend
 
 # Frontend-Dependencies installieren
 COPY frontend/package.json frontend/package-lock.json* ./
+COPY VERSION /app/VERSION
+
 # Verwende npm ci wenn package-lock.json vorhanden, sonst npm install
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
@@ -46,6 +48,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app/ ./app/
 COPY alembic.ini .
 COPY alembic/ ./alembic/
+COPY VERSION .
 
 # Static-Files vom Frontend-Build kopieren
 COPY --from=frontend-builder /app/frontend/dist ./static
