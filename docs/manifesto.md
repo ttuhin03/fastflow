@@ -1,5 +1,20 @@
 # Why Fast-Flow? The Anti-Overhead Manifesto
 
+```text
+.-----------------------------------------------------------.
+|                                                           |
+|   F A S T - F L O W   M A N I F E S T O                   |
+|                                                           |
+|   [ ] No Air-Castles (Airflow)                            |
+|   [ ] No Magic Spells (Mage)                              |
+|   [ ] No Complex Assets (Dagster)                         |
+|                                                           |
+|   [X] JUST. RUN. THE. SCRIPT.                             |
+|                                                           |
+|   >_ Python 3.11 + Docker + uv speed                      |
+'-----------------------------------------------------------'
+```
+
 ## Inhaltsverzeichnis
 - [1. Die Philosophie: "Code First, Infrastructure Second"](#1-die-philosophie-code-first-infrastructure-second)
 - [2. Der tiefe Fall: Warum uv-Caching alles verändert](#2-der-tiefe-fall-warum-uv-caching-alles-verändert)
@@ -63,6 +78,8 @@ Wir haben diese Kritikpunkte als Anforderungsliste für Fast-Flow genommen:
 - **Gegen Airflows Klobigkeit:** Wir sind ein einzelner Container. In 60 Sekunden bereit, statt 6 Monaten „Kopf gegen die Wand“.
 - **Gegen Dagsters Lock-in:** Wir haben keine IO-Manager. Dein Code gehört dir. Wenn du Fast-Flow morgen löschst, läuft dein Skript einfach weiter.
 - **Gegen die Dependency-Hölle:** Dank uv-Caching lösen wir Konflikte nicht durch „Probieren und Beten“, sondern durch blitzschnelle, isolierte Umgebungen, die in Millisekunden starten.
+
+![Cognitive Load Comparison](images/cognitive_load.png)
 
 ## 5. Der Realitätscheck: Ein mittel-komplexer Workflow
 
