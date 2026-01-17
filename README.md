@@ -3,8 +3,21 @@
 **The lightweight, Docker-native, Python-centric task orchestrator for 2026.**
 
 ![Fast-Flow Banner](docs/images/fastflow_banner.png)
-
 Fast-Flow ist die Antwort auf die Komplexität von Airflow und die Schwerfälligkeit traditioneller CI/CD-Tools. Er wurde für Entwickler gebaut, die echte Isolation wollen, ohne auf die Geschwindigkeit lokaler Skripte zu verzichten.
+> [!NOTE]
+>  Lies unser [Anti-Overhead Manifesto](docs/manifesto.md), um zu verstehen, warum Fast-Flow die bessere Alternative zu Airflow, Dagster & Co. ist.
+
+## 📖 Inhaltsverzeichnis
+- [🚀 Schnellstart](#-schnellstart)
+- [🏗 Architektur: Das "Runner-Cache"-Prinzip](#-architektur-das-runner-cache-prinzip)
+- [🛠 Der Container-Prozess & Lifecycle](#-der-container-prozess--lifecycle)
+- [🚀 Warum Fast-Flow? (Vergleich)](#-warum-fast-flow-vergleich)
+- [🎯 Warum Fast-Flow gewinnt (The Python Advantage)](#-warum-fast-flow-gewinnt-the-python-advantage)
+- [🛠 Technischer Stack](#-technischer-stack)
+- [🔒 Sicherheit: Docker Socket Proxy](#-sicherheit-docker-socket-proxy)
+- [📚 Dokumentation](#-dokumentation)
+- [📦 Versioning & Releases](#-versioning--releases)
+- [❓ Troubleshooting](#-troubleshooting)
 
 ## 🚀 Schnellstart
 
@@ -266,6 +279,7 @@ Der Orchestrator kommuniziert mit dem Proxy über `http://docker-proxy:2375` sta
 
 ## Dokumentation
 
+- **[Philosophie: Das Anti-Overhead Manifesto](docs/manifesto.md)** - Warum Fast-Flow entstanden ist und was es anders macht
 - **[Konfiguration](docs/deployment/CONFIGURATION.md)** - Detaillierte Erklärung aller Environment-Variablen
 - **[Deployment](docs/deployment/PRODUCTION.md)** - Produktions-Setup Guide
 - **[Versioning & Releases](docs/deployment/VERSIONING.md)** - Version-Management und Release-Prozess
