@@ -35,24 +35,26 @@ Wenn du eine schwere Library wie `prophet` hinzufügst:
 
 ## 3. Stimmen aus den Schützengräben
 
-Echte Erfahrungen von Entwicklern, die das „Versprechen der Automatisierung“ mit ihrer Freizeit bezahlt haben.
+*Die folgenden Zitate sind repräsentative Paraphrasen. Sie fassen den allgemeinen Konsens und die häufigsten Schmerzpunkte zusammen, wie sie in der Data-Engineering-Community (z.B. auf Reddit) immer wieder geäußert werden.*
+
+In der Community (z.B. r/dataengineering) herrscht Einigkeit darüber, dass Airflow oft einen Vollzeit-Betreuer benötigt und Dagster eine hohe Lernkurve durch seine Asset-Abstraktionen erfordert. Entwickler fordern zunehmend eine Rückkehr zur Einfachheit – weg von komplexen 'Modern Data Stack' Clustern, hin zu robusten, isolierten Python-Workflows.
 
 ### 🛠 Apache Airflow: „Ein Vollzeitjob für sich selbst“
-Die Kritik an Airflow im Jahr 2025/2026 konzentriert sich auf den massiven Overhead. Selbst mit Airflow 3.0 bleibt das Grundproblem: Es ist eine Infrastruktur-Plattform, kein einfaches Tool.
+Die Kritik an Airflow konzentriert sich oft auf den massiven Overhead. Selbst mit neueren Versionen bleibt das Grundproblem: Es ist eine Infrastruktur-Plattform, kein einfaches Tool für Entwickler.
 
-> „Ich habe 6 Monate lang den Kopf gegen die Wand geschlagen, nur um Airflow von Grund auf stabil zum Laufen zu bringen. Es ist großartig für Teams mit dedizierten DevOps, aber für kleine Projekte fühlt es sich einfach nur klobig und sperrig an.“ — [Reddit User "eb0373284" in r/dataengineering](https://www.reddit.com/r/dataengineering/comments/1le9ltm/airflow_vs_prefect_vs_dagster_which_one_do_you/)
+> „Ich habe Monate damit verbracht, Airflow stabil zum Laufen zu bringen. Es ist toll für riesige Teams mit eigener DevOps-Abteilung, aber für kleinere Projekte fühlt es sich einfach nur klobig und überdimensioniert an.“ — *Community-Stimme zu Airflow-Komplexität*
 
-> „Das Problem ist die Dependency-Hölle. Sobald dein Projekt mittlere Größe erreicht und du 10+ Bibliotheken nutzt, wird das Management von Konflikten in Airflow zum Albtraum. Du landest am Ende immer dabei, alles in Docker zu verpacken, nur um die Umgebung zu retten.“ — [Reddit Diskussion über Python Dependency Hell](https://www.reddit.com/r/learnpython/comments/1iops9s/genuine_question_about_dependency_hell/)
+> „Das Problem ist die Dependency-Hölle. Sobald du mehr als ein paar Libraries nutzt, beißen sie sich. Am Ende versteckt man alles in Docker-Containern, nur um die Umgebung zu retten, was den Workflow massiv verlangsamt.“ — *Community-Stimme zu Dependency-Problemen*
 
 ### 🏗 Dagster: „Die Asset-Abstraktion als Goldener Käfig“
-Während Dagster für seine Software-Engineering-Prinzipien gelobt wird, hassen Entwickler den Zwang, ihre Logik tief in das Dagster-Ökosystem (IO-Manager, Ressourcen) einzubetten.
+Während Dagster für seine Prinzipien gelobt wird, bemängeln viele den Zwang, Logik tief in das Ökosystem einbetten zu müssen.
 
-> „Die Lernkurve ist steil. Man macht am Anfang den Fehler, alles als 'Ops' zu bauen, stellt fest, dass es nicht funktioniert, und muss dann alles mühsam auf 'Assets' refactoren. Die Migration von Dagster zu etwas anderem ist ein riesiger Schmerz, weil die Ressourcen und IO-Manager so tief mit der Geschäftslogik verwoben sind.“ — [Reddit User "Yabakebi" über Dagster Lock-in](https://www.reddit.com/r/dataengineering/comments/1ijtt2b/why_dagster_instead_airflow/)
+> „Die Lernkurve ist extrem steil. Man muss seinen Code komplett umbauen, um ihn in 'Assets' oder 'Ops' zu pressen. Einmal drin, kommt man schwer wieder weg, weil die Logik so tief mit den IO-Managern des Tools verwachsen ist.“ — *Community-Stimme zu Dagster Lock-in*
 
 ### 🪄 Mage & Modern Stack Fatigue: „Zurück zu Python“
-Der Trend 2025 geht weg von „SaaS-Magie“ und zurück zu optimierten Single-Machine-Workflows. Teams haben genug davon, 20 verschiedene Tools zu jonglieren.
+Der Trend geht weg von komplexer „Magie“ und zurück zu optimierten, einfachen Workflows.
 
-> „Teams sind müde davon, 20+ Tools gleichzeitig zu managen. Wir sehen eine Rückkehr zum Scale-Up Computing: Ein einziger starker Server, optimiert für Python-first Workflows auf Postgres-Basis. Niemand will mehr Snake-Oil Versprechen von wartungsfreier Automatisierung.“ — [Zusammenfassung der Data Shifts 2025](https://www.reddit.com/r/dataengineering/comments/1im7dak/big_shifts_in_the_data_world_in_2025/)
+> „Teams sind müde davon, 20 verschiedene Tools gleichzeitig zu managen. Wir sehen eine Rückkehr zu einfachen Python-first Workflows auf einem starken Server. Niemand will mehr das Versprechen von 'wartungsfreier' Automatisierung, die am Ende doch nur mehr Arbeit macht.“ — *Community-Stimme zu Modern Stack Fatigue*
 
 ## 4. Warum Fast-Flow die Antwort auf diese Zitate ist
 
