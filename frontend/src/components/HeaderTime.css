@@ -2,54 +2,64 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  padding: var(--spacing-xs) var(--spacing-md);
+  padding: 6px var(--spacing-md);
+  background-color: var(--color-surface-variant);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  margin-right: var(--spacing-sm);
+  transition: all var(--transition-base);
+  height: 36px;
+  /* Match height of other controls roughly or let it size naturally */
+}
+
+.header-time-container:hover {
+  border-color: var(--color-border);
   background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-full);
-  margin-right: var(--spacing-md);
-  /* Use a subtle shadow/effect to make it look decent */
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .header-time-content {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  line-height: 1;
+  align-items: center;
 }
 
 .header-time-clock {
-  font-family: 'JetBrains Mono', 'Roboto Mono', monospace; /* Monospace for stable numbers */
-  font-size: var(--font-size-lg);
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   color: var(--color-text-primary);
   font-variant-numeric: tabular-nums;
+  letter-spacing: 0.5px;
 }
 
 .header-time-toggle {
-  background: none;
-  border: none;
+  background: transparent;
+  border: 1px solid var(--color-border);
   cursor: pointer;
   padding: 2px 6px;
   border-radius: var(--radius-sm);
-  font-size: var(--font-size-xs);
+  font-size: 0.7rem;
   font-weight: var(--font-weight-bold);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
   transition: all var(--transition-base);
+  margin-left: var(--spacing-xs);
+  min-width: 34px;
+  text-align: center;
 }
 
 .header-time-toggle.utc {
-  background-color: rgba(33, 150, 243, 0.1); /* Blueish for UTC */
-  color: #2196f3;
+  color: var(--color-info);
+  border-color: rgba(33, 150, 243, 0.3);
+  background-color: rgba(33, 150, 243, 0.1);
 }
 
 .header-time-toggle.cet {
-  background-color: rgba(76, 175, 80, 0.1); /* Greenish for CET */
-  color: #4caf50;
+  color: var(--color-warning);
+  /* Use warning color (orange) for CET to distinguish or maybe just text-secondary */
+  border-color: var(--color-border);
+  color: var(--color-text-secondary);
 }
 
 .header-time-toggle:hover {
-  filter: brightness(0.9);
   transform: translateY(-1px);
+  filter: brightness(1.2);
 }
