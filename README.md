@@ -567,3 +567,15 @@ Stellen Sie sicher, dass `POST=1` (für Container-Start) gesetzt ist.
 
 ### "ENCRYPTION_KEY fehlt"
 Die Anwendung startet nicht ohne Key. Generieren Sie einen (siehe Schnellstart) und setzen Sie ihn in der `.env`.
+
+---
+
+## ⚖️ Disclaimer & Haftungsausschluss
+
+**Wichtiger Hinweis zur Sicherheit und Haftung:**
+
+Dieses Projekt befindet sich in einem **Frühen Stadium / Beta-Status**. Da der Orchestrator Zugriff auf den Docker-Socket benötigt, um Pipelines auszuführen, besteht bei unsachgemäßer Konfiguration ein Sicherheitsrisiko für das Host-System.
+
+- **Nutzung auf eigene Gefahr:** Die Software wird „wie besehen“ (as is) zur Verfügung gestellt. Der Autor übernimmt keinerlei Haftung für Schäden an Hardware, Datenverlust, Sicherheitslücken oder Betriebsunterbrechungen, die durch die Nutzung dieser Software entstehen könnten.
+- **Keine Gewährleistung:** Es gibt keine Garantie für die Richtigkeit, Funktionsfähigkeit oder ständige Verfügbarkeit der Software.
+- **Sicherheitsempfehlung:** Betreiben Sie diesen Orchestrator niemals ungeschützt im öffentlichen Internet. Nutzen Sie immer den empfohlenen Docker-Socket-Proxy und eine starke Authentifizierung.
