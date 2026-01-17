@@ -22,6 +22,7 @@ import {
 import NotificationCenter from './NotificationCenter'
 import Tooltip from './Tooltip'
 import VersionInfo from './VersionInfo'
+import HeaderTime from './HeaderTime'
 import './Layout.css'
 
 interface NavItem {
@@ -232,7 +233,10 @@ export default function Layout() {
             <h2 className="page-title">
               {navItems.find(item => isActive(item.path))?.label || 'Dashboard'}
             </h2>
-            <NotificationCenter />
+            <div className="header-actions">
+              <HeaderTime />
+              <NotificationCenter />
+            </div>
           </div>
         </header>
 
