@@ -63,3 +63,57 @@
   transform: translateY(-1px);
   filter: brightness(1.2);
 }
+
+/* Alternative: Dual (beide Zeitzonen) */
+.header-time-dual {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.3px;
+}
+
+.ht-dual-utc {
+  color: rgba(33, 150, 243, 0.95);
+}
+
+.ht-dual-sep {
+  color: var(--color-text-secondary);
+  opacity: 0.7;
+  font-weight: 400;
+  user-select: none;
+}
+
+.ht-dual-cet {
+  color: var(--color-text-primary);
+}
+
+/* Umschalter zwischen Default- und Dual-Anzeige */
+.header-time-cycle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-left: var(--spacing-xs);
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.6;
+  flex-shrink: 0;
+  transition: all var(--transition-base);
+}
+
+.header-time-cycle:hover {
+  opacity: 1;
+  color: var(--color-primary);
+  border-color: var(--color-border);
+  background: rgba(33, 150, 243, 0.08);
+}
