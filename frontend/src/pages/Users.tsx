@@ -5,6 +5,7 @@ import { showError, showSuccess, showConfirm } from '../utils/toast'
 import { MdEdit, MdDelete, MdBlock, MdEmail, MdClose, MdOpenInNew, MdCheck, MdCancel } from 'react-icons/md'
 import Tooltip from '../components/Tooltip'
 import InfoIcon from '../components/InfoIcon'
+import { useAuth } from '../contexts/AuthContext'
 import './Users.css'
 
 interface User {
@@ -54,6 +55,7 @@ function getLinkedAccounts(user: User): ('GitHub' | 'Google')[] {
 }
 
 export default function Users() {
+  const { isAdmin } = useAuth()
   const queryClient = useQueryClient()
   const [showInviteForm, setShowInviteForm] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
@@ -318,22 +320,24 @@ export default function Users() {
 
   return (
     <div className="users-page">
-      <div className="users-header">
-        <div className="users-actions">
-          <button
-            onClick={() => {
-              setShowInviteForm(true)
-              resetInviteForm()
-            }}
-            className="btn btn-primary"
-          >
-            <MdEmail />
-            Einladung senden
-          </button>
+      {isAdmin && (
+        <div className="users-header">
+          <div className="users-actions">
+            <button
+              onClick={() => {
+                setShowInviteForm(true)
+                resetInviteForm()
+              }}
+              className="btn btn-primary"
+            >
+              <MdEmail />
+              Einladung senden
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
-      {approveModalUser && (
+      {isAdmin && approveModalUser && (
         <div className="users-form-card" style={{ marginBottom: '1rem' }}>
           <div className="users-form-header">
             <h3>Beitrittsanfrage freigeben</h3>
@@ -363,7 +367,7 @@ export default function Users() {
         </div>
       )}
 
-      {(editingUser || showInviteForm) && (
+      {isAdmin && (editingUser || showInviteForm) && (
         <div className="users-form-card">
           <div className="users-form-header">
             <h3>{showInviteForm ? 'Einladung senden' : 'Benutzer bearbeiten'}</h3>
@@ -477,7 +481,7 @@ export default function Users() {
                   <th>E-Mail <InfoIcon content="Von GitHub oder Google. Kann leer sein, wenn beim Provider nicht freigegeben." /></th>
                   <th>Provider</th>
                   <th>Erstellt</th>
-                  <th>Aktionen</th>
+                  {isAdmin && <th>Aktionen</th>}
                 </tr>
               </thead>
               <tbody>
@@ -487,12 +491,14 @@ export default function Users() {
                     <td>{u.email || '–'}</td>
                     <td>{getProvider(u)}</td>
                     <td>{new Date(u.created_at).toLocaleString('de-DE')}</td>
-                    <td>
-                      <div className="user-actions">
-                        <button onClick={() => handleOpenApproveModal(u)} className="btn-icon" title="Freigeben"><MdCheck /></button>
-                        <button onClick={() => handleRejectUser(u.id)} className="btn-icon btn-danger" title="Ablehnen"><MdCancel /></button>
-                      </div>
-                    </td>
+                    {isAdmin && (
+                      <td>
+                        <div className="user-actions">
+                          <button onClick={() => handleOpenApproveModal(u)} className="btn-icon" title="Freigeben"><MdCheck /></button>
+                          <button onClick={() => handleRejectUser(u.id)} className="btn-icon btn-danger" title="Ablehnen"><MdCancel /></button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -519,7 +525,7 @@ export default function Users() {
                   <th>Rolle</th>
                   <th>Status</th>
                   <th>Erstellt</th>
-                  <th>Aktionen</th>
+                  {isAdmin && <th>Aktionen</th>}
                 </tr>
               </thead>
               <tbody>
@@ -574,41 +580,43 @@ export default function Users() {
                       </Tooltip>
                     </td>
                     <td>{new Date(user.created_at).toLocaleDateString('de-DE')}</td>
-                    <td>
-                      <div className="user-actions">
-                        <button
-                          onClick={() => handleEditUser(user)}
-                          className="btn-icon"
-                          title="Bearbeiten"
-                        >
-                          <MdEdit />
-                        </button>
-                        {user.blocked ? (
+                    {isAdmin && (
+                      <td>
+                        <div className="user-actions">
                           <button
-                            onClick={() => handleUnblockUser(user.id)}
+                            onClick={() => handleEditUser(user)}
                             className="btn-icon"
-                            title="Entblockieren"
+                            title="Bearbeiten"
                           >
-                            <MdBlock />
+                            <MdEdit />
                           </button>
-                        ) : (
+                          {user.blocked ? (
+                            <button
+                              onClick={() => handleUnblockUser(user.id)}
+                              className="btn-icon"
+                              title="Entblockieren"
+                            >
+                              <MdBlock />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleBlockUser(user.id)}
+                              className="btn-icon"
+                              title="Blockieren"
+                            >
+                              <MdBlock />
+                            </button>
+                          )}
                           <button
-                            onClick={() => handleBlockUser(user.id)}
-                            className="btn-icon"
-                            title="Blockieren"
+                            onClick={() => handleDeleteUser(user.id)}
+                            className="btn-icon btn-danger"
+                            title="Löschen"
                           >
-                            <MdBlock />
+                            <MdDelete />
                           </button>
-                        )}
-                        <button
-                          onClick={() => handleDeleteUser(user.id)}
-                          className="btn-icon btn-danger"
-                          title="Löschen"
-                        >
-                          <MdDelete />
-                        </button>
-                      </div>
-                    </td>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -633,7 +641,7 @@ export default function Users() {
                   <th>Erstellt</th>
                   <th>Läuft ab</th>
                   <th>Status</th>
-                  <th>Aktionen</th>
+                  {isAdmin && <th>Aktionen</th>}
                 </tr>
               </thead>
               <tbody>
@@ -644,17 +652,19 @@ export default function Users() {
                     <td>{new Date(i.created_at).toLocaleString('de-DE')}</td>
                     <td>{new Date(i.expires_at).toLocaleString('de-DE')}</td>
                     <td>{i.is_used ? <span className="badge badge-success">Eingelöst</span> : <span className="badge">Offen</span>}</td>
-                    <td>
-                      {!i.is_used && new Date(i.expires_at) > new Date() && (
-                        <button
-                          onClick={() => deleteInviteMutation.mutate(i.id)}
-                          className="btn-icon btn-danger"
-                          title="Widerrufen"
-                        >
-                          <MdDelete />
-                        </button>
-                      )}
-                    </td>
+                    {isAdmin && (
+                      <td>
+                        {!i.is_used && new Date(i.expires_at) > new Date() && (
+                          <button
+                            onClick={() => deleteInviteMutation.mutate(i.id)}
+                            className="btn-icon btn-danger"
+                            title="Widerrufen"
+                          >
+                            <MdDelete />
+                          </button>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

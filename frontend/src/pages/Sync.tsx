@@ -415,6 +415,7 @@ export default function Sync() {
               value={syncBranch}
               onChange={(e) => setSyncBranch(e.target.value)}
               placeholder={syncStatus?.branch || 'main'}
+              disabled={isReadonly}
             />
           </div>
           {!isReadonly && (
@@ -462,6 +463,7 @@ export default function Sync() {
                     onChange={(e) =>
                       setSettingsForm({ ...settingsForm, auto_sync_enabled: e.target.checked })
                     }
+                    disabled={isReadonly}
                   />
                   Automatisches Sync aktivieren
                   <InfoIcon content="Wenn aktiviert, wird automatisch in regelmäßigen Abständen synchronisiert" />
@@ -483,7 +485,7 @@ export default function Sync() {
                       auto_sync_interval: e.target.value ? parseInt(e.target.value) : null,
                     })
                   }
-                  disabled={!settingsForm.auto_sync_enabled}
+                  disabled={isReadonly || !settingsForm.auto_sync_enabled}
                 />
               </div>
               {!isReadonly && (
@@ -566,10 +568,9 @@ export default function Sync() {
                   </p>
                   <button
                     onClick={() => {
-                      // Öffne in neuem Fenster/Tab für nahtlosen Flow
                       window.location.href = '/api/sync/github-manifest/authorize'
                     }}
-                    disabled={manifestAuthorizeMutation.isPending}
+                    disabled={isReadonly || manifestAuthorizeMutation.isPending}
                     className="connect-github-button"
                   >
                     {manifestAuthorizeMutation.isPending
@@ -642,7 +643,7 @@ export default function Sync() {
                     value={githubForm.app_id}
                     onChange={(e) => setGithubForm({ ...githubForm, app_id: e.target.value })}
                     placeholder="123456"
-                    disabled={!!githubConfig?.app_id}
+                    disabled={isReadonly || !!githubConfig?.app_id}
                   />
                   <small>
                     {githubConfig?.app_id
@@ -664,6 +665,7 @@ export default function Sync() {
                       setGithubForm({ ...githubForm, installation_id: e.target.value })
                     }
                     placeholder="12345678"
+                    disabled={isReadonly}
                   />
                   <small>Numerische Installation ID von GitHub</small>
                 </div>
@@ -678,6 +680,7 @@ export default function Sync() {
                     type="file"
                     accept=".pem"
                     onChange={handleFileUpload}
+                    disabled={isReadonly}
                   />
                   {githubForm.private_key_file && (
                     <div className="file-info">

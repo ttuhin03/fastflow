@@ -79,11 +79,11 @@ class InviteUserRequest(BaseModel):
 
 @router.get("", response_model=List[UserResponse])
 async def list_users(
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ) -> List[UserResponse]:
     """
-    Listet alle Benutzer auf (nur für Admins).
+    Listet alle Benutzer auf. Lesen: alle eingeloggten Nutzer; Änderungen: nur Admins.
     
     Args:
         current_user: Aktueller Benutzer (muss Admin sein)
@@ -115,10 +115,10 @@ async def list_users(
 
 @router.get("/invites", response_model=List[InvitationResponse])
 async def list_invites(
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> List[InvitationResponse]:
-    """Listet alle Einladungen (nur für Admins)."""
+    """Listet alle Einladungen. Lesen: alle; Erstellen/Widerrufen: nur Admins."""
     stmt = select(Invitation).order_by(Invitation.created_at.desc())
     rows = session.exec(stmt).all()
     return [
