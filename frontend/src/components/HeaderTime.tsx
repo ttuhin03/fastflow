@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import './HeaderTime.css'
 
-const STORAGE_KEY = 'headerTimeVariant'
+const STORAGE_KEY_VARIANT = 'headerTimeVariant'
+const STORAGE_KEY_UTC = 'headerTimeUtc'
 type Variant = 'default' | 'dual'
 
 function loadVariant(): Variant {
     try {
-        const v = localStorage.getItem(STORAGE_KEY)
+        const v = localStorage.getItem(STORAGE_KEY_VARIANT)
         if (v === 'default' || v === 'dual') return v
     } catch {
         /* localStorage unzugreifbar (z. B. privater Modus) */
@@ -14,10 +15,21 @@ function loadVariant(): Variant {
     return 'default'
 }
 
+function loadUtc(): boolean {
+    try {
+        const v = localStorage.getItem(STORAGE_KEY_UTC)
+        if (v === 'true') return true
+        if (v === 'false') return false
+    } catch {
+        /* localStorage unzugreifbar */
+    }
+    return true
+}
+
 export default function HeaderTime() {
-    const [isUtc, setIsUtc] = useState(true)
+    const [isUtc, setIsUtc] = useState(loadUtc)
     const [time, setTime] = useState(new Date())
-    const [variant, setVariant] = useState<Variant>(loadVariant)
+    const [variant, setVariant] = useState<Variant>(() => loadVariant())
 
     useEffect(() => {
         const timer = setInterval(() => setTime(new Date()), 1000)
@@ -38,11 +50,23 @@ export default function HeaderTime() {
         const next: Variant = variant === 'default' ? 'dual' : 'default'
         setVariant(next)
         try {
-            localStorage.setItem(STORAGE_KEY, next)
+            localStorage.setItem(STORAGE_KEY_VARIANT, next)
         } catch {
             /* z. B. privater Modus, Speicher voll */
         }
     }, [variant])
+
+    const toggleUtc = useCallback(() => {
+        setIsUtc((prev) => {
+            const next = !prev
+            try {
+                localStorage.setItem(STORAGE_KEY_UTC, String(next))
+            } catch {
+                /* z. B. privater Modus */
+            }
+            return next
+        })
+    }, [])
 
     return (
         <div className="header-time-container">
@@ -53,7 +77,7 @@ export default function HeaderTime() {
                     </div>
                     <button
                         className={`header-time-toggle ${isUtc ? 'utc' : 'cet'}`}
-                        onClick={() => setIsUtc(!isUtc)}
+                        onClick={toggleUtc}
                         title="Zeitzone umschalten"
                     >
                         {isUtc ? 'UTC' : 'CET'}
