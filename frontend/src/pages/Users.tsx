@@ -16,6 +16,7 @@ interface User {
   created_at: string
   microsoft_id: string | null
   github_id?: string | null
+  github_login?: string | null
   google_id?: string | null
   status?: string
 }
@@ -56,7 +57,6 @@ export default function Users() {
   const queryClient = useQueryClient()
   const [showInviteForm, setShowInviteForm] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
-  const [formEmail, setFormEmail] = useState('')
   const [formRole, setFormRole] = useState<'readonly' | 'write' | 'admin'>('readonly')
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<'readonly' | 'write' | 'admin'>('readonly')
@@ -136,11 +136,7 @@ export default function Users() {
   const updateUserMutation = useMutation({
     mutationFn: async ({ userId, data }: { 
       userId: string
-      data: {
-        email?: string
-        role?: 'READONLY' | 'WRITE' | 'ADMIN'
-        blocked?: boolean
-      }
+      data: { role: 'READONLY' | 'WRITE' | 'ADMIN' }
     }) => {
       const response = await apiClient.put(`/users/${userId}`, data)
       return response.data
@@ -244,7 +240,6 @@ export default function Users() {
   })
 
   const resetForm = () => {
-    setFormEmail('')
     setFormRole('readonly')
     setEditingUser(null)
   }
@@ -266,7 +261,6 @@ export default function Users() {
 
   const handleEditUser = (user: User) => {
     setEditingUser(user)
-    setFormEmail(user.email || '')
     setFormRole(normalizeRole(user.role))
     setShowInviteForm(false)
   }
@@ -276,11 +270,7 @@ export default function Users() {
     if (!editingUser) return
     updateUserMutation.mutate({
       userId: editingUser.id,
-      data: {
-        email: formEmail || undefined,
-        role: roleToUppercase(formRole),
-        blocked: editingUser.blocked
-      }
+      data: { role: roleToUppercase(formRole) }
     })
   }
 
@@ -392,14 +382,6 @@ export default function Users() {
           {editingUser && (
             <form onSubmit={handleUpdateUser}>
               <div className="form-group">
-                <label>E-Mail (optional):</label>
-                <input
-                  type="email"
-                  value={formEmail}
-                  onChange={(e) => setFormEmail(e.target.value)}
-                />
-              </div>
-              <div className="form-group">
                 <label>
                   Rolle:
                   <InfoIcon content="Readonly: Nur Leserechte. Write: Schreibrechte. Admin: Vollzugriff." />
@@ -491,8 +473,8 @@ export default function Users() {
             <table className="users-table">
               <thead>
                 <tr>
-                  <th>Benutzername</th>
-                  <th>E-Mail</th>
+                  <th>Name</th>
+                  <th>E-Mail <InfoIcon content="Von GitHub oder Google. Kann leer sein, wenn beim Provider nicht freigegeben." /></th>
                   <th>Provider</th>
                   <th>Erstellt</th>
                   <th>Aktionen</th>
@@ -531,8 +513,8 @@ export default function Users() {
             <table className="users-table">
               <thead>
                 <tr>
-                  <th>Benutzername</th>
-                  <th>E-Mail</th>
+                  <th>Name</th>
+                  <th>E-Mail <InfoIcon content="Von GitHub oder Google. Kann leer sein, wenn beim Provider nicht freigegeben." /></th>
                   <th>Konten</th>
                   <th>Rolle</th>
                   <th>Status</th>
@@ -544,13 +526,13 @@ export default function Users() {
                 {activeUsers.map((user) => (
                   <tr key={user.id} className={user.blocked ? 'blocked' : ''}>
                     <td>
-                      {user.github_id ? (
+                      {user.github_login ? (
                         <a
-                          href={`https://github.com/${user.username}`}
+                          href={`https://github.com/${user.github_login}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="github-user-link"
-                          title={`GitHub: @${user.username}`}
+                          title={`GitHub: @${user.github_login}`}
                         >
                           {user.username}
                           <MdOpenInNew className="icon-external" />

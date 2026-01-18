@@ -257,6 +257,10 @@ class User(SQLModel, table=True):
         index=True,
         description="GitHub OAuth ID (optional, für GitHub-Login)"
     )
+    github_login: Optional[str] = Field(
+        default=None,
+        description="GitHub-Benutzername (login) für Profile-Link"
+    )
     google_id: Optional[str] = Field(
         default=None,
         unique=True,

@@ -835,7 +835,7 @@ Einzelnen Nutzer abrufen.
 
 ### `PUT /api/users/{user_id}`
 
-Nutzer aktualisieren. Body: `{ "email": "...", "role": "READONLY|WRITE|ADMIN", "blocked": false }`.
+Nutzer aktualisieren. Body: `{ "role": "READONLY|WRITE|ADMIN", "blocked": false }`. E-Mail kommt von GitHub/Google und wird nicht per API geändert.
 
 ### `POST /api/users/{user_id}/approve`
 

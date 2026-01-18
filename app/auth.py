@@ -22,7 +22,7 @@ from jose import JWTError, jwt
 from sqlmodel import Session, select
 
 from app.config import config
-from app.database import get_session
+from app.database import get_session, retry_on_sqlite_io
 from app.models import User, Session as SessionModel, UserRole
 
 logger = logging.getLogger(__name__)
@@ -135,7 +135,9 @@ def get_session_by_token(session: Session, token: str) -> Optional[SessionModel]
         SessionModel.token == token,
         SessionModel.expires_at > datetime.utcnow()
     )
-    return session.exec(statement).first()
+    return retry_on_sqlite_io(
+        lambda: session.exec(statement).first(), session=session
+    )
 
 
 def delete_session(session: Session, token: str) -> None:
@@ -147,7 +149,9 @@ def delete_session(session: Session, token: str) -> None:
         token: JWT-Token
     """
     statement = select(SessionModel).where(SessionModel.token == token)
-    db_session = session.exec(statement).first()
+    db_session = retry_on_sqlite_io(
+        lambda: session.exec(statement).first(), session=session
+    )
     
     if db_session:
         session.delete(db_session)
@@ -270,7 +274,9 @@ async def get_current_user(
     
     # Hole Benutzer
     statement = select(User).where(User.username == username)
-    user = db_session.exec(statement).first()
+    user = retry_on_sqlite_io(
+        lambda: db_session.exec(statement).first(), session=db_session
+    )
     
     if user is None:
         raise HTTPException(

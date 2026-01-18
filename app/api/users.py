@@ -41,6 +41,7 @@ class UserResponse(BaseModel):
     created_at: str
     microsoft_id: Optional[str] = None
     github_id: Optional[str] = None
+    github_login: Optional[str] = None
     google_id: Optional[str] = None
     status: Optional[str] = None
 
@@ -64,8 +65,7 @@ class InvitationResponse(BaseModel):
 
 
 class UpdateUserRequest(BaseModel):
-    """Request-Model für Benutzer-Aktualisierung."""
-    email: Optional[EmailStr] = None
+    """Request-Model für Benutzer-Aktualisierung. E-Mail kommt von GitHub/Google und wird nicht geändert."""
     role: Optional[UserRole] = None
     blocked: Optional[bool] = None
 
@@ -105,6 +105,7 @@ async def list_users(
             created_at=user.created_at.isoformat(),
             microsoft_id=user.microsoft_id,
             github_id=user.github_id,
+            github_login=getattr(user, "github_login", None),
             google_id=getattr(user, "google_id", None),
             status=getattr(user, "status", "active"),
         )
@@ -220,6 +221,7 @@ async def get_user(
         created_at=user.created_at.isoformat(),
         microsoft_id=user.microsoft_id,
         github_id=user.github_id,
+        github_login=getattr(user, "github_login", None),
         google_id=getattr(user, "google_id", None),
         status=getattr(user, "status", "active"),
     )
@@ -265,6 +267,7 @@ async def approve_user(
         created_at=user.created_at.isoformat(),
         microsoft_id=user.microsoft_id,
         github_id=user.github_id,
+        github_login=getattr(user, "github_login", None),
         google_id=getattr(user, "google_id", None),
         status=getattr(user, "status", "active"),
     )
@@ -301,6 +304,7 @@ async def reject_user(
         created_at=user.created_at.isoformat(),
         microsoft_id=user.microsoft_id,
         github_id=user.github_id,
+        github_login=getattr(user, "github_login", None),
         google_id=getattr(user, "google_id", None),
         status=getattr(user, "status", "active"),
     )
@@ -337,18 +341,7 @@ async def update_user(
             detail="Benutzer nicht gefunden"
         )
     
-    # Aktualisiere Felder
-    if request.email is not None:
-        # Prüfe ob E-Mail bereits von anderem Benutzer verwendet wird
-        statement = select(User).where(User.email == request.email, User.id != user_id)
-        existing_user = session.exec(statement).first()
-        if existing_user:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="E-Mail-Adresse bereits vergeben"
-            )
-        user.email = request.email
-    
+    # Aktualisiere Felder (E-Mail von OAuth-Provider wird nicht geändert)
     if request.role is not None:
         user.role = request.role
     
@@ -370,6 +363,7 @@ async def update_user(
         created_at=user.created_at.isoformat(),
         microsoft_id=user.microsoft_id,
         github_id=user.github_id,
+        github_login=getattr(user, "github_login", None),
         google_id=getattr(user, "google_id", None),
         status=getattr(user, "status", "active"),
     )
@@ -432,6 +426,7 @@ async def block_user(
         created_at=user.created_at.isoformat(),
         microsoft_id=user.microsoft_id,
         github_id=user.github_id,
+        github_login=getattr(user, "github_login", None),
         google_id=getattr(user, "google_id", None),
         status=getattr(user, "status", "active"),
     )
@@ -482,6 +477,7 @@ async def unblock_user(
         created_at=user.created_at.isoformat(),
         microsoft_id=user.microsoft_id,
         github_id=user.github_id,
+        github_login=getattr(user, "github_login", None),
         google_id=getattr(user, "google_id", None),
         status=getattr(user, "status", "active"),
     )

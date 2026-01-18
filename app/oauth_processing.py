@@ -15,6 +15,7 @@ from fastapi import HTTPException
 from sqlmodel import Session, select
 
 from app.config import config
+from app.database import retry_on_sqlite_io
 from app.github_oauth import delete_oauth_state, get_oauth_state
 from app.models import Invitation, User, UserRole
 from app.notifications import notify_admin_join_request
@@ -27,7 +28,7 @@ def _unique_username(session: Session, login: str, provider_id: str) -> str:
     base = (login or "user").replace(" ", "_")[:50]
     for cand in (base, f"{base}_{provider_id[:12]}" if len(provider_id) > 8 else f"{base}_{provider_id}"):
         stmt = select(User).where(User.username == cand)
-        if session.exec(stmt).first() is None:
+        if retry_on_sqlite_io(lambda: session.exec(stmt).first(), session=session) is None:
             return cand
     return f"{base}_{provider_id}"
 
@@ -48,7 +49,7 @@ def get_or_create_initial_admin(
 
     # 1. Bereits mit dieser Provider-ID vorhanden
     stmt = select(User).where(getattr(User, id_attr) == provider_id)
-    user = session.exec(stmt).first()
+    user = retry_on_sqlite_io(lambda: session.exec(stmt).first(), session=session)
     if user:
         logger.info("OAuth initial_admin: user=%s bereits mit %s verknüpft", user.username, provider)
         return user
@@ -56,11 +57,13 @@ def get_or_create_initial_admin(
     # 2. INITIAL_ADMIN_EMAIL: bestehenden User verknüpfen oder neuen Admin anlegen
     if email and config.INITIAL_ADMIN_EMAIL and email == config.INITIAL_ADMIN_EMAIL:
         stmt = select(User).where(User.email == email)
-        user = session.exec(stmt).first()
+        user = retry_on_sqlite_io(lambda: session.exec(stmt).first(), session=session)
         if user:
             setattr(user, id_attr, provider_id)
             if avatar:
                 user.avatar_url = avatar
+            if provider == "github":
+                user.github_login = oauth_data.get("login")
             user.role = UserRole.ADMIN
             session.add(user)
             session.commit()
@@ -73,6 +76,7 @@ def get_or_create_initial_admin(
             email=email,
             role=UserRole.ADMIN,
             avatar_url=avatar,
+            github_login=oauth_data.get("login") if provider == "github" else None,
             **{id_attr: provider_id},
         )
         session.add(user)
@@ -107,6 +111,7 @@ def create_oauth_user(
         role=role,
         avatar_url=avatar,
         status=status,
+        github_login=oauth_data.get("login") if provider == "github" else None,
         **{id_attr: provider_id},
     )
     session.add(user)
@@ -149,13 +154,18 @@ async def process_oauth_login(
                 except (TypeError, ValueError):
                     logger.warning("OAuth: Link-Flow fehlgeschlagen provider=%s (ungültiger user_id im State)", provider)
                     raise HTTPException(status_code=403, detail="Ungültiger Link-State.")
-                user = session.exec(select(User).where(User.id == uid)).first()
+                user = retry_on_sqlite_io(
+                    lambda: session.exec(select(User).where(User.id == uid)).first(),
+                    session=session,
+                )
                 if not user or user.blocked:
                     logger.warning("OAuth: Link-Flow fehlgeschlagen provider=%s (user_id=%s nicht gefunden oder blockiert)", provider, stored["user_id"])
                     raise HTTPException(status_code=403, detail="Benutzer nicht gefunden oder blockiert.")
                 setattr(user, id_attr, provider_id)
                 if avatar:
                     user.avatar_url = avatar
+                if provider == "github":
+                    user.github_login = oauth_data.get("login")
                 session.add(user)
                 session.commit()
                 session.refresh(user)
@@ -165,7 +175,7 @@ async def process_oauth_login(
 
     # 1) Direkt-Login: User mit dieser Provider-ID
     stmt = select(User).where(getattr(User, id_attr) == provider_id)
-    user = session.exec(stmt).first()
+    user = retry_on_sqlite_io(lambda: session.exec(stmt).first(), session=session)
     if user:
         status = getattr(user, "status", "active")
         if status == "pending" or user.blocked:
@@ -177,11 +187,13 @@ async def process_oauth_login(
     # 2) Auto-Match: User mit gleicher E-Mail
     if email:
         stmt = select(User).where(User.email == email)
-        user = session.exec(stmt).first()
+        user = retry_on_sqlite_io(lambda: session.exec(stmt).first(), session=session)
         if user and not user.blocked:
             setattr(user, id_attr, provider_id)
             if avatar:
                 user.avatar_url = avatar
+            if provider == "github":
+                user.github_login = oauth_data.get("login")
             session.add(user)
             session.commit()
             session.refresh(user)
@@ -204,7 +216,7 @@ async def process_oauth_login(
                 Invitation.expires_at > datetime.utcnow(),
             )
         )
-        inv = session.exec(stmt).first()
+        inv = retry_on_sqlite_io(lambda: session.exec(stmt).first(), session=session)
         if inv and email and inv.recipient_email.lower() == email.lower():
             inv.is_used = True
             session.add(inv)
