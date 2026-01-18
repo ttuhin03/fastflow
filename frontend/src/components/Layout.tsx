@@ -65,6 +65,19 @@ export default function Layout() {
     refetchOnMount: true,
   })
 
+  const { data: users } = useQuery<{ status?: string }[]>({
+    queryKey: ['users'],
+    queryFn: async () => {
+      const response = await apiClient.get('/users')
+      return response.data
+    },
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  })
+  const pendingCount = Array.isArray(users)
+    ? users.filter((u) => (u.status || 'active') === 'pending').length
+    : 0
+
   useEffect(() => {
     const previousStatus = previousStatusRef.current
 
@@ -188,6 +201,11 @@ export default function Layout() {
                   {showPauseIcon ? <MdPause /> : item.icon}
                 </span>
                 <span className="nav-label">{item.label}</span>
+                {item.path === '/users' && pendingCount > 0 && (
+                  <span className="nav-badge" title="Offene Beitrittsanfragen">
+                    {pendingCount > 99 ? '99+' : pendingCount}
+                  </span>
+                )}
               </Link>
             )
           })}

@@ -93,6 +93,21 @@
   color: var(--color-primary);
 }
 
+.nav-badge {
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  color: #fff;
+  background: var(--color-warning, #ff9800);
+  border-radius: 9px;
+  flex-shrink: 0;
+}
+
 .nav-icon {
   font-size: 1.5rem;
   display: flex;
