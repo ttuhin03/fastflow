@@ -4,12 +4,20 @@ import './HeaderTime.css'
 const STORAGE_KEY = 'headerTimeVariant'
 type Variant = 'default' | 'dual'
 
+function loadVariant(): Variant {
+    try {
+        const v = localStorage.getItem(STORAGE_KEY)
+        if (v === 'default' || v === 'dual') return v
+    } catch {
+        /* localStorage unzugreifbar (z. B. privater Modus) */
+    }
+    return 'default'
+}
+
 export default function HeaderTime() {
     const [isUtc, setIsUtc] = useState(true)
     const [time, setTime] = useState(new Date())
-    const [variant, setVariant] = useState<Variant>(() =>
-        (localStorage.getItem(STORAGE_KEY) as Variant) || 'default'
-    )
+    const [variant, setVariant] = useState<Variant>(loadVariant)
 
     useEffect(() => {
         const timer = setInterval(() => setTime(new Date()), 1000)
@@ -29,7 +37,11 @@ export default function HeaderTime() {
     const cycleVariant = useCallback(() => {
         const next: Variant = variant === 'default' ? 'dual' : 'default'
         setVariant(next)
-        localStorage.setItem(STORAGE_KEY, next)
+        try {
+            localStorage.setItem(STORAGE_KEY, next)
+        } catch {
+            /* z. B. privater Modus, Speicher voll */
+        }
     }, [variant])
 
     return (

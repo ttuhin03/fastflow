@@ -60,10 +60,20 @@ def _redirect_to_settings_linked(provider: str) -> RedirectResponse:
     return RedirectResponse(url=f"{frontend}/settings?linked={provider}", status_code=302)
 
 
-def _redirect_request_screen(rejected: bool) -> RedirectResponse:
-    """Redirect zu /request-rejected oder /request-sent (ohne Token/Session)."""
+def _redirect_anklopfen_screen(user: User) -> RedirectResponse:
+    """
+    Redirect für Anklopfen-Fälle (ohne Token/Session):
+    - status=rejected: Beitrittsanfrage abgelehnt → /request-rejected
+    - blocked=True (z. B. aktiver Nutzer gesperrt): → /account-blocked
+    - sonst (pending): → /request-sent
+    """
     frontend = (config.FRONTEND_URL or config.BASE_URL or "http://localhost:8000").rstrip("/")
-    path = "/request-rejected" if rejected else "/request-sent"
+    if getattr(user, "status", None) == "rejected":
+        path = "/request-rejected"
+    elif user.blocked:
+        path = "/account-blocked"
+    else:
+        path = "/request-sent"
     return RedirectResponse(url=f"{frontend}{path}", status_code=302)
 
 
@@ -115,7 +125,7 @@ async def github_callback(
     except HTTPException:
         raise
     if anklopfen_only:
-        return _redirect_request_screen(rejected=user.blocked)
+        return _redirect_anklopfen_screen(user)
     if link_only:
         logger.info(f"GitHub-Konto für '{user.username}' verknüpft")
         return _redirect_to_settings_linked("github")
@@ -173,7 +183,7 @@ async def google_callback(
     except HTTPException:
         raise
     if anklopfen_only:
-        return _redirect_request_screen(rejected=user.blocked)
+        return _redirect_anklopfen_screen(user)
     if link_only:
         logger.info(f"Google-Konto für '{user.username}' verknüpft")
         return _redirect_to_settings_linked("google")

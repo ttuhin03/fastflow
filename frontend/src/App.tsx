@@ -6,6 +6,7 @@ import Invite from './pages/Invite'
 import AuthCallback from './pages/AuthCallback'
 import RequestSent from './pages/RequestSent'
 import RequestRejected from './pages/RequestRejected'
+import AccountBlocked from './pages/AccountBlocked'
 import Dashboard from './pages/Dashboard'
 import Pipelines from './pages/Pipelines'
 import PipelineDetail from './pages/PipelineDetail'
@@ -63,6 +64,7 @@ function AppRoutes() {
       <Route path="/auth/callback" element={<AuthCallback />} />
       <Route path="/request-sent" element={<RequestSent />} />
       <Route path="/request-rejected" element={<RequestRejected />} />
+      <Route path="/account-blocked" element={<AccountBlocked />} />
       <Route
         path="/"
         element={
