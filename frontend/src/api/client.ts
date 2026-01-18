@@ -50,17 +50,10 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config
 
-    // Ignoriere 401-Fehler für Login-Endpoint (sollte von Login-Komponente behandelt werden)
-    const isLoginEndpoint = originalRequest?.url?.includes('/auth/login')
     const isRefreshEndpoint = originalRequest?.url?.includes('/auth/refresh')
 
     // Wenn 401 und nicht bereits Refresh-Versuch
     if (error.response?.status === 401 && !originalRequest._retry) {
-      // Für Login-Endpoint: Fehler einfach weiterwerfen (wird von Login-Komponente behandelt)
-      if (isLoginEndpoint) {
-        return Promise.reject(error)
-      }
-
       if (isRefreshing) {
         // Wenn bereits Refresh läuft, warte auf Ergebnis
         return new Promise((resolve, reject) => {

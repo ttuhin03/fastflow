@@ -2,17 +2,10 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../api/client'
 import { showError, showSuccess, showConfirm } from '../utils/toast'
-import {
-  MdAdd,
-  MdEdit,
-  MdDelete,
-  MdBlock,
-  MdLockReset,
-  MdEmail,
-  MdClose
-} from 'react-icons/md'
+import { MdEdit, MdDelete, MdBlock, MdEmail, MdClose, MdOpenInNew, MdCheck, MdCancel } from 'react-icons/md'
 import Tooltip from '../components/Tooltip'
 import InfoIcon from '../components/InfoIcon'
+import { useAuth } from '../contexts/AuthContext'
 import './Users.css'
 
 interface User {
@@ -23,6 +16,19 @@ interface User {
   blocked: boolean
   created_at: string
   microsoft_id: string | null
+  github_id?: string | null
+  github_login?: string | null
+  google_id?: string | null
+  status?: string
+}
+
+interface InvitationRow {
+  id: string
+  recipient_email: string
+  is_used: boolean
+  expires_at: string
+  created_at: string
+  role: string
 }
 
 // Helper function to convert role to uppercase for API
@@ -35,20 +41,30 @@ const normalizeRole = (role: string): 'readonly' | 'write' | 'admin' => {
   return role.toLowerCase() as 'readonly' | 'write' | 'admin'
 }
 
+function getProvider(user: User): string {
+  if (user.github_id) return 'GitHub'
+  if (user.google_id) return 'Google'
+  return '–'
+}
+
+function getLinkedAccounts(user: User): ('GitHub' | 'Google')[] {
+  const a: ('GitHub' | 'Google')[] = []
+  if (user.github_id) a.push('GitHub')
+  if (user.google_id) a.push('Google')
+  return a
+}
+
 export default function Users() {
+  const { isAdmin } = useAuth()
   const queryClient = useQueryClient()
-  const [showCreateForm, setShowCreateForm] = useState(false)
   const [showInviteForm, setShowInviteForm] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
-
-  // Form states
-  const [formUsername, setFormUsername] = useState('')
-  const [formPassword, setFormPassword] = useState('')
-  const [formEmail, setFormEmail] = useState('')
   const [formRole, setFormRole] = useState<'readonly' | 'write' | 'admin'>('readonly')
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<'readonly' | 'write' | 'admin'>('readonly')
   const [inviteExpiresHours, setInviteExpiresHours] = useState(168)
+  const [approveModalUser, setApproveModalUser] = useState<User | null>(null)
+  const [approveRole, setApproveRole] = useState<'readonly' | 'write' | 'admin'>('readonly')
 
   // Check if current user is admin by trying to fetch users list
   // If successful, user is admin. If 403, user is not admin.
@@ -58,8 +74,18 @@ export default function Users() {
       const response = await apiClient.get('/users')
       return response.data
     },
-    retry: false, // Don't retry on 403
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const { data: invites = [] } = useQuery<InvitationRow[]>({
+    queryKey: ['invites'],
+    queryFn: async () => {
+      const response = await apiClient.get('/users/invites')
+      return response.data
+    },
+    retry: false,
+    staleTime: 2 * 60 * 1000,
   })
 
   // Show message if not admin (403 Forbidden) or if error detail contains "Admin"
@@ -86,27 +112,6 @@ export default function Users() {
     )
   }
 
-  const createUserMutation = useMutation({
-    mutationFn: async (data: {
-      username: string
-      password: string
-      email?: string
-      role: 'READONLY' | 'WRITE' | 'ADMIN'
-    }) => {
-      const response = await apiClient.post('/users', data)
-      return response.data
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] })
-      setShowCreateForm(false)
-      resetForm()
-      showSuccess('Benutzer erfolgreich erstellt')
-    },
-    onError: (error: any) => {
-      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
-    },
-  })
-
   const inviteUserMutation = useMutation({
     mutationFn: async (data: {
       email: string
@@ -116,14 +121,14 @@ export default function Users() {
       const response = await apiClient.post('/users/invite', data)
       return response.data
     },
-    onSuccess: (data) => {
+    onSuccess: (data: { link: string; expires_at: string }) => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
+      queryClient.invalidateQueries({ queryKey: ['invites'] })
       setShowInviteForm(false)
       resetInviteForm()
-      // Show invite link
-      const fullLink = `${window.location.origin}/invite/${data.token}`
-      navigator.clipboard.writeText(fullLink)
-      showSuccess(`Einladungslink erstellt und in Zwischenablage kopiert: ${fullLink}`)
+      navigator.clipboard.writeText(data.link)
+      const until = new Date(data.expires_at).toLocaleString('de-DE')
+      showSuccess(`Einladungslink erstellt und in Zwischenablage kopiert. Gültig bis ${until}.`)
     },
     onError: (error: any) => {
       showError(`Fehler: ${error.response?.data?.detail || error.message}`)
@@ -133,11 +138,7 @@ export default function Users() {
   const updateUserMutation = useMutation({
     mutationFn: async ({ userId, data }: { 
       userId: string
-      data: {
-        email?: string
-        role?: 'READONLY' | 'WRITE' | 'ADMIN'
-        blocked?: boolean
-      }
+      data: { role: 'READONLY' | 'WRITE' | 'ADMIN' }
     }) => {
       const response = await apiClient.put(`/users/${userId}`, data)
       return response.data
@@ -146,23 +147,7 @@ export default function Users() {
       queryClient.invalidateQueries({ queryKey: ['users'] })
       setEditingUser(null)
       resetForm()
-      setShowCreateForm(false)
       showSuccess('Benutzer erfolgreich aktualisiert')
-    },
-    onError: (error: any) => {
-      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
-    },
-  })
-
-  const resetPasswordMutation = useMutation({
-    mutationFn: async ({ userId, newPassword }: { userId: string; newPassword: string }) => {
-      const response = await apiClient.post(`/users/${userId}/reset-password`, {
-        new_password: newPassword
-      })
-      return response.data
-    },
-    onSuccess: () => {
-      showSuccess('Passwort erfolgreich zurückgesetzt')
     },
     onError: (error: any) => {
       showError(`Fehler: ${error.response?.data?.detail || error.message}`)
@@ -211,10 +196,52 @@ export default function Users() {
     },
   })
 
+  const deleteInviteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiClient.delete(`/users/invites/${id}`)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['invites'] })
+      showSuccess('Einladung widerrufen')
+    },
+    onError: (error: any) => {
+      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
+    },
+  })
+
+  const approveUserMutation = useMutation({
+    mutationFn: async ({ userId, role }: { userId: string; role: 'READONLY' | 'WRITE' | 'ADMIN' }) => {
+      const response = await apiClient.post(`/users/${userId}/approve`, { role })
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      queryClient.invalidateQueries({ queryKey: ['invites'] })
+      setApproveModalUser(null)
+      setApproveRole('readonly')
+      showSuccess('Beitrittsanfrage freigegeben')
+    },
+    onError: (error: any) => {
+      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
+    },
+  })
+
+  const rejectUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const response = await apiClient.post(`/users/${userId}/reject`)
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      queryClient.invalidateQueries({ queryKey: ['invites'] })
+      showSuccess('Beitrittsanfrage abgelehnt')
+    },
+    onError: (error: any) => {
+      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
+    },
+  })
+
   const resetForm = () => {
-    setFormUsername('')
-    setFormPassword('')
-    setFormEmail('')
     setFormRole('readonly')
     setEditingUser(null)
   }
@@ -223,16 +250,6 @@ export default function Users() {
     setInviteEmail('')
     setInviteRole('readonly')
     setInviteExpiresHours(168)
-  }
-
-  const handleCreateUser = (e: React.FormEvent) => {
-    e.preventDefault()
-    createUserMutation.mutate({
-      username: formUsername,
-      password: formPassword,
-      email: formEmail || undefined,
-      role: roleToUppercase(formRole)
-    })
   }
 
   const handleInviteUser = (e: React.FormEvent) => {
@@ -246,9 +263,7 @@ export default function Users() {
 
   const handleEditUser = (user: User) => {
     setEditingUser(user)
-    setFormEmail(user.email || '')
     setFormRole(normalizeRole(user.role))
-    setShowCreateForm(true)
     setShowInviteForm(false)
   }
 
@@ -257,22 +272,8 @@ export default function Users() {
     if (!editingUser) return
     updateUserMutation.mutate({
       userId: editingUser.id,
-      data: {
-        email: formEmail || undefined,
-        role: roleToUppercase(formRole),
-        blocked: editingUser.blocked
-      }
+      data: { role: roleToUppercase(formRole) }
     })
-  }
-
-  const handleResetPassword = async (userId: string) => {
-    // Für Passwort-Eingabe verwenden wir einen einfachen Prompt (kann später durch ein Modal ersetzt werden)
-    const newPassword = window.prompt('Neues Passwort eingeben:')
-    if (newPassword && newPassword.length >= 6) {
-      resetPasswordMutation.mutate({ userId, newPassword })
-    } else if (newPassword) {
-      showError('Passwort muss mindestens 6 Zeichen lang sein')
-    }
   }
 
   const handleBlockUser = async (userId: string) => {
@@ -296,48 +297,82 @@ export default function Users() {
     }
   }
 
+  const handleOpenApproveModal = (user: User) => {
+    setApproveModalUser(user)
+    setApproveRole('readonly')
+  }
+
+  const handleApproveUser = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!approveModalUser) return
+    approveUserMutation.mutate({ userId: approveModalUser.id, role: roleToUppercase(approveRole) })
+  }
+
+  const handleRejectUser = async (userId: string) => {
+    const confirmed = await showConfirm('Möchten Sie diese Beitrittsanfrage wirklich ablehnen?')
+    if (confirmed) {
+      rejectUserMutation.mutate(userId)
+    }
+  }
+
+  const activeUsers = (users || []).filter((u) => (u.status || 'active') === 'active')
+  const pendingUsers = (users || []).filter((u) => (u.status || 'active') === 'pending')
+
   return (
     <div className="users-page">
-      <div className="users-header">
-        <div className="users-actions">
-          <button
-            onClick={() => {
-              setShowCreateForm(true)
-              setShowInviteForm(false)
-              resetForm()
-            }}
-            className="btn btn-primary"
-          >
-            <MdAdd />
-            Nutzer erstellen
-          </button>
-          <button
-            onClick={() => {
-              setShowInviteForm(true)
-              setShowCreateForm(false)
-              resetInviteForm()
-            }}
-            className="btn btn-primary"
-          >
-            <MdEmail />
-            Einladung senden
-          </button>
-        </div>
-      </div>
-
-      {(showCreateForm || showInviteForm) && (
-        <div className="users-form-card">
-          <div className="users-form-header">
-            <h3>
-              {showInviteForm 
-                ? 'Einladung senden' 
-                : editingUser 
-                  ? 'Benutzer bearbeiten' 
-                  : 'Neuen Benutzer erstellen'}
-            </h3>
+      {isAdmin && (
+        <div className="users-header">
+          <div className="users-actions">
             <button
               onClick={() => {
-                setShowCreateForm(false)
+                setShowInviteForm(true)
+                resetInviteForm()
+              }}
+              className="btn btn-primary"
+            >
+              <MdEmail />
+              Einladung senden
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isAdmin && approveModalUser && (
+        <div className="users-form-card" style={{ marginBottom: '1rem' }}>
+          <div className="users-form-header">
+            <h3>Beitrittsanfrage freigeben</h3>
+            <button onClick={() => setApproveModalUser(null)} className="close-btn"><MdClose /></button>
+          </div>
+          <p style={{ marginBottom: '1rem', color: 'var(--color-text-secondary)' }}>
+            <strong>{approveModalUser.username}</strong> ({approveModalUser.email || 'keine E-Mail'}) – Rolle vergeben:
+          </p>
+          <form onSubmit={handleApproveUser}>
+            <div className="form-group">
+              <label>Rolle:</label>
+              <select
+                value={approveRole}
+                onChange={(e) => setApproveRole(e.target.value as 'readonly' | 'write' | 'admin')}
+                required
+              >
+                <option value="readonly">Readonly</option>
+                <option value="write">Write</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            <div className="form-actions">
+              <button type="submit" className="btn btn-success"><MdCheck /> Freigeben</button>
+              <button type="button" onClick={() => setApproveModalUser(null)} className="btn btn-secondary">Abbrechen</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {isAdmin && (editingUser || showInviteForm) && (
+        <div className="users-form-card">
+          <div className="users-form-header">
+            <h3>{showInviteForm ? 'Einladung senden' : 'Benutzer bearbeiten'}</h3>
+            <button
+              onClick={() => {
                 setShowInviteForm(false)
                 resetForm()
                 resetInviteForm()
@@ -348,43 +383,12 @@ export default function Users() {
             </button>
           </div>
 
-          {showCreateForm && (
-            <form onSubmit={editingUser ? handleUpdateUser : handleCreateUser}>
-              {!editingUser && (
-                <>
-                  <div className="form-group">
-                    <label>Benutzername:</label>
-                    <input
-                      type="text"
-                      value={formUsername}
-                      onChange={(e) => setFormUsername(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Passwort:</label>
-                    <input
-                      type="password"
-                      value={formPassword}
-                      onChange={(e) => setFormPassword(e.target.value)}
-                      required={!editingUser}
-                      minLength={6}
-                    />
-                  </div>
-                </>
-              )}
-              <div className="form-group">
-                <label>E-Mail (optional):</label>
-                <input
-                  type="email"
-                  value={formEmail}
-                  onChange={(e) => setFormEmail(e.target.value)}
-                />
-              </div>
+          {editingUser && (
+            <form onSubmit={handleUpdateUser}>
               <div className="form-group">
                 <label>
                   Rolle:
-                  <InfoIcon content="Readonly: Nur Leserechte (Pipelines anschauen, Runs ansehen). Write: Schreibrechte (Pipelines starten, Secrets verwalten). Admin: Vollzugriff (User-Verwaltung, Einstellungen)" />
+                  <InfoIcon content="Readonly: Nur Leserechte. Write: Schreibrechte. Admin: Vollzugriff." />
                 </label>
                 <select
                   value={formRole}
@@ -397,19 +401,8 @@ export default function Users() {
                 </select>
               </div>
               <div className="form-actions">
-                <button type="submit" className="btn btn-success">
-                  {editingUser ? 'Aktualisieren' : 'Erstellen'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowCreateForm(false)
-                    resetForm()
-                  }}
-                  className="btn btn-secondary"
-                >
-                  Abbrechen
-                </button>
+                <button type="submit" className="btn btn-success">Aktualisieren</button>
+                <button type="button" onClick={() => { setEditingUser(null); resetForm() }} className="btn btn-secondary">Abbrechen</button>
               </div>
             </form>
           )}
@@ -474,28 +467,98 @@ export default function Users() {
         </div>
       )}
 
-      <div className="users-list-card">
-        <h3>Benutzer</h3>
-        {isLoading ? (
-          <div className="loading-state">Laden...</div>
-        ) : users && users.length > 0 ? (
+      {pendingUsers.length > 0 && (
+        <div className="users-list-card" style={{ marginBottom: '1.5rem' }}>
+          <h3 className="users-section-title">
+            Beitrittsanfragen
+            <InfoIcon content="Nutzer haben sich per OAuth angemeldet und warten auf Freigabe. Freigeben oder Ablehnen." />
+          </h3>
           <div className="users-table-container">
             <table className="users-table">
               <thead>
                 <tr>
-                  <th>Benutzername</th>
-                  <th>E-Mail</th>
-                  <th>Rolle</th>
-                  <th>Status</th>
+                  <th>Name</th>
+                  <th>E-Mail <InfoIcon content="Von GitHub oder Google. Kann leer sein, wenn beim Provider nicht freigegeben." /></th>
+                  <th>Provider</th>
                   <th>Erstellt</th>
-                  <th>Aktionen</th>
+                  {isAdmin && <th>Aktionen</th>}
                 </tr>
               </thead>
               <tbody>
-                {users.map((user) => (
+                {pendingUsers.map((u) => (
+                  <tr key={u.id}>
+                    <td>{u.username}</td>
+                    <td>{u.email || '–'}</td>
+                    <td>{getProvider(u)}</td>
+                    <td>{new Date(u.created_at).toLocaleString('de-DE')}</td>
+                    {isAdmin && (
+                      <td>
+                        <div className="user-actions">
+                          <button onClick={() => handleOpenApproveModal(u)} className="btn-icon" title="Freigeben"><MdCheck /></button>
+                          <button onClick={() => handleRejectUser(u.id)} className="btn-icon btn-danger" title="Ablehnen"><MdCancel /></button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <div className="users-list-card">
+        <h3 className="users-section-title">
+          Aktive Nutzer
+          <InfoIcon content="Alle Benutzer melden sich über GitHub oder Google an. Der erste Admin wird über INITIAL_ADMIN_EMAIL festgelegt, weitere über Einladungen oder Freigabe von Beitrittsanfragen." />
+        </h3>
+        {isLoading ? (
+          <div className="loading-state">Laden...</div>
+        ) : activeUsers.length > 0 ? (
+          <div className="users-table-container">
+            <table className="users-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>E-Mail <InfoIcon content="Von GitHub oder Google. Kann leer sein, wenn beim Provider nicht freigegeben." /></th>
+                  <th>Konten</th>
+                  <th>Rolle</th>
+                  <th>Status</th>
+                  <th>Erstellt</th>
+                  {isAdmin && <th>Aktionen</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {activeUsers.map((user) => (
                   <tr key={user.id} className={user.blocked ? 'blocked' : ''}>
-                    <td>{user.username}</td>
+                    <td>
+                      {user.github_login ? (
+                        <a
+                          href={`https://github.com/${user.github_login}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="github-user-link"
+                          title={`GitHub: @${user.github_login}`}
+                        >
+                          {user.username}
+                          <MdOpenInNew className="icon-external" />
+                        </a>
+                      ) : (
+                        user.username
+                      )}
+                    </td>
                     <td>{user.email || '-'}</td>
+                    <td>
+                      <div className="account-badges">
+                        {getLinkedAccounts(user).length > 0 ? (
+                          getLinkedAccounts(user).map((p) => (
+                            <span key={p} className="badge badge-account" title={`${p} verknüpft`}>{p}</span>
+                          ))
+                        ) : (
+                          <span className="account-none">–</span>
+                        )}
+                      </div>
+                    </td>
                     <td>
                       <Tooltip content={
                         normalizeRole(user.role) === 'admin' ? 'Admin: Vollzugriff (User-Verwaltung, Einstellungen)' :
@@ -517,55 +580,96 @@ export default function Users() {
                       </Tooltip>
                     </td>
                     <td>{new Date(user.created_at).toLocaleDateString('de-DE')}</td>
-                    <td>
-                      <div className="user-actions">
-                        <button
-                          onClick={() => handleEditUser(user)}
-                          className="btn-icon"
-                          title="Bearbeiten"
-                        >
-                          <MdEdit />
-                        </button>
-                        <button
-                          onClick={() => handleResetPassword(user.id)}
-                          className="btn-icon"
-                          title="Passwort zurücksetzen"
-                        >
-                          <MdLockReset />
-                        </button>
-                        {user.blocked ? (
+                    {isAdmin && (
+                      <td>
+                        <div className="user-actions">
                           <button
-                            onClick={() => handleUnblockUser(user.id)}
+                            onClick={() => handleEditUser(user)}
                             className="btn-icon"
-                            title="Entblockieren"
+                            title="Bearbeiten"
                           >
-                            <MdBlock />
+                            <MdEdit />
                           </button>
-                        ) : (
+                          {user.blocked ? (
+                            <button
+                              onClick={() => handleUnblockUser(user.id)}
+                              className="btn-icon"
+                              title="Entblockieren"
+                            >
+                              <MdBlock />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleBlockUser(user.id)}
+                              className="btn-icon"
+                              title="Blockieren"
+                            >
+                              <MdBlock />
+                            </button>
+                          )}
                           <button
-                            onClick={() => handleBlockUser(user.id)}
-                            className="btn-icon"
-                            title="Blockieren"
+                            onClick={() => handleDeleteUser(user.id)}
+                            className="btn-icon btn-danger"
+                            title="Löschen"
                           >
-                            <MdBlock />
+                            <MdDelete />
                           </button>
-                        )}
-                        <button
-                          onClick={() => handleDeleteUser(user.id)}
-                          className="btn-icon btn-danger"
-                          title="Löschen"
-                        >
-                          <MdDelete />
-                        </button>
-                      </div>
-                    </td>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         ) : (
-          <div className="empty-state">Keine Benutzer gefunden</div>
+          <div className="empty-state">Keine aktiven Nutzer</div>
+        )}
+      </div>
+
+      <div className="users-list-card" style={{ marginTop: '1.5rem' }}>
+        <h3>Einladungen</h3>
+        {invites.length === 0 ? (
+          <div className="empty-state">Keine Einladungen</div>
+        ) : (
+          <div className="users-table-container">
+            <table className="users-table">
+              <thead>
+                <tr>
+                  <th>E-Mail</th>
+                  <th>Rolle</th>
+                  <th>Erstellt</th>
+                  <th>Läuft ab</th>
+                  <th>Status</th>
+                  {isAdmin && <th>Aktionen</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {invites.map((i) => (
+                  <tr key={i.id}>
+                    <td>{i.recipient_email}</td>
+                    <td><span className={`badge badge-${normalizeRole(i.role)}`}>{normalizeRole(i.role)}</span></td>
+                    <td>{new Date(i.created_at).toLocaleString('de-DE')}</td>
+                    <td>{new Date(i.expires_at).toLocaleString('de-DE')}</td>
+                    <td>{i.is_used ? <span className="badge badge-success">Eingelöst</span> : <span className="badge">Offen</span>}</td>
+                    {isAdmin && (
+                      <td>
+                        {!i.is_used && new Date(i.expires_at) > new Date() && (
+                          <button
+                            onClick={() => deleteInviteMutation.mutate(i.id)}
+                            className="btn-icon btn-danger"
+                            title="Widerrufen"
+                          >
+                            <MdDelete />
+                          </button>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

@@ -67,16 +67,47 @@ Speichert sensible Daten und Parameter.
 
 ### 5. `User` (Authentifizierung)
 
-Speichert Benutzer für den Login.
+Speichert Benutzer. Login via GitHub OAuth, Google OAuth (und Einladung).
 
 | Spalte | Typ | Beschreibung |
 |--------|-----|--------------|
-| `username` | String (PK) | Benutzername. |
-| `password_hash` | String | Gehashtes Passwort (bcrypt). |
-| `email` | String | (Optional) E-Mail Adresse. |
+| `id` | UUID (PK) | Eindeutige User-ID. |
+| `username` | String | Benutzername (eindeutig, indexiert). |
+| `email` | String | (Optional) E-Mail (von GitHub/Google oder manuell). |
 | `role` | Enum | `ADMIN`, `WRITE`, `READONLY`. |
 | `blocked` | Boolean | Ob der Benutzer gesperrt ist. |
-| `invitation_token` | String | (Optional) Token für Einladungen. |
+| `github_id` | String | (Optional) GitHub OAuth ID (unique). |
+| `google_id` | String | (Optional) Google OAuth ID (unique). |
+| `avatar_url` | String | (Optional) Profilbild-URL von OAuth-Provider. |
+| `microsoft_id` | String | (Optional) für zukünftige Microsoft-Auth (unique). |
+| `status` | String | `active` (Zugriff), `pending` (Beitrittsanfrage), `rejected` (abgelehnt). Default: `active`. |
+| `created_at` | DateTime | Erstellungsdatum. |
+
+### 6. `Invitation` (Einladungen)
+
+Token-Einladungen für neue User (Einlösung via GitHub OAuth oder Google OAuth).
+
+| Spalte | Typ | Beschreibung |
+|--------|-----|--------------|
+| `id` | UUID (PK) | Eindeutige ID. |
+| `recipient_email` | String | E-Mail des Empfängers. |
+| `token` | String | Einmal-Token (unique, in URL: `/invite?token=...`). |
+| `is_used` | Boolean | Ob die Einladung bereits eingelöst wurde. |
+| `expires_at` | DateTime | Ablauf der Gültigkeit. |
+| `role` | Enum | Rolle des neuen Users. |
+| `created_at` | DateTime | Erstellungsdatum. |
+
+### 7. `Session` (Sessions)
+
+Persistente Sessions (JWT-Token in DB).
+
+| Spalte | Typ | Beschreibung |
+|--------|-----|--------------|
+| `id` | UUID (PK) | Eindeutige Session-ID. |
+| `token` | String | JWT-Token (unique). |
+| `user_id` | UUID (FK) | Referenz auf `users.id`. |
+| `expires_at` | DateTime | Ablauf der Session. |
+| `created_at` | DateTime | Erstellungsdatum. |
 
 ---
 
@@ -85,6 +116,8 @@ Speichert Benutzer für den Login.
 - Eine **Pipeline** kann viele **PipelineRuns** haben (1:n).
 - Eine **Pipeline** kann viele **ScheduledJobs** haben (1:n).
 - **Secrets** sind global verfügbar und werden bei Bedarf in Runs injiziert.
+- Ein **User** kann viele **Sessions** haben (1:n).
+- **Invitation** steht für sich; nach Einlösung wird ein neuer **User** mit der hinterlegten Rolle angelegt.
 
 ## Hinweise
 

@@ -17,7 +17,7 @@ Die meisten Endpoints erfordern Authentifizierung. Verwenden Sie einen Bearer-To
 Authorization: Bearer <token>
 ```
 
-Token werden über den Login-Endpoint (`/api/auth/login`) erhalten.
+Token werden über GitHub OAuth (`GET /api/auth/github/authorize`) oder Google OAuth (`GET /api/auth/google/authorize`) erhalten; nach Autorisierung Redirect zu `/auth/callback#token=...`.
 
 ## Endpoints
 
@@ -804,27 +804,110 @@ curl -X POST http://localhost:8000/api/webhooks/pipeline_a/my-secret-key
 
 ---
 
-## Authentifizierung
+## Users (Nutzerverwaltung)
 
-### `POST /api/auth/login`
+Alle Endpoints erfordern Authentifizierung. `GET /api/users`, Invites, Approve, Reject, Block, Unblock, Delete und Invite erfordern **Admin**.
 
-Meldet einen Benutzer an.
+### `GET /api/users`
 
-**Request Body:**
-```json
-{
-  "username": "admin",
-  "password": "password"
-}
-```
+Listet alle Nutzer (inkl. `status`, `github_id`, `google_id`). Keine Filterung; Frontend gruppiert in „Aktive Nutzer“ (`status=active`) und „Beitrittsanfragen“ (`status=pending`).
 
 **Response:**
 ```json
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "token_type": "bearer"
-}
+[
+  {
+    "id": "uuid",
+    "username": "max",
+    "email": "max@example.com",
+    "role": "READONLY",
+    "blocked": false,
+    "created_at": "2024-01-15T10:00:00",
+    "github_id": "123",
+    "google_id": "456",
+    "status": "active"
+  }
+]
 ```
+
+### `GET /api/users/{user_id}`
+
+Einzelnen Nutzer abrufen.
+
+### `PUT /api/users/{user_id}`
+
+Nutzer aktualisieren. Body: `{ "role": "READONLY|WRITE|ADMIN", "blocked": false }`. E-Mail kommt von GitHub/Google und wird nicht per API geändert.
+
+### `POST /api/users/{user_id}/approve`
+
+**Beitrittsanfrage freigeben.** Nur wenn `status=pending`. Setzt `status=active`, `blocked=false`, `role` aus Body (Default: `READONLY`). Optional: E-Mail an Nutzer bei Freigabe (wenn `EMAIL_ENABLED` und `user.email`).
+
+**Request Body (optional):**
+```json
+{ "role": "READONLY" }
+```
+`role`: `READONLY`, `WRITE` oder `ADMIN`. Fehlt der Body, wird `READONLY` verwendet.
+
+**Fehler:** `400` wenn Nutzer nicht `pending` ist.
+
+### `POST /api/users/{user_id}/reject`
+
+**Beitrittsanfrage ablehnen.** Nur wenn `status=pending`. Setzt `status=rejected`, `blocked=true`.
+
+**Fehler:** `400` wenn Nutzer nicht `pending` ist.
+
+### `POST /api/users/{user_id}/block`
+
+Nutzer blockieren. Alle Sessions werden gelöscht.
+
+### `POST /api/users/{user_id}/unblock`
+
+Nutzer entblockieren.
+
+### `DELETE /api/users/{user_id}`
+
+Nutzer löschen. Nicht erlaubt, sich selbst zu löschen.
+
+### `GET /api/users/invites`
+
+Listet alle Einladungen (Admin).
+
+### `POST /api/users/invite`
+
+Erstellt eine Einladung. Body: `{ "email": "...", "role": "READONLY|WRITE|ADMIN", "expires_hours": 168 }`. Response: `{ "link": "...", "expires_at": "..." }`.
+
+### `DELETE /api/users/invites/{invitation_id}`
+
+Einladung widerrufen (Admin).
+
+---
+
+## Authentifizierung
+
+### `GET /api/auth/github/authorize`
+
+Leitet zur GitHub OAuth-Seite weiter. Nach Autorisierung: Redirect zu `{FRONTEND_URL}/auth/callback#token=...`.
+
+- **Query (optional):** `state` – z.B. Invitation-Token für Einladungs-Flow.
+
+### `GET /api/auth/github/callback`
+
+GitHub OAuth Callback (vom Browser aufgerufen). Erstellt Session und leitet zu `{FRONTEND_URL}/auth/callback#token=...` weiter. Bei **Link-Flow:** Redirect zu `{FRONTEND_URL}/settings?linked=github`. Bei **Beitrittsanfrage (anklopfen_only):** **kein** Token, **keine** Session; Redirect zu `{FRONTEND_URL}/request-sent` (pending) oder `{FRONTEND_URL}/request-rejected` (rejected/blocked).
+
+### `GET /api/auth/google/authorize`
+
+Leitet zur Google OAuth-Seite weiter. `state` optional (Invitation-Token oder CSRF).
+
+### `GET /api/auth/google/callback`
+
+Google OAuth Callback. Verhalten wie GitHub-Callback; bei Link-Flow: `{FRONTEND_URL}/settings?linked=google`; bei anklopfen_only: `{FRONTEND_URL}/request-sent` oder `{FRONTEND_URL}/request-rejected` ohne Session.
+
+### `GET /api/auth/link/google`
+
+Startet Google-OAuth zum **Verknüpfen** des Google-Kontos mit dem eingeloggten User. Erfordert Authentifizierung. Redirect zu `{FRONTEND_URL}/settings?linked=google` nach Erfolg.
+
+### `GET /api/auth/link/github`
+
+Startet GitHub-OAuth zum **Verknüpfen** des GitHub-Kontos. Erfordert Authentifizierung. Redirect zu `{FRONTEND_URL}/settings?linked=github` nach Erfolg.
 
 ### `POST /api/auth/logout`
 
@@ -839,13 +922,19 @@ Meldet einen Benutzer ab.
 
 ### `GET /api/auth/me`
 
-Gibt Informationen über den aktuellen Benutzer zurück.
+Gibt Informationen über den aktuellen Benutzer zurück (u.a. für Verknüpfte-Konten-UI).
 
 **Response:**
 ```json
 {
-  "username": "admin",
-  "is_admin": true
+  "username": "dein-username",
+  "id": "uuid",
+  "email": "user@example.com",
+  "has_github": true,
+  "has_google": false,
+  "avatar_url": "https://...",
+  "created_at": "2024-01-18T12:00:00",
+  "role": "admin"
 }
 ```
 

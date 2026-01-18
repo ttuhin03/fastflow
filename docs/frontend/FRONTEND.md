@@ -30,7 +30,9 @@ frontend/
 │   ├── contexts/
 │   │   └── AuthContext.tsx     # Authentication Context
 │   ├── pages/                 # Seiten-Komponenten
+│   │   ├── AuthCallback.tsx
 │   │   ├── Dashboard.tsx
+│   │   ├── Invite.tsx
 │   │   ├── Login.tsx
 │   │   ├── PipelineDetail.tsx
 │   │   ├── Pipelines.tsx
@@ -39,7 +41,8 @@ frontend/
 │   │   ├── Scheduler.tsx
 │   │   ├── Secrets.tsx
 │   │   ├── Settings.tsx
-│   │   └── Sync.tsx
+│   │   ├── Sync.tsx
+│   │   └── Users.tsx
 │   ├── styles/
 │   │   ├── design-system.css  # Design-System (Farben, Typografie)
 │   │   └── variables.css      # CSS-Variablen
@@ -54,7 +57,7 @@ frontend/
 Der API-Client ist ein konfigurierter Axios-Instanz mit automatischer Authentifizierung.
 
 **Features:**
-- Automatisches Hinzufügen des Authorization-Headers aus localStorage
+- Automatisches Hinzufügen des Authorization-Headers aus sessionStorage
 - Automatische Weiterleitung zum Login bei 401-Fehlern
 - Basis-URL konfigurierbar über `VITE_API_URL` (Standard: `http://localhost:8000/api`)
 
@@ -442,15 +445,19 @@ Git-Synchronisation und Repository-Verwaltung.
 
 #### `pages/Login.tsx`
 
-Login-Seite für Authentifizierung.
+Login-Seite. Anmeldung **nur via GitHub OAuth**.
 
 **Features:**
-- Benutzername/Passwort-Login
+- Button „Login mit GitHub“ (Redirect zu `/api/auth/github/authorize`)
 - Fehlerbehandlung
-- Automatische Weiterleitung nach erfolgreichem Login
+- Nach Autorisierung: Redirect zu `/auth/callback#token=...`, dann zu `/`
+
+**Weitere Seiten:**
+- `pages/AuthCallback.tsx` – verarbeitet `#token=...` nach OAuth, speichert Token in sessionStorage, leitet zu `/` weiter
+- `pages/Invite.tsx` – Einladungs-Landing (`/invite?token=...`), Button „Mit GitHub registrieren“ startet OAuth mit Token im `state`
 
 **API-Endpoints:**
-- `POST /api/auth/login` - Login
+- `GET /api/auth/github/authorize` – Login (Redirect zu GitHub)
 
 ## Authentication Context
 
@@ -459,7 +466,7 @@ Login-Seite für Authentifizierung.
 Verwaltet den Authentifizierungs-Status der Anwendung.
 
 **Features:**
-- Token-Verwaltung in localStorage
+- Token-Verwaltung in sessionStorage (auth_token)
 - Automatische Token-Validierung
 - Logout-Funktionalität
 - Protected Routes
@@ -484,7 +491,9 @@ function MyComponent() {
 Die Routing-Konfiguration befindet sich in `App.tsx`:
 
 - `/` - Dashboard
-- `/login` - Login
+- `/login` - Login (GitHub OAuth)
+- `/auth/callback` - OAuth-Callback (verarbeitet `#token=...`)
+- `/invite` - Einladungs-Seite (`?token=...`)
 - `/pipelines` - Pipeline-Übersicht
 - `/pipelines/:name` - Pipeline-Details
 - `/runs` - Run-Übersicht
@@ -493,9 +502,10 @@ Die Routing-Konfiguration befindet sich in `App.tsx`:
 - `/secrets` - Secrets
 - `/settings` - Settings
 - `/sync` - Git-Sync
+- `/users` - Nutzerverwaltung (nur für Admins, GitHub-Einladungen)
 
 **Protected Routes:**
-Alle Routen außer `/login` sind geschützt und erfordern Authentifizierung.
+Alle Routen außer `/login`, `/auth/callback` und `/invite` sind geschützt und erfordern Authentifizierung.
 
 ## Styling
 

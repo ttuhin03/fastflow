@@ -44,6 +44,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+
 # App-Code kopieren
 COPY app/ ./app/
 COPY alembic.ini .
@@ -53,6 +54,10 @@ COPY VERSION .
 # Static-Files vom Frontend-Build kopieren
 COPY --from=frontend-builder /app/frontend/dist ./static
 
+# Entrypoint: Migrationen, dann uvicorn
+COPY entrypoint.sh .
+RUN chmod +x entrypoint.sh
+
 # Exponiere Port für FastAPI
 EXPOSE 8000
 
@@ -60,5 +65,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Entry-Point: uvicorn mit FastAPI-App
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Zuerst alembic upgrade head, dann uvicorn
+CMD ["./entrypoint.sh"]

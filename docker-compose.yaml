@@ -60,6 +60,9 @@ services:
       - LOGS_DIR=/app/logs
       - DATA_DIR=/app/data
       - UV_CACHE_DIR=/app/data/uv_cache
+      # OAuth-Redirect: Frontend wird vom gleichen Server (Orchestrator) auf :8000 ausgeliefert
+      - FRONTEND_URL=http://localhost:${PORT:-8000}
+      - BASE_URL=http://localhost:${PORT:-8000}
       # Host-Pfade für Docker Volume-Mounts (wichtig für Worker-Container)
       # Diese werden automatisch aus den Container-Volumes extrahiert
       # Falls manuell gesetzt werden soll, verwende absolute Pfade

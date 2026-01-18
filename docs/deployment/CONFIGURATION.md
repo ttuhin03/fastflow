@@ -6,7 +6,7 @@ Fast-Flow wird primär über Environment-Variablen in einer `.env` Datei konfigu
 
 | Variable | Standardwert | Beschreibung |
 |----------|--------------|--------------|
-| `ENVIRONMENT` | `development` | Setzt den Modus (`development` oder `production`). In `production` werden unsichere Standardwerte (wie Default-Passwörter) blockiert. |
+| `ENVIRONMENT` | `development` | Setzt den Modus (`development` oder `production`). In `production` werden unsichere Standardwerte (z.B. `JWT_SECRET_KEY`) blockiert. |
 
 ## Datenbank
 
@@ -58,11 +58,16 @@ Fast-Flow wird primär über Environment-Variablen in einer `.env` Datei konfigu
 | Variable | Standardwert | Beschreibung | Produktion |
 |----------|--------------|--------------|------------|
 | `ENCRYPTION_KEY` | *Muss gesetzt werden* | Fernet-Key zur Verschlüsselung von Secrets in der DB. Generieren mit: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` | **Pflicht** |
-| `AUTH_USERNAME` | `admin` | Benutzername für das Login. | **Ändern!** |
-| `AUTH_PASSWORD` | `admin` | Passwort für das Login. | **Ändern!** |
-| `JWT_SECRET_KEY` | *Leer* / Unsafe | Secret Key zum Signieren von Session-Tokens. Muss lang und zufällig sein. | **Pflicht** |
-| `JWT_ALGORITHM` | `HS256` | Algorithmus für JWT Signatur. | HS256 |
-| `JWT_EXPIRATION_HOURS`| `24` | Gültigkeitsdauer einer Login-Session in Stunden. | 24 |
+| `JWT_SECRET_KEY` | `change-me-in-production` | Secret Key zum Signieren und Verifizieren der JWT-Tokens. Muss lang und zufällig sein (mind. 32 Zeichen). In Produktion: eigener Wert, `change-me-in-production` wird blockiert. | **Pflicht** |
+| `JWT_ALGORITHM` | `HS256` | Algorithmus für die JWT-Signatur (typisch: HS256). | HS256 |
+| `JWT_ACCESS_TOKEN_MINUTES` | `15` | Gültigkeitsdauer des Access-Tokens in Minuten (Laufzeit des JWT, `exp`-Claim). Kürzere Laufzeit reduziert das Risiko bei kompromittierten Tokens. | 15 |
+| `JWT_EXPIRATION_HOURS` | `24` | Gültigkeitsdauer der Session in der DB in Stunden. Nach Ablauf erscheint „Sitzung abgelaufen“; Re-Login nötig. | 24 |
+| `GITHUB_CLIENT_ID` | *Leer* | OAuth App Client ID (GitHub). | **Pflicht** (oder Google) |
+| `GITHUB_CLIENT_SECRET` | *Leer* | OAuth App Client Secret (GitHub). | **Pflicht** (oder Google) |
+| `GOOGLE_CLIENT_ID` | *Leer* | OAuth 2.0 Client ID (Google). Callback: `{BASE_URL}/api/auth/google/callback`. | Optional |
+| `GOOGLE_CLIENT_SECRET` | *Leer* | OAuth 2.0 Client Secret (Google). | Optional |
+| `INITIAL_ADMIN_EMAIL` | *Leer* | E-Mail des ersten Admins (Zutritt ohne Einladung, GitHub oder Google). | **Empfohlen** |
+| `FRONTEND_URL` / `BASE_URL` | s. [OAuth (GitHub, Google)](../oauth/README.md) | Für OAuth-Callback und Einladungs-Links. | Anpassen |
 
 ## GitHub Apps (Optional)
 

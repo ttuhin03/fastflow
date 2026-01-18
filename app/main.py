@@ -134,10 +134,6 @@ async def lifespan(app: FastAPI):
         logger.error(f"Fehler bei Version-Check-Initialisierung: {e}")
         # Nicht kritisch, App kann trotzdem starten
     
-    # bcrypt_sha256 wird beim ersten Login automatisch initialisiert
-    # Initialisierung beim Start wird übersprungen, da passlib beim Initialisieren
-    # ein Test-Passwort verwendet, das das 72-Byte-Limit überschreitet
-    
     # React-Frontend wird über StaticFiles serviert (siehe unten)
     
     logger.info("Fast-Flow Orchestrator gestartet")
@@ -218,27 +214,7 @@ def _validate_security_config() -> None:
                 "Dies sollte in Produktion geändert werden."
             )
     
-    # 3. AUTH_PASSWORD sollte nicht "admin" sein (kritisch in Produktion)
-    if config.AUTH_PASSWORD == "admin":
-        if is_production:
-            errors.append(
-                "AUTH_PASSWORD verwendet den unsicheren Standardwert 'admin'. "
-                "Bitte setze ein starkes Passwort in der .env-Datei."
-            )
-        else:
-            warnings.append(
-                "AUTH_PASSWORD verwendet den Standardwert 'admin'. "
-                "Dies sollte in Produktion geändert werden."
-            )
-    
-    # 4. AUTH_USERNAME sollte nicht "admin" sein (Warnung in Produktion)
-    if config.AUTH_USERNAME == "admin" and is_production:
-        warnings.append(
-            "AUTH_USERNAME verwendet den Standardwert 'admin'. "
-            "Es wird empfohlen, einen anderen Benutzernamen zu verwenden."
-        )
-    
-    # 5. CORS Validierung: Wildcard-Origins mit allow_credentials sind unsicher
+    # 3. CORS Validierung: Wildcard-Origins mit allow_credentials sind unsicher
     if config.CORS_ORIGINS:
         for origin in config.CORS_ORIGINS:
             if origin == "*" or origin.strip() == "*":

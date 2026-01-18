@@ -11,18 +11,19 @@ Dieses Modul enthält alle REST-API-Endpoints für Nutzermanagement:
 """
 
 import logging
-from typing import List, Optional
-from uuid import UUID, uuid4
+import secrets
 from datetime import datetime, timedelta
-import re
+from typing import List, Optional
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, EmailStr, field_validator
+from fastapi import APIRouter, Body, Depends, HTTPException, status
+from pydantic import BaseModel, EmailStr
 from sqlmodel import Session, select
 
-from app.auth import get_current_user, require_admin, get_password_hash, delete_all_user_sessions
+from app.auth import get_current_user, require_admin, delete_all_user_sessions
+from app.config import config
 from app.database import get_session
-from app.models import User, UserRole
+from app.models import User, UserRole, Invitation
 
 logger = logging.getLogger(__name__)
 
@@ -39,110 +40,32 @@ class UserResponse(BaseModel):
     blocked: bool
     created_at: str
     microsoft_id: Optional[str] = None
+    github_id: Optional[str] = None
+    github_login: Optional[str] = None
+    google_id: Optional[str] = None
+    status: Optional[str] = None
 
     class Config:
         from_attributes = True
 
 
-def validate_username(username: str) -> None:
-    """
-    Validiert Benutzername-Format.
-    
-    Anforderungen:
-    - Nur alphanumerische Zeichen und Unterstriche erlaubt
-    - Länge: 3-50 Zeichen
-    - Darf nicht mit Unterstrichen beginnen oder enden
-    
-    Args:
-        username: Benutzername zum Validieren
-        
-    Raises:
-        ValueError: Wenn Benutzername ungültig ist
-    """
-    import re
-    
-    # Länge prüfen
-    if len(username) < 3 or len(username) > 50:
-        raise ValueError("Benutzername muss zwischen 3 und 50 Zeichen lang sein")
-    
-    # Nur alphanumerische Zeichen und Unterstriche erlauben
-    if not re.match(r'^[a-zA-Z0-9_]+$', username):
-        raise ValueError("Benutzername darf nur Buchstaben, Zahlen und Unterstriche enthalten")
-    
-    # Darf nicht mit Unterstrichen beginnen oder enden
-    if username.startswith('_') or username.endswith('_'):
-        raise ValueError("Benutzername darf nicht mit Unterstrichen beginnen oder enden")
-    
-    # Darf nicht nur aus Unterstrichen bestehen
-    if username.replace('_', '') == '':
-        raise ValueError("Benutzername darf nicht nur aus Unterstrichen bestehen")
-
-
-def validate_password_strength(password: str) -> None:
-    """
-    Validiert Passwort-Stärke.
-    
-    Anforderungen:
-    - Mindestlänge: 12 Zeichen
-    - Mindestens 1 Großbuchstabe
-    - Mindestens 1 Kleinbuchstabe
-    - Mindestens 1 Zahl
-    - Mindestens 1 Sonderzeichen (!@#$%^&*()_+-=[]{}|;:,.<>?)
-    
-    Args:
-        password: Passwort zum Validieren
-        
-    Raises:
-        ValueError: Wenn Passwort zu schwach ist
-    """
-    import re
-    
-    # Mindestlänge: 12 Zeichen
-    if len(password) < 12:
-        raise ValueError("Passwort muss mindestens 12 Zeichen lang sein")
-    
-    # Mindestens 1 Großbuchstabe
-    if not re.search(r'[A-Z]', password):
-        raise ValueError("Passwort muss mindestens einen Großbuchstaben enthalten")
-    
-    # Mindestens 1 Kleinbuchstabe
-    if not re.search(r'[a-z]', password):
-        raise ValueError("Passwort muss mindestens einen Kleinbuchstaben enthalten")
-    
-    # Mindestens 1 Zahl
-    if not re.search(r'[0-9]', password):
-        raise ValueError("Passwort muss mindestens eine Zahl enthalten")
-    
-    # Mindestens 1 Sonderzeichen
-    if not re.search(r'[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]', password):
-        raise ValueError("Passwort muss mindestens ein Sonderzeichen enthalten (!@#$%^&*()_+-=[]{}|;:,.<>?)")
-
-
-class CreateUserRequest(BaseModel):
-    """Request-Model für Benutzer-Erstellung."""
-    username: str
-    password: str
-    email: Optional[EmailStr] = None
+class ApproveUserRequest(BaseModel):
+    """Request-Model für Freigabe einer Beitrittsanfrage."""
     role: UserRole = UserRole.READONLY
-    
-    @field_validator("username")
-    @classmethod
-    def validate_username(cls, v: str) -> str:
-        """Validiert Benutzername-Format."""
-        validate_username(v)
-        return v
-    
-    @field_validator("password")
-    @classmethod
-    def validate_password(cls, v: str) -> str:
-        """Validiert Passwort-Stärke."""
-        validate_password_strength(v)
-        return v
+
+
+class InvitationResponse(BaseModel):
+    """Response-Model für Einladungen (ohne token)."""
+    id: str
+    recipient_email: str
+    is_used: bool
+    expires_at: str
+    created_at: str
+    role: str
 
 
 class UpdateUserRequest(BaseModel):
-    """Request-Model für Benutzer-Aktualisierung."""
-    email: Optional[EmailStr] = None
+    """Request-Model für Benutzer-Aktualisierung. E-Mail kommt von GitHub/Google und wird nicht geändert."""
     role: Optional[UserRole] = None
     blocked: Optional[bool] = None
 
@@ -154,46 +77,13 @@ class InviteUserRequest(BaseModel):
     expires_hours: int = 168  # Standard: 7 Tage
 
 
-class AcceptInviteRequest(BaseModel):
-    """Request-Model für Einladungs-Annahme."""
-    username: str
-    password: str
-    token: str
-    
-    @field_validator("username")
-    @classmethod
-    def validate_username(cls, v: str) -> str:
-        """Validiert Benutzername-Format."""
-        validate_username(v)
-        return v
-    
-    @field_validator("password")
-    @classmethod
-    def validate_password(cls, v: str) -> str:
-        """Validiert Passwort-Stärke."""
-        validate_password_strength(v)
-        return v
-
-
-class ResetPasswordRequest(BaseModel):
-    """Request-Model für Passwort-Reset."""
-    new_password: str
-    
-    @field_validator("new_password")
-    @classmethod
-    def validate_password(cls, v: str) -> str:
-        """Validiert Passwort-Stärke."""
-        validate_password_strength(v)
-        return v
-
-
 @router.get("", response_model=List[UserResponse])
 async def list_users(
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ) -> List[UserResponse]:
     """
-    Listet alle Benutzer auf (nur für Admins).
+    Listet alle Benutzer auf. Lesen: alle eingeloggten Nutzer; Änderungen: nur Admins.
     
     Args:
         current_user: Aktueller Benutzer (muss Admin sein)
@@ -213,201 +103,84 @@ async def list_users(
             role=user.role.value,
             blocked=user.blocked,
             created_at=user.created_at.isoformat(),
-            microsoft_id=user.microsoft_id
+            microsoft_id=user.microsoft_id,
+            github_id=user.github_id,
+            github_login=getattr(user, "github_login", None),
+            google_id=getattr(user, "google_id", None),
+            status=getattr(user, "status", "active"),
         )
         for user in users
     ]
 
 
-@router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def create_user(
-    request: CreateUserRequest,
-    current_user: User = Depends(require_admin),
-    session: Session = Depends(get_session)
-) -> UserResponse:
-    """
-    Erstellt einen neuen Benutzer direkt (nur für Admins).
-    
-    Args:
-        request: Benutzer-Daten
-        current_user: Aktueller Benutzer (muss Admin sein)
-        session: Datenbank-Session
-        
-    Returns:
-        UserResponse: Erstellter Benutzer
-        
-    Raises:
-        HTTPException: Wenn Benutzername bereits existiert
-    """
-    # Prüfe ob Benutzername bereits existiert
-    statement = select(User).where(User.username == request.username)
-    existing_user = session.exec(statement).first()
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Benutzername bereits vergeben"
+@router.get("/invites", response_model=List[InvitationResponse])
+async def list_invites(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> List[InvitationResponse]:
+    """Listet alle Einladungen. Lesen: alle; Erstellen/Widerrufen: nur Admins."""
+    stmt = select(Invitation).order_by(Invitation.created_at.desc())
+    rows = session.exec(stmt).all()
+    return [
+        InvitationResponse(
+            id=str(i.id),
+            recipient_email=i.recipient_email,
+            is_used=i.is_used,
+            expires_at=i.expires_at.isoformat(),
+            created_at=i.created_at.isoformat(),
+            role=i.role.value,
         )
-    
-    # Prüfe ob E-Mail bereits existiert (falls angegeben)
-    if request.email:
-        statement = select(User).where(User.email == request.email)
-        existing_email = session.exec(statement).first()
-        if existing_email:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="E-Mail-Adresse bereits vergeben"
-            )
-    
-    # Erstelle neuen Benutzer
-    user = User(
-        username=request.username,
-        password_hash=get_password_hash(request.password),
-        email=request.email,
-        role=request.role
-    )
-    
-    session.add(user)
-    session.commit()
-    session.refresh(user)
-    
-    logger.info(f"Admin '{current_user.username}' hat Benutzer '{user.username}' erstellt")
-    
-    return UserResponse(
-        id=str(user.id),
-        username=user.username,
-        email=user.email,
-        role=user.role.value,
-        blocked=user.blocked,
-        created_at=user.created_at.isoformat(),
-        microsoft_id=user.microsoft_id
-    )
+        for i in rows
+    ]
 
 
 @router.post("/invite", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def invite_user(
     request: InviteUserRequest,
     current_user: User = Depends(require_admin),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
 ) -> dict:
     """
-    Erstellt einen Einladungslink für einen neuen Benutzer (nur für Admins).
-    
-    Args:
-        request: Einladungs-Daten
-        current_user: Aktueller Benutzer (muss Admin sein)
-        session: Datenbank-Session
-        
-    Returns:
-        dict: Einladungs-Token und Link
-        
-    Raises:
-        HTTPException: Wenn E-Mail bereits vergeben ist
+    Erstellt eine Einladung (Invitation) und gibt den Link zurück.
+    Einlösung nur via GitHub OAuth (/invite?token=... → /auth/github/authorize?state=token).
     """
-    # Prüfe ob E-Mail bereits existiert
-    statement = select(User).where(User.email == request.email)
-    existing_user = session.exec(statement).first()
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="E-Mail-Adresse bereits vergeben"
-        )
-    
-    # Generiere Einladungs-Token
-    invitation_token = str(uuid4())
-    invitation_expires_at = datetime.utcnow() + timedelta(hours=request.expires_hours)
-    
-    # Erstelle temporären Benutzer mit Einladungs-Token
-    user = User(
-        username="",  # Wird beim Einlösen der Einladung gesetzt
-        password_hash="",  # Wird beim Einlösen der Einladung gesetzt
-        email=request.email,
+    stmt = select(User).where(User.email == request.email)
+    if session.exec(stmt).first():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="E-Mail-Adresse bereits vergeben")
+
+    token = secrets.token_urlsafe(32)
+    expires_at = datetime.utcnow() + timedelta(hours=request.expires_hours)
+    inv = Invitation(
+        recipient_email=request.email,
+        token=token,
+        is_used=False,
+        expires_at=expires_at,
         role=request.role,
-        invitation_token=invitation_token,
-        invitation_expires_at=invitation_expires_at
     )
-    
-    session.add(user)
+    session.add(inv)
     session.commit()
-    session.refresh(user)
-    
-    # Erstelle Einladungs-Link (Frontend-Route)
-    invite_link = f"/invite/{invitation_token}"
-    
+
+    frontend = (config.FRONTEND_URL or config.BASE_URL or "http://localhost:8000").rstrip("/")
+    link = f"{frontend}/invite?token={token}"
     logger.info(f"Admin '{current_user.username}' hat Einladung für '{request.email}' erstellt")
-    
-    return {
-        "token": invitation_token,
-        "link": invite_link,
-        "expires_at": invitation_expires_at.isoformat()
-    }
+    return {"link": link, "expires_at": expires_at.isoformat()}
 
 
-@router.post("/invite/{token}/accept", response_model=UserResponse, status_code=status.HTTP_200_OK)
-async def accept_invite(
-    token: str,
-    request: AcceptInviteRequest,
-    session: Session = Depends(get_session)
-) -> UserResponse:
-    """
-    Nimmt eine Einladung an und erstellt den Benutzer.
-    
-    Args:
-        token: Einladungs-Token
-        request: Benutzer-Daten (Username, Passwort)
-        session: Datenbank-Session
-        
-    Returns:
-        UserResponse: Erstellter Benutzer
-        
-    Raises:
-        HTTPException: Wenn Token ungültig oder abgelaufen ist
-    """
-    # Finde Benutzer mit Token
-    statement = select(User).where(User.invitation_token == token)
-    user = session.exec(statement).first()
-    
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Einladungs-Token nicht gefunden"
-        )
-    
-    if user.invitation_expires_at and user.invitation_expires_at < datetime.utcnow():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Einladungs-Token ist abgelaufen"
-        )
-    
-    # Prüfe ob Benutzername bereits existiert
-    statement = select(User).where(User.username == request.username)
-    existing_user = session.exec(statement).first()
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Benutzername bereits vergeben"
-        )
-    
-    # Aktualisiere Benutzer
-    user.username = request.username
-    user.password_hash = get_password_hash(request.password)
-    user.invitation_token = None
-    user.invitation_expires_at = None
-    
-    session.add(user)
+@router.delete("/invites/{invitation_id}", status_code=status.HTTP_200_OK)
+async def delete_invite(
+    invitation_id: UUID,
+    current_user: User = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Widerruft eine Einladung (nur für Admins)."""
+    stmt = select(Invitation).where(Invitation.id == invitation_id)
+    inv = session.exec(stmt).first()
+    if not inv:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Einladung nicht gefunden")
+    session.delete(inv)
     session.commit()
-    session.refresh(user)
-    
-    logger.info(f"Benutzer '{user.username}' hat Einladung angenommen")
-    
-    return UserResponse(
-        id=str(user.id),
-        username=user.username,
-        email=user.email,
-        role=user.role.value,
-        blocked=user.blocked,
-        created_at=user.created_at.isoformat(),
-        microsoft_id=user.microsoft_id
-    )
+    logger.info(f"Admin '{current_user.username}' hat Einladung {invitation_id} widerrufen")
+    return {"message": "Einladung wurde widerrufen"}
 
 
 @router.get("/{user_id}", response_model=UserResponse)
@@ -446,7 +219,94 @@ async def get_user(
         role=user.role.value,
         blocked=user.blocked,
         created_at=user.created_at.isoformat(),
-        microsoft_id=user.microsoft_id
+        microsoft_id=user.microsoft_id,
+        github_id=user.github_id,
+        github_login=getattr(user, "github_login", None),
+        google_id=getattr(user, "google_id", None),
+        status=getattr(user, "status", "active"),
+    )
+
+
+@router.post("/{user_id}/approve", response_model=UserResponse)
+async def approve_user(
+    user_id: UUID,
+    request: Optional[ApproveUserRequest] = Body(None),
+    current_user: User = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> UserResponse:
+    """
+    Gibt eine Beitrittsanfrage (pending) frei. Setzt status=active, blocked=False, role aus Body (Default: readonly).
+    """
+    statement = select(User).where(User.id == user_id)
+    user = session.exec(statement).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Benutzer nicht gefunden")
+    st = getattr(user, "status", "active")
+    if st != "pending":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nur Beitrittsanfragen (pending) können freigegeben werden")
+    role = (request.role if request else None) or UserRole.READONLY
+    user.status = "active"  # type: ignore[assignment]
+    user.blocked = False
+    user.role = role
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    logger.info("Admin %s hat Beitrittsanfrage von %s freigegeben (role=%s)", current_user.username, user.username, role.value)
+    # Optional: E-Mail an Nutzer bei Freigabe
+    try:
+        from app.notifications import notify_user_approved
+        await notify_user_approved(user)
+    except Exception as e:
+        logger.warning("E-Mail an Nutzer bei Freigabe fehlgeschlagen: %s", e)
+    return UserResponse(
+        id=str(user.id),
+        username=user.username,
+        email=user.email,
+        role=user.role.value,
+        blocked=user.blocked,
+        created_at=user.created_at.isoformat(),
+        microsoft_id=user.microsoft_id,
+        github_id=user.github_id,
+        github_login=getattr(user, "github_login", None),
+        google_id=getattr(user, "google_id", None),
+        status=getattr(user, "status", "active"),
+    )
+
+
+@router.post("/{user_id}/reject", response_model=UserResponse)
+async def reject_user(
+    user_id: UUID,
+    current_user: User = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> UserResponse:
+    """
+    Lehnt eine Beitrittsanfrage (pending) ab. Setzt status=rejected, blocked=True.
+    """
+    statement = select(User).where(User.id == user_id)
+    user = session.exec(statement).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Benutzer nicht gefunden")
+    st = getattr(user, "status", "active")
+    if st != "pending":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nur Beitrittsanfragen (pending) können abgelehnt werden")
+    user.status = "rejected"  # type: ignore[assignment]
+    user.blocked = True
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    logger.info("Admin %s hat Beitrittsanfrage von %s abgelehnt", current_user.username, user.username)
+    return UserResponse(
+        id=str(user.id),
+        username=user.username,
+        email=user.email,
+        role=user.role.value,
+        blocked=user.blocked,
+        created_at=user.created_at.isoformat(),
+        microsoft_id=user.microsoft_id,
+        github_id=user.github_id,
+        github_login=getattr(user, "github_login", None),
+        google_id=getattr(user, "google_id", None),
+        status=getattr(user, "status", "active"),
     )
 
 
@@ -481,18 +341,7 @@ async def update_user(
             detail="Benutzer nicht gefunden"
         )
     
-    # Aktualisiere Felder
-    if request.email is not None:
-        # Prüfe ob E-Mail bereits von anderem Benutzer verwendet wird
-        statement = select(User).where(User.email == request.email, User.id != user_id)
-        existing_user = session.exec(statement).first()
-        if existing_user:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="E-Mail-Adresse bereits vergeben"
-            )
-        user.email = request.email
-    
+    # Aktualisiere Felder (E-Mail von OAuth-Provider wird nicht geändert)
     if request.role is not None:
         user.role = request.role
     
@@ -512,55 +361,12 @@ async def update_user(
         role=user.role.value,
         blocked=user.blocked,
         created_at=user.created_at.isoformat(),
-        microsoft_id=user.microsoft_id
+        microsoft_id=user.microsoft_id,
+        github_id=user.github_id,
+        github_login=getattr(user, "github_login", None),
+        google_id=getattr(user, "google_id", None),
+        status=getattr(user, "status", "active"),
     )
-
-
-@router.post("/{user_id}/reset-password", status_code=status.HTTP_200_OK)
-async def reset_password(
-    user_id: UUID,
-    request: ResetPasswordRequest,
-    current_user: User = Depends(require_admin),
-    session: Session = Depends(get_session)
-) -> dict:
-    """
-    Setzt das Passwort eines Benutzers zurück (nur für Admins).
-    
-    Args:
-        user_id: Benutzer-ID
-        request: Neues Passwort
-        current_user: Aktueller Benutzer (muss Admin sein)
-        session: Datenbank-Session
-        
-    Returns:
-        dict: Erfolgsmeldung
-        
-    Raises:
-        HTTPException: Wenn Benutzer nicht gefunden wird
-    """
-    statement = select(User).where(User.id == user_id)
-    user = session.exec(statement).first()
-    
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Benutzer nicht gefunden"
-        )
-    
-    # Setze neues Passwort
-    user.password_hash = get_password_hash(request.new_password)
-    
-    session.add(user)
-    session.commit()
-    
-    # Alle Sessions des Benutzers löschen (Sicherheit: Passwort wurde geändert)
-    deleted_sessions = delete_all_user_sessions(session, user.id)
-    logger.info(
-        f"Admin '{current_user.username}' hat Passwort für Benutzer '{user.username}' zurückgesetzt. "
-        f"{deleted_sessions} Sessions wurden invalidiert."
-    )
-    
-    return {"message": "Passwort erfolgreich zurückgesetzt"}
 
 
 @router.post("/{user_id}/block", response_model=UserResponse)
@@ -618,7 +424,11 @@ async def block_user(
         role=user.role.value,
         blocked=user.blocked,
         created_at=user.created_at.isoformat(),
-        microsoft_id=user.microsoft_id
+        microsoft_id=user.microsoft_id,
+        github_id=user.github_id,
+        github_login=getattr(user, "github_login", None),
+        google_id=getattr(user, "google_id", None),
+        status=getattr(user, "status", "active"),
     )
 
 
@@ -665,7 +475,11 @@ async def unblock_user(
         role=user.role.value,
         blocked=user.blocked,
         created_at=user.created_at.isoformat(),
-        microsoft_id=user.microsoft_id
+        microsoft_id=user.microsoft_id,
+        github_id=user.github_id,
+        github_login=getattr(user, "github_login", None),
+        google_id=getattr(user, "google_id", None),
+        status=getattr(user, "status", "active"),
     )
 
 

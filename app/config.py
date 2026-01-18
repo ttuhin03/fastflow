@@ -267,23 +267,37 @@ class Config:
     gesetzt werden.
     """
     
-    # Authentication-Konfiguration
-    AUTH_USERNAME: str = os.getenv("AUTH_USERNAME", "admin")
+    # GitHub OAuth (User-Login, getrennt von GitHub App)
+    GITHUB_CLIENT_ID: Optional[str] = os.getenv("GITHUB_CLIENT_ID")
     """
-    Benutzername für Basic Authentication.
+    GitHub OAuth App Client ID für User-Login.
     
-    Standard: admin. Sollte in Produktion geändert werden.
-    """
-    
-    AUTH_PASSWORD: str = os.getenv("AUTH_PASSWORD", "admin")
-    """
-    Passwort für Basic Authentication.
-    
-    Standard: admin. MUSS in Produktion geändert werden!
-    ⚠️ KRITISCH: Authentifizierung ist der wichtigste Schutz gegen
-    Docker-Socket-Missbrauch (Docker-Socket = Root-Zugriff auf Host).
+    Erstelle eine OAuth App unter GitHub: Settings → Developer settings → OAuth Apps.
+    Authorization callback URL: {BASE_URL}/api/auth/github/callback
     """
     
+    GITHUB_CLIENT_SECRET: Optional[str] = os.getenv("GITHUB_CLIENT_SECRET")
+    """GitHub OAuth App Client Secret für User-Login."""
+    
+    INITIAL_ADMIN_EMAIL: Optional[str] = os.getenv("INITIAL_ADMIN_EMAIL")
+    """
+    E-Mail des ersten Admins (Zutritt ohne Einladung).
+    
+    Wenn gesetzt: User mit dieser E-Mail (GitHub oder Google) erhalten beim ersten
+    Login automatisch Admin-Rechte. Danach: normale Einladung für weitere User.
+    """
+
+    # Google OAuth (User-Login)
+    GOOGLE_CLIENT_ID: Optional[str] = os.getenv("GOOGLE_CLIENT_ID")
+    """
+    Google OAuth 2.0 Client ID für User-Login.
+    OAuth-Client in Google Cloud Console anlegen (Web-Anwendung).
+    Authorization redirect URI: {BASE_URL}/api/auth/google/callback
+    """
+    GOOGLE_CLIENT_SECRET: Optional[str] = os.getenv("GOOGLE_CLIENT_SECRET")
+    """Google OAuth 2.0 Client Secret für User-Login."""
+
+    # Authentication-Konfiguration (Login via GitHub OAuth, Google OAuth)
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "change-me-in-production")
     """
     Secret Key für JWT-Token-Signierung.
@@ -395,7 +409,7 @@ class Config:
     Standard: development
     In Produktion sollte dies auf "production" gesetzt werden.
     Beeinflusst Sicherheitsvalidierungen beim Start:
-    - In Produktion werden Standardwerte für JWT_SECRET_KEY und AUTH_PASSWORD blockiert
+    - In Produktion werden Standardwerte für JWT_SECRET_KEY blockiert
     - In Development werden nur Warnungen ausgegeben
     """
     

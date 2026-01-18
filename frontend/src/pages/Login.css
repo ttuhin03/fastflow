@@ -30,6 +30,7 @@
   transform: translate(-50%, -50%);
   object-fit: cover;
   z-index: 0;
+  filter: brightness(0.15);
 }
 
 .login-background-overlay {
@@ -415,6 +416,44 @@
   background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
 }
 
+/* "Sign in with GitHub" / "Sign in with Google" – gleicher Stil wie "View on GitHub" (.github-link) */
+.login-btn-github,
+.login-btn-google {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  backdrop-filter: blur(10px);
+}
+
+.login-btn-google {
+  margin-top: var(--spacing-sm);
+}
+
+.login-btn-github .login-btn-github-icon,
+.login-btn-google .login-btn-google-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: var(--color-primary);
+}
+
+.login-btn-github:hover:not(:disabled),
+.login-btn-google:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.login-btn-github:hover:not(:disabled)::before,
+.login-btn-google:hover:not(:disabled)::before {
+  width: 0;
+  height: 0;
+}
+
 .login-btn::before {
   content: '';
   position: absolute;
@@ -433,7 +472,7 @@
   height: 300px;
 }
 
-.login-btn:hover:not(:disabled) {
+.login-btn:not(.login-btn-github):not(.login-btn-google):hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 
     0 6px 20px rgba(33, 150, 243, 0.4),

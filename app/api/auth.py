@@ -2,33 +2,34 @@
 Authentication API Endpoints.
 
 Dieses Modul enthält alle REST-API-Endpoints für Authentication:
-- Login
-- Logout
+- GitHub OAuth (Login, Einladung)
+- Logout, Refresh, Me
 """
 
 import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 from sqlmodel import Session, select
-import re
 
 from app.auth import (
-    authenticate_user,
     create_access_token,
     create_session,
     delete_session,
     get_current_user,
-    get_or_create_user,
     get_session_by_token,
-    verify_token
 )
 from app.config import config
 from app.database import get_session
+from app.github_oauth import delete_oauth_state, generate_oauth_state, store_oauth_state
+from app.github_oauth_user import get_github_authorize_url, get_github_user_data
+from app.google_oauth_user import get_google_authorize_url, get_google_user_data
 from app.middleware.rate_limiting import limiter
 from app.models import User
+from app.oauth_processing import process_oauth_login
 
 logger = logging.getLogger(__name__)
 
@@ -37,46 +38,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 security = HTTPBearer(auto_error=False)
 
 
-def validate_username_format(username: str) -> None:
-    """
-    Validiert Benutzername-Format.
-    
-    Anforderungen:
-    - Nur alphanumerische Zeichen und Unterstriche erlaubt
-    - Länge: 3-50 Zeichen
-    - Darf nicht mit Unterstrichen beginnen oder enden
-    
-    Args:
-        username: Benutzername zum Validieren
-        
-    Raises:
-        ValueError: Wenn Benutzername ungültig ist
-    """
-    if len(username) < 3 or len(username) > 50:
-        raise ValueError("Benutzername muss zwischen 3 und 50 Zeichen lang sein")
-    
-    if not re.match(r'^[a-zA-Z0-9_]+$', username):
-        raise ValueError("Benutzername darf nur Buchstaben, Zahlen und Unterstriche enthalten")
-    
-    if username.startswith('_') or username.endswith('_'):
-        raise ValueError("Benutzername darf nicht mit Unterstrichen beginnen oder enden")
-
-
-class LoginRequest(BaseModel):
-    """Request-Model für Login-Endpoint."""
-    username: str
-    password: str
-    
-    @field_validator("username")
-    @classmethod
-    def validate_username(cls, v: str) -> str:
-        """Validiert Benutzername-Format."""
-        validate_username_format(v)
-        return v
-
-
 class LoginResponse(BaseModel):
-    """Response-Model für Login-Endpoint."""
+    """Response-Model für Token-basierte Responses (z.B. Refresh)."""
     access_token: str
     token_type: str = "bearer"
     username: str
@@ -87,60 +50,187 @@ class LogoutResponse(BaseModel):
     message: str
 
 
-@router.post("/login", response_model=LoginResponse, status_code=status.HTTP_200_OK)
-@limiter.limit("5/minute")
-async def login(
+def _redirect_with_token(token: str) -> RedirectResponse:
+    frontend = (config.FRONTEND_URL or config.BASE_URL or "http://localhost:8000").rstrip("/")
+    return RedirectResponse(url=f"{frontend}/auth/callback#token={token}", status_code=302)
+
+
+def _redirect_to_settings_linked(provider: str) -> RedirectResponse:
+    frontend = (config.FRONTEND_URL or config.BASE_URL or "http://localhost:8000").rstrip("/")
+    return RedirectResponse(url=f"{frontend}/settings?linked={provider}", status_code=302)
+
+
+def _redirect_anklopfen_screen(user: User) -> RedirectResponse:
+    """
+    Redirect für Anklopfen-Fälle (ohne Token/Session):
+    - status=rejected: Beitrittsanfrage abgelehnt → /request-rejected
+    - blocked=True (z. B. aktiver Nutzer gesperrt): → /account-blocked
+    - sonst (pending): → /request-sent
+    """
+    frontend = (config.FRONTEND_URL or config.BASE_URL or "http://localhost:8000").rstrip("/")
+    if getattr(user, "status", None) == "rejected":
+        path = "/request-rejected"
+    elif user.blocked:
+        path = "/account-blocked"
+    else:
+        path = "/request-sent"
+    return RedirectResponse(url=f"{frontend}{path}", status_code=302)
+
+
+@router.get("/github/authorize")
+@limiter.limit("20/minute")
+async def github_authorize(
     request: Request,
-    login_data: LoginRequest,
-    session: Session = Depends(get_session)
-) -> LoginResponse:
+    state: Optional[str] = None,
+) -> RedirectResponse:
     """
-    Authentifiziert einen Benutzer und gibt ein JWT-Token zurück.
-    
-    Beim ersten Start wird der Standard-Benutzer (aus Config) erstellt,
-    falls er noch nicht existiert.
-    
-    Args:
-        request: FastAPI Request (für Rate Limiting)
-        login_data: Login-Daten (Benutzername und Passwort)
-        session: Datenbank-Session
-        
-    Returns:
-        LoginResponse: JWT-Token und Benutzername
-        
-    Raises:
-        HTTPException: Wenn Authentifizierung fehlschlägt
+    Leitet zur GitHub OAuth Authorize-URL weiter.
+    state: optional, wird als OAuth state mitgegeben (Invitation-Token oder CSRF).
     """
-    # Erstelle Standard-Benutzer beim ersten Start (falls nicht vorhanden)
-    get_or_create_user(
-        session,
-        config.AUTH_USERNAME,
-        config.AUTH_PASSWORD
-    )
-    
-    # Authentifiziere Benutzer
-    user = authenticate_user(session, login_data.username, login_data.password)
-    
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Ungültiger Benutzername oder Passwort",
-            headers={"WWW-Authenticate": "Bearer"},
+    if not config.GITHUB_CLIENT_ID:
+        raise HTTPException(status_code=503, detail="GitHub OAuth ist nicht konfiguriert (GITHUB_CLIENT_ID fehlt)")
+    s = state if state else generate_oauth_state()
+    if not state:
+        store_oauth_state(s, {"purpose": "login"})
+    url = get_github_authorize_url(s)
+    return RedirectResponse(url=url, status_code=302)
+
+
+@router.get("/github/callback")
+async def github_callback(
+    code: Optional[str] = None,
+    state: Optional[str] = None,
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    """
+    GitHub OAuth Callback. Nutzt process_oauth_login (Direkt, Auto-Match, Link, INITIAL_ADMIN, Einladung, Anklopfen).
+    """
+    if not code:
+        raise HTTPException(status_code=400, detail="GitHub OAuth: code fehlt")
+    try:
+        github_user = await get_github_user_data(code)
+    except HTTPException:
+        raise
+    # GitHub liefert "id", "login"; ggf. "avatar_url" für Profilbild
+    oauth_data = {**github_user, "avatar_url": github_user.get("avatar_url")}
+    try:
+        user, link_only, anklopfen_only = await process_oauth_login(
+            provider="github",
+            provider_id=str(github_user["id"]),
+            email=github_user.get("email"),
+            session=session,
+            oauth_data=oauth_data,
+            state=state,
         )
-    
-    # Erstelle JWT-Token
-    access_token = create_access_token(username=user.username)
-    
-    # Erstelle Session in Datenbank (Persistenz)
-    create_session(session, user, access_token)
-    
-    logger.info(f"Benutzer '{user.username}' hat sich angemeldet")
-    
-    return LoginResponse(
-        access_token=access_token,
-        token_type="bearer",
-        username=user.username
-    )
+    except HTTPException:
+        raise
+    if anklopfen_only:
+        return _redirect_anklopfen_screen(user)
+    if link_only:
+        logger.info(f"GitHub-Konto für '{user.username}' verknüpft")
+        return _redirect_to_settings_linked("github")
+    if state:
+        delete_oauth_state(state)
+    token = create_access_token(username=user.username)
+    create_session(session, user, token)
+    logger.info(f"User '{user.username}' per GitHub angemeldet")
+    return _redirect_with_token(token)
+
+
+@router.get("/google/authorize")
+@limiter.limit("20/minute")
+async def google_authorize(
+    request: Request,
+    state: Optional[str] = None,
+) -> RedirectResponse:
+    """
+    Leitet zur Google OAuth Authorize-URL weiter.
+    state: optional (Invitation-Token oder leer für Login mit CSRF).
+    """
+    if not config.GOOGLE_CLIENT_ID:
+        raise HTTPException(status_code=503, detail="Google OAuth ist nicht konfiguriert (GOOGLE_CLIENT_ID fehlt)")
+    s = state if state else generate_oauth_state()
+    if not state:
+        store_oauth_state(s, {"purpose": "login"})
+    url = get_google_authorize_url(s)
+    return RedirectResponse(url=url, status_code=302)
+
+
+@router.get("/google/callback")
+async def google_callback(
+    code: Optional[str] = None,
+    state: Optional[str] = None,
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    """
+    Google OAuth Callback. Nutzt process_oauth_login (Direkt, Auto-Match, Link, INITIAL_ADMIN, Einladung, Anklopfen).
+    """
+    if not code:
+        raise HTTPException(status_code=400, detail="Google OAuth: code fehlt")
+    try:
+        google_user = await get_google_user_data(code)
+    except HTTPException:
+        raise
+    try:
+        user, link_only, anklopfen_only = await process_oauth_login(
+            provider="google",
+            provider_id=str(google_user["id"]),
+            email=google_user.get("email"),
+            session=session,
+            oauth_data=google_user,
+            state=state,
+        )
+    except HTTPException:
+        raise
+    if anklopfen_only:
+        return _redirect_anklopfen_screen(user)
+    if link_only:
+        logger.info(f"Google-Konto für '{user.username}' verknüpft")
+        return _redirect_to_settings_linked("google")
+    if state:
+        delete_oauth_state(state)
+    token = create_access_token(username=user.username)
+    create_session(session, user, token)
+    logger.info(f"User '{user.username}' per Google angemeldet")
+    return _redirect_with_token(token)
+
+
+@router.get("/link/google")
+@limiter.limit("20/minute")
+async def link_google(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+) -> RedirectResponse:
+    """
+    Startet den Google-OAuth-Flow zum Verknüpfen des Google-Kontos mit dem eingeloggten User.
+    Erfordert Authentifizierung. Nach erfolgreicher Verknüpfung: Redirect zu /settings?linked=google.
+    """
+    if not config.GOOGLE_CLIENT_ID:
+        raise HTTPException(status_code=503, detail="Google OAuth ist nicht konfiguriert (GOOGLE_CLIENT_ID fehlt)")
+    s = generate_oauth_state()
+    store_oauth_state(s, {"purpose": "link_google", "user_id": str(current_user.id)})
+    url = get_google_authorize_url(s)
+    logger.info("OAuth: Link-Flow gestartet provider=google user=%s", current_user.username)
+    return RedirectResponse(url=url, status_code=302)
+
+
+@router.get("/link/github")
+@limiter.limit("20/minute")
+async def link_github(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+) -> RedirectResponse:
+    """
+    Startet den GitHub-OAuth-Flow zum Verknüpfen des GitHub-Kontos mit dem eingeloggten User.
+    Erfordert Authentifizierung. Nach erfolgreicher Verknüpfung: Redirect zu /settings?linked=github.
+    """
+    if not config.GITHUB_CLIENT_ID:
+        raise HTTPException(status_code=503, detail="GitHub OAuth ist nicht konfiguriert (GITHUB_CLIENT_ID fehlt)")
+    s = generate_oauth_state()
+    store_oauth_state(s, {"purpose": "link_github", "user_id": str(current_user.id)})
+    url = get_github_authorize_url(s)
+    logger.info("OAuth: Link-Flow gestartet provider=github user=%s", current_user.username)
+    return RedirectResponse(url=url, status_code=302)
 
 
 @router.get("/me", response_model=dict, status_code=status.HTTP_200_OK)
@@ -149,18 +239,18 @@ async def get_current_user_info(
 ) -> dict:
     """
     Gibt Informationen über den aktuell angemeldeten Benutzer zurück.
-    
-    Args:
-        current_user: Aktueller Benutzer (aus Dependency)
-        
-    Returns:
-        dict: Benutzer-Informationen
+    Erweitet um email, has_github, has_google, avatar_url für die Konten-UI.
     """
+    role_val = current_user.role.value if hasattr(current_user, "role") and current_user.role else "readonly"
     return {
         "username": current_user.username,
         "id": str(current_user.id),
+        "email": getattr(current_user, "email", None),
+        "has_github": bool(getattr(current_user, "github_id", None)),
+        "has_google": bool(getattr(current_user, "google_id", None)),
+        "avatar_url": getattr(current_user, "avatar_url", None),
         "created_at": current_user.created_at.isoformat(),
-        "role": current_user.role.value if hasattr(current_user, 'role') else 'readonly'
+        "role": role_val,
     }
 
 

@@ -14,11 +14,24 @@ Hinweis: Migrationen werden nicht automatisch ausgeführt.
 Siehe docs/DATABASE_MIGRATIONS.md für Anleitung zur manuellen Ausführung.
 """
 
-from typing import Generator
-from sqlmodel import SQLModel, create_engine, Session, text
-from app.config import config
-from app.models import Pipeline, PipelineRun, ScheduledJob, Secret, User, Session as SessionModel  # Import Models für Metadaten-Registrierung
 import logging
+import time
+from typing import Any, Callable, Generator, Optional, TypeVar
+
+import sqlalchemy.exc
+from sqlalchemy import event
+from sqlmodel import SQLModel, Session, create_engine, text
+
+from app.config import config
+from app.models import (
+    Invitation,
+    Pipeline,
+    PipelineRun,
+    ScheduledJob,
+    Secret,
+    Session as SessionModel,
+    User,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -30,17 +43,63 @@ else:
     database_url = config.DATABASE_URL
 
 # Engine erstellen
+# Hinweis: Bei Docker mit Volume-Mounts (v.a. Mac/Windows) können bei SQLite
+# disk I/O-Fehler auftreten. busy_timeout und retry_on_sqlite_io fangen
+# viele transiente Fälle ab. Produktion: DATABASE_URL=postgresql://... empfohlen.
 if database_url.startswith("sqlite"):
-    # SQLite-spezifische Konfiguration
     connect_args = {"check_same_thread": False}
     engine = create_engine(
         database_url,
         connect_args=connect_args,
-        echo=False  # Setze auf True für SQL-Debugging
+        echo=False,
     )
+
+    @event.listens_for(engine, "connect")
+    def _set_sqlite_pragma(dbapi_conn: Any, connection_record: Any) -> None:
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA busy_timeout=5000")
+        cursor.close()
 else:
-    # PostgreSQL oder andere Datenbanken
     engine = create_engine(database_url, echo=False)
+
+
+_T = TypeVar("_T")
+
+
+def retry_on_sqlite_io(
+    fn: Callable[[], _T],
+    *,
+    max_attempts: int = 3,
+    delay_ms: int = 100,
+    session: Optional[Session] = None,
+) -> _T:
+    """
+    Führt fn() aus. Bei SQLite-OperationalError (disk I/O, locked) Rollback,
+    kurze Pause und Wiederholung. Nur für SQLite; bei PostgreSQL wird fn() 1x aufgerufen.
+    """
+    if not database_url.startswith("sqlite"):
+        return fn()
+    for attempt in range(max_attempts):
+        try:
+            return fn()
+        except sqlalchemy.exc.OperationalError as e:
+            if attempt == max_attempts - 1:
+                raise
+            err = getattr(e, "orig", e)
+            msg = str(err).lower()
+            if "disk i/o error" in msg or "database is locked" in msg:
+                if session is not None:
+                    try:
+                        session.rollback()
+                    except Exception:
+                        pass
+                logger.debug(
+                    "SQLite I/O/lock, Retry %s/%s: %s", attempt + 1, max_attempts, e
+                )
+                time.sleep(delay_ms / 1000.0)
+            else:
+                raise
+    return fn()  # type: ignore[return-value]  # unreachable
 
 
 def wal_checkpoint() -> None:
@@ -114,31 +173,6 @@ def _ensure_secret_is_parameter_column() -> None:
 # Siehe docs/DATABASE_MIGRATIONS.md für Anleitung zur manuellen Ausführung
 
 
-def _ensure_default_admin_role() -> None:
-    """
-    Stellt sicher, dass der Standard-Admin-Nutzer (aus Config) Admin-Rechte hat.
-    
-    Wird beim Start aufgerufen, um sicherzustellen, dass der Standard-Admin-Nutzer
-    immer Admin-Rechte hat, auch wenn er bereits existiert.
-    """
-    try:
-        from app.auth import get_or_create_user
-        from app.config import config
-        
-        with Session(engine) as session:
-            # Rufe get_or_create_user auf, um sicherzustellen, dass der Standard-Admin-Nutzer
-            # existiert und die richtige Rolle hat
-            get_or_create_user(
-                session,
-                config.AUTH_USERNAME,
-                config.AUTH_PASSWORD
-            )
-            logger.info(f"Standard-Admin-Nutzer '{config.AUTH_USERNAME}' initialisiert/geprüft")
-    except Exception as e:
-        logger.warning(f"Fehler beim Initialisieren des Standard-Admin-Nutzers: {e}")
-        # Nicht kritisch, wird beim Login korrigiert
-
-
 def init_db() -> None:
     """
     Initialisiert die Datenbank und erstellt alle Tabellen.
@@ -162,9 +196,6 @@ def init_db() -> None:
     # Stelle sicher, dass is_parameter-Spalte existiert (für bestehende DBs)
     # Diese Funktion wird in Zukunft durch Migrationen ersetzt
     _ensure_secret_is_parameter_column()
-    
-    # Stelle sicher, dass der Standard-Admin-Nutzer die richtige Rolle hat
-    _ensure_default_admin_role()
     
     # Migrationen werden nicht automatisch ausgeführt
     # Siehe docs/DATABASE_MIGRATIONS.md für Anleitung zur manuellen Ausführung

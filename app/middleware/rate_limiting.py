@@ -5,7 +5,7 @@ Dieses Modul stellt Rate Limiting für API-Endpoints bereit.
 Verwendet slowapi für in-memory Rate Limiting basierend auf IP-Adressen.
 
 Rate Limits:
-- /api/auth/login: 5 Requests pro Minute pro IP (Schutz vor Brute-Force)
+- /api/auth/github/authorize: 20/min (Limiter am Endpoint)
 - /api/webhooks/*: 100 Requests pro Minute pro IP (Schutz vor DDoS)
 - Allgemein: 100 Requests pro Minute pro IP
 """
