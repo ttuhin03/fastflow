@@ -59,10 +59,12 @@ Fast-Flow wird primär über Environment-Variablen in einer `.env` Datei konfigu
 |----------|--------------|--------------|------------|
 | `ENCRYPTION_KEY` | *Muss gesetzt werden* | Fernet-Key zur Verschlüsselung von Secrets in der DB. Generieren mit: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` | **Pflicht** |
 | `JWT_SECRET_KEY` | *Leer* / Unsafe | Secret Key zum Signieren von Session-Tokens. Muss lang und zufällig sein. | **Pflicht** |
-| `GITHUB_CLIENT_ID` | *Leer* | OAuth App Client ID (GitHub). Login nur via GitHub. | **Pflicht** |
-| `GITHUB_CLIENT_SECRET` | *Leer* | OAuth App Client Secret. | **Pflicht** |
-| `INITIAL_ADMIN_EMAIL` | *Leer* | E-Mail des ersten Admins (Zutritt ohne Einladung). | **Empfohlen** |
-| `FRONTEND_URL` / `BASE_URL` | s. [GitHub OAuth](../GITHUB_OAUTH.md) | Für OAuth-Callback und Einladungs-Links. | Anpassen |
+| `GITHUB_CLIENT_ID` | *Leer* | OAuth App Client ID (GitHub). | **Pflicht** (oder Google) |
+| `GITHUB_CLIENT_SECRET` | *Leer* | OAuth App Client Secret (GitHub). | **Pflicht** (oder Google) |
+| `GOOGLE_CLIENT_ID` | *Leer* | OAuth 2.0 Client ID (Google). Callback: `{BASE_URL}/api/auth/google/callback`. | Optional |
+| `GOOGLE_CLIENT_SECRET` | *Leer* | OAuth 2.0 Client Secret (Google). | Optional |
+| `INITIAL_ADMIN_EMAIL` | *Leer* | E-Mail des ersten Admins (Zutritt ohne Einladung, GitHub oder Google). | **Empfohlen** |
+| `FRONTEND_URL` / `BASE_URL` | s. [OAuth (GitHub, Google)](../oauth/README.md) | Für OAuth-Callback und Einladungs-Links. | Anpassen |
 | `JWT_ALGORITHM` | `HS256` | Algorithmus für JWT Signatur. | HS256 |
 | `JWT_EXPIRATION_HOURS`| `24` | Gültigkeitsdauer einer Login-Session in Stunden. | 24 |
 

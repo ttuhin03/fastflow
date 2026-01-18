@@ -17,7 +17,7 @@ Die meisten Endpoints erfordern Authentifizierung. Verwenden Sie einen Bearer-To
 Authorization: Bearer <token>
 ```
 
-Token werden über GitHub OAuth (`GET /api/auth/github/authorize`) erhalten; nach Autorisierung Redirect zu `/auth/callback#token=...`.
+Token werden über GitHub OAuth (`GET /api/auth/github/authorize`) oder Google OAuth (`GET /api/auth/google/authorize`) erhalten; nach Autorisierung Redirect zu `/auth/callback#token=...`.
 
 ## Endpoints
 
@@ -814,7 +814,23 @@ Leitet zur GitHub OAuth-Seite weiter. Nach Autorisierung: Redirect zu `{FRONTEND
 
 ### `GET /api/auth/github/callback`
 
-GitHub OAuth Callback (vom Browser aufgerufen). Erstellt Session und leitet zu `{FRONTEND_URL}/auth/callback#token=...` weiter.
+GitHub OAuth Callback (vom Browser aufgerufen). Erstellt Session und leitet zu `{FRONTEND_URL}/auth/callback#token=...` weiter. Bei Link-Flow: Redirect zu `{FRONTEND_URL}/settings?linked=github`.
+
+### `GET /api/auth/google/authorize`
+
+Leitet zur Google OAuth-Seite weiter. `state` optional (Invitation-Token oder CSRF).
+
+### `GET /api/auth/google/callback`
+
+Google OAuth Callback. Verhalten wie GitHub-Callback; bei Link-Flow: `{FRONTEND_URL}/settings?linked=google`.
+
+### `GET /api/auth/link/google`
+
+Startet Google-OAuth zum **Verknüpfen** des Google-Kontos mit dem eingeloggten User. Erfordert Authentifizierung. Redirect zu `{FRONTEND_URL}/settings?linked=google` nach Erfolg.
+
+### `GET /api/auth/link/github`
+
+Startet GitHub-OAuth zum **Verknüpfen** des GitHub-Kontos. Erfordert Authentifizierung. Redirect zu `{FRONTEND_URL}/settings?linked=github` nach Erfolg.
 
 ### `POST /api/auth/logout`
 
@@ -829,13 +845,19 @@ Meldet einen Benutzer ab.
 
 ### `GET /api/auth/me`
 
-Gibt Informationen über den aktuellen Benutzer zurück.
+Gibt Informationen über den aktuellen Benutzer zurück (u.a. für Verknüpfte-Konten-UI).
 
 **Response:**
 ```json
 {
-  "username": "dein-github-username",
-  "is_admin": true
+  "username": "dein-username",
+  "id": "uuid",
+  "email": "user@example.com",
+  "has_github": true,
+  "has_google": false,
+  "avatar_url": "https://...",
+  "created_at": "2024-01-18T12:00:00",
+  "role": "admin"
 }
 ```
 

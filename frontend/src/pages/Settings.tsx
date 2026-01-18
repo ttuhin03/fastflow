@@ -1,9 +1,15 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
-import { MdSave, MdRefresh, MdInfo, MdWarning, MdEmail, MdGroup } from 'react-icons/md'
+import { MdSave, MdRefresh, MdInfo, MdWarning, MdEmail, MdGroup, MdLink, MdCheck } from 'react-icons/md'
 import { showError, showSuccess } from '../utils/toast'
+
+const getApiOrigin = () => {
+  const u = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
+  return u.replace(/\/api\/?$/, '') || 'http://localhost:8000'
+}
 import Tooltip from '../components/Tooltip'
 import InfoIcon from '../components/InfoIcon'
 import StorageStats from '../components/StorageStats'
@@ -35,6 +41,8 @@ export default function Settings() {
   const [localSettings, setLocalSettings] = useState<Settings | null>(null)
   const [showCleanupInfo, setShowCleanupInfo] = useState(false)
 
+  const [searchParams, setSearchParams] = useSearchParams()
+
   const { data: settings, isLoading } = useQuery<Settings>({
     queryKey: ['settings'],
     queryFn: async () => {
@@ -42,6 +50,25 @@ export default function Settings() {
       return response.data
     },
   })
+
+  const { data: me, refetch: refetchMe } = useQuery({
+    queryKey: ['auth/me'],
+    queryFn: async () => {
+      const response = await apiClient.get('/auth/me')
+      return response.data as { has_github?: boolean; has_google?: boolean; email?: string; avatar_url?: string }
+    },
+  })
+
+  useEffect(() => {
+    const linked = searchParams.get('linked')
+    if (linked === 'google' || linked === 'github') {
+      showSuccess(linked === 'google' ? 'Google-Konto verknüpft.' : 'GitHub-Konto verknüpft.')
+      const np = new URLSearchParams(searchParams)
+      np.delete('linked')
+      setSearchParams(Object.fromEntries(np.entries()), { replace: true })
+      refetchMe()
+    }
+  }, [searchParams, setSearchParams, refetchMe])
 
   const updateSettingsMutation = useMutation({
     mutationFn: async (updatedSettings: Partial<Settings>) => {
@@ -227,6 +254,43 @@ export default function Settings() {
           Einstellungen werden aktuell nur aus Environment-Variablen geladen.
           Änderungen erfordern einen Neustart der Anwendung.
         </p>
+      </div>
+
+      <div className="settings-section card">
+        <h3 className="section-title">Verknüpfte Konten</h3>
+        <p className="setting-hint" style={{ marginBottom: '1rem' }}>
+          Verknüpfe GitHub und Google, um mit beiden Accounts einzuloggen. E-Mail kann je Provider abweichen; Verknüpfung funktioniert über „Jetzt verbinden“.
+        </p>
+        <div className="accounts-list" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <div className="account-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid var(--color-border)' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <strong>GitHub</strong>
+              {me?.has_github ? <MdCheck style={{ color: 'var(--color-success)' }} aria-label="Verknüpft" /> : null}
+            </span>
+            {me?.has_github ? (
+              <span style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>Verknüpft</span>
+            ) : (
+              <a href={`${getApiOrigin()}/api/auth/link/github`} className="btn btn-outlined" style={{ fontSize: '0.875rem', padding: '0.25rem 0.5rem' }}>
+                <MdLink style={{ marginRight: '0.25rem' }} />
+                Jetzt verbinden
+              </a>
+            )}
+          </div>
+          <div className="account-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <strong>Google</strong>
+              {me?.has_google ? <MdCheck style={{ color: 'var(--color-success)' }} aria-label="Verknüpft" /> : null}
+            </span>
+            {me?.has_google ? (
+              <span style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>Verknüpft</span>
+            ) : (
+              <a href={`${getApiOrigin()}/api/auth/link/google`} className="btn btn-outlined" style={{ fontSize: '0.875rem', padding: '0.25rem 0.5rem' }}>
+                <MdLink style={{ marginRight: '0.25rem' }} />
+                Jetzt verbinden
+              </a>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="storage-section-settings">

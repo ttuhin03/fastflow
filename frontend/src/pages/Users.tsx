@@ -108,7 +108,8 @@ export default function Users() {
       setShowInviteForm(false)
       resetInviteForm()
       navigator.clipboard.writeText(data.link)
-      showSuccess('Einladungslink erstellt und in Zwischenablage kopiert')
+      const until = new Date(data.expires_at).toLocaleString('de-DE')
+      showSuccess(`Einladungslink erstellt und in Zwischenablage kopiert. Gültig bis ${until}.`)
     },
     onError: (error: any) => {
       showError(`Fehler: ${error.response?.data?.detail || error.message}`)

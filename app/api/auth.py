@@ -7,7 +7,6 @@ Dieses Modul enthält alle REST-API-Endpoints für Authentication:
 """
 
 import logging
-from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -19,18 +18,18 @@ from sqlmodel import Session, select
 from app.auth import (
     create_access_token,
     create_session,
-    create_github_user,
     delete_session,
     get_current_user,
-    get_or_create_github_admin,
     get_session_by_token,
 )
 from app.config import config
 from app.database import get_session
-from app.github_oauth import generate_oauth_state, store_oauth_state
+from app.github_oauth import delete_oauth_state, generate_oauth_state, store_oauth_state
 from app.github_oauth_user import get_github_authorize_url, get_github_user_data
+from app.google_oauth_user import get_google_authorize_url, get_google_user_data
 from app.middleware.rate_limiting import limiter
-from app.models import User, Invitation
+from app.models import User
+from app.oauth_processing import process_oauth_login
 
 logger = logging.getLogger(__name__)
 
@@ -52,9 +51,13 @@ class LogoutResponse(BaseModel):
 
 
 def _redirect_with_token(token: str) -> RedirectResponse:
-    # FRONTEND_URL oder BASE_URL (wenn Frontend vom Backend mitausgeliefert wird)
     frontend = (config.FRONTEND_URL or config.BASE_URL or "http://localhost:8000").rstrip("/")
     return RedirectResponse(url=f"{frontend}/auth/callback#token={token}", status_code=302)
+
+
+def _redirect_to_settings_linked(provider: str) -> RedirectResponse:
+    frontend = (config.FRONTEND_URL or config.BASE_URL or "http://localhost:8000").rstrip("/")
+    return RedirectResponse(url=f"{frontend}/settings?linked={provider}", status_code=302)
 
 
 @router.get("/github/authorize")
@@ -83,58 +86,130 @@ async def github_callback(
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
     """
-    GitHub OAuth Callback. Pfad A: INITIAL_ADMIN_EMAIL, B: bestehender github_id-User,
-    C: gültige Invitation, D: 403.
+    GitHub OAuth Callback. Nutzt process_oauth_login (Direkt, Auto-Match, Link, INITIAL_ADMIN, Einladung).
     """
     if not code:
         raise HTTPException(status_code=400, detail="GitHub OAuth: code fehlt")
-
     try:
         github_user = await get_github_user_data(code)
     except HTTPException:
         raise
-
-    email = github_user.get("email")
-    github_id = str(github_user["id"])
-    utc = datetime.utcnow
-
-    # A: Initial Admin (email == INITIAL_ADMIN_EMAIL)
-    if email and config.INITIAL_ADMIN_EMAIL and email == config.INITIAL_ADMIN_EMAIL:
-        user = get_or_create_github_admin(session, github_user)
-        if user:
-            token = create_access_token(username=user.username)
-            create_session(session, user, token)
-            logger.info(f"Admin '{user.username}' via INITIAL_ADMIN_EMAIL angemeldet")
-            return _redirect_with_token(token)
-
-    # B: Bestehender User mit github_id
-    stmt = select(User).where(User.github_id == github_id)
-    existing = session.exec(stmt).first()
-    if existing and not existing.blocked:
-        token = create_access_token(username=existing.username)
-        create_session(session, existing, token)
-        logger.info(f"User '{existing.username}' per GitHub angemeldet")
-        return _redirect_with_token(token)
-
-    # C: Einladung (state = Invitation.token)
-    if state:
-        stmt = (
-            select(Invitation)
-            .where(Invitation.token == state, Invitation.is_used == False, Invitation.expires_at > datetime.utcnow())
+    # GitHub liefert "id", "login"; ggf. "avatar_url" für Profilbild
+    oauth_data = {**github_user, "avatar_url": github_user.get("avatar_url")}
+    try:
+        user, link_only = process_oauth_login(
+            provider="github",
+            provider_id=str(github_user["id"]),
+            email=github_user.get("email"),
+            session=session,
+            oauth_data=oauth_data,
+            state=state,
         )
-        inv = session.exec(stmt).first()
-        if inv:
-            inv.is_used = True
-            session.add(inv)
-            session.commit()
-            user = create_github_user(session, github_user, inv.role)
-            token = create_access_token(username=user.username)
-            create_session(session, user, token)
-            logger.info(f"User '{user.username}' via Einladung angemeldet")
-            return _redirect_with_token(token)
+    except HTTPException:
+        raise
+    if link_only:
+        logger.info(f"GitHub-Konto für '{user.username}' verknüpft")
+        return _redirect_to_settings_linked("github")
+    if state:
+        delete_oauth_state(state)
+    token = create_access_token(username=user.username)
+    create_session(session, user, token)
+    logger.info(f"User '{user.username}' per GitHub angemeldet")
+    return _redirect_with_token(token)
 
-    # D
-    raise HTTPException(status_code=403, detail="Zutritt verweigert. Keine gültige Einladung gefunden.")
+
+@router.get("/google/authorize")
+@limiter.limit("20/minute")
+async def google_authorize(
+    request: Request,
+    state: Optional[str] = None,
+) -> RedirectResponse:
+    """
+    Leitet zur Google OAuth Authorize-URL weiter.
+    state: optional (Invitation-Token oder leer für Login mit CSRF).
+    """
+    if not config.GOOGLE_CLIENT_ID:
+        raise HTTPException(status_code=503, detail="Google OAuth ist nicht konfiguriert (GOOGLE_CLIENT_ID fehlt)")
+    s = state if state else generate_oauth_state()
+    if not state:
+        store_oauth_state(s, {"purpose": "login"})
+    url = get_google_authorize_url(s)
+    return RedirectResponse(url=url, status_code=302)
+
+
+@router.get("/google/callback")
+async def google_callback(
+    code: Optional[str] = None,
+    state: Optional[str] = None,
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    """
+    Google OAuth Callback. Nutzt process_oauth_login (Direkt, Auto-Match, Link, INITIAL_ADMIN, Einladung).
+    """
+    if not code:
+        raise HTTPException(status_code=400, detail="Google OAuth: code fehlt")
+    try:
+        google_user = await get_google_user_data(code)
+    except HTTPException:
+        raise
+    try:
+        user, link_only = process_oauth_login(
+            provider="google",
+            provider_id=str(google_user["id"]),
+            email=google_user.get("email"),
+            session=session,
+            oauth_data=google_user,
+            state=state,
+        )
+    except HTTPException:
+        raise
+    if link_only:
+        logger.info(f"Google-Konto für '{user.username}' verknüpft")
+        return _redirect_to_settings_linked("google")
+    if state:
+        delete_oauth_state(state)
+    token = create_access_token(username=user.username)
+    create_session(session, user, token)
+    logger.info(f"User '{user.username}' per Google angemeldet")
+    return _redirect_with_token(token)
+
+
+@router.get("/link/google")
+@limiter.limit("20/minute")
+async def link_google(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+) -> RedirectResponse:
+    """
+    Startet den Google-OAuth-Flow zum Verknüpfen des Google-Kontos mit dem eingeloggten User.
+    Erfordert Authentifizierung. Nach erfolgreicher Verknüpfung: Redirect zu /settings?linked=google.
+    """
+    if not config.GOOGLE_CLIENT_ID:
+        raise HTTPException(status_code=503, detail="Google OAuth ist nicht konfiguriert (GOOGLE_CLIENT_ID fehlt)")
+    s = generate_oauth_state()
+    store_oauth_state(s, {"purpose": "link_google", "user_id": str(current_user.id)})
+    url = get_google_authorize_url(s)
+    logger.info("OAuth: Link-Flow gestartet provider=google user=%s", current_user.username)
+    return RedirectResponse(url=url, status_code=302)
+
+
+@router.get("/link/github")
+@limiter.limit("20/minute")
+async def link_github(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+) -> RedirectResponse:
+    """
+    Startet den GitHub-OAuth-Flow zum Verknüpfen des GitHub-Kontos mit dem eingeloggten User.
+    Erfordert Authentifizierung. Nach erfolgreicher Verknüpfung: Redirect zu /settings?linked=github.
+    """
+    if not config.GITHUB_CLIENT_ID:
+        raise HTTPException(status_code=503, detail="GitHub OAuth ist nicht konfiguriert (GITHUB_CLIENT_ID fehlt)")
+    s = generate_oauth_state()
+    store_oauth_state(s, {"purpose": "link_github", "user_id": str(current_user.id)})
+    url = get_github_authorize_url(s)
+    logger.info("OAuth: Link-Flow gestartet provider=github user=%s", current_user.username)
+    return RedirectResponse(url=url, status_code=302)
 
 
 @router.get("/me", response_model=dict, status_code=status.HTTP_200_OK)
@@ -143,18 +218,18 @@ async def get_current_user_info(
 ) -> dict:
     """
     Gibt Informationen über den aktuell angemeldeten Benutzer zurück.
-    
-    Args:
-        current_user: Aktueller Benutzer (aus Dependency)
-        
-    Returns:
-        dict: Benutzer-Informationen
+    Erweitet um email, has_github, has_google, avatar_url für die Konten-UI.
     """
+    role_val = current_user.role.value if hasattr(current_user, "role") and current_user.role else "readonly"
     return {
         "username": current_user.username,
         "id": str(current_user.id),
+        "email": getattr(current_user, "email", None),
+        "has_github": bool(getattr(current_user, "github_id", None)),
+        "has_google": bool(getattr(current_user, "google_id", None)),
+        "avatar_url": getattr(current_user, "avatar_url", None),
         "created_at": current_user.created_at.isoformat(),
-        "role": current_user.role.value if hasattr(current_user, 'role') else 'readonly'
+        "role": role_val,
     }
 
 

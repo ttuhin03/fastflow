@@ -283,11 +283,21 @@ class Config:
     """
     E-Mail des ersten Admins (Zutritt ohne Einladung).
     
-    Wenn gesetzt: User mit dieser GitHub-E-Mail erhalten beim ersten Login
-    automatisch Admin-Rechte. Danach: normale Einladung für weitere User.
+    Wenn gesetzt: User mit dieser E-Mail (GitHub oder Google) erhalten beim ersten
+    Login automatisch Admin-Rechte. Danach: normale Einladung für weitere User.
     """
-    
-    # Authentication-Konfiguration (Login nur via GitHub OAuth)
+
+    # Google OAuth (User-Login)
+    GOOGLE_CLIENT_ID: Optional[str] = os.getenv("GOOGLE_CLIENT_ID")
+    """
+    Google OAuth 2.0 Client ID für User-Login.
+    OAuth-Client in Google Cloud Console anlegen (Web-Anwendung).
+    Authorization redirect URI: {BASE_URL}/api/auth/google/callback
+    """
+    GOOGLE_CLIENT_SECRET: Optional[str] = os.getenv("GOOGLE_CLIENT_SECRET")
+    """Google OAuth 2.0 Client Secret für User-Login."""
+
+    # Authentication-Konfiguration (Login via GitHub OAuth, Google OAuth)
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "change-me-in-production")
     """
     Secret Key für JWT-Token-Signierung.

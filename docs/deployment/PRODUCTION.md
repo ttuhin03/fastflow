@@ -7,7 +7,7 @@ Dieser Guide beschreibt Best Practices für das Deployment von Fast-Flow in eine
 Vor dem Go-Live sicherstellen:
 
 - [ ] **HTTPS nutzen** (via Reverse Proxy)
-- [ ] **GitHub OAuth** (`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `INITIAL_ADMIN_EMAIL`) in `.env` setzen
+- [ ] **OAuth** (`GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` und/oder `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`), `INITIAL_ADMIN_EMAIL` in `.env` setzen
 - [ ] **JWT Key setzen**: Einen langen, zufälligen `JWT_SECRET_KEY` setzen.
 - [ ] **Encryption Key setzen**: `ENCRYPTION_KEY` sicher generieren und speichern.
 - [ ] **Environment**: Setze `ENVIRONMENT=production` in der `.env`.

@@ -67,22 +67,24 @@ Speichert sensible Daten und Parameter.
 
 ### 5. `User` (Authentifizierung)
 
-Speichert Benutzer. Login nur via GitHub OAuth (und Einladung).
+Speichert Benutzer. Login via GitHub OAuth, Google OAuth (und Einladung).
 
 | Spalte | Typ | Beschreibung |
 |--------|-----|--------------|
 | `id` | UUID (PK) | Eindeutige User-ID. |
 | `username` | String | Benutzername (eindeutig, indexiert). |
-| `email` | String | (Optional) E-Mail (von GitHub oder manuell). |
+| `email` | String | (Optional) E-Mail (von GitHub/Google oder manuell). |
 | `role` | Enum | `ADMIN`, `WRITE`, `READONLY`. |
 | `blocked` | Boolean | Ob der Benutzer gesperrt ist. |
 | `github_id` | String | (Optional) GitHub OAuth ID (unique). |
+| `google_id` | String | (Optional) Google OAuth ID (unique). |
+| `avatar_url` | String | (Optional) Profilbild-URL von OAuth-Provider. |
 | `microsoft_id` | String | (Optional) für zukünftige Microsoft-Auth (unique). |
 | `created_at` | DateTime | Erstellungsdatum. |
 
 ### 6. `Invitation` (Einladungen)
 
-Token-Einladungen für neue User (Einlösung via GitHub OAuth).
+Token-Einladungen für neue User (Einlösung via GitHub OAuth oder Google OAuth).
 
 | Spalte | Typ | Beschreibung |
 |--------|-----|--------------|

@@ -214,7 +214,7 @@ class Secret(SQLModel, table=True):
 
 class User(SQLModel, table=True):
     """
-    User-Model. Authentifizierung nur via GitHub OAuth (und Einladung).
+    User-Model. Authentifizierung via GitHub OAuth, Google OAuth (und Einladung).
     """
     __tablename__ = "users"
 
@@ -231,7 +231,7 @@ class User(SQLModel, table=True):
     email: Optional[str] = Field(
         default=None,
         index=True,
-        description="E-Mail (von GitHub oder manuell)"
+        description="E-Mail (von GitHub/Google oder manuell)"
     )
     role: UserRole = Field(
         default=UserRole.READONLY,
@@ -252,6 +252,16 @@ class User(SQLModel, table=True):
         unique=True,
         index=True,
         description="GitHub OAuth ID (optional, für GitHub-Login)"
+    )
+    google_id: Optional[str] = Field(
+        default=None,
+        unique=True,
+        index=True,
+        description="Google OAuth ID (optional, für Google-Login)"
+    )
+    avatar_url: Optional[str] = Field(
+        default=None,
+        description="Profilbild-URL (von OAuth-Provider)"
     )
     created_at: datetime = Field(
         default_factory=datetime.utcnow,

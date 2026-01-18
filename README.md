@@ -12,6 +12,7 @@ Fast-Flow ist die Antwort auf die Komplexität von Airflow und die Schwerfällig
 
 ## 📖 Inhaltsverzeichnis
 - [🚀 Schnellstart](#-schnellstart)
+- [📋 Zuletzt umgesetzt](#-zuletzt-umgesetzt)
 - [🏗 Architektur: Das "Runner-Cache"-Prinzip](#-architektur-das-runner-cache-prinzip)
 - [🛠 Der Container-Prozess & Lifecycle](#-der-container-prozess--lifecycle)
 - [🔄 Git-Native Deployment](#-git-native-deployment)
@@ -73,18 +74,27 @@ cp .env.example .env
 # oder manuell: uvicorn app.main:app --reload (Backend); Frontend: cd frontend && npm run dev
 ```
 
-### 🔐 Login (GitHub OAuth)
+### 🔐 Login (GitHub OAuth, Google OAuth)
 
-Die Anmeldung erfolgt **nur über GitHub**:
+Die Anmeldung erfolgt **über GitHub oder Google**:
 
-1. **GitHub OAuth App** anlegen (Settings → Developer settings → OAuth Apps).  
-   **Authorization callback URL:** `http://localhost:8000/api/auth/github/callback` (bzw. `{BASE_URL}/api/auth/github/callback`).
-2. In **`.env`** setzen: `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `INITIAL_ADMIN_EMAIL` (E-Mail deines GitHub-Accounts → erster Admin).
-3. Für **Docker** (Alles auf :8000): `FRONTEND_URL` weglassen oder `=http://localhost:8000`, `BASE_URL=http://localhost:8000`.  
-   Für **Dev** (Frontend :3000, Backend :8000): `FRONTEND_URL=http://localhost:3000`, `BASE_URL=http://localhost:8000`.
+1. **GitHub:** OAuth-App (Settings → Developer settings → OAuth Apps), Callback `{BASE_URL}/api/auth/github/callback`.  
+   **Google:** OAuth-Client (Google Cloud Console), Callback `{BASE_URL}/api/auth/google/callback`.
+2. In **`.env`**: `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` und/oder `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`; `INITIAL_ADMIN_EMAIL` (E-Mail für ersten Admin).
+3. **Docker** (Alles :8000): `FRONTEND_URL` weglassen oder `=http://localhost:8000`, `BASE_URL=http://localhost:8000`.  
+   **Dev** (Frontend :3000, Backend :8000): `FRONTEND_URL=http://localhost:3000`, `BASE_URL=http://localhost:8000`.
 
 > [!TIP]
-> Ausführliche Schritte, Test-Szenarien und Fehlerbehebung: [GitHub OAuth](docs/GITHUB_OAUTH.md).
+> Ausführliche Schritte, Einladung, Konto verknüpfen: [OAuth (GitHub & Google)](docs/oauth/README.md).
+
+### 📋 Zuletzt umgesetzt
+
+- **Google OAuth** – Zweiter Login-Provider neben GitHub (Login, Einladung, Konto verknüpfen). User-Model um `google_id` und `avatar_url` erweitert.
+- **Konto verknüpfen** – In **Einstellungen → Verknüpfte Konten** können eingeloggte Nutzer GitHub und/oder Google an ihr Profil anbinden; Login dann mit beiden möglich (z.B. wenn E-Mails je Provider unterschiedlich sind).
+- **Einladungen** – Einladungslinks lassen sich mit **GitHub oder Google** einlösen; die OAuth-E-Mail muss der Einladungs-E-Mail entsprechen.
+- **Migrationen automatisch** – Beim Container-Start führt `entrypoint.sh` zuerst `alembic upgrade head` aus, danach startet die App. Manuelles Migrieren entfällt bei `./start-docker.sh` / `docker-compose up`.
+- **OAuth-Logging** – Erfolgreiche Matches werden geloggt (`match=direct|email|link|initial_admin|invitation`, inkl. Provider und User), ebenso abgelehnte Logins und fehlgeschlagene Link-Flows. Hilfreich für Debugging: `docker-compose logs -f orchestrator | grep -E "OAuth:|initial_admin"`.
+- **Dokumentation** – OAuth-Doku in `docs/oauth/` (README, GITHUB.md, GOOGLE.md); `docs/GITHUB_OAUTH.md` entfernt.
 
 ---
 
@@ -326,7 +336,7 @@ Der Orchestrator kommuniziert mit dem Proxy über `http://docker-proxy:2375` sta
 ## Dokumentation
 
 - **[Philosophie: Das Anti-Overhead Manifesto](docs/manifesto.md)** - Warum Fast-Flow entstanden ist und was es anders macht
-- **[GitHub OAuth](docs/GITHUB_OAUTH.md)** - Login einrichten, Einladungen, Test-Szenarien
+- **[OAuth (GitHub & Google)](docs/oauth/README.md)** - Login, Einladungen, Konto verknüpfen
 - **[Konfiguration](docs/deployment/CONFIGURATION.md)** - Detaillierte Erklärung aller Environment-Variablen
 - **[Deployment](docs/deployment/PRODUCTION.md)** - Produktions-Setup Guide
 - **[Versioning & Releases](docs/deployment/VERSIONING.md)** - Version-Management und Release-Prozess

@@ -120,6 +120,10 @@ GitHub OAuth + Token-Einladung:
 ### 007_drop_password_hash
 - Entfernt `users.password_hash` (Login nur noch via GitHub OAuth).
 
+### 008_add_google_avatar
+- `users.google_id` (optional, unique) für Google OAuth.
+- `users.avatar_url` (optional) für Profilbild von OAuth-Providern.
+
 ## Wichtige Hinweise
 
 1. **Backup erstellen**: Vor dem Ausführen von Migrationen sollte ein Backup der Datenbank erstellt werden, besonders in Produktionsumgebungen.
