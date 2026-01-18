@@ -2,33 +2,35 @@
 Authentication API Endpoints.
 
 Dieses Modul enthält alle REST-API-Endpoints für Authentication:
-- Login
-- Logout
+- GitHub OAuth (Login, Einladung)
+- Logout, Refresh, Me
 """
 
 import logging
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 from sqlmodel import Session, select
-import re
 
 from app.auth import (
-    authenticate_user,
     create_access_token,
     create_session,
+    create_github_user,
     delete_session,
     get_current_user,
-    get_or_create_user,
+    get_or_create_github_admin,
     get_session_by_token,
-    verify_token
 )
 from app.config import config
 from app.database import get_session
+from app.github_oauth import generate_oauth_state, store_oauth_state
+from app.github_oauth_user import get_github_authorize_url, get_github_user_data
 from app.middleware.rate_limiting import limiter
-from app.models import User
+from app.models import User, Invitation
 
 logger = logging.getLogger(__name__)
 
@@ -37,46 +39,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 security = HTTPBearer(auto_error=False)
 
 
-def validate_username_format(username: str) -> None:
-    """
-    Validiert Benutzername-Format.
-    
-    Anforderungen:
-    - Nur alphanumerische Zeichen und Unterstriche erlaubt
-    - Länge: 3-50 Zeichen
-    - Darf nicht mit Unterstrichen beginnen oder enden
-    
-    Args:
-        username: Benutzername zum Validieren
-        
-    Raises:
-        ValueError: Wenn Benutzername ungültig ist
-    """
-    if len(username) < 3 or len(username) > 50:
-        raise ValueError("Benutzername muss zwischen 3 und 50 Zeichen lang sein")
-    
-    if not re.match(r'^[a-zA-Z0-9_]+$', username):
-        raise ValueError("Benutzername darf nur Buchstaben, Zahlen und Unterstriche enthalten")
-    
-    if username.startswith('_') or username.endswith('_'):
-        raise ValueError("Benutzername darf nicht mit Unterstrichen beginnen oder enden")
-
-
-class LoginRequest(BaseModel):
-    """Request-Model für Login-Endpoint."""
-    username: str
-    password: str
-    
-    @field_validator("username")
-    @classmethod
-    def validate_username(cls, v: str) -> str:
-        """Validiert Benutzername-Format."""
-        validate_username_format(v)
-        return v
-
-
 class LoginResponse(BaseModel):
-    """Response-Model für Login-Endpoint."""
+    """Response-Model für Token-basierte Responses (z.B. Refresh)."""
     access_token: str
     token_type: str = "bearer"
     username: str
@@ -87,60 +51,90 @@ class LogoutResponse(BaseModel):
     message: str
 
 
-@router.post("/login", response_model=LoginResponse, status_code=status.HTTP_200_OK)
-@limiter.limit("5/minute")
-async def login(
+def _redirect_with_token(token: str) -> RedirectResponse:
+    # FRONTEND_URL oder BASE_URL (wenn Frontend vom Backend mitausgeliefert wird)
+    frontend = (config.FRONTEND_URL or config.BASE_URL or "http://localhost:8000").rstrip("/")
+    return RedirectResponse(url=f"{frontend}/auth/callback#token={token}", status_code=302)
+
+
+@router.get("/github/authorize")
+@limiter.limit("20/minute")
+async def github_authorize(
     request: Request,
-    login_data: LoginRequest,
-    session: Session = Depends(get_session)
-) -> LoginResponse:
+    state: Optional[str] = None,
+) -> RedirectResponse:
     """
-    Authentifiziert einen Benutzer und gibt ein JWT-Token zurück.
-    
-    Beim ersten Start wird der Standard-Benutzer (aus Config) erstellt,
-    falls er noch nicht existiert.
-    
-    Args:
-        request: FastAPI Request (für Rate Limiting)
-        login_data: Login-Daten (Benutzername und Passwort)
-        session: Datenbank-Session
-        
-    Returns:
-        LoginResponse: JWT-Token und Benutzername
-        
-    Raises:
-        HTTPException: Wenn Authentifizierung fehlschlägt
+    Leitet zur GitHub OAuth Authorize-URL weiter.
+    state: optional, wird als OAuth state mitgegeben (Invitation-Token oder CSRF).
     """
-    # Erstelle Standard-Benutzer beim ersten Start (falls nicht vorhanden)
-    get_or_create_user(
-        session,
-        config.AUTH_USERNAME,
-        config.AUTH_PASSWORD
-    )
-    
-    # Authentifiziere Benutzer
-    user = authenticate_user(session, login_data.username, login_data.password)
-    
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Ungültiger Benutzername oder Passwort",
-            headers={"WWW-Authenticate": "Bearer"},
+    if not config.GITHUB_CLIENT_ID:
+        raise HTTPException(status_code=503, detail="GitHub OAuth ist nicht konfiguriert (GITHUB_CLIENT_ID fehlt)")
+    s = state if state else generate_oauth_state()
+    if not state:
+        store_oauth_state(s, {"purpose": "login"})
+    url = get_github_authorize_url(s)
+    return RedirectResponse(url=url, status_code=302)
+
+
+@router.get("/github/callback")
+async def github_callback(
+    code: Optional[str] = None,
+    state: Optional[str] = None,
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    """
+    GitHub OAuth Callback. Pfad A: INITIAL_ADMIN_EMAIL, B: bestehender github_id-User,
+    C: gültige Invitation, D: 403.
+    """
+    if not code:
+        raise HTTPException(status_code=400, detail="GitHub OAuth: code fehlt")
+
+    try:
+        github_user = await get_github_user_data(code)
+    except HTTPException:
+        raise
+
+    email = github_user.get("email")
+    github_id = str(github_user["id"])
+    utc = datetime.utcnow
+
+    # A: Initial Admin (email == INITIAL_ADMIN_EMAIL)
+    if email and config.INITIAL_ADMIN_EMAIL and email == config.INITIAL_ADMIN_EMAIL:
+        user = get_or_create_github_admin(session, github_user)
+        if user:
+            token = create_access_token(username=user.username)
+            create_session(session, user, token)
+            logger.info(f"Admin '{user.username}' via INITIAL_ADMIN_EMAIL angemeldet")
+            return _redirect_with_token(token)
+
+    # B: Bestehender User mit github_id
+    stmt = select(User).where(User.github_id == github_id)
+    existing = session.exec(stmt).first()
+    if existing and not existing.blocked:
+        token = create_access_token(username=existing.username)
+        create_session(session, existing, token)
+        logger.info(f"User '{existing.username}' per GitHub angemeldet")
+        return _redirect_with_token(token)
+
+    # C: Einladung (state = Invitation.token)
+    if state:
+        stmt = (
+            select(Invitation)
+            .where(Invitation.token == state, Invitation.is_used == False, Invitation.expires_at > datetime.utcnow())
         )
-    
-    # Erstelle JWT-Token
-    access_token = create_access_token(username=user.username)
-    
-    # Erstelle Session in Datenbank (Persistenz)
-    create_session(session, user, access_token)
-    
-    logger.info(f"Benutzer '{user.username}' hat sich angemeldet")
-    
-    return LoginResponse(
-        access_token=access_token,
-        token_type="bearer",
-        username=user.username
-    )
+        inv = session.exec(stmt).first()
+        if inv:
+            inv.is_used = True
+            session.add(inv)
+            session.commit()
+            user = create_github_user(session, github_user, inv.role)
+            token = create_access_token(username=user.username)
+            create_session(session, user, token)
+            logger.info(f"User '{user.username}' via Einladung angemeldet")
+            return _redirect_with_token(token)
+
+    # D
+    raise HTTPException(status_code=403, detail="Zutritt verweigert. Keine gültige Einladung gefunden.")
 
 
 @router.get("/me", response_model=dict, status_code=status.HTTP_200_OK)

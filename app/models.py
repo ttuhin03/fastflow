@@ -265,10 +265,34 @@ class User(SQLModel, table=True):
         index=True,
         description="Microsoft OAuth ID (optional, für zukünftige Microsoft-Auth)"
     )
+    github_id: Optional[str] = Field(
+        default=None,
+        unique=True,
+        index=True,
+        description="GitHub OAuth ID (optional, für GitHub-Login)"
+    )
     created_at: datetime = Field(
         default_factory=datetime.utcnow,
         description="Erstellungs-Zeitpunkt (UTC)"
     )
+
+
+class Invitation(SQLModel, table=True):
+    """
+    Einladung für neuen User (Token-Einladung via GitHub OAuth).
+
+    Ersetzt den alten Flow über User.invitation_token / invitation_expires_at.
+    Token wird an /invite?token=... übergeben; state im OAuth = token.
+    """
+    __tablename__ = "invitations"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    recipient_email: str = Field(index=True)
+    token: str = Field(unique=True, index=True)  # secrets.token_urlsafe(32)
+    is_used: bool = Field(default=False)
+    expires_at: datetime = Field(...)  # Pflicht, Token läuft ab
+    role: UserRole = Field(default=UserRole.READONLY)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class Session(SQLModel, table=True):

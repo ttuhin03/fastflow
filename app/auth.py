@@ -19,8 +19,6 @@ from uuid import uuid4, UUID
 from fastapi import Depends, HTTPException, status, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
-from passlib.context import CryptContext
-from passlib.exc import UnknownHashError
 from sqlmodel import Session, select
 
 from app.config import config
@@ -29,82 +27,8 @@ from app.models import User, Session as SessionModel, UserRole
 
 logger = logging.getLogger(__name__)
 
-# Password-Hashing-Kontext (bcrypt_sha256)
-# bcrypt_sha256 wendet SHA-256 auf das Passwort an, bevor es mit bcrypt gehasht wird
-# Das umgeht das 72-Byte-Limit von bcrypt
-pwd_context = CryptContext(
-    schemes=["bcrypt_sha256"],
-    deprecated="auto"
-)
-
 # HTTPBearer für JWT-Token-Extraktion
 security = HTTPBearer(auto_error=False)
-
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """
-    Verifiziert ein Klartext-Passwort gegen einen Hash.
-    
-    Args:
-        plain_password: Klartext-Passwort
-        hashed_password: Gehashtes Passwort (bcrypt_sha256)
-        
-    Returns:
-        bool: True wenn Passwort korrekt, sonst False
-        
-    Raises:
-        UnknownHashError: Wenn Hash nicht im erwarteten Format ist (wird von authenticate_user abgefangen)
-        ValueError: Wenn Hash leer oder None ist
-    """
-    # Prüfe ob Hash leer oder None ist
-    if not hashed_password or not hashed_password.strip():
-        logger.warning("Passwort-Hash ist leer oder None")
-        return False
-    
-    try:
-        return pwd_context.verify(plain_password, hashed_password)
-    except UnknownHashError:
-        # Hash ist nicht im erwarteten Format (z.B. alter Hash-Format oder beschädigt)
-        # Wirf die Exception weiter, damit authenticate_user sie abfangen kann
-        raise
-    except Exception as e:
-        # Andere Fehler beim Verifizieren
-        logger.error(f"Unerwarteter Fehler bei Passwort-Verifizierung: {e}")
-        return False
-
-
-def get_password_hash(password: str) -> str:
-    """
-    Erstellt einen bcrypt-Hash für ein Passwort.
-    
-    Args:
-        password: Klartext-Passwort
-        
-    Returns:
-        str: Gehashtes Passwort
-    """
-    # bcrypt_sha256 hat kein 72-Byte-Limit, da es SHA-256 vor dem Hashing anwendet
-    # Aber wir müssen sicherstellen, dass das Backend initialisiert ist
-    try:
-        return pwd_context.hash(password)
-    except (ValueError, AttributeError) as e:
-        # Falls Backend noch nicht initialisiert ist, initialisiere es
-        # Verwende ein sehr kurzes Passwort für die Initialisierung
-        try:
-            # Versuche mit einem kurzen Passwort zu initialisieren
-            _ = pwd_context.hash("x")
-            # Versuche es erneut mit dem echten Passwort
-            return pwd_context.hash(password)
-        except Exception:
-            # Falls das auch fehlschlägt, verwende direkt bcrypt ohne passlib
-            import bcrypt
-            password_bytes = password.encode('utf-8')
-            if len(password_bytes) > 72:
-                import hashlib
-                # Pre-hash mit SHA-256 wenn zu lang
-                password_bytes = hashlib.sha256(password_bytes).digest()
-            salt = bcrypt.gensalt()
-            return bcrypt.hashpw(password_bytes, salt).decode('utf-8')
 
 
 def create_access_token(username: str, expires_delta: Optional[timedelta] = None) -> str:
@@ -169,71 +93,85 @@ def verify_token(token: str) -> Optional[str]:
         return None
 
 
-def get_or_create_user(session: Session, username: str, password: str) -> User:
+def get_or_create_github_admin(session: Session, github_user: dict) -> User:
     """
-    Holt einen Benutzer aus der Datenbank oder erstellt ihn.
-    
-    Beim ersten Start wird der Standard-Benutzer (aus Config) erstellt,
-    falls er noch nicht existiert.
-    
-    Args:
-        session: Datenbank-Session
-        username: Benutzername
-        password: Klartext-Passwort (wird gehasht gespeichert)
-        
-    Returns:
-        User: Benutzer-Instanz
+    Holt oder erstellt den ersten Admin per GitHub (INITIAL_ADMIN_EMAIL).
+
+    - Sucht zuerst User mit github_id == github_user["id"].
+    - Sonst: User mit email == INITIAL_ADMIN_EMAIL → github_id setzen, role=ADMIN.
+    - Sonst: Neuen User anlegen (github_id, email, username aus login, role=ADMIN, password_hash=None).
     """
-    # Prüfe ob Benutzer existiert
-    statement = select(User).where(User.username == username)
-    user = session.exec(statement).first()
-    
-    # Prüfe ob dies der Standard-Admin-Nutzer ist
     from app.config import config
-    is_default_admin = (username == config.AUTH_USERNAME)
-    
-    # Fix: Korrigiere alte lowercase enum-Werte zu UPPERCASE (für Migration)
-    if user and hasattr(user, 'role') and user.role:
-        role_str = str(user.role) if not isinstance(user.role, str) else user.role
-        if role_str in ['readonly', 'write', 'admin']:
-            # Konvertiere lowercase zu UPPERCASE
-            role_mapping = {'readonly': UserRole.READONLY, 'write': UserRole.WRITE, 'admin': UserRole.ADMIN}
-            user.role = role_mapping[role_str]
-            session.add(user)
-            session.commit()
-            session.refresh(user)
-            logger.info(f"Rolle für Benutzer '{username}' von '{role_str}' zu '{user.role.value}' korrigiert")
-    
-    if user is None:
-        # Erstelle neuen Benutzer
-        # Standard-Benutzer (aus Config) bekommt Admin-Rechte
-        user = User(
-            username=username,
-            password_hash=get_password_hash(password),
-            role=UserRole.ADMIN if is_default_admin else UserRole.READONLY
-        )
-        session.add(user)
-        session.commit()
-        session.refresh(user)
-        logger.info(f"Benutzer '{username}' erstellt (Rolle: {user.role.value})")
-    else:
-        # Wenn Benutzer existiert, aber keine Rolle hat (Migration), setze auf Admin für Standard-Benutzer
-        if not hasattr(user, 'role') or user.role is None:
-            user.role = UserRole.ADMIN if is_default_admin else UserRole.READONLY
-            session.add(user)
-            session.commit()
-            session.refresh(user)
-            logger.info(f"Rolle für Benutzer '{username}' gesetzt: {user.role.value}")
-        # WICHTIG: Stelle sicher, dass der Standard-Admin-Nutzer immer Admin-Rechte hat
-        elif is_default_admin and user.role != UserRole.ADMIN:
-            logger.warning(f"Standard-Admin-Nutzer '{username}' hatte Rolle '{user.role.value}', wird auf ADMIN gesetzt")
+
+    gid = str(github_user["id"])
+    email = github_user.get("email")
+    login = github_user.get("login") or "github"
+
+    # 1. Bereits mit github_id vorhanden
+    stmt = select(User).where(User.github_id == gid)
+    user = session.exec(stmt).first()
+    if user:
+        return user
+
+    # 2. INITIAL_ADMIN_EMAIL: bestehenden User verknüpfen oder neuen Admin anlegen
+    if email and config.INITIAL_ADMIN_EMAIL and email == config.INITIAL_ADMIN_EMAIL:
+        stmt = select(User).where(User.email == email)
+        user = session.exec(stmt).first()
+        if user:
+            user.github_id = gid
             user.role = UserRole.ADMIN
             session.add(user)
             session.commit()
             session.refresh(user)
-            logger.info(f"Rolle für Standard-Admin-Nutzer '{username}' auf ADMIN gesetzt")
-    
+            return user
+        # Neuer User mit dieser E-Mail als Admin
+        username = _unique_username(session, login, gid)
+        user = User(
+            username=username,
+            email=email,
+            github_id=gid,
+            role=UserRole.ADMIN,
+            password_hash=None,
+        )
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+        return user
+
+    # 3. Kein INITIAL_ADMIN_EMAIL-Match: nur wenn explizit als Admin angelegt (sollte nicht vorkommen)
+    return None
+
+
+def create_github_user(session: Session, github_user: dict, role: UserRole) -> User:
+    """
+    Erstellt einen neuen User aus GitHub-Daten (Einladungs-Flow).
+
+    username aus login, bei Kollision login_<id>. password_hash=None.
+    """
+    gid = str(github_user["id"])
+    email = github_user.get("email") or ""
+    login = github_user.get("login") or "github"
+    username = _unique_username(session, login, gid)
+    user = User(
+        username=username,
+        email=email or None,
+        github_id=gid,
+        role=role,
+        password_hash=None,
+    )
+    session.add(user)
+    session.commit()
+    session.refresh(user)
     return user
+
+
+def _unique_username(session: Session, login: str, github_id: str) -> str:
+    base = (login or "user").replace(" ", "_")[:50]
+    for cand in (base, f"{base}_{github_id[:12]}" if len(github_id) > 8 else f"{base}_{github_id}"):
+        stmt = select(User).where(User.username == cand)
+        if session.exec(stmt).first() is None:
+            return cand
+    return f"{base}_{github_id}"
 
 
 def create_session(session: Session, user: User, token: str) -> SessionModel:
@@ -441,78 +379,6 @@ async def get_current_user(
             detail="Benutzer ist blockiert",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    return user
-
-
-def authenticate_user(session: Session, username: str, password: str) -> Optional[User]:
-    """
-    Authentifiziert einen Benutzer mit Benutzername und Passwort.
-    
-    Repariert automatisch ungültige Hashes für den Standard-Admin-Nutzer,
-    wenn das eingegebene Passwort mit dem Config-Passwort übereinstimmt.
-    Dies ermöglicht die Wiederherstellung nach Hash-Korruption.
-    
-    Args:
-        session: Datenbank-Session
-        username: Benutzername
-        password: Klartext-Passwort
-        
-    Returns:
-        Optional[User]: Benutzer wenn Authentifizierung erfolgreich, sonst None
-    """
-    # Hole Benutzer aus Datenbank
-    statement = select(User).where(User.username == username)
-    user = session.exec(statement).first()
-    
-    if user is None:
-        return None
-    
-    # Prüfe ob Hash vorhanden ist
-    if not user.password_hash or not user.password_hash.strip():
-        logger.warning(f"Benutzer '{username}' hat keinen gültigen Passwort-Hash")
-        return None
-    
-    # Verifiziere Passwort
-    try:
-        if not verify_password(password, user.password_hash):
-            return None
-    except UnknownHashError:
-        # Hash ist ungültig - prüfe ob wir ihn reparieren können
-        # Nur für Standard-Admin-Nutzer und nur wenn Passwort mit Config übereinstimmt
-        is_default_admin = (username == config.AUTH_USERNAME)
-        
-        if is_default_admin and password == config.AUTH_PASSWORD:
-            # Sichere Hash-Reparatur: Nur für Standard-Admin mit korrektem Config-Passwort
-            logger.warning(
-                f"Passwort-Hash für Standard-Admin-Nutzer '{username}' ist ungültig. "
-                "Repariere Hash mit Config-Passwort..."
-            )
-            try:
-                user.password_hash = get_password_hash(password)
-                session.add(user)
-                session.commit()
-                session.refresh(user)
-                logger.info(f"Passwort-Hash für Benutzer '{username}' erfolgreich repariert")
-                # Hash wurde repariert, Login ist erfolgreich
-                return user
-            except Exception as e:
-                logger.error(f"Fehler beim Reparieren des Passwort-Hash für Benutzer '{username}': {e}")
-                return None
-        else:
-            # Hash ist ungültig und kann nicht repariert werden
-            logger.error(
-                f"Passwort-Hash für Benutzer '{username}' ist ungültig. "
-                "Login abgelehnt aus Sicherheitsgründen."
-            )
-            return None
-    except Exception as e:
-        logger.error(f"Fehler bei Passwort-Verifizierung für Benutzer '{username}': {e}")
-        return None
-    
-    # Prüfe ob Benutzer blockiert ist
-    if user.blocked:
-        return None
     
     return user
 

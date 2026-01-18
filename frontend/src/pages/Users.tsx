@@ -2,15 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../api/client'
 import { showError, showSuccess, showConfirm } from '../utils/toast'
-import {
-  MdAdd,
-  MdEdit,
-  MdDelete,
-  MdBlock,
-  MdLockReset,
-  MdEmail,
-  MdClose
-} from 'react-icons/md'
+import { MdEdit, MdDelete, MdBlock, MdEmail, MdClose } from 'react-icons/md'
 import Tooltip from '../components/Tooltip'
 import InfoIcon from '../components/InfoIcon'
 import './Users.css'
@@ -23,6 +15,16 @@ interface User {
   blocked: boolean
   created_at: string
   microsoft_id: string | null
+  github_id?: string | null
+}
+
+interface InvitationRow {
+  id: string
+  recipient_email: string
+  is_used: boolean
+  expires_at: string
+  created_at: string
+  role: string
 }
 
 // Helper function to convert role to uppercase for API
@@ -37,13 +39,8 @@ const normalizeRole = (role: string): 'readonly' | 'write' | 'admin' => {
 
 export default function Users() {
   const queryClient = useQueryClient()
-  const [showCreateForm, setShowCreateForm] = useState(false)
   const [showInviteForm, setShowInviteForm] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
-
-  // Form states
-  const [formUsername, setFormUsername] = useState('')
-  const [formPassword, setFormPassword] = useState('')
   const [formEmail, setFormEmail] = useState('')
   const [formRole, setFormRole] = useState<'readonly' | 'write' | 'admin'>('readonly')
   const [inviteEmail, setInviteEmail] = useState('')
@@ -58,8 +55,18 @@ export default function Users() {
       const response = await apiClient.get('/users')
       return response.data
     },
-    retry: false, // Don't retry on 403
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const { data: invites = [] } = useQuery<InvitationRow[]>({
+    queryKey: ['invites'],
+    queryFn: async () => {
+      const response = await apiClient.get('/users/invites')
+      return response.data
+    },
+    retry: false,
+    staleTime: 2 * 60 * 1000,
   })
 
   // Show message if not admin (403 Forbidden) or if error detail contains "Admin"
@@ -86,27 +93,6 @@ export default function Users() {
     )
   }
 
-  const createUserMutation = useMutation({
-    mutationFn: async (data: {
-      username: string
-      password: string
-      email?: string
-      role: 'READONLY' | 'WRITE' | 'ADMIN'
-    }) => {
-      const response = await apiClient.post('/users', data)
-      return response.data
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] })
-      setShowCreateForm(false)
-      resetForm()
-      showSuccess('Benutzer erfolgreich erstellt')
-    },
-    onError: (error: any) => {
-      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
-    },
-  })
-
   const inviteUserMutation = useMutation({
     mutationFn: async (data: {
       email: string
@@ -116,14 +102,13 @@ export default function Users() {
       const response = await apiClient.post('/users/invite', data)
       return response.data
     },
-    onSuccess: (data) => {
+    onSuccess: (data: { link: string; expires_at: string }) => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
+      queryClient.invalidateQueries({ queryKey: ['invites'] })
       setShowInviteForm(false)
       resetInviteForm()
-      // Show invite link
-      const fullLink = `${window.location.origin}/invite/${data.token}`
-      navigator.clipboard.writeText(fullLink)
-      showSuccess(`Einladungslink erstellt und in Zwischenablage kopiert: ${fullLink}`)
+      navigator.clipboard.writeText(data.link)
+      showSuccess('Einladungslink erstellt und in Zwischenablage kopiert')
     },
     onError: (error: any) => {
       showError(`Fehler: ${error.response?.data?.detail || error.message}`)
@@ -146,23 +131,7 @@ export default function Users() {
       queryClient.invalidateQueries({ queryKey: ['users'] })
       setEditingUser(null)
       resetForm()
-      setShowCreateForm(false)
       showSuccess('Benutzer erfolgreich aktualisiert')
-    },
-    onError: (error: any) => {
-      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
-    },
-  })
-
-  const resetPasswordMutation = useMutation({
-    mutationFn: async ({ userId, newPassword }: { userId: string; newPassword: string }) => {
-      const response = await apiClient.post(`/users/${userId}/reset-password`, {
-        new_password: newPassword
-      })
-      return response.data
-    },
-    onSuccess: () => {
-      showSuccess('Passwort erfolgreich zurückgesetzt')
     },
     onError: (error: any) => {
       showError(`Fehler: ${error.response?.data?.detail || error.message}`)
@@ -211,9 +180,20 @@ export default function Users() {
     },
   })
 
+  const deleteInviteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiClient.delete(`/users/invites/${id}`)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['invites'] })
+      showSuccess('Einladung widerrufen')
+    },
+    onError: (error: any) => {
+      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
+    },
+  })
+
   const resetForm = () => {
-    setFormUsername('')
-    setFormPassword('')
     setFormEmail('')
     setFormRole('readonly')
     setEditingUser(null)
@@ -223,16 +203,6 @@ export default function Users() {
     setInviteEmail('')
     setInviteRole('readonly')
     setInviteExpiresHours(168)
-  }
-
-  const handleCreateUser = (e: React.FormEvent) => {
-    e.preventDefault()
-    createUserMutation.mutate({
-      username: formUsername,
-      password: formPassword,
-      email: formEmail || undefined,
-      role: roleToUppercase(formRole)
-    })
   }
 
   const handleInviteUser = (e: React.FormEvent) => {
@@ -248,7 +218,6 @@ export default function Users() {
     setEditingUser(user)
     setFormEmail(user.email || '')
     setFormRole(normalizeRole(user.role))
-    setShowCreateForm(true)
     setShowInviteForm(false)
   }
 
@@ -263,16 +232,6 @@ export default function Users() {
         blocked: editingUser.blocked
       }
     })
-  }
-
-  const handleResetPassword = async (userId: string) => {
-    // Für Passwort-Eingabe verwenden wir einen einfachen Prompt (kann später durch ein Modal ersetzt werden)
-    const newPassword = window.prompt('Neues Passwort eingeben:')
-    if (newPassword && newPassword.length >= 6) {
-      resetPasswordMutation.mutate({ userId, newPassword })
-    } else if (newPassword) {
-      showError('Passwort muss mindestens 6 Zeichen lang sein')
-    }
   }
 
   const handleBlockUser = async (userId: string) => {
@@ -302,19 +261,7 @@ export default function Users() {
         <div className="users-actions">
           <button
             onClick={() => {
-              setShowCreateForm(true)
-              setShowInviteForm(false)
-              resetForm()
-            }}
-            className="btn btn-primary"
-          >
-            <MdAdd />
-            Nutzer erstellen
-          </button>
-          <button
-            onClick={() => {
               setShowInviteForm(true)
-              setShowCreateForm(false)
               resetInviteForm()
             }}
             className="btn btn-primary"
@@ -325,19 +272,12 @@ export default function Users() {
         </div>
       </div>
 
-      {(showCreateForm || showInviteForm) && (
+      {(editingUser || showInviteForm) && (
         <div className="users-form-card">
           <div className="users-form-header">
-            <h3>
-              {showInviteForm 
-                ? 'Einladung senden' 
-                : editingUser 
-                  ? 'Benutzer bearbeiten' 
-                  : 'Neuen Benutzer erstellen'}
-            </h3>
+            <h3>{showInviteForm ? 'Einladung senden' : 'Benutzer bearbeiten'}</h3>
             <button
               onClick={() => {
-                setShowCreateForm(false)
                 setShowInviteForm(false)
                 resetForm()
                 resetInviteForm()
@@ -348,31 +288,8 @@ export default function Users() {
             </button>
           </div>
 
-          {showCreateForm && (
-            <form onSubmit={editingUser ? handleUpdateUser : handleCreateUser}>
-              {!editingUser && (
-                <>
-                  <div className="form-group">
-                    <label>Benutzername:</label>
-                    <input
-                      type="text"
-                      value={formUsername}
-                      onChange={(e) => setFormUsername(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Passwort:</label>
-                    <input
-                      type="password"
-                      value={formPassword}
-                      onChange={(e) => setFormPassword(e.target.value)}
-                      required={!editingUser}
-                      minLength={6}
-                    />
-                  </div>
-                </>
-              )}
+          {editingUser && (
+            <form onSubmit={handleUpdateUser}>
               <div className="form-group">
                 <label>E-Mail (optional):</label>
                 <input
@@ -384,7 +301,7 @@ export default function Users() {
               <div className="form-group">
                 <label>
                   Rolle:
-                  <InfoIcon content="Readonly: Nur Leserechte (Pipelines anschauen, Runs ansehen). Write: Schreibrechte (Pipelines starten, Secrets verwalten). Admin: Vollzugriff (User-Verwaltung, Einstellungen)" />
+                  <InfoIcon content="Readonly: Nur Leserechte. Write: Schreibrechte. Admin: Vollzugriff." />
                 </label>
                 <select
                   value={formRole}
@@ -397,19 +314,8 @@ export default function Users() {
                 </select>
               </div>
               <div className="form-actions">
-                <button type="submit" className="btn btn-success">
-                  {editingUser ? 'Aktualisieren' : 'Erstellen'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowCreateForm(false)
-                    resetForm()
-                  }}
-                  className="btn btn-secondary"
-                >
-                  Abbrechen
-                </button>
+                <button type="submit" className="btn btn-success">Aktualisieren</button>
+                <button type="button" onClick={() => { setEditingUser(null); resetForm() }} className="btn btn-secondary">Abbrechen</button>
               </div>
             </form>
           )}
@@ -526,13 +432,6 @@ export default function Users() {
                         >
                           <MdEdit />
                         </button>
-                        <button
-                          onClick={() => handleResetPassword(user.id)}
-                          className="btn-icon"
-                          title="Passwort zurücksetzen"
-                        >
-                          <MdLockReset />
-                        </button>
                         {user.blocked ? (
                           <button
                             onClick={() => handleUnblockUser(user.id)}
@@ -566,6 +465,50 @@ export default function Users() {
           </div>
         ) : (
           <div className="empty-state">Keine Benutzer gefunden</div>
+        )}
+      </div>
+
+      <div className="users-list-card" style={{ marginTop: '1.5rem' }}>
+        <h3>Einladungen</h3>
+        {invites.length === 0 ? (
+          <div className="empty-state">Keine Einladungen</div>
+        ) : (
+          <div className="users-table-container">
+            <table className="users-table">
+              <thead>
+                <tr>
+                  <th>E-Mail</th>
+                  <th>Rolle</th>
+                  <th>Erstellt</th>
+                  <th>Läuft ab</th>
+                  <th>Status</th>
+                  <th>Aktionen</th>
+                </tr>
+              </thead>
+              <tbody>
+                {invites.map((i) => (
+                  <tr key={i.id}>
+                    <td>{i.recipient_email}</td>
+                    <td><span className={`badge badge-${normalizeRole(i.role)}`}>{normalizeRole(i.role)}</span></td>
+                    <td>{new Date(i.created_at).toLocaleString('de-DE')}</td>
+                    <td>{new Date(i.expires_at).toLocaleString('de-DE')}</td>
+                    <td>{i.is_used ? <span className="badge badge-success">Eingelöst</span> : <span className="badge">Offen</span>}</td>
+                    <td>
+                      {!i.is_used && new Date(i.expires_at) > new Date() && (
+                        <button
+                          onClick={() => deleteInviteMutation.mutate(i.id)}
+                          className="btn-icon btn-danger"
+                          title="Widerrufen"
+                        >
+                          <MdDelete />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

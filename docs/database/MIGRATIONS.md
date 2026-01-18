@@ -107,6 +107,11 @@ Fügt Nutzermanagement-Felder zur `users`-Tabelle hinzu:
 - `invitation_expires_at` (optional)
 - `microsoft_id` (optional, für zukünftige Microsoft-Auth)
 
+### 004_github_invitation
+GitHub OAuth + Token-Einladung:
+- Neue Tabelle `invitations` (recipient_email, token, is_used, expires_at, role, created_at)
+- Neue Spalte `users.github_id` (optional, unique, für GitHub-Login)
+
 ## Wichtige Hinweise
 
 1. **Backup erstellen**: Vor dem Ausführen von Migrationen sollte ein Backup der Datenbank erstellt werden, besonders in Produktionsumgebungen.

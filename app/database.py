@@ -17,7 +17,7 @@ Siehe docs/DATABASE_MIGRATIONS.md für Anleitung zur manuellen Ausführung.
 from typing import Generator
 from sqlmodel import SQLModel, create_engine, Session, text
 from app.config import config
-from app.models import Pipeline, PipelineRun, ScheduledJob, Secret, User, Session as SessionModel  # Import Models für Metadaten-Registrierung
+from app.models import Pipeline, PipelineRun, ScheduledJob, Secret, User, Invitation, Session as SessionModel  # Import Models für Metadaten-Registrierung
 import logging
 
 logger = logging.getLogger(__name__)
@@ -114,31 +114,6 @@ def _ensure_secret_is_parameter_column() -> None:
 # Siehe docs/DATABASE_MIGRATIONS.md für Anleitung zur manuellen Ausführung
 
 
-def _ensure_default_admin_role() -> None:
-    """
-    Stellt sicher, dass der Standard-Admin-Nutzer (aus Config) Admin-Rechte hat.
-    
-    Wird beim Start aufgerufen, um sicherzustellen, dass der Standard-Admin-Nutzer
-    immer Admin-Rechte hat, auch wenn er bereits existiert.
-    """
-    try:
-        from app.auth import get_or_create_user
-        from app.config import config
-        
-        with Session(engine) as session:
-            # Rufe get_or_create_user auf, um sicherzustellen, dass der Standard-Admin-Nutzer
-            # existiert und die richtige Rolle hat
-            get_or_create_user(
-                session,
-                config.AUTH_USERNAME,
-                config.AUTH_PASSWORD
-            )
-            logger.info(f"Standard-Admin-Nutzer '{config.AUTH_USERNAME}' initialisiert/geprüft")
-    except Exception as e:
-        logger.warning(f"Fehler beim Initialisieren des Standard-Admin-Nutzers: {e}")
-        # Nicht kritisch, wird beim Login korrigiert
-
-
 def init_db() -> None:
     """
     Initialisiert die Datenbank und erstellt alle Tabellen.
@@ -162,9 +137,6 @@ def init_db() -> None:
     # Stelle sicher, dass is_parameter-Spalte existiert (für bestehende DBs)
     # Diese Funktion wird in Zukunft durch Migrationen ersetzt
     _ensure_secret_is_parameter_column()
-    
-    # Stelle sicher, dass der Standard-Admin-Nutzer die richtige Rolle hat
-    _ensure_default_admin_role()
     
     # Migrationen werden nicht automatisch ausgeführt
     # Siehe docs/DATABASE_MIGRATIONS.md für Anleitung zur manuellen Ausführung

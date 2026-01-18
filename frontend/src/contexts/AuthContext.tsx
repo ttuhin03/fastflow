@@ -4,7 +4,6 @@ import apiClient from '../api/client'
 interface AuthContextType {
   isAuthenticated: boolean
   loading: boolean
-  login: (username: string, password: string) => Promise<void>
   logout: () => Promise<void>
   token: string | null
   userRole: 'readonly' | 'write' | 'admin' | null
@@ -51,24 +50,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(false)
   }, [])
 
-  const login = async (username: string, password: string) => {
-    try {
-      const response = await apiClient.post('/auth/login', {
-        username,
-        password,
-      })
-      const { access_token } = response.data
-      // Verwende sessionStorage statt localStorage für besseren XSS-Schutz
-      // sessionStorage wird beim Schließen des Tabs/Browsers gelöscht
-      sessionStorage.setItem('auth_token', access_token)
-      setToken(access_token)
-      setIsAuthenticated(true)
-      await fetchUserInfo()
-    } catch (error: any) {
-      throw new Error(error.response?.data?.detail || 'Login fehlgeschlagen')
-    }
-  }
-
   const logout = async () => {
     try {
       await apiClient.post('/auth/logout')
@@ -91,7 +72,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{ 
       isAuthenticated, 
       loading, 
-      login, 
       logout, 
       token,
       userRole,
