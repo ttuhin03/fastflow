@@ -11,6 +11,7 @@ Fast-Flow ist die Antwort auf die Komplexität von Airflow und die Schwerfällig
 - [🚀 Schnellstart](#-schnellstart)
 - [🏗 Architektur: Das "Runner-Cache"-Prinzip](#-architektur-das-runner-cache-prinzip)
 - [🛠 Der Container-Prozess & Lifecycle](#-der-container-prozess--lifecycle)
+- [🔄 Git-Native Deployment](#-git-native-deployment)
 - [🚀 Warum Fast-Flow? (Vergleich)](#-warum-fast-flow-vergleich)
 - [🎯 Warum Fast-Flow gewinnt (The Python Advantage)](#-warum-fast-flow-gewinnt-the-python-advantage)
 - [🛠 Technischer Stack](#-technischer-stack)
@@ -181,6 +182,42 @@ graph TB
 - **Geschwindigkeit**: Durch den Entfall von `docker build` Schritten startet eine Pipeline so schnell wie ein lokaler Prozess.
 - **Isolation**: Ein Fehler in `pipeline_a` kann niemals die Umgebung von `pipeline_b` beeinflussen.
 - **Skalierbarkeit**: Da der Controller (API) und die Worker (Container) entkoppelt sind, kann das System durch das Hinzufügen von Message-Queues (wie Redis) leicht auf mehrere Server verteilt werden.
+
+## 🔄 Git-Native Deployment
+
+**Push to Deploy, No Build Needed**
+
+Traditionelle Orchestratoren verwandeln Deployment oft in ein logistisches Problem. Fast-Flow verwandelt es in einen `git push`.
+
+### Die alte Welt (Airflow, Dagster, Mage)
+
+*   **Image-Hell**: Jede Code-Änderung erfordert oft einen neuen Docker-Build (5-10 Minuten warten).
+*   **Sidecar-Chaos**: Man braucht komplexe Git-Sync-Sidecars oder S3-Buckets, um DAGs zu verteilen.
+*   **Version-Gap**: Was im UI steht, entspricht oft nicht dem, was im Git-Repository ist.
+
+### Der Fast-Flow Weg: "Source of Truth"
+
+In Fast-Flow ist dein Git-Repository die einzige Wahrheit. Es gibt keinen "Upload"-Button und keinen manuellen Build-Schritt.
+
+*   **Zero-Build Deployment**: Wenn du deinen Code änderst, zieht der Orchestrator die Änderungen per Webhook oder manuellem Sync. Dank der uv-JIT Architektur ist die neue Version sofort startbereit.
+*   **Vollständige Rückverfolgbarkeit**: Da jede Pipeline-Konfiguration (`pipeline.json`) und jede Library (`requirements.txt`) im Git liegt, hast du eine lückenlose Historie. Wer hat wann das Memory-Limit erhöht? Wer hat die prophet-Version geändert? Dein Git-Log sagt es dir.
+*   **Atomic Sync**: Unser Sync-Mechanismus stellt sicher, dass Pipelines niemals "halbe" Dateien lesen. Änderungen werden atomar eingespielt – sicher und konsistent.
+
+| Feature | Traditionelle Tools | Fast-Flow |
+| :--- | :--- | :--- |
+| **Deployment-Speed** | Minuten (Build & Push) | Sekunden (Git Pull) |
+| **Versionierung** | Oft nur für den Code | Code, Deps & Ressourcen-Limits |
+| **Rollback** | Image-Rollback (komplex) | Git Revert (einfach) |
+| **Wahrheit** | UI vs. Git vs. Image | Git ist Gesetz |
+
+### 🛠 So funktioniert der Flow:
+
+1.  **Entwickeln**: Du schreibst dein Python-Skript lokal.
+2.  **Pushen**: `git push origin main`.
+3.  **Syncen**: Der Orchestrator merkt die Änderung (via Webhook oder Auto-Sync).
+4.  **Laufen**: Die Pipeline startet sofort mit dem neuen Code. Keine Docker-Builds, kein Warten.
+
+> "Wir haben das Deployment so langweilig wie möglich gemacht, damit du dich auf das Spannende konzentrieren kannst: Deinen Code."
 
 ## 🚀 Warum Fast-Flow? (Vergleich)
 
