@@ -99,7 +99,7 @@ def get_or_create_github_admin(session: Session, github_user: dict) -> User:
 
     - Sucht zuerst User mit github_id == github_user["id"].
     - Sonst: User mit email == INITIAL_ADMIN_EMAIL → github_id setzen, role=ADMIN.
-    - Sonst: Neuen User anlegen (github_id, email, username aus login, role=ADMIN, password_hash=None).
+    - Sonst: Neuen User anlegen (github_id, email, username aus login, role=ADMIN).
     """
     from app.config import config
 
@@ -131,7 +131,6 @@ def get_or_create_github_admin(session: Session, github_user: dict) -> User:
             email=email,
             github_id=gid,
             role=UserRole.ADMIN,
-            password_hash=None,
         )
         session.add(user)
         session.commit()
@@ -146,7 +145,7 @@ def create_github_user(session: Session, github_user: dict, role: UserRole) -> U
     """
     Erstellt einen neuen User aus GitHub-Daten (Einladungs-Flow).
 
-    username aus login, bei Kollision login_<id>. password_hash=None.
+    username aus login, bei Kollision login_<id>.
     """
     gid = str(github_user["id"])
     email = github_user.get("email") or ""
@@ -157,7 +156,6 @@ def create_github_user(session: Session, github_user: dict, role: UserRole) -> U
         email=email or None,
         github_id=gid,
         role=role,
-        password_hash=None,
     )
     session.add(user)
     session.commit()

@@ -1,12 +1,12 @@
-# GitHub OAuth + Einladung testen
+# GitHub OAuth + Einladung
 
-Kurze Anleitung, um den GitHub-Login und den Einladungs-Flow zu testen.
+Anleitung zum Einrichten und Testen von GitHub-Login und Einladungs-Flow.
 
 ---
 
 ## 1. GitHub OAuth App anlegen
 
-1. **GitHub** → **Settings** ( dein Profil) → **Developer settings** → **OAuth Apps** → **New OAuth App**
+1. **GitHub** → **Settings** (dein Profil) → **Developer settings** → **OAuth Apps** → **New OAuth App**
 2. Ausfüllen:
    - **Application name:** z.B. `Fast-Flow (lokal)`
    - **Homepage URL:** `http://localhost:3000` (oder deine Frontend-URL)
@@ -19,8 +19,6 @@ Kurze Anleitung, um den GitHub-Login und den Einladungs-Flow zu testen.
 ## 2. .env vorbereiten
 
 ```bash
-cd /Users/tuhin/cursor_repos/fastflow
-
 # .env aus Beispiel anlegen (falls noch nicht vorhanden)
 cp .env.example .env
 
@@ -51,43 +49,22 @@ BASE_URL=http://localhost:8000
 
 ---
 
-## 3. Migration ausführen (falls DB schon existiert)
+## 3. Backend + Frontend starten
 
-Falls die DB schon von einer älteren Version stammt:
-
-```bash
-# Mit Docker (Dev)
-docker-compose -f docker-compose.dev.yaml exec orchestrator alembic upgrade head
-
-# Oder lokal (mit venv/Installation)
-alembic upgrade head
-```
-
-Status prüfen:
+### Option A: Docker (start-docker.sh / start-dev.sh)
 
 ```bash
-alembic current
-# bzw. im Container: docker-compose -f docker-compose.dev.yaml exec orchestrator alembic current
+./start-docker.sh   # Produktions-Setup (Alles auf :8000)
+# oder
+./start-dev.sh      # Dev: Frontend :3000, Backend :8000
 ```
-
----
-
-## 4. Backend + Frontend starten
-
-### Option A: Docker (start-dev.sh)
-
-```bash
-./start-dev.sh
-```
-
-- Frontend: **http://localhost:3000**
-- Backend: **http://localhost:8000**
 
 ### Option B: Docker manuell
 
 ```bash
 mkdir -p pipelines logs data data/uv_cache
-docker-compose -f docker-compose.dev.yaml up --build
+docker-compose up --build
+# bzw. docker-compose -f docker-compose.dev.yaml up --build für Dev
 ```
 
 ### Option C: Lokal (Backend + Frontend getrennt)
@@ -95,7 +72,6 @@ docker-compose -f docker-compose.dev.yaml up --build
 **Backend:**
 
 ```bash
-# Im Projektroot
 pip install -r requirements.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
@@ -103,23 +79,19 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 **Frontend (anderes Terminal):**
 
 ```bash
-cd frontend
-npm install
-npm run dev
+cd frontend && npm install && npm run dev
 ```
-
-Docker-Proxy wird für Pipelines benötigt; für reine Auth-Tests kannst du erstmal ohne starten (einige API-Calls schlagen dann ggf. fehl).
 
 ---
 
-## 5. Test-Szenarien
+## 4. Test-Szenarien
 
 ### A) Erster Login (INITIAL_ADMIN_EMAIL)
 
-1. **http://localhost:3000** öffnen → Redirect zu `/login`
+1. App öffnen (z.B. **http://localhost:8000** oder **http://localhost:3000**) → Redirect zu `/login`
 2. **„Login mit GitHub“** klicken
-3. Auf GitHub anmelden/Authorisieren ( falls nötig )
-4. Redirect zu **http://localhost:3000/auth/callback#token=…** → dann zu **/** (Dashboard)
+3. Auf GitHub anmelden/Authorisieren
+4. Redirect zu `/auth/callback#token=…` → dann zu **/** (Dashboard)
 5. Prüfen: oben rechts eingeloggt, Nutzerverwaltung (Users) als Admin sichtbar
 
 **Hinweis:** Funktioniert nur, wenn die bei GitHub hinterlegte (primäre) E-Mail **exakt** `INITIAL_ADMIN_EMAIL` entspricht.
@@ -128,14 +100,14 @@ Docker-Proxy wird für Pipelines benötigt; für reine Auth-Tests kannst du erst
 
 ### B) Einladung erstellen und einlösen
 
-1. Als Admin ( aus A ) einloggen
+1. Als Admin (aus A) einloggen
 2. **Users** → **„Einladung senden“**
    - E-Mail: eine **andere** GitHub-E-Mail (nicht `INITIAL_ADMIN_EMAIL`)
    - Rolle: z.B. Readonly
    - Gültig: z.B. 168 h
 3. **Einladung erstellen** → Link wird in die Zwischenablage kopiert  
-   Format: `http://localhost:3000/invite?token=…`
-4. **Im selben oder anderen Browser/Profil:** diesen Link öffnen (oder in Incognito)
+   Format: `http://…/invite?token=…`
+4. Im selben oder anderen Browser/Profil: Link öffnen (oder Incognito)
 5. **„Mit GitHub registrieren“** klicken → GitHub OAuth → Redirect mit `#token=…` → zu **/**
 6. Prüfen: neuer User in **Users**, Einladung in der Liste als **Eingelöst**
 
@@ -149,23 +121,20 @@ Docker-Proxy wird für Pipelines benötigt; für reine Auth-Tests kannst du erst
 
 ---
 
-### D) Abgelaufener Einladungslink (Pfad D / 403)
+### D) Abgelaufener Einladungslink (403)
 
 1. Einladung erstellen, Link kopieren
-2. In der DB oder per SQL `expires_at` in die Vergangenheit setzen (oder 1 Stunde Gültigkeit wählen und warten)
+2. In der DB `expires_at` in die Vergangenheit setzen (oder 1 h Gültigkeit wählen und warten)
 3. Link öffnen → **„Mit GitHub registrieren“** → nach GitHub und zurück
 4. Erwartung: **403** „Zutritt verweigert. Keine gültige Einladung gefunden.“
 
 ---
 
-## 6. Nützliche Befehle
+## 5. Nützliche Befehle
 
 ```bash
-# Logs (Docker Dev)
-docker-compose -f docker-compose.dev.yaml logs -f orchestrator
-
-# Alle Dev-Container stoppen
-docker-compose -f docker-compose.dev.yaml down
+# Logs (Docker)
+docker-compose logs -f orchestrator
 
 # API Health (Backend läuft?)
 curl -s http://localhost:8000/health
@@ -177,12 +146,12 @@ curl -sI "http://localhost:8000/api/auth/github/authorize"
 
 ---
 
-## 7. Häufige Fehler
+## 6. Häufige Fehler
 
 | Symptom | Prüfen |
 |--------|--------|
 | **503** „GitHub OAuth ist nicht konfiguriert“ | `GITHUB_CLIENT_ID` in `.env` gesetzt? |
 | **403** „Zutritt verweigert. Keine gültige Einladung“ | Beim Einladungs-Login: `INITIAL_ADMIN_EMAIL` trifft nicht zu, und entweder keine gültige Einladung (`state=token`) oder abgelaufen/bereits eingelöst. |
 | Redirect zu GitHub klappt, danach Fehlerseite | `BASE_URL` = `http://localhost:8000`? Callback-URL in der GitHub OAuth App **exakt** `http://localhost:8000/api/auth/github/callback`? |
-| Nach OAuth: weiße Seite oder „Anmeldung wird abgeschlossen…“ | `FRONTEND_URL` = `http://localhost:3000`? Frontend läuft? `/auth/callback` erreichbar? |
+| Nach OAuth: weiße Seite oder „Anmeldung wird abgeschlossen…“ | `FRONTEND_URL` passt zur tatsächlichen Frontend-URL? Frontend läuft? `/auth/callback` erreichbar? |
 | „ENCRYPTION_KEY ist nicht gesetzt“ | `.env` mit `ENCRYPTION_KEY=…` anlegen (Fernet-Key aus Schritt 2). |

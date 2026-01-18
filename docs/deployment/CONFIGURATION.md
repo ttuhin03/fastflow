@@ -6,7 +6,7 @@ Fast-Flow wird primär über Environment-Variablen in einer `.env` Datei konfigu
 
 | Variable | Standardwert | Beschreibung |
 |----------|--------------|--------------|
-| `ENVIRONMENT` | `development` | Setzt den Modus (`development` oder `production`). In `production` werden unsichere Standardwerte (wie Default-Passwörter) blockiert. |
+| `ENVIRONMENT` | `development` | Setzt den Modus (`development` oder `production`). In `production` werden unsichere Standardwerte (z.B. `JWT_SECRET_KEY`) blockiert. |
 
 ## Datenbank
 
@@ -58,9 +58,11 @@ Fast-Flow wird primär über Environment-Variablen in einer `.env` Datei konfigu
 | Variable | Standardwert | Beschreibung | Produktion |
 |----------|--------------|--------------|------------|
 | `ENCRYPTION_KEY` | *Muss gesetzt werden* | Fernet-Key zur Verschlüsselung von Secrets in der DB. Generieren mit: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` | **Pflicht** |
-| `AUTH_USERNAME` | `admin` | Benutzername für das Login. | **Ändern!** |
-| `AUTH_PASSWORD` | `admin` | Passwort für das Login. | **Ändern!** |
 | `JWT_SECRET_KEY` | *Leer* / Unsafe | Secret Key zum Signieren von Session-Tokens. Muss lang und zufällig sein. | **Pflicht** |
+| `GITHUB_CLIENT_ID` | *Leer* | OAuth App Client ID (GitHub). Login nur via GitHub. | **Pflicht** |
+| `GITHUB_CLIENT_SECRET` | *Leer* | OAuth App Client Secret. | **Pflicht** |
+| `INITIAL_ADMIN_EMAIL` | *Leer* | E-Mail des ersten Admins (Zutritt ohne Einladung). | **Empfohlen** |
+| `FRONTEND_URL` / `BASE_URL` | s. [GitHub OAuth](../GITHUB_OAUTH.md) | Für OAuth-Callback und Einladungs-Links. | Anpassen |
 | `JWT_ALGORITHM` | `HS256` | Algorithmus für JWT Signatur. | HS256 |
 | `JWT_EXPIRATION_HOURS`| `24` | Gültigkeitsdauer einer Login-Session in Stunden. | 24 |
 

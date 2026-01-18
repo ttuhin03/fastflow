@@ -214,14 +214,10 @@ class Secret(SQLModel, table=True):
 
 class User(SQLModel, table=True):
     """
-    User-Model.
-    
-    Speichert Benutzer-Informationen für Authentifizierung.
-    Passwörter werden gehasht gespeichert (passlib bcrypt).
-    Unterstützt lokale Authentifizierung und Microsoft OAuth (zukünftig).
+    User-Model. Authentifizierung nur via GitHub OAuth (und Einladung).
     """
     __tablename__ = "users"
-    
+
     id: UUID = Field(
         default_factory=uuid4,
         primary_key=True,
@@ -232,14 +228,10 @@ class User(SQLModel, table=True):
         index=True,
         description="Benutzername (eindeutig)"
     )
-    password_hash: Optional[str] = Field(
-        default=None,
-        description="Gehashtes Passwort (bcrypt, optional für Microsoft-User)"
-    )
     email: Optional[str] = Field(
         default=None,
         index=True,
-        description="E-Mail-Adresse (optional, für Microsoft-Auth)"
+        description="E-Mail (von GitHub oder manuell)"
     )
     role: UserRole = Field(
         default=UserRole.READONLY,
@@ -248,16 +240,6 @@ class User(SQLModel, table=True):
     blocked: bool = Field(
         default=False,
         description="Ist der Benutzer blockiert?"
-    )
-    invitation_token: Optional[str] = Field(
-        default=None,
-        unique=True,
-        index=True,
-        description="Einladungs-Token (optional)"
-    )
-    invitation_expires_at: Optional[datetime] = Field(
-        default=None,
-        description="Ablauf-Zeitpunkt der Einladung (UTC, optional)"
     )
     microsoft_id: Optional[str] = Field(
         default=None,
@@ -280,8 +262,6 @@ class User(SQLModel, table=True):
 class Invitation(SQLModel, table=True):
     """
     Einladung für neuen User (Token-Einladung via GitHub OAuth).
-
-    Ersetzt den alten Flow über User.invitation_token / invitation_expires_at.
     Token wird an /invite?token=... übergeben; state im OAuth = token.
     """
     __tablename__ = "invitations"

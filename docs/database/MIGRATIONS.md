@@ -103,14 +103,22 @@ Fügt Nutzermanagement-Felder zur `users`-Tabelle hinzu:
 - `email` (optional)
 - `role` (READONLY, WRITE, ADMIN)
 - `blocked` (boolean)
-- `invitation_token` (optional)
-- `invitation_expires_at` (optional)
-- `microsoft_id` (optional, für zukünftige Microsoft-Auth)
+- `invitation_token`, `invitation_expires_at` (optional; in **006** wieder entfernt)
+- `microsoft_id` (optional)
 
 ### 004_github_invitation
 GitHub OAuth + Token-Einladung:
 - Neue Tabelle `invitations` (recipient_email, token, is_used, expires_at, role, created_at)
 - Neue Spalte `users.github_id` (optional, unique, für GitHub-Login)
+
+### 005_make_password_hash_nullable
+- `users.password_hash` war kurz nullable (Vorstufe für 007).
+
+### 006_drop_user_invitation_columns
+- Entfernt `users.invitation_token` und `users.invitation_expires_at` (Einladungen nur noch über Tabelle `invitations`).
+
+### 007_drop_password_hash
+- Entfernt `users.password_hash` (Login nur noch via GitHub OAuth).
 
 ## Wichtige Hinweise
 
@@ -138,7 +146,7 @@ Wenn eine Migration fehlschlägt:
 4. Die Migration korrigieren und erneut ausführen
 
 ### Enum-Werte korrigieren
-Falls Enum-Werte in der Datenbank nicht mit dem Code übereinstimmen (z.B. 'readonly' statt 'READONLY'), werden sie automatisch beim Lesen der Daten korrigiert. Dies geschieht in `app/auth.py` in den Funktionen `get_or_create_user()` und `get_current_user()`.
+Falls Enum-Werte in der Datenbank nicht mit dem Code übereinstimmen (z.B. 'readonly' statt 'READONLY'), werden sie automatisch beim Lesen korrigiert (`app/auth.py`, `get_current_user`).
 
 ## Beispiel-Workflow
 

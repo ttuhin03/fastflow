@@ -110,6 +110,29 @@
   color: var(--color-text-primary);
 }
 
+.users-section-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.github-user-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.github-user-link:hover {
+  text-decoration: underline;
+}
+
+.github-user-link .icon-external {
+  font-size: 0.85em;
+  opacity: 0.8;
+}
+
 .users-table-container {
   overflow-x: auto;
 }

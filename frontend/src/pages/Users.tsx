@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../api/client'
 import { showError, showSuccess, showConfirm } from '../utils/toast'
-import { MdEdit, MdDelete, MdBlock, MdEmail, MdClose } from 'react-icons/md'
+import { MdEdit, MdDelete, MdBlock, MdEmail, MdClose, MdOpenInNew } from 'react-icons/md'
 import Tooltip from '../components/Tooltip'
 import InfoIcon from '../components/InfoIcon'
 import './Users.css'
@@ -381,7 +381,10 @@ export default function Users() {
       )}
 
       <div className="users-list-card">
-        <h3>Benutzer</h3>
+        <h3 className="users-section-title">
+          Benutzer
+          <InfoIcon content="Alle Benutzer melden sich über GitHub an. Der erste Admin wird über INITIAL_ADMIN_EMAIL festgelegt, weitere über Einladungen." />
+        </h3>
         {isLoading ? (
           <div className="loading-state">Laden...</div>
         ) : users && users.length > 0 ? (
@@ -400,7 +403,22 @@ export default function Users() {
               <tbody>
                 {users.map((user) => (
                   <tr key={user.id} className={user.blocked ? 'blocked' : ''}>
-                    <td>{user.username}</td>
+                    <td>
+                      {user.github_id ? (
+                        <a
+                          href={`https://github.com/${user.username}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="github-user-link"
+                          title={`GitHub: @${user.username}`}
+                        >
+                          {user.username}
+                          <MdOpenInNew className="icon-external" />
+                        </a>
+                      ) : (
+                        user.username
+                      )}
+                    </td>
                     <td>{user.email || '-'}</td>
                     <td>
                       <Tooltip content={

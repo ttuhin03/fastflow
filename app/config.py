@@ -399,7 +399,7 @@ class Config:
     Standard: development
     In Produktion sollte dies auf "production" gesetzt werden.
     Beeinflusst Sicherheitsvalidierungen beim Start:
-    - In Produktion werden Standardwerte für JWT_SECRET_KEY und AUTH_PASSWORD blockiert
+    - In Produktion werden Standardwerte für JWT_SECRET_KEY blockiert
     - In Development werden nur Warnungen ausgegeben
     """
     

@@ -41,7 +41,8 @@ Der einfachste Weg, Fast-Flow zu starten.
 cp .env.example .env
 
 # 2. Encryption Key generieren (WICHTIG!)
-# Generiert einen Key und gibt ihn aus. Füge diesen in .env unter ENCRYPTION_KEY ein.
+# Generiert einen Key und gibt ihn aus. Füge ihn in .env unter ENCRYPTION_KEY ein.
+# Für den Login: GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, INITIAL_ADMIN_EMAIL in .env (siehe Abschnitt Login).
 python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 
 # 3. Starten
@@ -68,17 +69,22 @@ cp .env.example .env
 # -> ENCRYPTION_KEY in .env setzen (siehe oben)
 
 # 3. Starten
-./start.sh
-# oder manuell: uvicorn app.main:app --reload
+./start-dev.sh
+# oder manuell: uvicorn app.main:app --reload (Backend); Frontend: cd frontend && npm run dev
 ```
 
-### 🔐 Standard-Login
+### 🔐 Login (GitHub OAuth)
 
-- **User:** `admin`
-- **Passwort:** `admin`
+Die Anmeldung erfolgt **nur über GitHub**:
 
-> [!WARNING]
-> Ändern Sie diese Zugangsdaten in der `.env` Datei für den Produktionseinsatz! Siehe [Konfiguration](docs/deployment/CONFIGURATION.md).
+1. **GitHub OAuth App** anlegen (Settings → Developer settings → OAuth Apps).  
+   **Authorization callback URL:** `http://localhost:8000/api/auth/github/callback` (bzw. `{BASE_URL}/api/auth/github/callback`).
+2. In **`.env`** setzen: `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `INITIAL_ADMIN_EMAIL` (E-Mail deines GitHub-Accounts → erster Admin).
+3. Für **Docker** (Alles auf :8000): `FRONTEND_URL` weglassen oder `=http://localhost:8000`, `BASE_URL=http://localhost:8000`.  
+   Für **Dev** (Frontend :3000, Backend :8000): `FRONTEND_URL=http://localhost:3000`, `BASE_URL=http://localhost:8000`.
+
+> [!TIP]
+> Ausführliche Schritte, Test-Szenarien und Fehlerbehebung: [GitHub OAuth](docs/GITHUB_OAUTH.md).
 
 ---
 
@@ -274,7 +280,7 @@ Während Airflow eine Postgres-DB, einen Redis-Broker, einen Scheduler, einen We
 - **Execution**: Docker Engine API + uv
 - **Security**: Docker Socket Proxy (tecnativa/docker-socket-proxy) für sichere Docker-API-Zugriffe
 - **Scheduling**: APScheduler (Persistent)
-- **Auth**: JWT & Fernet Encryption
+- **Auth**: GitHub OAuth, JWT & Fernet Encryption
 
 ## Hauptfunktionen
 
@@ -320,6 +326,7 @@ Der Orchestrator kommuniziert mit dem Proxy über `http://docker-proxy:2375` sta
 ## Dokumentation
 
 - **[Philosophie: Das Anti-Overhead Manifesto](docs/manifesto.md)** - Warum Fast-Flow entstanden ist und was es anders macht
+- **[GitHub OAuth](docs/GITHUB_OAUTH.md)** - Login einrichten, Einladungen, Test-Szenarien
 - **[Konfiguration](docs/deployment/CONFIGURATION.md)** - Detaillierte Erklärung aller Environment-Variablen
 - **[Deployment](docs/deployment/PRODUCTION.md)** - Produktions-Setup Guide
 - **[Versioning & Releases](docs/deployment/VERSIONING.md)** - Version-Management und Release-Prozess
@@ -327,7 +334,6 @@ Der Orchestrator kommuniziert mit dem Proxy über `http://docker-proxy:2375` sta
 - **[Docker Socket Proxy](docs/deployment/DOCKER_PROXY.md)** - Sicherheitsarchitektur und Proxy-Konfiguration
 - **[API-Dokumentation](docs/api/API.md)** - Vollständige API-Referenz
 - **[Frontend-Dokumentation](docs/frontend/FRONTEND.md)** - Frontend-Komponenten und Seiten
-- **[Pipeline-Repository](docs/pipelines/PIPELINE_REPOSITORY.md)** - Detaillierte Anleitung für Pipeline-Repositories
 
 ## 📦 Versioning & Releases
 

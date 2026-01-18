@@ -17,7 +17,7 @@ Die meisten Endpoints erfordern Authentifizierung. Verwenden Sie einen Bearer-To
 Authorization: Bearer <token>
 ```
 
-Token werden über den Login-Endpoint (`/api/auth/login`) erhalten.
+Token werden über GitHub OAuth (`GET /api/auth/github/authorize`) erhalten; nach Autorisierung Redirect zu `/auth/callback#token=...`.
 
 ## Endpoints
 
@@ -806,25 +806,15 @@ curl -X POST http://localhost:8000/api/webhooks/pipeline_a/my-secret-key
 
 ## Authentifizierung
 
-### `POST /api/auth/login`
+### `GET /api/auth/github/authorize`
 
-Meldet einen Benutzer an.
+Leitet zur GitHub OAuth-Seite weiter. Nach Autorisierung: Redirect zu `{FRONTEND_URL}/auth/callback#token=...`.
 
-**Request Body:**
-```json
-{
-  "username": "admin",
-  "password": "password"
-}
-```
+- **Query (optional):** `state` – z.B. Invitation-Token für Einladungs-Flow.
 
-**Response:**
-```json
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "token_type": "bearer"
-}
-```
+### `GET /api/auth/github/callback`
+
+GitHub OAuth Callback (vom Browser aufgerufen). Erstellt Session und leitet zu `{FRONTEND_URL}/auth/callback#token=...` weiter.
 
 ### `POST /api/auth/logout`
 
@@ -844,7 +834,7 @@ Gibt Informationen über den aktuellen Benutzer zurück.
 **Response:**
 ```json
 {
-  "username": "admin",
+  "username": "dein-github-username",
   "is_admin": true
 }
 ```
