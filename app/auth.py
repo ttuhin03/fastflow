@@ -299,6 +299,14 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    # Abwehr: pending/rejected erhalten in diesem Flow keinen Token; falls doch:
+    if getattr(user, "status", "active") != "active":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Benutzer ist nicht freigegeben",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
     return user
 
 

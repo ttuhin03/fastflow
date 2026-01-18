@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../api/client'
 import { showError, showSuccess, showConfirm } from '../utils/toast'
-import { MdEdit, MdDelete, MdBlock, MdEmail, MdClose, MdOpenInNew } from 'react-icons/md'
+import { MdEdit, MdDelete, MdBlock, MdEmail, MdClose, MdOpenInNew, MdCheck, MdCancel } from 'react-icons/md'
 import Tooltip from '../components/Tooltip'
 import InfoIcon from '../components/InfoIcon'
 import './Users.css'
@@ -16,6 +16,8 @@ interface User {
   created_at: string
   microsoft_id: string | null
   github_id?: string | null
+  google_id?: string | null
+  status?: string
 }
 
 interface InvitationRow {
@@ -37,6 +39,19 @@ const normalizeRole = (role: string): 'readonly' | 'write' | 'admin' => {
   return role.toLowerCase() as 'readonly' | 'write' | 'admin'
 }
 
+function getProvider(user: User): string {
+  if (user.github_id) return 'GitHub'
+  if (user.google_id) return 'Google'
+  return '–'
+}
+
+function getLinkedAccounts(user: User): ('GitHub' | 'Google')[] {
+  const a: ('GitHub' | 'Google')[] = []
+  if (user.github_id) a.push('GitHub')
+  if (user.google_id) a.push('Google')
+  return a
+}
+
 export default function Users() {
   const queryClient = useQueryClient()
   const [showInviteForm, setShowInviteForm] = useState(false)
@@ -46,6 +61,8 @@ export default function Users() {
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<'readonly' | 'write' | 'admin'>('readonly')
   const [inviteExpiresHours, setInviteExpiresHours] = useState(168)
+  const [approveModalUser, setApproveModalUser] = useState<User | null>(null)
+  const [approveRole, setApproveRole] = useState<'readonly' | 'write' | 'admin'>('readonly')
 
   // Check if current user is admin by trying to fetch users list
   // If successful, user is admin. If 403, user is not admin.
@@ -194,6 +211,38 @@ export default function Users() {
     },
   })
 
+  const approveUserMutation = useMutation({
+    mutationFn: async ({ userId, role }: { userId: string; role: 'READONLY' | 'WRITE' | 'ADMIN' }) => {
+      const response = await apiClient.post(`/users/${userId}/approve`, { role })
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      queryClient.invalidateQueries({ queryKey: ['invites'] })
+      setApproveModalUser(null)
+      setApproveRole('readonly')
+      showSuccess('Beitrittsanfrage freigegeben')
+    },
+    onError: (error: any) => {
+      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
+    },
+  })
+
+  const rejectUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const response = await apiClient.post(`/users/${userId}/reject`)
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      queryClient.invalidateQueries({ queryKey: ['invites'] })
+      showSuccess('Beitrittsanfrage abgelehnt')
+    },
+    onError: (error: any) => {
+      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
+    },
+  })
+
   const resetForm = () => {
     setFormEmail('')
     setFormRole('readonly')
@@ -256,6 +305,27 @@ export default function Users() {
     }
   }
 
+  const handleOpenApproveModal = (user: User) => {
+    setApproveModalUser(user)
+    setApproveRole('readonly')
+  }
+
+  const handleApproveUser = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!approveModalUser) return
+    approveUserMutation.mutate({ userId: approveModalUser.id, role: roleToUppercase(approveRole) })
+  }
+
+  const handleRejectUser = async (userId: string) => {
+    const confirmed = await showConfirm('Möchten Sie diese Beitrittsanfrage wirklich ablehnen?')
+    if (confirmed) {
+      rejectUserMutation.mutate(userId)
+    }
+  }
+
+  const activeUsers = (users || []).filter((u) => (u.status || 'active') === 'active')
+  const pendingUsers = (users || []).filter((u) => (u.status || 'active') === 'pending')
+
   return (
     <div className="users-page">
       <div className="users-header">
@@ -272,6 +342,36 @@ export default function Users() {
           </button>
         </div>
       </div>
+
+      {approveModalUser && (
+        <div className="users-form-card" style={{ marginBottom: '1rem' }}>
+          <div className="users-form-header">
+            <h3>Beitrittsanfrage freigeben</h3>
+            <button onClick={() => setApproveModalUser(null)} className="close-btn"><MdClose /></button>
+          </div>
+          <p style={{ marginBottom: '1rem', color: 'var(--color-text-secondary)' }}>
+            <strong>{approveModalUser.username}</strong> ({approveModalUser.email || 'keine E-Mail'}) – Rolle vergeben:
+          </p>
+          <form onSubmit={handleApproveUser}>
+            <div className="form-group">
+              <label>Rolle:</label>
+              <select
+                value={approveRole}
+                onChange={(e) => setApproveRole(e.target.value as 'readonly' | 'write' | 'admin')}
+                required
+              >
+                <option value="readonly">Readonly</option>
+                <option value="write">Write</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            <div className="form-actions">
+              <button type="submit" className="btn btn-success"><MdCheck /> Freigeben</button>
+              <button type="button" onClick={() => setApproveModalUser(null)} className="btn btn-secondary">Abbrechen</button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {(editingUser || showInviteForm) && (
         <div className="users-form-card">
@@ -381,20 +481,59 @@ export default function Users() {
         </div>
       )}
 
-      <div className="users-list-card">
-        <h3 className="users-section-title">
-          Benutzer
-          <InfoIcon content="Alle Benutzer melden sich über GitHub an. Der erste Admin wird über INITIAL_ADMIN_EMAIL festgelegt, weitere über Einladungen." />
-        </h3>
-        {isLoading ? (
-          <div className="loading-state">Laden...</div>
-        ) : users && users.length > 0 ? (
+      {pendingUsers.length > 0 && (
+        <div className="users-list-card" style={{ marginBottom: '1.5rem' }}>
+          <h3 className="users-section-title">
+            Beitrittsanfragen
+            <InfoIcon content="Nutzer haben sich per OAuth angemeldet und warten auf Freigabe. Freigeben oder Ablehnen." />
+          </h3>
           <div className="users-table-container">
             <table className="users-table">
               <thead>
                 <tr>
                   <th>Benutzername</th>
                   <th>E-Mail</th>
+                  <th>Provider</th>
+                  <th>Erstellt</th>
+                  <th>Aktionen</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingUsers.map((u) => (
+                  <tr key={u.id}>
+                    <td>{u.username}</td>
+                    <td>{u.email || '–'}</td>
+                    <td>{getProvider(u)}</td>
+                    <td>{new Date(u.created_at).toLocaleString('de-DE')}</td>
+                    <td>
+                      <div className="user-actions">
+                        <button onClick={() => handleOpenApproveModal(u)} className="btn-icon" title="Freigeben"><MdCheck /></button>
+                        <button onClick={() => handleRejectUser(u.id)} className="btn-icon btn-danger" title="Ablehnen"><MdCancel /></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <div className="users-list-card">
+        <h3 className="users-section-title">
+          Aktive Nutzer
+          <InfoIcon content="Alle Benutzer melden sich über GitHub oder Google an. Der erste Admin wird über INITIAL_ADMIN_EMAIL festgelegt, weitere über Einladungen oder Freigabe von Beitrittsanfragen." />
+        </h3>
+        {isLoading ? (
+          <div className="loading-state">Laden...</div>
+        ) : activeUsers.length > 0 ? (
+          <div className="users-table-container">
+            <table className="users-table">
+              <thead>
+                <tr>
+                  <th>Benutzername</th>
+                  <th>E-Mail</th>
+                  <th>Konten</th>
                   <th>Rolle</th>
                   <th>Status</th>
                   <th>Erstellt</th>
@@ -402,7 +541,7 @@ export default function Users() {
                 </tr>
               </thead>
               <tbody>
-                {users.map((user) => (
+                {activeUsers.map((user) => (
                   <tr key={user.id} className={user.blocked ? 'blocked' : ''}>
                     <td>
                       {user.github_id ? (
@@ -421,6 +560,17 @@ export default function Users() {
                       )}
                     </td>
                     <td>{user.email || '-'}</td>
+                    <td>
+                      <div className="account-badges">
+                        {getLinkedAccounts(user).length > 0 ? (
+                          getLinkedAccounts(user).map((p) => (
+                            <span key={p} className="badge badge-account" title={`${p} verknüpft`}>{p}</span>
+                          ))
+                        ) : (
+                          <span className="account-none">–</span>
+                        )}
+                      </div>
+                    </td>
                     <td>
                       <Tooltip content={
                         normalizeRole(user.role) === 'admin' ? 'Admin: Vollzugriff (User-Verwaltung, Einstellungen)' :
@@ -483,7 +633,7 @@ export default function Users() {
             </table>
           </div>
         ) : (
-          <div className="empty-state">Keine Benutzer gefunden</div>
+          <div className="empty-state">Keine aktiven Nutzer</div>
         )}
       </div>
 

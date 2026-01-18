@@ -124,6 +124,9 @@ GitHub OAuth + Token-Einladung:
 - `users.google_id` (optional, unique) für Google OAuth.
 - `users.avatar_url` (optional) für Profilbild von OAuth-Providern.
 
+### 009_add_user_status
+- `users.status` (String, Default `active`) für Beitrittsanfragen: `active` (voller Zugriff), `pending` (wartet auf Freigabe), `rejected` (abgelehnt, i.d.R. mit `blocked=true`). Unbekannte OAuth-Nutzer erhalten `pending` und erscheinen unter Users → Beitrittsanfragen; nach Freigabe wird `active` gesetzt.
+
 ## Wichtige Hinweise
 
 1. **Backup erstellen**: Vor dem Ausführen von Migrationen sollte ein Backup der Datenbank erstellt werden, besonders in Produktionsumgebungen.

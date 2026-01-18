@@ -1,0 +1,31 @@
+/* Gemeinsame Anpassungen für /request-sent und /request-rejected (Login-ähnliches Layout) */
+
+.request-screen-body p {
+  margin: 0 0 0.75rem;
+  color: var(--color-text-primary);
+  line-height: 1.6;
+}
+
+.request-screen-body p:last-of-type {
+  margin-bottom: 1.25rem;
+}
+
+.request-screen-body .request-note {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+.request-screen-body .login-btn {
+  text-decoration: none;
+  display: block;
+  text-align: center;
+}
+
+.login-icon--error {
+  background: linear-gradient(135deg, rgba(244, 67, 54, 0.25), rgba(211, 47, 47, 0.2)) !important;
+  box-shadow: 0 4px 20px rgba(244, 67, 54, 0.35), 0 0 0 4px rgba(244, 67, 54, 0.1) !important;
+}
+
+.login-icon--error svg {
+  color: var(--color-error, #f44336);
+}

@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from sqlmodel import Session, select
 
@@ -41,9 +41,16 @@ class UserResponse(BaseModel):
     created_at: str
     microsoft_id: Optional[str] = None
     github_id: Optional[str] = None
+    google_id: Optional[str] = None
+    status: Optional[str] = None
 
     class Config:
         from_attributes = True
+
+
+class ApproveUserRequest(BaseModel):
+    """Request-Model für Freigabe einer Beitrittsanfrage."""
+    role: UserRole = UserRole.READONLY
 
 
 class InvitationResponse(BaseModel):
@@ -98,6 +105,8 @@ async def list_users(
             created_at=user.created_at.isoformat(),
             microsoft_id=user.microsoft_id,
             github_id=user.github_id,
+            google_id=getattr(user, "google_id", None),
+            status=getattr(user, "status", "active"),
         )
         for user in users
     ]
@@ -211,6 +220,89 @@ async def get_user(
         created_at=user.created_at.isoformat(),
         microsoft_id=user.microsoft_id,
         github_id=user.github_id,
+        google_id=getattr(user, "google_id", None),
+        status=getattr(user, "status", "active"),
+    )
+
+
+@router.post("/{user_id}/approve", response_model=UserResponse)
+async def approve_user(
+    user_id: UUID,
+    request: Optional[ApproveUserRequest] = Body(None),
+    current_user: User = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> UserResponse:
+    """
+    Gibt eine Beitrittsanfrage (pending) frei. Setzt status=active, blocked=False, role aus Body (Default: readonly).
+    """
+    statement = select(User).where(User.id == user_id)
+    user = session.exec(statement).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Benutzer nicht gefunden")
+    st = getattr(user, "status", "active")
+    if st != "pending":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nur Beitrittsanfragen (pending) können freigegeben werden")
+    role = (request.role if request else None) or UserRole.READONLY
+    user.status = "active"  # type: ignore[assignment]
+    user.blocked = False
+    user.role = role
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    logger.info("Admin %s hat Beitrittsanfrage von %s freigegeben (role=%s)", current_user.username, user.username, role.value)
+    # Optional: E-Mail an Nutzer bei Freigabe
+    try:
+        from app.notifications import notify_user_approved
+        await notify_user_approved(user)
+    except Exception as e:
+        logger.warning("E-Mail an Nutzer bei Freigabe fehlgeschlagen: %s", e)
+    return UserResponse(
+        id=str(user.id),
+        username=user.username,
+        email=user.email,
+        role=user.role.value,
+        blocked=user.blocked,
+        created_at=user.created_at.isoformat(),
+        microsoft_id=user.microsoft_id,
+        github_id=user.github_id,
+        google_id=getattr(user, "google_id", None),
+        status=getattr(user, "status", "active"),
+    )
+
+
+@router.post("/{user_id}/reject", response_model=UserResponse)
+async def reject_user(
+    user_id: UUID,
+    current_user: User = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> UserResponse:
+    """
+    Lehnt eine Beitrittsanfrage (pending) ab. Setzt status=rejected, blocked=True.
+    """
+    statement = select(User).where(User.id == user_id)
+    user = session.exec(statement).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Benutzer nicht gefunden")
+    st = getattr(user, "status", "active")
+    if st != "pending":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nur Beitrittsanfragen (pending) können abgelehnt werden")
+    user.status = "rejected"  # type: ignore[assignment]
+    user.blocked = True
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    logger.info("Admin %s hat Beitrittsanfrage von %s abgelehnt", current_user.username, user.username)
+    return UserResponse(
+        id=str(user.id),
+        username=user.username,
+        email=user.email,
+        role=user.role.value,
+        blocked=user.blocked,
+        created_at=user.created_at.isoformat(),
+        microsoft_id=user.microsoft_id,
+        github_id=user.github_id,
+        google_id=getattr(user, "google_id", None),
+        status=getattr(user, "status", "active"),
     )
 
 
@@ -278,6 +370,8 @@ async def update_user(
         created_at=user.created_at.isoformat(),
         microsoft_id=user.microsoft_id,
         github_id=user.github_id,
+        google_id=getattr(user, "google_id", None),
+        status=getattr(user, "status", "active"),
     )
 
 
@@ -338,6 +432,8 @@ async def block_user(
         created_at=user.created_at.isoformat(),
         microsoft_id=user.microsoft_id,
         github_id=user.github_id,
+        google_id=getattr(user, "google_id", None),
+        status=getattr(user, "status", "active"),
     )
 
 
@@ -386,6 +482,8 @@ async def unblock_user(
         created_at=user.created_at.isoformat(),
         microsoft_id=user.microsoft_id,
         github_id=user.github_id,
+        google_id=getattr(user, "google_id", None),
+        status=getattr(user, "status", "active"),
     )
 
 

@@ -17,9 +17,82 @@ from email.mime.multipart import MIMEMultipart
 import httpx
 
 from app.config import config
-from app.models import PipelineRun, RunStatus
+from app.models import PipelineRun, RunStatus, User
 
 logger = logging.getLogger(__name__)
+
+
+async def notify_admin_join_request(user: User) -> None:
+    """
+    Benachrichtigt Admins über eine neue Beitrittsanfrage (Anklopfen).
+    Immer: Log. Bei EMAIL_ENABLED + SMTP + EMAIL_RECIPIENTS: E-Mail.
+    """
+    provider = "github" if getattr(user, "github_id", None) else ("google" if getattr(user, "google_id", None) else "?")
+    logger.warning(
+        "!!! BEITRITTSANFRAGE !!! user=%s email=%s provider=%s Bitte prüfen: Users – Beitrittsanfragen",
+        user.username,
+        user.email or "(keine)",
+        provider,
+    )
+    if not config.EMAIL_ENABLED or not config.SMTP_HOST or not config.SMTP_FROM or not config.EMAIL_RECIPIENTS:
+        return
+    try:
+        subject = f"[FastFlow] Neue Beitrittsanfrage: {user.username}"
+        body = f"""Neue Beitrittsanfrage in FastFlow.
+
+Benutzer: {user.username}
+E-Mail: {user.email or '(nicht angegeben)'}
+Provider: {provider}
+
+Bitte prüfen Sie die Beitrittsanfragen unter: Users – Beitrittsanfragen.
+"""
+        message = MIMEMultipart("alternative")
+        message["From"] = config.SMTP_FROM
+        message["To"] = ", ".join(config.EMAIL_RECIPIENTS)
+        message["Subject"] = subject
+        message.attach(MIMEText(body, "plain"))
+        smtp = aiosmtplib.SMTP(
+            hostname=config.SMTP_HOST,
+            port=config.SMTP_PORT,
+            use_tls=config.SMTP_PORT == 587,
+        )
+        await smtp.connect()
+        if config.SMTP_USER and config.SMTP_PASSWORD:
+            await smtp.login(config.SMTP_USER, config.SMTP_PASSWORD)
+        await smtp.send_message(message)
+        await smtp.quit()
+        logger.info("E-Mail-Benachrichtigung für Beitrittsanfrage %s gesendet", user.username)
+    except Exception as e:
+        logger.error("Fehler beim Senden der E-Mail für Beitrittsanfrage %s: %s", user.username, e, exc_info=True)
+
+
+async def notify_user_approved(user: User) -> None:
+    """Sendet E-Mail an Nutzer: Sie wurden freigegeben, bitte unter {FRONTEND_URL}/login anmelden."""
+    if not config.EMAIL_ENABLED or not user.email or not config.SMTP_HOST or not config.SMTP_FROM:
+        return
+    frontend = (config.FRONTEND_URL or config.BASE_URL or "http://localhost:8000").rstrip("/")
+    login_url = f"{frontend}/login"
+    subject = "[FastFlow] Sie wurden freigegeben"
+    body = f"""Hallo {user.username},
+
+Ihre Beitrittsanfrage wurde freigegeben. Sie können sich jetzt anmelden:
+
+{login_url}
+"""
+    try:
+        message = MIMEMultipart("alternative")
+        message["From"] = config.SMTP_FROM
+        message["To"] = user.email
+        message["Subject"] = subject
+        message.attach(MIMEText(body, "plain"))
+        smtp = aiosmtplib.SMTP(hostname=config.SMTP_HOST, port=config.SMTP_PORT, use_tls=config.SMTP_PORT == 587)
+        await smtp.connect()
+        if config.SMTP_USER and config.SMTP_PASSWORD:
+            await smtp.login(config.SMTP_USER, config.SMTP_PASSWORD)
+        await smtp.send_message(message)
+        await smtp.quit()
+    except Exception as e:
+        logger.warning("E-Mail an Nutzer bei Freigabe fehlgeschlagen (user=%s): %s", user.username, e)
 
 
 async def send_notifications(run: PipelineRun, status: RunStatus) -> None:

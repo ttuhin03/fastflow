@@ -80,6 +80,7 @@ Speichert Benutzer. Login via GitHub OAuth, Google OAuth (und Einladung).
 | `google_id` | String | (Optional) Google OAuth ID (unique). |
 | `avatar_url` | String | (Optional) Profilbild-URL von OAuth-Provider. |
 | `microsoft_id` | String | (Optional) für zukünftige Microsoft-Auth (unique). |
+| `status` | String | `active` (Zugriff), `pending` (Beitrittsanfrage), `rejected` (abgelehnt). Default: `active`. |
 | `created_at` | DateTime | Erstellungsdatum. |
 
 ### 6. `Invitation` (Einladungen)

@@ -11,7 +11,7 @@ Dieses Modul definiert alle SQLModel-Models für die Datenbank:
 """
 
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Literal
 from uuid import uuid4, UUID
 from enum import Enum
 from sqlmodel import SQLModel, Field, JSON, Column
@@ -241,6 +241,10 @@ class User(SQLModel, table=True):
         default=False,
         description="Ist der Benutzer blockiert?"
     )
+    status: Literal["active", "pending", "rejected"] = Field(
+        default="active",
+        description="active=Zugriff, pending=Beitrittsanfrage, rejected=abgelehnt"
+    )
     microsoft_id: Optional[str] = Field(
         default=None,
         unique=True,
@@ -262,6 +266,10 @@ class User(SQLModel, table=True):
     avatar_url: Optional[str] = Field(
         default=None,
         description="Profilbild-URL (von OAuth-Provider)"
+    )
+    status: str = Field(
+        default="active",
+        description="active (voller Zugriff) | pending (Beitrittsanfrage, wartet) | rejected (abgelehnt)"
     )
     created_at: datetime = Field(
         default_factory=datetime.utcnow,

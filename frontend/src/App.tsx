@@ -4,6 +4,8 @@ import { Toaster } from 'react-hot-toast'
 import Login from './pages/Login'
 import Invite from './pages/Invite'
 import AuthCallback from './pages/AuthCallback'
+import RequestSent from './pages/RequestSent'
+import RequestRejected from './pages/RequestRejected'
 import Dashboard from './pages/Dashboard'
 import Pipelines from './pages/Pipelines'
 import PipelineDetail from './pages/PipelineDetail'
@@ -59,6 +61,8 @@ function AppRoutes() {
       <Route path="/login" element={<Login />} />
       <Route path="/invite" element={<Invite />} />
       <Route path="/auth/callback" element={<AuthCallback />} />
+      <Route path="/request-sent" element={<RequestSent />} />
+      <Route path="/request-rejected" element={<RequestRejected />} />
       <Route
         path="/"
         element={

@@ -85,12 +85,15 @@ Die Anmeldung erfolgt **über GitHub oder Google**:
    **Dev** (Frontend :3000, Backend :8000): `FRONTEND_URL=http://localhost:3000`, `BASE_URL=http://localhost:8000`.
 
 > [!TIP]
-> Ausführliche Schritte, Einladung, Konto verknüpfen: [OAuth (GitHub & Google)](docs/oauth/README.md).
+> Ausführliche Schritte, Einladung, Konto verknüpfen, **Beitrittsanfragen**: [OAuth (GitHub & Google)](docs/oauth/README.md).
+
+**Beitrittsanfragen (Anklopfen):** Unbekannte Nutzer (ohne Einladung) können per OAuth eine Anfrage stellen. Sie erhalten **keine Session**, werden auf `/request-sent` umgeleitet und erscheinen unter **Users → Beitrittsanfragen**. Nach Freigabe durch einen Admin können sie sich normal anmelden. Abgelehnte bzw. noch wartende Nutzer landen bei erneutem OAuth-Login auf `/request-sent` bzw. `/request-rejected` (ebenfalls ohne Session).
 
 ### 📋 Zuletzt umgesetzt
 
+- **Beitrittsanfragen (Anklopfen)** – Unbekannte OAuth-Nutzer legen eine Anfrage ab (Status `pending`), erhalten keine Session und sehen `/request-sent`. Admins können unter **Users → Beitrittsanfragen** freigeben oder ablehnen. Bei Freigabe optional E-Mail an den Nutzer; bei neuer Anfrage Log + optional E-Mail an Admins (`EMAIL_RECIPIENTS`).
 - **Google OAuth** – Zweiter Login-Provider neben GitHub (Login, Einladung, Konto verknüpfen). User-Model um `google_id` und `avatar_url` erweitert.
-- **Konto verknüpfen** – In **Einstellungen → Verknüpfte Konten** können eingeloggte Nutzer GitHub und/oder Google an ihr Profil anbinden; Login dann mit beiden möglich (z.B. wenn E-Mails je Provider unterschiedlich sind).
+- **Konto verknüpfen** – In **Einstellungen → Verknüpfte Konten** können eingeloggte Nutzer GitHub und/oder Google an ihr Profil anbinden; Login dann mit beiden möglich (z.B. wenn E-Mails je Provider unterschiedlich sind). In **Users** ist sichtbar, welche Konten pro Nutzer verknüpft sind.
 - **Einladungen** – Einladungslinks lassen sich mit **GitHub oder Google** einlösen; die OAuth-E-Mail muss der Einladungs-E-Mail entsprechen.
 - **Migrationen automatisch** – Beim Container-Start führt `entrypoint.sh` zuerst `alembic upgrade head` aus, danach startet die App. Manuelles Migrieren entfällt bei `./start-docker.sh` / `docker-compose up`.
 - **OAuth-Logging** – Erfolgreiche Matches werden geloggt (`match=direct|email|link|initial_admin|invitation`, inkl. Provider und User), ebenso abgelehnte Logins und fehlgeschlagene Link-Flows. Hilfreich für Debugging: `docker-compose logs -f orchestrator | grep -E "OAuth:|initial_admin"`.
