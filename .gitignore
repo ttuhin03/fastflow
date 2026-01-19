@@ -233,3 +233,8 @@ pipelines/
 # GitHub Apps Private Key
 data/github_app_key.pem
 
+# Docusaurus (docs)
+docs/node_modules/
+docs/build/
+node_modules/
+
