@@ -361,7 +361,7 @@ export default function Settings() {
         <div className="settings-section card">
           <h3 className="section-title">
             Global Privacy & Telemetry
-            <InfoIcon content="Phase 1: Nur Fehlerberichte wirken. Phase 2: auch Nutzungsstatistiken, Session Replay, Surveys." />
+            <InfoIcon content="Phase 1: Fehlerberichte. Phase 2: Nutzungsstatistiken (Product Analytics). Session Recording (Replay) wird ausdrücklich nicht verwendet." />
           </h3>
           <div className="settings-telemetry-toggles">
             <label className="settings-telemetry-toggle">
@@ -371,7 +371,7 @@ export default function Settings() {
                 disabled={updateSystemSettingsMutation.isPending}
                 onChange={(e) => updateSystemSettingsMutation.mutate({ enable_telemetry: e.target.checked })}
               />
-              Nutzungsstatistiken (Phase 2: Product Analytics, Session Replay, Survey)
+              Nutzungsstatistiken (Product Analytics, anonym). Kein Session Recording.
             </label>
             <label className="settings-telemetry-toggle">
               <input
@@ -383,6 +383,9 @@ export default function Settings() {
               Fehlerberichte (PostHog Error-Tracking)
             </label>
           </div>
+          <p className="settings-telemetry-note">
+            Session Recording (Bildschirmaufzeichnung / Replay) wird ausdrücklich nicht verwendet.
+          </p>
         </div>
       )}
 

@@ -142,6 +142,14 @@ async def lifespan(app: FastAPI):
         logger.error(f"Fehler bei Version-Check-Initialisierung: {e}")
         # Nicht kritisch, App kann trotzdem starten
 
+    # Telemetry: instance_heartbeat täglich 03:00 UTC (Storage, RAM, CPU, total_users_bucket)
+    try:
+        from app.analytics import schedule_telemetry_heartbeat
+        schedule_telemetry_heartbeat()
+        logger.info("Telemetry instance_heartbeat geplant")
+    except Exception as e:
+        logger.warning("Telemetry Heartbeat konnte nicht geplant werden: %s", e)
+
     # PostHog Startup-Test (nur ENVIRONMENT=development): immer eine Test-Exception senden,
     # unabhängig von enable_error_reporting. Prüft, ob PostHog erreichbar ist.
     if config.ENVIRONMENT == "development":
@@ -180,7 +188,14 @@ async def lifespan(app: FastAPI):
             session.close()
     except Exception as e:
         logger.error(f"Fehler beim Graceful Shutdown: {e}")
-    
+
+    # PostHog: Flush und Shutdown (vgl. Product Analytics Installation – sauberes Beenden)
+    try:
+        from app.posthog_client import shutdown_posthog
+        shutdown_posthog()
+    except Exception as e:
+        logger.warning("PostHog Shutdown: %s", e)
+
     logger.info("Fast-Flow Orchestrator heruntergefahren")
 
 

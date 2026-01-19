@@ -134,6 +134,12 @@
   cursor: pointer;
 }
 
+.settings-telemetry-note {
+  margin-top: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary, #666);
+}
+
 .settings-actions {
   display: flex;
   flex-direction: column;

@@ -38,7 +38,7 @@ export default function SetupWizard() {
         <h2 className="setup-wizard-title">Erste Einstellungen</h2>
         <p className="setup-wizard-text">
           Fehlerberichte und Nutzungsstatistiken helfen uns, Fast-Flow zu verbessern.
-          Alles läuft anonym und sicher in der EU.
+          Alles läuft anonym und sicher in der EU. Session Recording wird nicht verwendet.
         </p>
         <p className="setup-wizard-link">
           <a href="https://posthog.com" target="_blank" rel="noopener noreferrer">Mehr zu PostHog</a>
@@ -63,7 +63,7 @@ export default function SetupWizard() {
             <span>Nutzungsstatistiken erlauben</span>
           </label>
           <p className="setup-wizard-note">
-            Das hilft unseren Entwicklern sehr – vielen Dank. Alles anonym und sicher.
+            Das hilft unseren Entwicklern sehr – vielen Dank. Alles anonym und sicher. Session Recording (Bildschirmaufzeichnung) wird ausdrücklich nicht genutzt.
           </p>
           <div className="setup-wizard-actions">
             <button type="submit" className="btn btn-primary" disabled={submitting}>

@@ -72,7 +72,7 @@ def get_distinct_id(session: Session) -> str:
 
 def _get_or_create_client(session: Session) -> Optional[Any]:
     """
-    Lazy-Init: PostHog-Client nur bei enable_error_reporting.
+    Lazy-Init: PostHog-Client bei enable_error_reporting ODER enable_telemetry.
     enable_exception_autocapture=True. Host und API-Key aus config (fest).
     """
     global _posthog_client
@@ -80,7 +80,7 @@ def _get_or_create_client(session: Session) -> Optional[Any]:
     if not config.POSTHOG_API_KEY:
         return None
     ss = get_system_settings(session)
-    if not ss.enable_error_reporting:
+    if not ss.enable_error_reporting and not ss.enable_telemetry:
         return None
 
     if _posthog_client is not None:
@@ -90,7 +90,7 @@ def _get_or_create_client(session: Session) -> Optional[Any]:
         from posthog import Posthog
 
         _posthog_client = Posthog(
-            config.POSTHOG_API_KEY,
+            project_api_key=config.POSTHOG_API_KEY,
             host=config.POSTHOG_HOST,
             enable_exception_autocapture=True,
         )
@@ -104,8 +104,21 @@ def _get_or_create_client(session: Session) -> Optional[Any]:
         return None
 
 
+def get_posthog_client_for_telemetry(session: Session) -> Optional[Any]:
+    """
+    Gibt den PostHog-Client für Product Analytics (Telemetrie) zurück.
+    Nur wenn enable_telemetry=True und API-Key gesetzt. Init erfolgt via _get_or_create_client.
+    """
+    if not config.POSTHOG_API_KEY:
+        return None
+    ss = get_system_settings(session)
+    if not ss.enable_telemetry:
+        return None
+    return _get_or_create_client(session)
+
+
 def shutdown_posthog() -> None:
-    """Shutdown und Referenz auf None. Nach enable_error_reporting=False aufrufen."""
+    """Flush und Shutdown des PostHog-Clients. Bei enable_error_reporting=False oder beim App-Exit aufrufen."""
     global _posthog_client
     if _posthog_client is not None:
         try:
@@ -127,6 +140,9 @@ def capture_exception(
     """
     if properties is None:
         properties = {}
+    ss = get_system_settings(session)
+    if not ss.enable_error_reporting:
+        return
     client = _get_or_create_client(session)
     if client is None:
         return
@@ -148,7 +164,7 @@ def capture_startup_test_exception() -> None:
     try:
         from posthog import Posthog
 
-        ph = Posthog(config.POSTHOG_API_KEY, host=config.POSTHOG_HOST)
+        ph = Posthog(project_api_key=config.POSTHOG_API_KEY, host=config.POSTHOG_HOST)
         exc = RuntimeError(
             "Fast-Flow Startup-Test: Test-Exception für PostHog (ENVIRONMENT=development). "
             "Kein echter Fehler – nur Verifikation. $fastflow_startup_test=True."
@@ -170,9 +186,5 @@ def capture_startup_test_exception() -> None:
         logger.warning("PostHog Startup-Test übersprungen: %s", e)
 
 
-def track_event(_event_name: str, _properties: Dict[str, Any], _session: Session) -> None:
-    """
-    Stub für Phase 2 (Product Analytics, pipeline_run_started).
-    In Phase 1: keine Aktion.
-    """
-    return
+# track_event wird von app.analytics bereitgestellt (Phase 2).
+# Stub hier entfernt; Analytics-Modul nutzt get_posthog_client_for_telemetry.

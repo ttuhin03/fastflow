@@ -37,6 +37,7 @@ import docker
 from docker.errors import DockerException, APIError, ImageNotFound
 from sqlmodel import Session, select, update
 
+from app.analytics import track_pipeline_run_finished, track_pipeline_run_started
 from app.config import config
 from app.models import Pipeline, PipelineRun, RunStatus
 from app.pipeline_discovery import DiscoveredPipeline, get_pipeline
@@ -333,7 +334,12 @@ async def run_pipeline(
         session.add(run)
         session.commit()
         session.refresh(run)
-        
+
+        try:
+            track_pipeline_run_started(session, name, triggered_by, pipeline.has_requirements)
+        except Exception:
+            pass
+
         # Container-Start in Hintergrund-Task (Session wird intern erstellt)
         asyncio.create_task(
             _run_container_task(
@@ -665,6 +671,15 @@ async def _run_container_task(
         
         session.add(run)
         session.commit()
+
+        if exit_code_value == 0:
+            dur = (run.finished_at - run.started_at).total_seconds() if run.finished_at and run.started_at else None
+            try:
+                track_pipeline_run_finished(
+                    session, pipeline.name, "SUCCESS", run.triggered_by, dur, pipeline.has_requirements
+                )
+            except Exception:
+                pass
         
         # Pipeline-Statistiken aktualisieren (atomar)
         await _update_pipeline_stats(pipeline.name, exit_code_value == 0, session, triggered_by=run.triggered_by)
