@@ -328,7 +328,7 @@ async def _pre_heat_pipeline(pipeline_name: str, requirements_path: Path, sessio
         # uv pip compile ausführen (lädt alle Pakete in Cache)
         cmd = ["uv", "pip", "compile", str(requirements_path)]
         
-        exit_code, stdout, stderr = await asyncio.get_event_loop().run_in_executor(
+        result = await asyncio.get_event_loop().run_in_executor(
             _executor,
             lambda: subprocess.run(
                 cmd,
@@ -339,8 +339,8 @@ async def _pre_heat_pipeline(pipeline_name: str, requirements_path: Path, sessio
             )
         )
         
-        if exit_code != 0:
-            error_msg = f"Pre-Heating fehlgeschlagen für {pipeline_name}: {stderr}"
+        if result.returncode != 0:
+            error_msg = f"Pre-Heating fehlgeschlagen für {pipeline_name}: {result.stderr or ''}"
             logger.warning(error_msg)
             return (False, error_msg)
         
@@ -370,6 +370,44 @@ async def _pre_heat_pipeline(pipeline_name: str, requirements_path: Path, sessio
         error_msg = f"Fehler beim Pre-Heating für {pipeline_name}: {e}"
         logger.error(error_msg)
         return (False, error_msg)
+
+
+async def run_pre_heat_at_startup() -> None:
+    """
+    UV Pre-Heating beim API-Start (Hintergrund-Task).
+    
+    Wenn UV_PRE_HEAT aktiviert ist: für jede Pipeline mit requirements.txt
+    wird `uv pip compile` ausgeführt (lädt alle Pakete in den Cache).
+    Läuft asynchron, blockiert den App-Start nicht.
+    """
+    if not config.UV_PRE_HEAT:
+        return
+    try:
+        discovered = discover_pipelines(force_refresh=True)
+        with_req = [p for p in discovered if p.has_requirements]
+        if not with_req:
+            logger.debug("Keine Pipelines mit requirements.txt für Pre-Heating beim Start")
+            return
+        logger.info("Starte UV Pre-Heating beim Start für %d Pipeline(s)", len(with_req))
+        from app.database import get_session
+        session_gen = get_session()
+        session = next(session_gen)
+        try:
+            ok, fail = 0, 0
+            for p in with_req:
+                req = p.path / "requirements.txt"
+                if not req.exists():
+                    continue
+                success, _ = await _pre_heat_pipeline(p.name, req, session)
+                if success:
+                    ok += 1
+                else:
+                    fail += 1
+            logger.info("UV Pre-Heating beim Start abgeschlossen: %d ok, %d fehlgeschlagen", ok, fail)
+        finally:
+            session.close()
+    except Exception as e:
+        logger.warning("UV Pre-Heating beim Start fehlgeschlagen: %s", e)
 
 
 async def sync_pipelines(

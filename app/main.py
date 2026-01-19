@@ -153,6 +153,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("Telemetry Heartbeat konnte nicht geplant werden: %s", e)
 
+    # UV Pre-Heating beim Start (wenn UV_PRE_HEAT): uv pip compile für alle requirements.txt
+    try:
+        from app.git_sync import run_pre_heat_at_startup
+        asyncio.create_task(run_pre_heat_at_startup())
+        logger.info("UV Pre-Heating beim Start geplant (Hintergrund)")
+    except Exception as e:
+        logger.warning("UV Pre-Heating beim Start konnte nicht gestartet werden: %s", e)
+
     # PostHog Startup-Test (nur ENVIRONMENT=development): immer eine Test-Exception senden,
     # unabhängig von enable_error_reporting. Prüft, ob PostHog erreichbar ist.
     if config.ENVIRONMENT == "development":

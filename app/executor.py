@@ -64,6 +64,18 @@ _metrics_queues: Dict[UUID, asyncio.Queue] = {}
 # Pre-Heating-Locks (pro Pipeline-Name)
 _pre_heating_locks: Dict[str, asyncio.Lock] = {}
 
+# Marker für setup_duration: wird vor main.py ausgegeben, in Logs/SSE herausgefiltert
+SETUP_READY_MARKER = "FASTFLOW_SETUP_READY"
+
+# Wrapper-Code für -c: print(Marker), dann main.py via runpy (CWD, sys.argv, __main__)
+_SETUP_READY_WRAPPER = (
+    "print('FASTFLOW_SETUP_READY', flush=True); "
+    "import os, sys, runpy; "
+    "os.chdir('/app'); "
+    "sys.argv = ['main.py']; "
+    "runpy.run_path('/app/main.py', run_name='__main__')"
+)
+
 
 def init_docker_client() -> None:
     """
@@ -478,6 +490,7 @@ async def _run_container_task(
                 _executor,
                 lambda: client.containers.run(**container_config)
             )
+            setup_start = time.time()  # Ende: wenn SETUP_READY_MARKER im Log erscheint
             logger.info(f"Container {container.id[:12]} erfolgreich gestartet für Run {run_id}")
         except APIError as e:
             # Infrastructure-Fehler: Docker-Proxy blockiert Request
@@ -501,8 +514,9 @@ async def _run_container_task(
         # WICHTIG: Log-Streaming SOFORT starten, damit keine Logs verloren gehen
         # Laut IMPLEMENTATION_PLAN sollen Logs während des gesamten Container-Laufs gestreamt werden
         logger.debug(f"Starte Log-Streaming für Run {run_id}")
+        first_log_event = asyncio.Event()
         log_task = asyncio.create_task(
-            _stream_logs(container, log_file_path, log_queue, run_id)
+            _stream_logs(container, log_file_path, log_queue, run_id, first_log_event)
         )
         
         logger.debug(f"Starte Metrics-Monitoring für Run {run_id}")
@@ -518,18 +532,16 @@ async def _run_container_task(
             )
         )
         
-        # UV-Version erfassen (aus Container) - parallel zu Log-Streaming
-        uv_version = await _get_uv_version(container)
+        # UV-Version parallel, setup_duration = Zeit Container-Start bis SETUP_READY_MARKER
+        uv_version_task = asyncio.create_task(_get_uv_version(container))
+        try:
+            await asyncio.wait_for(first_log_event.wait(), timeout=60.0)
+            setup_duration = time.time() - setup_start
+        except asyncio.TimeoutError:
+            setup_duration = None
+
+        uv_version = await uv_version_task
         run.uv_version = uv_version
-        session.add(run)
-        session.commit()
-        
-        # Setup-Duration messen (Zeit für uv-Setup)
-        setup_start = time.time()
-        # Warte kurz auf erste Logs (uv-Setup)
-        await asyncio.sleep(1)
-        setup_duration = time.time() - setup_start
-        
         run.setup_duration = setup_duration
         session.add(run)
         session.commit()
@@ -852,17 +864,13 @@ def _build_container_command(pipeline: DiscoveredPipeline) -> List[str]:
     """
     if pipeline.has_requirements:
         requirements_path = "/app/requirements.txt"
-        main_py_path = "/app/main.py"
         return [
             "uv", "run",
             "--with-requirements", requirements_path,
-            # Python unbuffered mode: -u Flag für sofortige Ausgabe
-            "python", "-u", main_py_path
+            "python", "-u", "-c", _SETUP_READY_WRAPPER
         ]
     else:
-        main_py_path = "/app/main.py"
-        # Python unbuffered mode: -u Flag für sofortige Ausgabe
-        return ["uv", "run", "python", "-u", main_py_path]
+        return ["uv", "run", "python", "-u", "-c", _SETUP_READY_WRAPPER]
 
 
 async def _get_uv_version(container: docker.models.containers.Container) -> Optional[str]:
@@ -894,7 +902,8 @@ async def _stream_logs(
     container: docker.models.containers.Container,
     log_file_path: Path,
     log_queue: asyncio.Queue,
-    run_id: UUID
+    run_id: UUID,
+    first_log_event: Optional[asyncio.Event] = None
 ) -> None:
     """
     Streamt Logs aus Container und schreibt sie in Datei und Queue.
@@ -904,6 +913,7 @@ async def _stream_logs(
         log_file_path: Pfad zur Log-Datei
         log_queue: Queue für SSE-Streaming
         run_id: Run-ID
+        first_log_event: Optional; wird gesetzt wenn SETUP_READY_MARKER erscheint (für setup_duration)
     """
     import aiofiles
     
@@ -962,6 +972,11 @@ async def _stream_logs(
                     
                     # Nur schreiben wenn Zeile nicht leer ist
                     if log_line:
+                        # SETUP_READY_MARKER: nur für setup_duration, nicht in Log/SSE
+                        if log_line.strip() == SETUP_READY_MARKER:
+                            if first_log_event is not None:
+                                first_log_event.set()
+                            continue
                         if not first_log_received:
                             logger.info(f"Erste Log-Zeile für Run {run_id} empfangen: {log_line[:100]}")
                             first_log_received = True
@@ -1010,19 +1025,23 @@ async def _stream_logs(
                     log_line = line_buffer.decode("utf-8", errors="replace").rstrip()
                 
                 if log_line:
-                    timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-                    log_line_with_timestamp = f"[{timestamp}] {log_line}"
-                    await log_file.write(log_line_with_timestamp + "\n")
-                    await log_file.flush()
-                    try:
-                        log_queue.put_nowait(log_line_with_timestamp)
-                    except asyncio.QueueFull:
+                    if log_line.strip() == SETUP_READY_MARKER:
+                        if first_log_event is not None:
+                            first_log_event.set()
+                    else:
+                        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+                        log_line_with_timestamp = f"[{timestamp}] {log_line}"
+                        await log_file.write(log_line_with_timestamp + "\n")
+                        await log_file.flush()
                         try:
-                            log_queue.get_nowait()
                             log_queue.put_nowait(log_line_with_timestamp)
-                        except asyncio.QueueEmpty:
-                            pass
-                    line_count += 1
+                        except asyncio.QueueFull:
+                            try:
+                                log_queue.get_nowait()
+                                log_queue.put_nowait(log_line_with_timestamp)
+                            except asyncio.QueueEmpty:
+                                pass
+                        line_count += 1
         
     except asyncio.CancelledError:
         # Task wurde abgebrochen (normal bei Container-Ende)
