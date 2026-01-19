@@ -228,7 +228,7 @@ data/uv_cache/
 .env
 
 # Pipelines (wird als Volume gemountet)
-pipelines/
+/pipelines/
 
 # GitHub Apps Private Key
 data/github_app_key.pem

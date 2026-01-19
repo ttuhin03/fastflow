@@ -1,0 +1,163 @@
+---
+sidebar_position: 4
+---
+
+# pipeline.json – Referenz
+
+Optionale Metadaten-Datei für Resource-Limits, Timeout, Retries, Beschreibung, Tags und Environment-Variablen.
+
+**Dateinamen:** `pipeline.json` (bevorzugt) oder `{pipeline_name}.json` (z.B. `data_processor.json`).
+
+## JSON-Format (Beispiel)
+
+```json
+{
+  "cpu_hard_limit": 1.0,
+  "mem_hard_limit": "1g",
+  "cpu_soft_limit": 0.8,
+  "mem_soft_limit": "800m",
+  "timeout": 3600,
+  "retry_attempts": 3,
+  "description": "Prozessiert täglich eingehende Daten",
+  "tags": ["data-processing", "daily"],
+  "enabled": true,
+  "default_env": {
+    "LOG_LEVEL": "INFO",
+    "DEBUG": "false"
+  }
+}
+```
+
+## Felder
+
+### Resource-Limits
+
+| Feld | Standard | Beschreibung |
+|------|----------|--------------|
+| `cpu_hard_limit` | – | CPU-Limit in Kernen (z.B. `0.5`, `1.0`, `2.0`). **Strikt** durchgesetzt (Throttling). |
+| `mem_hard_limit` | – | RAM (z.B. `"512m"`, `"1g"`, `"2g"`). **OOM-Kill** bei Überschreitung. |
+| `cpu_soft_limit` | – | CPU-Schwelle nur für **Monitoring/Warnungen** in der UI, keine Limitierung. |
+| `mem_soft_limit` | – | RAM-Schwelle nur für **Monitoring/Warnungen** in der UI, keine Limitierung. |
+
+### Pipeline-Konfiguration
+
+| Feld | Typ | Beschreibung |
+|------|-----|--------------|
+| `timeout` | Integer, optional | Timeout in Sekunden (überschreibt globales `CONTAINER_TIMEOUT`). |
+| `retry_attempts` | Integer, optional | Anzahl Retries bei Fehlern (überschreibt globales `RETRY_ATTEMPTS`). |
+| `retry_strategy` | Object, optional | Wartezeit-Strategie zwischen Retries. Siehe [Retry-Strategien](#retry-strategien). |
+| `enabled` | Boolean, optional | Pipeline aktiviert/deaktiviert (Standard: `true`). |
+
+### Webhooks
+
+| Feld | Beschreibung |
+|------|--------------|
+| `webhook_key` | Webhook-Schlüssel (String). Wenn gesetzt und nicht leer: Pipeline per `POST /api/webhooks/{pipeline_name}/{webhook_key}` auslösbar. **Nicht setzen oder leer** = Webhooks deaktiviert. |
+
+### Dokumentation
+
+| Feld | Typ | Beschreibung |
+|------|-----|--------------|
+| `description` | String, optional | Beschreibung, wird in der UI angezeigt. |
+| `tags` | Array[String], optional | Tags für Kategorisierung/Filterung. |
+
+### Environment-Variablen
+
+| Feld | Typ | Beschreibung |
+|------|-----|--------------|
+| `default_env` | Object, optional | Default-Env-Vars bei jedem Run. Werden mit UI-Env-Vars zusammengeführt (UI hat Vorrang). **Secrets nicht hier** – über [Secrets-Management](/docs/deployment/CONFIGURATION) in der UI. |
+
+### Retry-Strategien
+
+`retry_strategy` steuert, **wie lange** vor jedem erneuten Versuch gewartet wird. Ohne `retry_strategy` gilt ein fester Standardabstand (z.B. 60 s).
+
+| `type` | Zusatzfelder | Beschreibung |
+|--------|--------------|--------------|
+| `exponential_backoff` | `initial_delay`, `max_delay`, `multiplier` | Wartezeit wächst: `initial_delay * (multiplier ^ Versuch)`, begrenzt auf `max_delay`. Geeignet für instabile APIs. |
+| `fixed_delay` | `delay` | Immer dieselbe Wartezeit (Sekunden). Geeignet für interne Dienste. |
+| `custom_schedule` | `delays` | Liste von Wartezeiten in Sekunden, ein Wert pro Retry (z.B. `[60, 300, 3600]`). |
+
+**Beispiel: Exponential Backoff**
+
+```json
+{
+  "retry_attempts": 3,
+  "retry_strategy": {
+    "type": "exponential_backoff",
+    "initial_delay": 60,
+    "max_delay": 3600,
+    "multiplier": 2.0
+  }
+}
+```
+
+**Beispiel: Fixed Delay**
+
+```json
+{
+  "retry_attempts": 3,
+  "retry_strategy": {
+    "type": "fixed_delay",
+    "delay": 120
+  }
+}
+```
+
+**Beispiel: Custom Schedule**
+
+```json
+{
+  "retry_attempts": 3,
+  "retry_strategy": {
+    "type": "custom_schedule",
+    "delays": [60, 300, 3600]
+  }
+}
+```
+
+---
+
+## Webhooks: Pipeline per HTTP auslösen
+
+Wenn `webhook_key` in `pipeline.json` gesetzt ist, kann die Pipeline per **HTTP POST** getriggert werden:
+
+- **Endpoint:** `POST /api/webhooks/{pipeline_name}/{webhook_key}`
+- **Body:** optional (z.B. `{}` oder leer). Ein Body mit `{"webhook_key": "..."}` ist **nicht** nötig – der Schlüssel steht im Pfad.
+- **Antwort:** 200 mit Run-Infos; 401 bei falschem Key, 404 wenn Pipeline nicht existiert oder Webhooks deaktiviert.
+
+Beispiel:
+
+```bash
+curl -X POST "https://deine-instanz.de/api/webhooks/data_sync/mein-geheimer-key"
+```
+
+Die Webhook-URL (mit deinem Schlüssel) wird in der Pipeline-Detailansicht der UI angezeigt und kann dort kopiert werden. **`webhook_key` geheim halten** – jeder mit der URL kann die Pipeline starten.
+
+---
+
+## Verhalten
+
+- **Hard Limits:** Werden als Docker-Limits gesetzt.  
+  - Memory-Überschreitung → OOM-Kill (Exit-Code 137).  
+  - CPU → Throttling.
+- **Soft Limits:** Nur Überwachung, keine Limitierung; Überschreitung erscheint im Frontend als Warnung.
+- **Fehlende Metadaten:** Globale/Standard-Limits werden genutzt (falls konfiguriert).
+- **Timeout & Retry:** Pipeline-Werte überschreiben die globale Konfiguration.
+
+## Minimales Beispiel
+
+```json
+{
+  "cpu_hard_limit": 2.0,
+  "mem_hard_limit": "2g",
+  "cpu_soft_limit": 1.5,
+  "mem_soft_limit": "1.5g"
+}
+```
+
+## Siehe auch
+
+- [Pipelines – Übersicht](/docs/pipelines/uebersicht)
+- [Erweiterte Pipelines](/docs/pipelines/erweiterte-pipelines) – Webhooks, Best Practices
+- [API](/docs/api/api) – Webhook-Endpoint `POST /api/webhooks/{pipeline_name}/{webhook_key}`
+- [Konfiguration](/docs/deployment/CONFIGURATION) – globale Limits, `CONTAINER_TIMEOUT`, `RETRY_ATTEMPTS`
