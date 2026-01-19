@@ -20,7 +20,11 @@ from app.database import get_session
 from app.models import PipelineRun, User
 from app.executor import get_metrics_queue
 from app.auth import get_current_user
+from app.errors import get_500_detail
 
+import logging
+
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/runs", tags=["metrics"])
 
 
@@ -86,9 +90,10 @@ async def get_run_metrics(
         return JSONResponse(content=metrics)
         
     except Exception as e:
+        logger.exception("Fehler beim Lesen der Metrics-Datei")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Fehler beim Lesen der Metrics-Datei: {str(e)}"
+            detail=get_500_detail(e),
         )
 
 

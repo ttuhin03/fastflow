@@ -9,14 +9,16 @@ Dieses Modul enthält alle REST-API-Endpoints für Git-Synchronisation:
 from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import JSONResponse, RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlmodel import Session
 from datetime import datetime
 import json
+import logging
 import urllib.parse
 import requests
 
 from app.database import get_session
+from app.errors import get_500_detail
 from app.git_sync import sync_pipelines, get_sync_status, get_sync_logs, test_github_app_token
 from app.config import config
 from app.auth import require_write, get_current_user
@@ -34,12 +36,13 @@ from app.github_oauth import (
     delete_oauth_state
 )
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/sync", tags=["sync"])
 
 
 class SyncRequest(BaseModel):
     """Request-Model für Git-Sync."""
-    branch: Optional[str] = None
+    branch: Optional[str] = Field(default=None, min_length=1, max_length=255, description="Git-Branch (z.B. main)")
 
 
 @router.post("", response_model=Dict[str, Any])
@@ -406,11 +409,14 @@ async def github_installation_callback(
 
 
 @router.delete("/github-config", response_model=Dict[str, Any])
-async def delete_github_config_endpoint() -> Dict[str, Any]:
+async def delete_github_config_endpoint(
+    current_user: User = Depends(require_write),
+) -> Dict[str, Any]:
     """
     Löscht GitHub Apps Konfiguration.
     
     Entfernt Private Key Datei und Environment-Variablen.
+    Erfordert Write-Rechte.
     
     Returns:
         Dictionary mit Bestätigung
@@ -424,9 +430,10 @@ async def delete_github_config_endpoint() -> Dict[str, Any]:
         }
         
     except Exception as e:
+        logger.exception("Fehler beim Löschen der GitHub Config")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Fehler beim Löschen der GitHub Config: {str(e)}"
+            detail=get_500_detail(e),
         )
 
 

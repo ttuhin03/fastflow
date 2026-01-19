@@ -155,6 +155,12 @@
   font-weight: 500;
 }
 
+.env-vars-note {
+  font-size: 0.85rem;
+  color: #888;
+  margin: 0 0 0.75rem 0;
+}
+
 .env-vars,
 .parameters {
   display: flex;

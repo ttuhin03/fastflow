@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import apiClient from '../api/client'
+import { showError } from '../utils/toast'
 
 interface AuthContextType {
   isAuthenticated: boolean
@@ -26,13 +27,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const role = response.data.role?.toLowerCase() as 'readonly' | 'write' | 'admin'
       setUserRole(role || 'readonly')
     } catch (error: any) {
-      // Wenn Session abgelaufen ist, wird der Interceptor in client.ts
-      // automatisch den User ausloggen und zur Login-Seite weiterleiten
       setUserRole(null)
-      // Wenn es ein 401-Fehler ist, wird der Token bereits vom Interceptor entfernt
-      if (error?.response?.status === 401) {
-        setIsAuthenticated(false)
-        setToken(null)
+      setIsAuthenticated(false)
+      setToken(null)
+      // Interceptor behandelt 401 (Redirect, Token-Entfernung). Bei anderen Fehlern Hinweis anzeigen.
+      if (error?.response?.status !== 401) {
+        showError('Sitzung konnte nicht geladen werden. Bitte erneut anmelden.')
       }
     }
   }

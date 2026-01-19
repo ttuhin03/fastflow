@@ -3,212 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
 import apiClient from '../api/client'
 import { showError, showSuccess } from '../utils/toast'
+import { LineChart } from '../components/LineChart'
+import { RunEnvSection } from '../components/RunEnvSection'
 import './RunDetail.css'
-
-interface LineChartProps {
-  data: Metric[]
-  valueKey: 'cpu_percent' | 'ram_mb'
-  maxValue: number
-  color: string
-  warningColor: string
-  softLimit?: number
-  hardLimit?: number
-}
-
-function LineChart({ data, valueKey, maxValue, color, warningColor, softLimit, hardLimit }: LineChartProps) {
-  const svgRef = useRef<SVGSVGElement>(null)
-  const [dimensions, setDimensions] = useState({ width: 800, height: 200 })
-
-  useEffect(() => {
-    const updateDimensions = () => {
-      if (svgRef.current) {
-        const container = svgRef.current.parentElement
-        if (container) {
-          setDimensions({
-            width: container.clientWidth || 800,
-            height: 200,
-          })
-        }
-      }
-    }
-    updateDimensions()
-    window.addEventListener('resize', updateDimensions)
-    return () => window.removeEventListener('resize', updateDimensions)
-  }, [])
-
-  if (data.length === 0) {
-    return <div className="no-chart-data">Keine Daten verfügbar</div>
-  }
-
-  const width = dimensions.width
-  const height = dimensions.height
-  const padding = { top: 20, right: 20, bottom: 30, left: 50 }
-  const chartWidth = width - padding.left - padding.right
-  const chartHeight = height - padding.top - padding.bottom
-
-  // Berechne Punkte für die Linie
-  const points = data.map((metric, index) => {
-    const value = metric[valueKey] ?? 0
-    const x = padding.left + (index / (data.length - 1 || 1)) * chartWidth
-    const y = padding.top + chartHeight - (value / maxValue) * chartHeight
-    return { x, y, value, metric, index }
-  })
-
-  // Erstelle SVG-Pfad für die Linie
-  const pathData = points
-    .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
-    .join(' ')
-
-  // Erstelle Bereich unter der Linie (für Füllung)
-  const areaPath = `${pathData} L ${points[points.length - 1].x} ${padding.top + chartHeight} L ${points[0].x} ${padding.top + chartHeight} Z`
-
-  return (
-    <div className="line-chart-container">
-      <svg ref={svgRef} width={width} height={height} className="line-chart">
-        {/* Grid-Linien */}
-        <defs>
-          <linearGradient id="areaGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor={color} stopOpacity="0.3" />
-            <stop offset="100%" stopColor={color} stopOpacity="0.05" />
-          </linearGradient>
-        </defs>
-        
-        {/* Y-Achse Grid */}
-        {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
-          const y = padding.top + chartHeight - ratio * chartHeight
-          const value = ratio * maxValue
-          return (
-            <g key={ratio}>
-              <line
-                x1={padding.left}
-                y1={y}
-                x2={width - padding.right}
-                y2={y}
-                stroke="#444"
-                strokeWidth="1"
-                strokeDasharray="2,2"
-              />
-              <text
-                x={padding.left - 10}
-                y={y + 4}
-                fill="#888"
-                fontSize="10"
-                textAnchor="end"
-              >
-                {valueKey === 'cpu_percent' ? `${value.toFixed(0)}%` : `${value.toFixed(0)}`}
-              </text>
-            </g>
-          )
-        })}
-
-        {/* Füllung unter der Linie */}
-        <path d={areaPath} fill="url(#areaGradient)" />
-
-        {/* Hard Limit Linie */}
-        {hardLimit !== undefined && hardLimit > 0 && hardLimit <= maxValue && (
-          <g>
-            <line
-              x1={padding.left}
-              y1={padding.top + chartHeight - (hardLimit / maxValue) * chartHeight}
-              x2={width - padding.right}
-              y2={padding.top + chartHeight - (hardLimit / maxValue) * chartHeight}
-              stroke="#f44336"
-              strokeWidth="2"
-              strokeDasharray="4,4"
-              opacity="0.8"
-            />
-            <text
-              x={width - padding.right + 5}
-              y={padding.top + chartHeight - (hardLimit / maxValue) * chartHeight + 4}
-              fill="#f44336"
-              fontSize="10"
-              fontWeight="600"
-            >
-              Hard Limit: {valueKey === 'cpu_percent' ? `${hardLimit.toFixed(0)}%` : `${hardLimit.toFixed(0)} MB`}
-            </text>
-          </g>
-        )}
-
-        {/* Soft Limit Linie */}
-        {softLimit !== undefined && softLimit > 0 && softLimit <= maxValue && (
-          <g>
-            <line
-              x1={padding.left}
-              y1={padding.top + chartHeight - (softLimit / maxValue) * chartHeight}
-              x2={width - padding.right}
-              y2={padding.top + chartHeight - (softLimit / maxValue) * chartHeight}
-              stroke="#ff9800"
-              strokeWidth="2"
-              strokeDasharray="3,3"
-              opacity="0.8"
-            />
-            <text
-              x={width - padding.right + 5}
-              y={padding.top + chartHeight - (softLimit / maxValue) * chartHeight + 4}
-              fill="#ff9800"
-              fontSize="10"
-              fontWeight="600"
-            >
-              Soft Limit: {valueKey === 'cpu_percent' ? `${softLimit.toFixed(0)}%` : `${softLimit.toFixed(0)} MB`}
-            </text>
-          </g>
-        )}
-
-        {/* Hauptlinie */}
-        <path
-          d={pathData}
-          fill="none"
-          stroke={color}
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-
-        {/* Punkte und Warnungen */}
-        {points.map((point) => {
-          const isWarning = point.metric.soft_limit_exceeded
-          return (
-            <g key={point.index}>
-              <circle
-                cx={point.x}
-                cy={point.y}
-                r={isWarning ? 5 : 3}
-                fill={isWarning ? warningColor : color}
-                stroke="#1a1a1a"
-                strokeWidth="1"
-              />
-              <title>
-                {new Date(point.metric.timestamp).toLocaleTimeString()}: {point.value.toFixed(1)}{valueKey === 'cpu_percent' ? '%' : ' MB'}
-                {isWarning && ' (Soft-Limit überschritten)'}
-              </title>
-            </g>
-          )
-        })}
-
-        {/* X-Achse Labels (nur erste, mittlere und letzte) */}
-        {points.length > 1 && (
-          <>
-            {[0, Math.floor(points.length / 2), points.length - 1].map((idx) => {
-              const point = points[idx]
-              return (
-                <text
-                  key={idx}
-                  x={point.x}
-                  y={height - padding.bottom + 20}
-                  fill="#888"
-                  fontSize="10"
-                  textAnchor="middle"
-                >
-                  {new Date(point.metric.timestamp).toLocaleTimeString()}
-                </text>
-              )
-            })}
-          </>
-        )}
-      </svg>
-    </div>
-  )
-}
 
 interface Run {
   id: string
@@ -255,8 +52,8 @@ export default function RunDetail() {
   const logsEndRef = useRef<HTMLDivElement>(null)
   const [logs, setLogs] = useState<string[]>([])
   const [metrics, setMetrics] = useState<Metric[]>([])
-  const eventSourceRef = useRef<EventSource | null>(null)
-  const metricsEventSourceRef = useRef<EventSource | null>(null)
+  const logStreamAbortRef = useRef<AbortController | null>(null)
+  const metricsStreamAbortRef = useRef<AbortController | null>(null)
   const [logReconnectAttempts, setLogReconnectAttempts] = useState(0)
   const [metricsReconnectAttempts, setMetricsReconnectAttempts] = useState(0)
   const [logConnectionStatus, setLogConnectionStatus] = useState<'connected' | 'disconnected' | 'reconnecting'>('connected')
@@ -378,23 +175,19 @@ export default function RunDetail() {
     },
   })
 
-  // Log-Streaming mit SSE (mit Re-Connect-Handling)
+  // Log-Streaming mit SSE via fetch (Authorization-Header, kein Token in URL)
   useEffect(() => {
     if (!run || activeTab !== 'logs') {
-      // Cleanup wenn Tab gewechselt wird
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close()
-        eventSourceRef.current = null
-      }
+      logStreamAbortRef.current?.abort()
+      logStreamAbortRef.current = null
       return
     }
 
     const isRunning = run.status === 'RUNNING' || run.status === 'PENDING'
     let reconnectTimeout: ReturnType<typeof setTimeout> | null = null
     const MAX_RECONNECT_ATTEMPTS = 5
-    const RECONNECT_DELAY = 3000 // 3 Sekunden
-    
-    // Lade historische Logs nur für abgeschlossene Runs
+    const RECONNECT_DELAY = 3000
+
     const loadHistoricalLogs = async () => {
       try {
         const response = await apiClient.get(`/runs/${runId}/logs?tail=1000`, { responseType: 'text' })
@@ -405,214 +198,188 @@ export default function RunDetail() {
         setLogs([])
       }
     }
-    
+
     const connectLogStream = () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close()
-      }
-      
+      logStreamAbortRef.current?.abort()
+      const ctrl = new AbortController()
+      logStreamAbortRef.current = ctrl
+
       setLogConnectionStatus('reconnecting')
-      // EventSource unterstützt keine Custom Headers
-      // Daher Token als Query-Parameter übergeben
       const token = sessionStorage.getItem('auth_token')
       if (!token) {
         console.error('Kein Auth-Token gefunden, kann Log-Stream nicht verbinden')
         setLogConnectionStatus('disconnected')
         return
       }
-      
-      // Konstruiere URL - baseURL enthält bereits /api, daher direkt anhängen
+
       const baseURL = apiClient.defaults.baseURL || 'http://localhost:8000/api'
-      // Token als Query-Parameter hinzufügen (URL-encoded)
-      const streamURL = `${baseURL}/runs/${runId}/logs/stream?token=${encodeURIComponent(token)}`
-      console.log('Connecting to log stream:', streamURL.replace(token, '[TOKEN]')) // Token in Log ausblenden
-      
-      const eventSource = new EventSource(streamURL)
-      eventSourceRef.current = eventSource
+      const url = `${baseURL}/runs/${runId}/logs/stream`
 
-      eventSource.onopen = () => {
-        console.log('Log stream connected, readyState:', eventSource.readyState)
-        setLogConnectionStatus('connected')
-        setLogReconnectAttempts(0)
-      }
-
-      eventSource.onmessage = (event) => {
-        setLogConnectionStatus('connected')
-        // Ignoriere Keep-Alive-Nachrichten
-        if (event.data.trim() === '' || event.data.startsWith(':')) {
-          return
-        }
+      ;(async () => {
         try {
-          const data = JSON.parse(event.data)
-          if (data.line) {
-            console.log('Received log line:', data.line.substring(0, 100))
-            setLogs((prev) => {
-              // Verhindere Duplikate
-              if (prev.length > 0 && prev[prev.length - 1] === data.line) {
-                return prev
+          const res = await fetch(url, {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: ctrl.signal,
+          })
+          if (!res.ok) throw new Error(res.statusText)
+          setLogConnectionStatus('connected')
+          setLogReconnectAttempts(0)
+          const reader = res.body!.getReader()
+          const dec = new TextDecoder()
+          let buf = ''
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            buf += dec.decode(value, { stream: true })
+            for (;;) {
+              const i = buf.indexOf('\n\n')
+              if (i === -1) break
+              const block = buf.slice(0, i).trimEnd()
+              buf = buf.slice(i + 2)
+              if (block.startsWith('data: ')) {
+                const payload = block.slice(6)
+                try {
+                  const data = JSON.parse(payload)
+                  if (data.line) {
+                    setLogs((prev) => {
+                      if (prev.length > 0 && prev[prev.length - 1] === data.line) return prev
+                      return [...prev, data.line]
+                    })
+                  } else if (data.error) console.error('Log stream error from server:', data.error)
+                } catch {
+                  if (payload) setLogs((prev) => [...prev, payload])
+                }
               }
-              return [...prev, data.line]
-            })
-          } else if (data.error) {
-            console.error('Log stream error from server:', data.error)
+            }
           }
-        } catch (e) {
-          // Fallback: Direkt als Text behandeln
-          if (event.data && !event.data.startsWith(':')) {
-            console.log('Received log line (fallback):', event.data.substring(0, 100))
-            setLogs((prev) => {
-              if (prev.length > 0 && prev[prev.length - 1] === event.data) {
-                return prev
-              }
-              return [...prev, event.data]
-            })
-          }
-        }
-      }
-
-      eventSource.onerror = (error) => {
-        console.error('Log stream error:', error)
-        console.log('EventSource readyState:', eventSource.readyState)
-        // readyState: 0 = CONNECTING, 1 = OPEN, 2 = CLOSED
-        if (eventSource.readyState === EventSource.CLOSED) {
           setLogConnectionStatus('disconnected')
-          eventSource.close()
-          
-          // Re-Connect versuchen nur wenn noch nicht zu viele Versuche
           if (logReconnectAttempts < MAX_RECONNECT_ATTEMPTS && isRunning) {
             reconnectTimeout = setTimeout(() => {
               setLogReconnectAttempts((prev) => prev + 1)
-              console.log(`Reconnecting log stream (attempt ${logReconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})`)
+              connectLogStream()
+            }, RECONNECT_DELAY)
+          }
+        } catch (e: unknown) {
+          if ((e as { name?: string })?.name === 'AbortError') return
+          console.error('Log stream error:', e)
+          setLogConnectionStatus('disconnected')
+          logStreamAbortRef.current = null
+          if (logReconnectAttempts < MAX_RECONNECT_ATTEMPTS && isRunning) {
+            reconnectTimeout = setTimeout(() => {
+              setLogReconnectAttempts((prev) => prev + 1)
               connectLogStream()
             }, RECONNECT_DELAY)
           }
         }
-      }
+      })()
     }
-    
+
     if (isRunning) {
-      // Für laufende Runs: Lade zuerst vorhandene Logs, dann starte Stream
-      // Das Backend sendet alle vorhandenen Logs aus der Queue beim Connect
-      console.log('Starting log stream for running run')
-      setLogs([]) // Leere Logs zuerst
+      setLogs([])
       connectLogStream()
-      
       return () => {
         if (reconnectTimeout) clearTimeout(reconnectTimeout)
-        if (eventSourceRef.current) {
-          console.log('Closing log stream')
-          eventSourceRef.current.close()
-          eventSourceRef.current = null
-        }
+        logStreamAbortRef.current?.abort()
+        logStreamAbortRef.current = null
       }
     } else {
-      // Für abgeschlossene Runs: Lade Logs aus Datei
-      console.log('Loading historical logs for finished run')
       loadHistoricalLogs()
     }
   }, [runId, run, activeTab, logReconnectAttempts])
 
-  // Metrics-Streaming mit SSE (mit Re-Connect-Handling)
+  // Metrics-Streaming mit SSE via fetch (Authorization-Header, kein Token in URL)
   useEffect(() => {
-    if (!run || activeTab !== 'metrics') return
+    if (!run || activeTab !== 'metrics') {
+      metricsStreamAbortRef.current?.abort()
+      metricsStreamAbortRef.current = null
+      return
+    }
 
     const isRunning = run.status === 'RUNNING' || run.status === 'PENDING'
     let reconnectTimeout: ReturnType<typeof setTimeout> | null = null
     const MAX_RECONNECT_ATTEMPTS = 5
-    const RECONNECT_DELAY = 3000 // 3 Sekunden
-    
+    const RECONNECT_DELAY = 3000
+
     const connectMetricsStream = () => {
-      if (metricsEventSourceRef.current) {
-        metricsEventSourceRef.current.close()
-      }
-      
+      metricsStreamAbortRef.current?.abort()
+      const ctrl = new AbortController()
+      metricsStreamAbortRef.current = ctrl
+
       setMetricsConnectionStatus('reconnecting')
-      // EventSource unterstützt keine Custom Headers
-      // Daher Token als Query-Parameter übergeben
       const token = sessionStorage.getItem('auth_token')
       if (!token) {
         console.error('Kein Auth-Token gefunden, kann Metrics-Stream nicht verbinden')
         setMetricsConnectionStatus('disconnected')
         return
       }
-      
-      // Konstruiere URL - baseURL enthält bereits /api, daher direkt anhängen
+
       const baseURL = apiClient.defaults.baseURL || 'http://localhost:8000/api'
-      // Token als Query-Parameter hinzufügen (URL-encoded)
-      const streamURL = `${baseURL}/runs/${runId}/metrics/stream?token=${encodeURIComponent(token)}`
-      console.log('Connecting to metrics stream:', streamURL.replace(token, '[TOKEN]')) // Token in Log ausblenden
-      
-      const eventSource = new EventSource(streamURL)
-      metricsEventSourceRef.current = eventSource
+      const url = `${baseURL}/runs/${runId}/metrics/stream`
 
-      eventSource.onopen = () => {
-        console.log('Metrics stream connected, readyState:', eventSource.readyState)
-        setMetricsConnectionStatus('connected')
-        setMetricsReconnectAttempts(0)
-      }
-
-      eventSource.onmessage = (event) => {
-        setMetricsConnectionStatus('connected')
-        // Ignoriere Keep-Alive-Nachrichten
-        if (event.data.trim() === '' || event.data.startsWith(':')) {
-          return
-        }
+      ;(async () => {
         try {
-          const metric = JSON.parse(event.data)
-          if (metric.timestamp) {
-            setMetrics((prev) => [...prev, metric])
-          } else if (metric.error) {
-            console.error('Metrics stream error from server:', metric.error)
+          const res = await fetch(url, {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: ctrl.signal,
+          })
+          if (!res.ok) throw new Error(res.statusText)
+          setMetricsConnectionStatus('connected')
+          setMetricsReconnectAttempts(0)
+          const reader = res.body!.getReader()
+          const dec = new TextDecoder()
+          let buf = ''
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            buf += dec.decode(value, { stream: true })
+            for (;;) {
+              const i = buf.indexOf('\n\n')
+              if (i === -1) break
+              const block = buf.slice(0, i).trimEnd()
+              buf = buf.slice(i + 2)
+              if (block.startsWith('data: ')) {
+                try {
+                  const metric = JSON.parse(block.slice(6))
+                  if (metric.timestamp) setMetrics((prev) => [...prev, metric])
+                  else if (metric.error) console.error('Metrics stream error from server:', metric.error)
+                } catch (e) {
+                  console.error('Fehler beim Parsen der Metrics:', e)
+                }
+              }
+            }
           }
-        } catch (e) {
-          console.error('Fehler beim Parsen der Metrics:', e)
-        }
-      }
-
-      eventSource.onerror = (error) => {
-        console.error('Metrics stream error:', error)
-        console.log('EventSource readyState:', eventSource.readyState)
-        // readyState: 0 = CONNECTING, 1 = OPEN, 2 = CLOSED
-        if (eventSource.readyState === EventSource.CLOSED) {
           setMetricsConnectionStatus('disconnected')
-          eventSource.close()
-          
-          // Re-Connect versuchen nur wenn noch nicht zu viele Versuche
           if (metricsReconnectAttempts < MAX_RECONNECT_ATTEMPTS && isRunning) {
             reconnectTimeout = setTimeout(() => {
               setMetricsReconnectAttempts((prev) => prev + 1)
-              console.log(`Reconnecting metrics stream (attempt ${metricsReconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})`)
+              connectMetricsStream()
+            }, RECONNECT_DELAY)
+          }
+        } catch (e: unknown) {
+          if ((e as { name?: string })?.name === 'AbortError') return
+          console.error('Metrics stream error:', e)
+          setMetricsConnectionStatus('disconnected')
+          metricsStreamAbortRef.current = null
+          if (metricsReconnectAttempts < MAX_RECONNECT_ATTEMPTS && isRunning) {
+            reconnectTimeout = setTimeout(() => {
+              setMetricsReconnectAttempts((prev) => prev + 1)
               connectMetricsStream()
             }, RECONNECT_DELAY)
           }
         }
-      }
+      })()
     }
-    
+
     if (isRunning) {
-      // Für laufende Runs: Starte Metrics-Stream
-      console.log('Starting metrics stream for running run')
-      setMetrics([]) // Leere Metrics zuerst
+      setMetrics([])
       connectMetricsStream()
-      
       return () => {
         if (reconnectTimeout) clearTimeout(reconnectTimeout)
-        if (metricsEventSourceRef.current) {
-          console.log('Closing metrics stream')
-          metricsEventSourceRef.current.close()
-          metricsEventSourceRef.current = null
-        }
+        metricsStreamAbortRef.current?.abort()
+        metricsStreamAbortRef.current = null
       }
     } else if (run.metrics_file) {
-      // Metrics aus Datei laden für abgeschlossene Runs
-      apiClient
-        .get(`/runs/${runId}/metrics`)
-        .then((response) => {
-          setMetrics(response.data)
-        })
-        .catch((error) => {
-          console.error('Fehler beim Laden der Metrics:', error)
-        })
+      apiClient.get(`/runs/${runId}/metrics`).then((r) => setMetrics(r.data)).catch((e) => console.error('Fehler beim Laden der Metrics:', e))
     }
   }, [runId, run, activeTab, metricsReconnectAttempts])
 
@@ -863,45 +630,10 @@ export default function RunDetail() {
       )}
 
       {activeTab === 'env' && (
-        <div className="env-container">
-          {Object.keys(run.env_vars || {}).length > 0 ? (
-            <div className="run-info-card">
-              <h3>Environment-Variablen</h3>
-              <div className="env-vars">
-                {Object.entries(run.env_vars).map(([key, value]) => (
-                  <div key={key} className="env-var">
-                    <span className="env-key">{key}:</span>
-                    <span className="env-value">{value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="run-info-card">
-              <p className="no-env-vars">Keine Environment-Variablen gesetzt</p>
-            </div>
-          )}
-
-          {Object.keys(run.parameters || {}).length > 0 && (
-            <div className="run-info-card">
-              <h3>Parameter</h3>
-              <div className="parameters">
-                {Object.entries(run.parameters).map(([key, value]) => (
-                  <div key={key} className="parameter">
-                    <span className="param-key">{key}:</span>
-                    <span className="param-value">{value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {Object.keys(run.env_vars || {}).length === 0 && Object.keys(run.parameters || {}).length === 0 && (
-            <div className="run-info-card">
-              <p className="no-env-vars">Keine Environment-Variablen oder Parameter gesetzt</p>
-            </div>
-          )}
-        </div>
+        <RunEnvSection
+          envVars={run.env_vars || {}}
+          parameters={run.parameters || {}}
+        />
       )}
 
       {activeTab === 'metrics' && (

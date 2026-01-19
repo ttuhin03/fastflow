@@ -7,7 +7,8 @@ Dieses Modul enthält alle REST-API-Endpoints für Pipeline-Management:
 - Pipeline-Statistiken abrufen/zurücksetzen
 """
 
-from typing import List, Optional, Dict, Any
+from collections import defaultdict
+from typing import List, Optional, Dict, Any, Tuple
 from uuid import UUID
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -66,6 +67,87 @@ class DailyStat(BaseModel):
 class DailyStatsResponse(BaseModel):
     """Response-Model für tägliche Pipeline-Statistiken."""
     daily_stats: List[DailyStat]
+
+
+def _parse_date_range(
+    start_date: Optional[str],
+    end_date: Optional[str],
+    days: int,
+) -> Tuple[datetime, datetime]:
+    """Berechnet (start_dt, end_dt) aus Parametern. Wirft HTTPException bei ungültigem Format."""
+    if start_date and end_date:
+        try:
+            start_dt = datetime.fromisoformat(start_date)
+            end_dt = datetime.fromisoformat(end_date)
+            end_dt = end_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+            if start_dt > end_dt:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Startdatum muss vor Enddatum liegen",
+                )
+            return start_dt, end_dt
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Ungültiges Datumsformat. Erwartet: YYYY-MM-DD",
+            )
+    if start_date:
+        try:
+            start_dt = datetime.fromisoformat(start_date)
+            return start_dt, datetime.utcnow()
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Ungültiges Datumsformat. Erwartet: YYYY-MM-DD",
+            )
+    if end_date:
+        try:
+            end_dt = datetime.fromisoformat(end_date)
+            end_dt = end_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+            return end_dt - timedelta(days=days), end_dt
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Ungültiges Datumsformat. Erwartet: YYYY-MM-DD",
+            )
+    now = datetime.utcnow()
+    end_dt = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+    start_dt = (now - timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)
+    return start_dt, end_dt
+
+
+def _aggregate_runs_to_daily_stats(
+    runs: List[PipelineRun],
+    include_run_ids: bool = False,
+) -> List[DailyStat]:
+    """Gruppiert Runs nach Datum und gibt DailyStat-Liste zurück."""
+    daily_data: Dict[str, Dict] = defaultdict(lambda: {"total": 0, "successful": 0, "failed": 0, "run_ids": []})
+    for run in runs:
+        date_str = run.started_at.date().isoformat()
+        daily_data[date_str]["total"] += 1
+        if include_run_ids:
+            daily_data[date_str]["run_ids"].append(str(run.id))
+        if run.status == RunStatus.SUCCESS:
+            daily_data[date_str]["successful"] += 1
+        elif run.status == RunStatus.FAILED:
+            daily_data[date_str]["failed"] += 1
+    result: List[DailyStat] = []
+    for date_str in sorted(daily_data.keys()):
+        d = daily_data[date_str]
+        total = d["total"]
+        success_rate = (d["successful"] / total * 100.0) if total > 0 else 0.0
+        run_ids = (d["run_ids"][:10] or None) if include_run_ids else None
+        result.append(
+            DailyStat(
+                date=date_str,
+                total_runs=total,
+                successful_runs=d["successful"],
+                failed_runs=d["failed"],
+                success_rate=success_rate,
+                run_ids=run_ids,
+            )
+        )
+    return result
 
 
 @router.get("", response_model=List[PipelineResponse])
@@ -380,114 +462,15 @@ async def get_pipeline_daily_stats(
             detail=f"Pipeline nicht gefunden: {name}"
         )
     
-    # Datum-Bereich bestimmen
-    if start_date and end_date:
-        try:
-            start_dt = datetime.fromisoformat(start_date)
-            end_dt = datetime.fromisoformat(end_date)
-            # End-Datum auf Ende des Tages setzen (23:59:59)
-            end_dt = end_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
-            if start_dt > end_dt:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Startdatum muss vor Enddatum liegen"
-                )
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Ungültiges Datumsformat. Erwartet: YYYY-MM-DD"
-            )
-    elif start_date:
-        try:
-            start_dt = datetime.fromisoformat(start_date)
-            end_dt = datetime.utcnow()
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Ungültiges Datumsformat. Erwartet: YYYY-MM-DD"
-            )
-    elif end_date:
-        try:
-            end_dt = datetime.fromisoformat(end_date)
-            # End-Datum auf Ende des Tages setzen
-            end_dt = end_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
-            start_dt = end_dt - timedelta(days=days)
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Ungültiges Datumsformat. Erwartet: YYYY-MM-DD"
-            )
-    else:
-        # Standard: Letzte N Tage
-        # Setze end_dt auf Ende des heutigen Tages (23:59:59.999999) in UTC
-        # um sicherzustellen, dass alle Runs von heute erfasst werden
-        now = datetime.utcnow()
-        end_dt = now.replace(hour=23, minute=59, second=59, microsecond=999999)
-        start_dt = (now - timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)
-    
-    # Query: Alle Runs im Zeitraum abrufen
+    start_dt, end_dt = _parse_date_range(start_date, end_date, days)
     stmt = (
         select(PipelineRun)
         .where(PipelineRun.pipeline_name == name)
         .where(PipelineRun.started_at >= start_dt)
         .where(PipelineRun.started_at <= end_dt)
     )
-    
     runs = session.exec(stmt).all()
-    
-    # Debug: Log heute's Datum und Anzahl gefundener Runs
-    from datetime import date as date_type
-    from collections import defaultdict
-    import logging
-    logger = logging.getLogger(__name__)
-    today_utc = date_type.today()  # UTC date
-    logger.info(f"Daily stats for {name}: Found {len(runs)} runs, today UTC: {today_utc}, start_dt: {start_dt}, end_dt: {end_dt}")
-    
-    # In Python nach Datum gruppieren und aggregieren
-    daily_data = defaultdict(lambda: {"total": 0, "successful": 0, "failed": 0, "run_ids": []})
-    
-    for run in runs:
-        # Datum extrahieren (nur Datum, ohne Zeit) - UTC-Datum verwenden
-        # started_at ist bereits in UTC gespeichert
-        run_date = run.started_at.date()
-        date_str = run_date.isoformat()
-        
-        # Debug: Log Runs von heute
-        if run_date == today_utc:
-            logger.info(f"Today's run found: {run.id}, status: {run.status}, started_at: {run.started_at}")
-        
-        # Zähle ALLE Runs, unabhängig vom Status (auch RUNNING/PENDING)
-        daily_data[date_str]["total"] += 1
-        daily_data[date_str]["run_ids"].append(str(run.id))  # Speichere Run-ID
-        if run.status == RunStatus.SUCCESS:
-            daily_data[date_str]["successful"] += 1
-        elif run.status == RunStatus.FAILED:
-            daily_data[date_str]["failed"] += 1
-        # RUNNING und PENDING Runs werden als "total" gezählt, aber nicht als successful/failed
-    
-    # In DailyStat-Objekte umwandeln und sortieren
-    daily_stats = []
-    for date_str in sorted(daily_data.keys()):
-        data = daily_data[date_str]
-        total = data["total"]
-        successful = data["successful"]
-        failed = data["failed"]
-        run_ids = data["run_ids"][:10]  # Max 10 Run-IDs für Tooltip (Performance)
-        
-        # Erfolgsrate berechnen
-        success_rate = 0.0
-        if total > 0:
-            success_rate = (successful / total) * 100.0
-        
-        daily_stats.append(DailyStat(
-            date=date_str,
-            total_runs=total,
-            successful_runs=successful,
-            failed_runs=failed,
-            success_rate=success_rate,
-            run_ids=run_ids if run_ids else None
-        ))
-    
+    daily_stats = _aggregate_runs_to_daily_stats(runs, include_run_ids=True)
     return DailyStatsResponse(daily_stats=daily_stats)
 
 
@@ -584,106 +567,12 @@ async def get_all_pipelines_daily_stats(
     Returns:
         Tägliche Statistiken mit Erfolgsraten für alle Pipelines kombiniert
     """
-    # Datum-Bereich bestimmen
-    if start_date and end_date:
-        try:
-            start_dt = datetime.fromisoformat(start_date)
-            end_dt = datetime.fromisoformat(end_date)
-            end_dt = end_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
-            if start_dt > end_dt:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Startdatum muss vor Enddatum liegen"
-                )
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Ungültiges Datumsformat. Erwartet: YYYY-MM-DD"
-            )
-    elif start_date:
-        try:
-            start_dt = datetime.fromisoformat(start_date)
-            end_dt = datetime.utcnow()
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Ungültiges Datumsformat. Erwartet: YYYY-MM-DD"
-            )
-    elif end_date:
-        try:
-            end_dt = datetime.fromisoformat(end_date)
-            end_dt = end_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
-            start_dt = end_dt - timedelta(days=days)
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Ungültiges Datumsformat. Erwartet: YYYY-MM-DD"
-            )
-    else:
-        # Standard: Letzte N Tage
-        # Setze end_dt auf Ende des heutigen Tages (23:59:59.999999) in UTC
-        # um sicherzustellen, dass alle Runs von heute erfasst werden
-        now = datetime.utcnow()
-        end_dt = now.replace(hour=23, minute=59, second=59, microsecond=999999)
-        start_dt = (now - timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)
-    
-    # Query: Alle Runs im Zeitraum abrufen (alle Pipelines)
+    start_dt, end_dt = _parse_date_range(start_date, end_date, days)
     stmt = (
         select(PipelineRun)
         .where(PipelineRun.started_at >= start_dt)
         .where(PipelineRun.started_at <= end_dt)
     )
-    
     runs = session.exec(stmt).all()
-    
-    # Debug: Log heute's Datum und Anzahl gefundener Runs
-    from datetime import date as date_type
-    from collections import defaultdict
-    import logging
-    logger = logging.getLogger(__name__)
-    today_utc = date_type.today()  # UTC date
-    logger.info(f"All pipelines daily stats: Found {len(runs)} runs, today UTC: {today_utc}, start_dt: {start_dt}, end_dt: {end_dt}")
-    
-    # In Python nach Datum gruppieren und aggregieren
-    daily_data = defaultdict(lambda: {"total": 0, "successful": 0, "failed": 0})
-    
-    for run in runs:
-        # Datum extrahieren (nur Datum, ohne Zeit) - UTC-Datum verwenden
-        # started_at ist bereits in UTC gespeichert
-        run_date = run.started_at.date()
-        date_str = run_date.isoformat()
-        
-        # Debug: Log Runs von heute
-        if run_date == today_utc:
-            logger.info(f"Today's run found: {run.id}, pipeline: {run.pipeline_name}, status: {run.status}, started_at: {run.started_at}")
-        
-        # Zähle ALLE Runs, unabhängig vom Status (auch RUNNING/PENDING)
-        daily_data[date_str]["total"] += 1
-        if run.status == RunStatus.SUCCESS:
-            daily_data[date_str]["successful"] += 1
-        elif run.status == RunStatus.FAILED:
-            daily_data[date_str]["failed"] += 1
-        # RUNNING und PENDING Runs werden als "total" gezählt, aber nicht als successful/failed
-    
-    # In DailyStat-Objekte umwandeln und sortieren
-    daily_stats = []
-    for date_str in sorted(daily_data.keys()):
-        data = daily_data[date_str]
-        total = data["total"]
-        successful = data["successful"]
-        failed = data["failed"]
-        
-        # Erfolgsrate berechnen
-        success_rate = 0.0
-        if total > 0:
-            success_rate = (successful / total) * 100.0
-        
-        daily_stats.append(DailyStat(
-            date=date_str,
-            total_runs=total,
-            successful_runs=successful,
-            failed_runs=failed,
-            success_rate=success_rate
-        ))
-    
+    daily_stats = _aggregate_runs_to_daily_stats(runs, include_run_ids=False)
     return DailyStatsResponse(daily_stats=daily_stats)

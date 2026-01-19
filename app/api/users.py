@@ -17,7 +17,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from sqlmodel import Session, select
 
 from app.auth import get_current_user, require_admin, delete_all_user_sessions
@@ -48,6 +48,23 @@ class UserResponse(BaseModel):
     class Config:
         from_attributes = True
 
+    @classmethod
+    def from_user(cls, user: "User") -> "UserResponse":
+        """Erstellt UserResponse aus einem User-Model."""
+        return cls(
+            id=str(user.id),
+            username=user.username,
+            email=user.email,
+            role=user.role.value,
+            blocked=user.blocked,
+            created_at=user.created_at.isoformat(),
+            microsoft_id=user.microsoft_id,
+            github_id=user.github_id,
+            github_login=getattr(user, "github_login", None),
+            google_id=user.google_id,
+            status=getattr(user, "status", "active"),
+        )
+
 
 class ApproveUserRequest(BaseModel):
     """Request-Model für Freigabe einer Beitrittsanfrage."""
@@ -74,7 +91,7 @@ class InviteUserRequest(BaseModel):
     """Request-Model für Benutzer-Einladung."""
     email: EmailStr
     role: UserRole = UserRole.READONLY
-    expires_hours: int = 168  # Standard: 7 Tage
+    expires_hours: int = Field(default=168, ge=1, le=8760)  # 1h–1 Jahr
 
 
 @router.get("", response_model=List[UserResponse])
