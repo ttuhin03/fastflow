@@ -98,6 +98,7 @@ Die Anmeldung erfolgt **über GitHub oder Google**:
 - **Migrationen automatisch** – Beim Container-Start führt `entrypoint.sh` zuerst `alembic upgrade head` aus, danach startet die App. Manuelles Migrieren entfällt bei `./start-docker.sh` / `docker-compose up`.
 - **OAuth-Logging** – Erfolgreiche Matches werden geloggt (`match=direct|email|link|initial_admin|invitation`, inkl. Provider und User), ebenso abgelehnte Logins und fehlgeschlagene Link-Flows. Hilfreich für Debugging: `docker-compose logs -f orchestrator | grep -E "OAuth:|initial_admin"`.
 - **Dokumentation** – OAuth-Doku in `docs/oauth/` (README, GITHUB.md, GOOGLE.md); `docs/GITHUB_OAUTH.md` entfernt.
+- **Error-Tracking & Telemetrie (PostHog)** – Phase 1: Fehlerberichte (Backend + Frontend) an PostHog Cloud EU. First-Run-Wizard für Admins, Einstellungen → Global Privacy & Telemetry. Anonym (UUID), Scrubbing, URL/Path in Backend-Fehlern. Details: [docs/telemetry/README.md](docs/telemetry/README.md).
 
 ---
 
@@ -347,6 +348,7 @@ Der Orchestrator kommuniziert mit dem Proxy über `http://docker-proxy:2375` sta
 - **[Docker Socket Proxy](docs/deployment/DOCKER_PROXY.md)** - Sicherheitsarchitektur und Proxy-Konfiguration
 - **[API-Dokumentation](docs/api/API.md)** - Vollständige API-Referenz
 - **[Frontend-Dokumentation](docs/frontend/FRONTEND.md)** - Frontend-Komponenten und Seiten
+- **[Error-Tracking & Telemetrie (PostHog)](docs/telemetry/README.md)** - Fehlerberichte, First-Run-Wizard, Einstellungen, CSP
 
 ## 📦 Versioning & Releases
 
