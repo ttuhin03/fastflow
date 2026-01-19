@@ -39,17 +39,7 @@ const config: Config = {
           sidebarPath: './sidebars.ts',
           editUrl: 'https://github.com/ttuhin03/fastflow/tree/main/docs/',
         },
-        blog: {
-          showReadingTime: true,
-          feedOptions: {
-            type: ['rss', 'atom'],
-            xslt: true,
-          },
-          editUrl: 'https://github.com/ttuhin03/fastflow/tree/main/docs/',
-          onInlineTags: 'warn',
-          onInlineAuthors: 'warn',
-          onUntruncatedBlogPosts: 'warn',
-        },
+        blog: false, // erstmal deaktiviert
         theme: {
           customCss: './src/css/custom.css',
         },
@@ -65,7 +55,7 @@ const config: Config = {
         hashed: true,
         language: ['de'],
         indexDocs: true,
-        indexBlog: true,
+        indexBlog: false,
       },
     ],
   ],
@@ -88,7 +78,6 @@ const config: Config = {
           position: 'left',
           label: 'Doku',
         },
-        {to: '/blog', label: 'Blog', position: 'left'},
         {
           href: 'https://github.com/ttuhin03/fastflow',
           label: 'GitHub',
@@ -112,7 +101,6 @@ const config: Config = {
         {
           title: 'Mehr',
           items: [
-            {label: 'Blog', to: '/blog'},
             {label: 'GitHub', href: 'https://github.com/ttuhin03/fastflow'},
             {label: 'Disclaimer', to: '/docs/disclaimer'},
           ],

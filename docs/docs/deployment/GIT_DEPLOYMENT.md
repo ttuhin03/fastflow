@@ -10,7 +10,7 @@ In Fast-Flow ist dein **Git-Repository die einzige Wahrheit**. Es gibt keinen "U
 
 ## Die alte Welt (Airflow, Dagster, Mage)
 
-- **Image-Hell:**** Jede Code-Änderung erfordert oft einen neuen Docker-Build (5–10 Minuten).
+- **Image-Hell:** Jede Code-Änderung erfordert oft einen neuen Docker-Build (5–10 Minuten).
 - **Sidecar-Chaos:** Git-Sync-Sidecars oder S3-Buckets, um DAGs zu verteilen.
 - **Version-Gap:** UI und Git-Repository sind oft nicht im Einklang.
 

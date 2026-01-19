@@ -49,6 +49,20 @@ Ausführlich: [OAuth (GitHub & Google)](/docs/oauth/readme).
 - **Pfad:** `PIPELINES_DIR` in `.env` muss auf das richtige Verzeichnis zeigen (Volume oder geklontes Repo).
 - **Git-Sync:** Bei Git-Sync nach Änderungen einen manuellen Sync auslösen oder auf den nächsten Auto-Sync warten.
 
+**Sync/Webhook: Pipeline erscheint nach Push nicht**
+
+- **Auto-Sync:** `AUTO_SYNC_ENABLED=true` und `AUTO_SYNC_INTERVAL` prüfen; nach Push ggf. bis zum nächsten Lauf warten oder **manuellen Sync** in der UI auslösen.
+- **Webhook:** Webhook-URL in GitHub/GitLab etc. korrekt eingetragen? Repo-URL und `GIT_BRANCH` in `.env` stimmen mit dem gepushten Branch überein.
+- **Manueller Sync:** In der UI Sync ausführen und Logs/Fehlermeldungen prüfen.
+
+## `pipeline.json`-Fehler (ungültiges JSON)
+
+Wenn die UI Fehler zu den Pipeline-Metadaten anzeigt:
+
+- **Syntax:** `pipeline.json` (oder `{pipeline_name}.json`) muss gültiges JSON sein. Typische Fehler: fehlende Klammer, **trailing comma** (z.B. `"tags": ["a", ]`), Anführungszeichen um Keys.
+- **Prüfen:** `python3 -c "import json; json.load(open('pipelines/meine_pipeline/pipeline.json'))"` – liefert keine Ausgabe bei gültigem JSON, sonst Fehlermeldung mit Zeile/Position.
+- **Fallback:** Datei vorübergehend umbenennen oder löschen; Fast-Flow läuft auch ohne `pipeline.json` (alle Metadaten optional).
+
 ## Run schlägt mit Exit-Code 137 fehl
 
 - **Häufig:** Out-of-Memory (OOM). Der Container wurde vom System beendet.

@@ -49,6 +49,16 @@ uvicorn app.main:app --reload
 # Frontend (in anderem Terminal): cd frontend && npm run dev
 ```
 
+**Optional – Schnelltest mit minimaler Pipeline:** Ordner `pipelines/hello/` anlegen und `main.py` mit folgendem Inhalt (Standard `PIPELINES_DIR` ist `./pipelines`):
+
+```python
+# pipelines/hello/main.py
+if __name__ == "__main__":
+    print("Hello from Fast-Flow!")
+```
+
+Nach Neustart des Backends erscheint die Pipeline in der UI; lokal testen mit `uv run main.py` (im Ordner `pipelines/hello/`).
+
 ## Login (GitHub OAuth, Google OAuth)
 
 1. **GitHub:** OAuth-App (Settings → Developer settings → OAuth Apps), Callback `{BASE_URL}/api/auth/github/callback`.  
