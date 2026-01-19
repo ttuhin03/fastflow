@@ -7,6 +7,13 @@ Dieses Modul definiert gemeinsame Fixtures für alle Tests:
 - Test-Session
 """
 
+import os
+
+# OAuth für Tests: mind. ein Provider vollständig; HTTP-Verifizierung überspringen
+os.environ.setdefault("GITHUB_CLIENT_ID", "test-github-client-id")
+os.environ.setdefault("GITHUB_CLIENT_SECRET", "test-github-client-secret")
+os.environ["SKIP_OAUTH_VERIFICATION"] = "1"
+
 import pytest
 from pathlib import Path
 from sqlmodel import SQLModel, create_engine, Session

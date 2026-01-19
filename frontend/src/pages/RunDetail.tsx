@@ -741,14 +741,14 @@ export default function RunDetail() {
         <div className="info-row">
           <span className="info-label">Gestartet:</span>
           <span className="info-value">
-            {new Date(run.started_at).toLocaleString('de-DE')}
+            {new Date(run.started_at).toLocaleString('de-DE', { timeZone: 'UTC' })} UTC
           </span>
         </div>
         {run.finished_at && (
           <div className="info-row">
             <span className="info-label">Beendet:</span>
             <span className="info-value">
-              {new Date(run.finished_at).toLocaleString('de-DE')}
+              {new Date(run.finished_at).toLocaleString('de-DE', { timeZone: 'UTC' })} UTC
             </span>
           </div>
         )}

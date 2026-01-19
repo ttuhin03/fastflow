@@ -13,9 +13,14 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+import os
+
+import httpx
+
 from app.config import config
 from app.database import init_db
-import os
+from app.github_oauth_user import GITHUB_ACCESS_TOKEN_URL
+from app.google_oauth_user import GOOGLE_TOKEN_URL
 
 # Logger konfigurieren
 logging.basicConfig(
@@ -66,6 +71,9 @@ async def lifespan(app: FastAPI):
     
     # Sicherheits-Validierungen beim Start
     _validate_security_config()
+    
+    # OAuth-Validierung: mind. ein Provider muss vollständig sein; Konfiguration wird verifiziert
+    await _validate_oauth_config()
     
     # Verzeichnisse erstellen
     config.ensure_directories()
@@ -244,6 +252,141 @@ def _validate_security_config() -> None:
         else:
             # In Entwicklung: Nur warnen
             logger.error("⚠️  In Produktion würden diese Fehler die App am Start verhindern.")
+
+
+async def _validate_oauth_config() -> None:
+    """
+    Prüft, dass mindestens ein OAuth-Provider (GitHub oder Google) vollständig
+    konfiguriert ist, und verifiziert die Credentials beim jeweiligen Anbieter.
+
+    - Vollständig = CLIENT_ID und CLIENT_SECRET gesetzt.
+    - Verifizierung: Token-Request mit Dummy-Code; erwartet wird
+      „falscher Code“ (Credentials ok), nicht „falsche Credentials“.
+
+    Raises:
+        RuntimeError: Wenn kein Provider vollständig ist oder eine
+            Verifizierung fehlschlägt (ungültige Credentials, Netzwerk, etc.).
+    """
+    has_github = bool(config.GITHUB_CLIENT_ID and config.GITHUB_CLIENT_SECRET)
+    has_google = bool(config.GOOGLE_CLIENT_ID and config.GOOGLE_CLIENT_SECRET)
+
+    if not has_github and not has_google:
+        raise RuntimeError(
+            "OAuth ist nicht konfiguriert: Es muss mindestens einer der folgenden "
+            "Provider vollständig gesetzt sein (jeweils CLIENT_ID und CLIENT_SECRET).\n"
+            "  - GitHub: GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET\n"
+            "  - Google:  GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET\n"
+            "Siehe .env.example und docs/oauth/."
+        )
+
+    base = (config.BASE_URL or "http://localhost:8000").rstrip("/")
+
+    if config.SKIP_OAUTH_VERIFICATION:
+        logger.info("OAuth-HTTP-Verifizierung übersprungen (SKIP_OAUTH_VERIFICATION)")
+        return
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        if has_github:
+            await _verify_github_oauth(client, base)
+        if has_google:
+            await _verify_google_oauth(client, base)
+
+
+async def _verify_github_oauth(client: httpx.AsyncClient, base: str) -> None:
+    """
+    Prüft GitHub-OAuth-Credentials über den Token-Endpoint mit Dummy-Code.
+    Erwartet: error=bad_verification_code (Credentials ok). Bei
+    incorrect_client_credentials oder anderem Fehler: RuntimeError.
+    """
+    redirect_uri = f"{base}/api/auth/github/callback"
+    try:
+        resp = await client.post(
+            GITHUB_ACCESS_TOKEN_URL,
+            headers={"Accept": "application/json"},
+            data={
+                "client_id": config.GITHUB_CLIENT_ID,
+                "client_secret": config.GITHUB_CLIENT_SECRET,
+                "code": "__startup_verify__",
+                "redirect_uri": redirect_uri,
+            },
+        )
+    except httpx.RequestError as e:
+        raise RuntimeError(
+            f"GitHub OAuth-Verifizierung: Anfrage fehlgeschlagen (Netzwerk/Timeout). "
+            f"Konnektivität zu github.com und BASE_URL prüfen. Fehler: {e}"
+        ) from e
+
+    try:
+        body = resp.json()
+    except Exception as e:
+        raise RuntimeError(
+            f"GitHub OAuth-Verifizierung: Ungültige Antwort (Status {resp.status_code}). "
+            f"BASE_URL/Redirect-URI prüfen. Fehler: {e}"
+        ) from e
+
+    err = body.get("error") or ""
+    if err == "bad_verification_code":
+        logger.info("GitHub OAuth: Credentials verifiziert")
+        return
+    if err == "incorrect_client_credentials":
+        raise RuntimeError(
+            "GitHub OAuth: GITHUB_CLIENT_ID oder GITHUB_CLIENT_SECRET ist falsch. "
+            "Bitte in .env und in der GitHub OAuth App (Developer settings → OAuth Apps) prüfen."
+        )
+    msg = body.get("error_description") or body.get("error") or resp.text or str(resp.status_code)
+    raise RuntimeError(
+        f"GitHub OAuth-Verifizierung fehlgeschlagen: {msg}. "
+        f"Redirect-URI in der GitHub OAuth App muss exakt sein: {redirect_uri}"
+    )
+
+
+async def _verify_google_oauth(client: httpx.AsyncClient, base: str) -> None:
+    """
+    Prüft Google-OAuth-Credentials über den Token-Endpoint mit Dummy-Code.
+    Erwartet: error=invalid_grant (Credentials ok). Bei invalid_client
+    oder anderem Fehler: RuntimeError.
+    """
+    redirect_uri = f"{base}/api/auth/google/callback"
+    try:
+        resp = await client.post(
+            GOOGLE_TOKEN_URL,
+            headers={"Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded"},
+            data={
+                "client_id": config.GOOGLE_CLIENT_ID,
+                "client_secret": config.GOOGLE_CLIENT_SECRET,
+                "code": "__startup_verify__",
+                "redirect_uri": redirect_uri,
+                "grant_type": "authorization_code",
+            },
+        )
+    except httpx.RequestError as e:
+        raise RuntimeError(
+            f"Google OAuth-Verifizierung: Anfrage fehlgeschlagen (Netzwerk/Timeout). "
+            f"Konnektivität zu oauth2.googleapis.com und BASE_URL prüfen. Fehler: {e}"
+        ) from e
+
+    try:
+        body = resp.json()
+    except Exception as e:
+        raise RuntimeError(
+            f"Google OAuth-Verifizierung: Ungültige Antwort (Status {resp.status_code}). "
+            f"BASE_URL/Redirect-URI prüfen. Fehler: {e}"
+        ) from e
+
+    err = body.get("error") or ""
+    if err == "invalid_grant":
+        logger.info("Google OAuth: Credentials verifiziert")
+        return
+    if err == "invalid_client":
+        raise RuntimeError(
+            "Google OAuth: GOOGLE_CLIENT_ID oder GOOGLE_CLIENT_SECRET ist falsch. "
+            "Bitte in .env und in der Google Cloud Console (APIs & Services → Anmeldedaten) prüfen."
+        )
+    msg = body.get("error_description") or body.get("error") or resp.text or str(resp.status_code)
+    raise RuntimeError(
+        f"Google OAuth-Verifizierung fehlgeschlagen: {msg}. "
+        f"Redirect-URI in der Google OAuth App muss exakt sein: {redirect_uri}"
+    )
 
 
 def setup_signal_handlers() -> None:
