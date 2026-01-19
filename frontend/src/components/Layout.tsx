@@ -23,6 +23,7 @@ import NotificationCenter from './NotificationCenter'
 import Tooltip from './Tooltip'
 import VersionInfo from './VersionInfo'
 import HeaderTime from './HeaderTime'
+import SetupWizard from './SetupWizard'
 import './Layout.css'
 
 interface NavItem {
@@ -152,6 +153,7 @@ export default function Layout() {
 
   return (
     <div className="layout">
+      <SetupWizard />
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
         <div className="sidebar-overlay" onClick={closeSidebar}></div>

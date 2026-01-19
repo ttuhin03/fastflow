@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import { MdSave, MdRefresh, MdInfo, MdWarning, MdEmail, MdGroup, MdLink, MdCheck } from 'react-icons/md'
 import { showError, showSuccess } from '../utils/toast'
+import { captureException } from '../utils/posthog'
 
 const getApiOrigin = () => {
   const u = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
@@ -37,7 +38,7 @@ interface Settings {
 
 export default function Settings() {
   const queryClient = useQueryClient()
-  const { isReadonly } = useAuth()
+  const { isReadonly, isAdmin } = useAuth()
   const [localSettings, setLocalSettings] = useState<Settings | null>(null)
   const [showCleanupInfo, setShowCleanupInfo] = useState(false)
 
@@ -49,6 +50,12 @@ export default function Settings() {
       const response = await apiClient.get('/settings')
       return response.data
     },
+  })
+
+  const { data: health } = useQuery<{ status?: string; environment?: string }>({
+    queryKey: ['health'],
+    queryFn: async () => { const r = await apiClient.get('/health'); return r.data },
+    staleTime: 60 * 1000,
   })
 
   const { data: me, refetch: refetchMe } = useQuery({
@@ -69,6 +76,36 @@ export default function Settings() {
       refetchMe()
     }
   }, [searchParams, setSearchParams, refetchMe])
+
+  const { data: systemSettings } = useQuery<{
+    is_setup_completed: boolean
+    enable_telemetry: boolean
+    enable_error_reporting: boolean
+  }>({
+    queryKey: ['settings-system'],
+    queryFn: async () => {
+      const response = await apiClient.get('/settings/system')
+      return response.data
+    },
+    retry: false,
+    staleTime: 2 * 60 * 1000,
+    enabled: isAdmin,
+  })
+
+  const updateSystemSettingsMutation = useMutation({
+    mutationFn: async (patch: { enable_telemetry?: boolean; enable_error_reporting?: boolean }) => {
+      const response = await apiClient.put('/settings/system', patch)
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings-system'] })
+      showSuccess('System-Konfiguration gespeichert.')
+    },
+    onError: (err: unknown) => {
+      const e = err as { response?: { data?: { detail?: string }; status?: number }; message?: string }
+      showError(e?.response?.data?.detail || e?.message || 'Speichern fehlgeschlagen.')
+    },
+  })
 
   const updateSettingsMutation = useMutation({
     mutationFn: async (updatedSettings: Partial<Settings>) => {
@@ -234,6 +271,33 @@ export default function Settings() {
     forceCleanupMutation.mutate()
   }
 
+  const handleTestFrontendException = () => {
+    captureException(
+      new Error(
+        'Fast-Flow Frontend-Test: Test-Exception für PostHog (nur Development). Kein echter Fehler – nur Verifikation. In PostHog anhand dieser Meldung bzw. $fastflow_frontend_test=True als Test erkennbar.'
+      ),
+      {
+        $fastflow_frontend_test: true,
+        description: 'Test-Button: Frontend Error-Tracking. Nur in DEV sichtbar.',
+      }
+    )
+    showSuccess('Test-Exception an PostHog gesendet (Frontend). In PostHog prüfen.')
+  }
+
+  const triggerTestExceptionBackendMutation = useMutation({
+    mutationFn: async () => {
+      const r = await apiClient.post('/settings/trigger-test-exception')
+      return r.data as { message?: string }
+    },
+    onSuccess: (d) => {
+      showSuccess(d?.message || 'Test-Exception an PostHog gesendet (Backend).')
+    },
+    onError: (err: unknown) => {
+      const e = err as { response?: { data?: { detail?: string }; status?: number }; message?: string }
+      showError(e?.response?.data?.detail || e?.message || 'Backend-Test fehlgeschlagen.')
+    },
+  })
+
   if (isLoading) {
     return (
       <div className="loading-container">
@@ -292,6 +356,38 @@ export default function Settings() {
           </div>
         </div>
       </div>
+
+      {isAdmin && (
+        <div className="settings-section card">
+          <h3 className="section-title">
+            Global Privacy & Telemetry
+            <InfoIcon content="Phase 1: Fehlerberichte. Phase 2: Nutzungsstatistiken (Product Analytics). Session Recording (Replay) wird ausdrücklich nicht verwendet." />
+          </h3>
+          <div className="settings-telemetry-toggles">
+            <label className="settings-telemetry-toggle">
+              <input
+                type="checkbox"
+                checked={systemSettings?.enable_telemetry ?? false}
+                disabled={updateSystemSettingsMutation.isPending}
+                onChange={(e) => updateSystemSettingsMutation.mutate({ enable_telemetry: e.target.checked })}
+              />
+              Nutzungsstatistiken (Product Analytics, anonym). Kein Session Recording.
+            </label>
+            <label className="settings-telemetry-toggle">
+              <input
+                type="checkbox"
+                checked={systemSettings?.enable_error_reporting ?? false}
+                disabled={updateSystemSettingsMutation.isPending}
+                onChange={(e) => updateSystemSettingsMutation.mutate({ enable_error_reporting: e.target.checked })}
+              />
+              Fehlerberichte (PostHog Error-Tracking)
+            </label>
+          </div>
+          <p className="settings-telemetry-note">
+            Session Recording (Bildschirmaufzeichnung / Replay) wird ausdrücklich nicht verwendet.
+          </p>
+        </div>
+      )}
 
       <div className="storage-section-settings">
         <h3 className="section-title">Speicherplatz-Statistiken</h3>
@@ -673,6 +769,32 @@ export default function Settings() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {health?.environment === 'development' && (
+        <div className="settings-section card" style={{ marginTop: '1rem' }}>
+          <h3 className="section-title">Entwicklung</h3>
+          <p className="setting-hint" style={{ marginBottom: '0.75rem' }}>
+            Sichtbar, wenn in der .env <code>ENVIRONMENT=development</code>. Sendet Test-Exceptions an PostHog. Auswählen: Backend oder Frontend.
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <button
+              type="button"
+              onClick={handleTestFrontendException}
+              className="btn btn-outlined"
+            >
+              Test-Exception (Frontend) senden
+            </button>
+            <button
+              type="button"
+              onClick={() => triggerTestExceptionBackendMutation.mutate()}
+              disabled={triggerTestExceptionBackendMutation.isPending}
+              className="btn btn-outlined"
+            >
+              {triggerTestExceptionBackendMutation.isPending ? 'Sende…' : 'Test-Exception (Backend) senden'}
+            </button>
+          </div>
         </div>
       )}
 

@@ -30,6 +30,7 @@ from app.models import (
     ScheduledJob,
     Secret,
     Session as SessionModel,
+    SystemSettings,
     User,
 )
 

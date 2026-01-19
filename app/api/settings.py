@@ -13,7 +13,7 @@ import logging
 import psutil
 from pathlib import Path
 from typing import Optional, Dict, Any, List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlmodel import Session
 
@@ -23,13 +23,42 @@ from app.cleanup import cleanup_logs, cleanup_docker_resources
 from app.models import PipelineRun, RunStatus, User
 from app.notifications import send_email_notification, send_teams_notification
 from app.executor import _get_docker_client
-from app.auth import require_write, get_current_user
+from app.auth import require_admin, require_write, get_current_user
+from app.posthog_client import get_system_settings, shutdown_posthog, capture_exception
 from app.errors import get_500_detail
 from sqlmodel import text
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/settings", tags=["settings"])
+
+
+class TelemetryStatusResponse(BaseModel):
+    """Öffentliche Konfiguration für Frontend PostHog (Phase 2a: Error-Tracking). Kein Auth."""
+    enable_error_reporting: bool
+    posthog_api_key: str
+    posthog_host: str
+
+
+@router.get("/telemetry-status", response_model=TelemetryStatusResponse)
+async def get_telemetry_status(
+    session: Session = Depends(get_session),
+) -> TelemetryStatusResponse:
+    """
+    Gibt PostHog-Client-Konfiguration für Frontend (Phase 2a).
+    Öffentlich (kein Auth), damit Login- und Fehlerseiten auch tracken können.
+    """
+    enable = False
+    try:
+        ss = get_system_settings(session)
+        enable = bool(ss.enable_error_reporting)
+    except Exception as e:
+        logger.debug("telemetry-status: SystemSettings nicht lesbar, enable_error_reporting=false: %s", e)
+    return TelemetryStatusResponse(
+        enable_error_reporting=enable,
+        posthog_api_key=config.POSTHOG_API_KEY,
+        posthog_host=config.POSTHOG_HOST,
+    )
 
 
 class SettingsResponse(BaseModel):
@@ -50,6 +79,20 @@ class SettingsResponse(BaseModel):
     email_recipients: List[str]
     teams_enabled: bool
     teams_webhook_url: Optional[str]
+
+
+class SystemSettingsResponse(BaseModel):
+    """Response für System-Konfiguration (Wizard, Nutzer-Tab)."""
+    is_setup_completed: bool
+    enable_telemetry: bool
+    enable_error_reporting: bool
+
+
+class SystemSettingsUpdate(BaseModel):
+    """Request für System-Konfiguration (nur übergebene Felder werden aktualisiert)."""
+    is_setup_completed: Optional[bool] = None
+    enable_telemetry: Optional[bool] = None
+    enable_error_reporting: Optional[bool] = None
 
 
 class SettingsUpdate(BaseModel):
@@ -130,6 +173,87 @@ async def update_settings(
                    "Bitte ändern Sie die Werte in der .env-Datei oder als Environment-Variablen. "
                    "Ein Neustart der Anwendung ist erforderlich."
     }
+
+
+@router.get("/system", response_model=SystemSettingsResponse)
+async def get_system_settings_endpoint(
+    current_user: User = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> SystemSettingsResponse:
+    """
+    Gibt System-Konfiguration zurück (is_setup_completed, enable_telemetry, enable_error_reporting).
+    Nur für Admins.
+    """
+    ss = get_system_settings(session)
+    return SystemSettingsResponse(
+        is_setup_completed=ss.is_setup_completed,
+        enable_telemetry=ss.enable_telemetry,
+        enable_error_reporting=ss.enable_error_reporting,
+    )
+
+
+@router.put("/system", response_model=SystemSettingsResponse)
+async def update_system_settings_endpoint(
+    body: SystemSettingsUpdate,
+    current_user: User = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> SystemSettingsResponse:
+    """
+    Aktualisiert System-Konfiguration. Nur übergebene Felder werden geändert.
+    Wenn enable_error_reporting auf False gesetzt wird: PostHog-Client shutdown.
+    """
+    ss = get_system_settings(session)
+    if body.is_setup_completed is not None:
+        ss.is_setup_completed = body.is_setup_completed
+    if body.enable_telemetry is not None:
+        ss.enable_telemetry = body.enable_telemetry
+    if body.enable_error_reporting is not None:
+        ss.enable_error_reporting = body.enable_error_reporting
+    session.add(ss)
+    session.commit()
+    session.refresh(ss)
+    if ss.enable_error_reporting is False:
+        shutdown_posthog()
+    return SystemSettingsResponse(
+        is_setup_completed=ss.is_setup_completed,
+        enable_telemetry=ss.enable_telemetry,
+        enable_error_reporting=ss.enable_error_reporting,
+    )
+
+
+@router.post("/trigger-test-exception")
+async def trigger_test_exception_backend(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> Dict[str, str]:
+    """
+    Nur in ENVIRONMENT=development. Sendet eine Test-Exception an PostHog (Backend).
+    Nur wirksam, wenn Fehlerberichte (enable_error_reporting) aktiviert sind.
+    """
+    if config.ENVIRONMENT != "development":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Nur in ENVIRONMENT=development verfügbar.",
+        )
+    u = str(request.url)
+    url_no_query = u.split("?")[0] if "?" in u else u
+    exc = RuntimeError(
+        "Fast-Flow Backend-Test: Test-Exception für PostHog (manuell aus Einstellungen, ENVIRONMENT=development). "
+        "Kein echter Fehler. $fastflow_backend_test=True."
+    )
+    capture_exception(
+        exc,
+        session,
+        properties={
+            "$fastflow_backend_test": True,
+            "description": "Manuell aus Einstellungen ausgelöst (Backend).",
+            "$current_url": url_no_query,
+            "$request_path": request.url.path,
+            "$request_method": request.method,
+        },
+    )
+    return {"message": "Test-Exception an PostHog gesendet (Backend). In PostHog prüfen."}
 
 
 @router.get("/storage", response_model=Dict[str, Any])

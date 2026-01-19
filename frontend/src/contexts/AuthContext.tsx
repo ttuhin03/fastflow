@@ -11,6 +11,8 @@ interface AuthContextType {
   isReadonly: boolean
   isWrite: boolean
   isAdmin: boolean
+  is_setup_completed: boolean
+  refetchUserInfo: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -20,16 +22,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [token, setToken] = useState<string | null>(null)
   const [userRole, setUserRole] = useState<'readonly' | 'write' | 'admin' | null>(null)
+  const [is_setup_completed, setIsSetupCompleted] = useState(true)
 
   const fetchUserInfo = async () => {
     try {
       const response = await apiClient.get('/auth/me')
       const role = response.data.role?.toLowerCase() as 'readonly' | 'write' | 'admin'
       setUserRole(role || 'readonly')
+      setIsSetupCompleted(response.data.is_setup_completed !== false)
     } catch (error: any) {
       setUserRole(null)
       setIsAuthenticated(false)
       setToken(null)
+      setIsSetupCompleted(true)
       // Interceptor behandelt 401 (Redirect, Token-Entfernung). Bei anderen Fehlern Hinweis anzeigen.
       if (error?.response?.status !== 401) {
         showError('Sitzung konnte nicht geladen werden. Bitte erneut anmelden.')
@@ -56,11 +61,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       // Ignoriere Fehler beim Logout
     } finally {
-      // Entferne Token aus sessionStorage
       sessionStorage.removeItem('auth_token')
       setToken(null)
       setIsAuthenticated(false)
       setUserRole(null)
+      setIsSetupCompleted(true)
     }
   }
 
@@ -77,7 +82,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       userRole,
       isReadonly,
       isWrite,
-      isAdmin
+      isAdmin,
+      is_setup_completed,
+      refetchUserInfo: fetchUserInfo,
     }}>
       {children}
     </AuthContext.Provider>

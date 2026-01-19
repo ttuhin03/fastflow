@@ -9,7 +9,7 @@ import asyncio
 import signal
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -141,6 +141,26 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Fehler bei Version-Check-Initialisierung: {e}")
         # Nicht kritisch, App kann trotzdem starten
+
+    # Telemetry: instance_heartbeat täglich 03:00 UTC (Storage, RAM, CPU, total_users_bucket)
+    try:
+        from app.analytics import run_instance_heartbeat_sync, schedule_telemetry_heartbeat
+        schedule_telemetry_heartbeat()
+        logger.info("Telemetry instance_heartbeat geplant")
+        # Einmalig beim Start: Instance-Heartbeat (total_users_bucket, Pipelines, Storage, RAM, CPU)
+        # Nur gesendet wenn enable_telemetry; danach wie geplant (z.B. täglich 03:00 UTC)
+        asyncio.create_task(asyncio.to_thread(run_instance_heartbeat_sync))
+    except Exception as e:
+        logger.warning("Telemetry Heartbeat konnte nicht geplant werden: %s", e)
+
+    # PostHog Startup-Test (nur ENVIRONMENT=development): immer eine Test-Exception senden,
+    # unabhängig von enable_error_reporting. Prüft, ob PostHog erreichbar ist.
+    if config.ENVIRONMENT == "development":
+        try:
+            from app.posthog_client import capture_startup_test_exception
+            capture_startup_test_exception()
+        except Exception as ex:
+            logger.warning("PostHog Startup-Test übersprungen: %s", ex)
     
     # React-Frontend wird über StaticFiles serviert (siehe unten)
     
@@ -171,7 +191,14 @@ async def lifespan(app: FastAPI):
             session.close()
     except Exception as e:
         logger.error(f"Fehler beim Graceful Shutdown: {e}")
-    
+
+    # PostHog: Flush und Shutdown (vgl. Product Analytics Installation – sauberes Beenden)
+    try:
+        from app.posthog_client import shutdown_posthog
+        shutdown_posthog()
+    except Exception as e:
+        logger.warning("PostHog Shutdown: %s", e)
+
     logger.info("Fast-Flow Orchestrator heruntergefahren")
 
 
@@ -416,7 +443,7 @@ def setup_signal_handlers() -> None:
 app = FastAPI(
     title="Fast-Flow Orchestrator",
     description="Workflow-Orchestrierungstool für schnelle, isolierte Pipeline-Ausführungen",
-    version="0.1.0",
+    version=config.VERSION,
     lifespan=lifespan
 )
 
@@ -427,6 +454,34 @@ from slowapi import _rate_limit_exceeded_handler
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+async def _posthog_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """FastAPI-Exception-Handler: PostHog capture_exception wenn enable_error_reporting."""
+    try:
+        from sqlmodel import Session
+        from app.database import engine
+        from app.posthog_client import capture_exception, get_system_settings
+        with Session(engine) as session:
+            ss = get_system_settings(session)
+            if ss.enable_error_reporting:
+                u = str(request.url)
+                url_no_query = u.split("?")[0] if "?" in u else u
+                capture_exception(
+                    exc,
+                    session,
+                    properties={
+                        "$request_method": request.method,
+                        "$current_url": url_no_query,
+                        "$request_path": request.url.path,
+                    },
+                )
+    except Exception as e:
+        logger.warning("PostHog in exception_handler: %s", e)
+    return JSONResponse(status_code=500, content={"detail": str(exc)})
+
+
+app.add_exception_handler(Exception, _posthog_exception_handler)
 
 # Security Headers Middleware (muss vor CORS sein)
 from app.middleware.security_headers import SecurityHeadersMiddleware
@@ -458,7 +513,8 @@ async def health_check() -> JSONResponse:
     return JSONResponse(
         content={
             "status": "healthy",
-            "version": "0.1.0"
+            "version": config.VERSION,
+            "environment": config.ENVIRONMENT,
         }
     )
 

@@ -24,7 +24,9 @@ from app.auth import (
 )
 from app.config import config
 from app.database import get_session
+from app.analytics import track_user_logged_in, track_user_registered
 from app.github_oauth import delete_oauth_state, generate_oauth_state, store_oauth_state
+from app.posthog_client import get_system_settings
 from app.github_oauth_user import get_github_authorize_url, get_github_user_data
 from app.google_oauth_user import get_google_authorize_url, get_google_user_data
 from app.middleware.rate_limiting import limiter
@@ -114,7 +116,7 @@ async def github_callback(
     # GitHub liefert "id", "login"; ggf. "avatar_url" für Profilbild
     oauth_data = {**github_user, "avatar_url": github_user.get("avatar_url")}
     try:
-        user, link_only, anklopfen_only = await process_oauth_login(
+        user, link_only, anklopfen_only, is_new_user, registration_source = await process_oauth_login(
             provider="github",
             provider_id=str(github_user["id"]),
             email=github_user.get("email"),
@@ -125,10 +127,20 @@ async def github_callback(
     except HTTPException:
         raise
     if anklopfen_only:
+        if is_new_user:
+            track_user_registered(session, "github", invitation=False, initial_admin=False, anklopfen=True)
         return _redirect_anklopfen_screen(user)
     if link_only:
         logger.info(f"GitHub-Konto für '{user.username}' verknüpft")
         return _redirect_to_settings_linked("github")
+    if is_new_user and registration_source:
+        track_user_registered(
+            session, "github",
+            invitation=(registration_source == "invitation"),
+            initial_admin=(registration_source == "initial_admin"),
+            anklopfen=(registration_source == "anklopfen"),
+        )
+    track_user_logged_in(session, "github", is_new_user)
     if state:
         delete_oauth_state(state)
     token = create_access_token(username=user.username)
@@ -172,7 +184,7 @@ async def google_callback(
     except HTTPException:
         raise
     try:
-        user, link_only, anklopfen_only = await process_oauth_login(
+        user, link_only, anklopfen_only, is_new_user, registration_source = await process_oauth_login(
             provider="google",
             provider_id=str(google_user["id"]),
             email=google_user.get("email"),
@@ -183,10 +195,20 @@ async def google_callback(
     except HTTPException:
         raise
     if anklopfen_only:
+        if is_new_user:
+            track_user_registered(session, "google", invitation=False, initial_admin=False, anklopfen=True)
         return _redirect_anklopfen_screen(user)
     if link_only:
         logger.info(f"Google-Konto für '{user.username}' verknüpft")
         return _redirect_to_settings_linked("google")
+    if is_new_user and registration_source:
+        track_user_registered(
+            session, "google",
+            invitation=(registration_source == "invitation"),
+            initial_admin=(registration_source == "initial_admin"),
+            anklopfen=(registration_source == "anklopfen"),
+        )
+    track_user_logged_in(session, "google", is_new_user)
     if state:
         delete_oauth_state(state)
     token = create_access_token(username=user.username)
@@ -235,13 +257,20 @@ async def link_github(
 
 @router.get("/me", response_model=dict, status_code=status.HTTP_200_OK)
 async def get_current_user_info(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
 ) -> dict:
     """
     Gibt Informationen über den aktuell angemeldeten Benutzer zurück.
-    Erweitet um email, has_github, has_google, avatar_url für die Konten-UI.
+    Erweitet um email, has_github, has_google, avatar_url, is_setup_completed.
     """
     role_val = current_user.role.value if hasattr(current_user, "role") and current_user.role else "readonly"
+    is_setup_completed = False
+    try:
+        ss = get_system_settings(session)
+        is_setup_completed = ss.is_setup_completed
+    except Exception:
+        pass
     return {
         "username": current_user.username,
         "id": str(current_user.id),
@@ -251,6 +280,7 @@ async def get_current_user_info(
         "avatar_url": getattr(current_user, "avatar_url", None),
         "created_at": current_user.created_at.isoformat(),
         "role": role_val,
+        "is_setup_completed": is_setup_completed,
     }
 
 

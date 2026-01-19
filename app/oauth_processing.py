@@ -37,9 +37,11 @@ def get_or_create_initial_admin(
     session: Session,
     oauth_data: dict,
     provider: Provider,
-) -> Optional[User]:
+) -> Tuple[Optional[User], bool]:
     """
     Holt oder erstellt den ersten Admin (INITIAL_ADMIN_EMAIL) für GitHub oder Google.
+    Returns:
+        (user, is_newly_created): is_newly_created=True nur wenn ein neuer User angelegt wurde.
     """
     id_attr = "github_id" if provider == "github" else "google_id"
     provider_id = str(oauth_data.get("id") or "")
@@ -52,7 +54,7 @@ def get_or_create_initial_admin(
     user = retry_on_sqlite_io(lambda: session.exec(stmt).first(), session=session)
     if user:
         logger.info("OAuth initial_admin: user=%s bereits mit %s verknüpft", user.username, provider)
-        return user
+        return (user, False)
 
     # 2. INITIAL_ADMIN_EMAIL: bestehenden User verknüpfen oder neuen Admin anlegen
     if email and config.INITIAL_ADMIN_EMAIL and email == config.INITIAL_ADMIN_EMAIL:
@@ -69,7 +71,7 @@ def get_or_create_initial_admin(
             session.commit()
             session.refresh(user)
             logger.info("OAuth initial_admin: bestehender User user=%s mit %s verknüpft, role=ADMIN", user.username, provider)
-            return user
+            return (user, False)
         username = _unique_username(session, login, provider_id)
         user = User(
             username=username,
@@ -83,9 +85,9 @@ def get_or_create_initial_admin(
         session.commit()
         session.refresh(user)
         logger.info("OAuth initial_admin: neuer Admin user=%s angelegt (provider=%s)", user.username, provider)
-        return user
+        return (user, True)
 
-    return None
+    return (None, False)
 
 
 def create_oauth_user(
@@ -120,6 +122,12 @@ def create_oauth_user(
     return user
 
 
+def _oauth_return(
+    user: User, link_only: bool, anklopfen_only: bool, is_new_user: bool = False, registration_source: Optional[str] = None
+) -> Tuple[User, bool, bool, bool, Optional[str]]:
+    return (user, link_only, anklopfen_only, is_new_user, registration_source)
+
+
 async def process_oauth_login(
     *,
     provider: Provider,
@@ -128,15 +136,16 @@ async def process_oauth_login(
     session: Session,
     oauth_data: dict,
     state: Optional[str] = None,
-) -> Tuple[User, bool, bool]:
+) -> Tuple[User, bool, bool, bool, Optional[str]]:
     """
     Zentrale OAuth-Auswertung für Login, Link und Anklopfen.
 
     Returns:
-        (user, link_only, anklopfen_only):
+        (user, link_only, anklopfen_only, is_new_user, registration_source):
         - link_only=True: Link-Flow, Redirect zu /settings?linked=...
         - anklopfen_only=True: Kein Token/Session, Redirect zu /request-sent oder /request-rejected
-        - sonst: normales Login mit Token/Session
+        - is_new_user=True: User wurde in diesem Flow neu angelegt
+        - registration_source: "invitation" | "initial_admin" | "anklopfen" | None
     """
     id_attr = "github_id" if provider == "github" else "google_id"
     avatar = oauth_data.get("avatar_url") or oauth_data.get("picture")
@@ -171,7 +180,7 @@ async def process_oauth_login(
                 session.refresh(user)
                 delete_oauth_state(state)
                 logger.info("OAuth: match=link provider=%s user=%s (%s-Konto verknüpft)", provider, user.username, provider)
-                return (user, True, False)
+                return _oauth_return(user, True, False)
 
     # 1) Direkt-Login: User mit dieser Provider-ID
     stmt = select(User).where(getattr(User, id_attr) == provider_id)
@@ -180,9 +189,9 @@ async def process_oauth_login(
         status = getattr(user, "status", "active")
         if status == "pending" or user.blocked:
             logger.info("OAuth: match=direct anklopfen_only provider=%s user=%s (pending oder blocked)", provider, user.username)
-            return (user, False, True)
+            return _oauth_return(user, False, True)
         logger.info("OAuth: match=direct provider=%s user=%s (bereits verknüpft)", provider, user.username)
-        return (user, False, False)
+        return _oauth_return(user, False, False)
 
     # 2) Auto-Match: User mit gleicher E-Mail
     if email:
@@ -198,13 +207,13 @@ async def process_oauth_login(
             session.commit()
             session.refresh(user)
             logger.info("OAuth: match=email provider=%s user=%s (E-Mail-Match, %s-Konto verknüpft)", provider, user.username, provider)
-            return (user, False, False)
+            return _oauth_return(user, False, False)
 
     # 4) INITIAL_ADMIN_EMAIL
-    user = get_or_create_initial_admin(session, oauth_data, provider)
+    user, created = get_or_create_initial_admin(session, oauth_data, provider)
     if user:
         logger.info("OAuth: match=initial_admin provider=%s user=%s", provider, user.username)
-        return (user, False, False)
+        return _oauth_return(user, False, False, is_new_user=created, registration_source="initial_admin" if created else None)
 
     # 5) Einladung: state = Invitation.token, E-Mail muss recipient_email entsprechen
     if state:
@@ -223,7 +232,7 @@ async def process_oauth_login(
             session.commit()
             user = create_oauth_user(session, oauth_data, inv.role, provider, status="active")
             logger.info("OAuth: match=invitation provider=%s user=%s role=%s recipient=%s", provider, user.username, inv.role.value, inv.recipient_email)
-            return (user, False, False)
+            return _oauth_return(user, False, False, is_new_user=True, registration_source="invitation")
 
     # 7) Anklopfen: unbekannter Nutzer → Beitrittsanfrage (pending), kein Token/Session
     user = create_oauth_user(session, oauth_data, UserRole.READONLY, provider, status="pending")
@@ -232,4 +241,4 @@ async def process_oauth_login(
     except Exception as e:
         logger.warning("notify_admin_join_request fehlgeschlagen für user=%s: %s", user.username, e)
     logger.info("OAuth: anklopfen provider=%s user=%s (Beitrittsanfrage angelegt)", provider, user.username)
-    return (user, False, True)
+    return _oauth_return(user, False, True, is_new_user=True, registration_source="anklopfen")
