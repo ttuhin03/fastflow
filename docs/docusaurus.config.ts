@@ -9,6 +9,10 @@ const config: Config = {
   tagline: 'Der schlanke, Docker-native, Python-zentrische Task-Orchestrator',
   favicon: 'img/favicon.ico',
 
+  markdown: {
+    mermaid: true,
+  },
+
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
   future: {
     v4: true, // Improve compatibility with the upcoming Docusaurus v4
@@ -54,6 +58,7 @@ const config: Config = {
   ],
 
   themes: [
+    '@docusaurus/theme-mermaid',
     [
       require.resolve('@easyops-cn/docusaurus-search-local'),
       {
@@ -99,7 +104,9 @@ const config: Config = {
           items: [
             {label: 'Intro', to: '/docs/intro'},
             {label: 'Schnellstart', to: '/docs/schnellstart'},
-            {label: 'Manifesto', to: '/docs/manifesto'},
+            {label: 'Setup', to: '/docs/setup'},
+            {label: 'Erste Pipeline', to: '/docs/pipelines/erste-pipeline'},
+            {label: 'Troubleshooting', to: '/docs/troubleshooting'},
           ],
         },
         {
@@ -107,6 +114,7 @@ const config: Config = {
           items: [
             {label: 'Blog', to: '/blog'},
             {label: 'GitHub', href: 'https://github.com/ttuhin03/fastflow'},
+            {label: 'Disclaimer', to: '/docs/disclaimer'},
           ],
         },
       ],
@@ -115,6 +123,9 @@ const config: Config = {
     prism: {
       theme: prismThemes.github,
       darkTheme: prismThemes.dracula,
+    },
+    mermaid: {
+      theme: { light: 'neutral', dark: 'dark' },
     },
   } satisfies Preset.ThemeConfig,
 };

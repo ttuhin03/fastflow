@@ -98,7 +98,7 @@ Die Anmeldung erfolgt **über GitHub oder Google**:
 - **Migrationen automatisch** – Beim Container-Start führt `entrypoint.sh` zuerst `alembic upgrade head` aus, danach startet die App. Manuelles Migrieren entfällt bei `./start-docker.sh` / `docker-compose up`.
 - **OAuth-Logging** – Erfolgreiche Matches werden geloggt (`match=direct|email|link|initial_admin|invitation`, inkl. Provider und User), ebenso abgelehnte Logins und fehlgeschlagene Link-Flows. Hilfreich für Debugging: `docker-compose logs -f orchestrator | grep -E "OAuth:|initial_admin"`.
 - **Dokumentation** – OAuth-Doku in `docs/docs/oauth/` (README, GITHUB.md, GOOGLE.md); `docs/GITHUB_OAUTH.md` entfernt.
-- **Error-Tracking & Telemetrie (PostHog)** – Phase 1: Fehlerberichte (Backend + Frontend) an PostHog Cloud EU. First-Run-Wizard für Admins, Einstellungen → Global Privacy & Telemetry. Anonym (UUID), Scrubbing, URL/Path in Backend-Fehlern. Details: [docs/telemetry/README.md](docs/docs/telemetry/README.md).
+- **Error-Tracking & Telemetrie (PostHog)** – Phase 1: Fehlerberichte (Backend + Frontend) an PostHog Cloud EU. First-Run-Wizard für Admins, Einstellungen → Global Privacy & Telemetry. Anonym (UUID), Scrubbing, URL/Path in Backend-Fehlern. Details: [Telemetrie (PostHog)](docs/docs/telemetry/README.md).
 
 ---
 
@@ -339,16 +339,27 @@ Der Orchestrator kommuniziert mit dem Proxy über `http://docker-proxy:2375` sta
 
 ## Dokumentation
 
-- **[Philosophie: Das Anti-Overhead Manifesto](docs/docs/manifesto.md)** - Warum Fast-Flow entstanden ist und was es anders macht
-- **[OAuth (GitHub & Google)](docs/docs/oauth/README.md)** - Login, Einladungen, Konto verknüpfen
-- **[Konfiguration](docs/docs/deployment/CONFIGURATION.md)** - Detaillierte Erklärung aller Environment-Variablen
-- **[Deployment](docs/docs/deployment/PRODUCTION.md)** - Produktions-Setup Guide
-- **[Versioning & Releases](docs/docs/deployment/VERSIONING.md)** - Version-Management und Release-Prozess
-- **[Database](docs/docs/database/SCHEMA.md)** - Schema und [Migrationen](docs/docs/database/MIGRATIONS.md)
-- **[Docker Socket Proxy](docs/docs/deployment/DOCKER_PROXY.md)** - Sicherheitsarchitektur und Proxy-Konfiguration
-- **[API-Dokumentation](docs/docs/api/API.md)** - Vollständige API-Referenz
-- **[Frontend-Dokumentation](docs/docs/frontend/FRONTEND.md)** - Frontend-Komponenten und Seiten
-- **[Error-Tracking & Telemetrie (PostHog)](docs/docs/telemetry/README.md)** - Fehlerberichte, First-Run-Wizard, Einstellungen, CSP
+Die Doku liegt unter `docs/docs/` und wird mit Docusaurus bereitgestellt (lokal: `cd docs && npm run start` → `/docs`).
+
+- **[Setup-Anleitung](docs/docs/setup.md)** – Ausführlich: Env-Variablen, OAuth, Verzeichnisse
+- **[Philosophie: Das Anti-Overhead Manifesto](docs/docs/manifesto.md)** – Warum Fast-Flow entstanden ist und was es anders macht
+- **[Architektur](docs/docs/architektur.md)** – Runner-Cache-Prinzip, Container-Lifecycle, Datenfluss
+- **[OAuth (GitHub & Google)](docs/docs/oauth/README.md)** – Login, Einladungen, Konto verknüpfen, Beitrittsanfragen
+- **[Pipelines – Übersicht](docs/docs/pipelines/uebersicht.md)** – Struktur, `main.py`, `requirements.txt`, Erkennung
+- **[Erste Pipeline](docs/docs/pipelines/erste-pipeline.md)** – Tutorial: erste Pipeline von null an
+- **[Erweiterte Pipelines](docs/docs/pipelines/erweiterte-pipelines.md)** – Retries, Timeout, Scheduling, Webhooks, Struktur
+- **[Pipelines – pipeline.json Referenz](docs/docs/pipelines/referenz.md)** – Metadaten, Limits, `default_env`
+- **[Konfiguration](docs/docs/deployment/CONFIGURATION.md)** – Environment-Variablen
+- **[Deployment](docs/docs/deployment/PRODUCTION.md)** – Produktions-Setup
+- **[Git-Deployment](docs/docs/deployment/GIT_DEPLOYMENT.md)** – Push-to-Deploy, Git als Source of Truth
+- **[Versioning & Releases](docs/docs/deployment/VERSIONING.md)** – Version-Management und Release-Prozess
+- **[Datenbank](docs/docs/database/SCHEMA.md)** – Schema und [Migrationen](docs/docs/database/MIGRATIONS.md)
+- **[Docker Socket Proxy](docs/docs/deployment/DOCKER_PROXY.md)** – Sicherheitsarchitektur und Proxy-Konfiguration
+- **[API](docs/docs/api/API.md)** – API-Referenz
+- **[Frontend](docs/docs/frontend/FRONTEND.md)** – Frontend-Komponenten und Seiten
+- **[Error-Tracking & Telemetrie (PostHog)](docs/docs/telemetry/README.md)** – Fehlerberichte, First-Run-Wizard, Einstellungen, CSP
+- **[Troubleshooting](docs/docs/troubleshooting.md)** – Häufige Fehler und Lösungen
+- **[Disclaimer & Haftungsausschluss](docs/docs/disclaimer.md)** – Sicherheit, Beta-Status, Haftung
 
 ## 📦 Versioning & Releases
 
@@ -392,7 +403,7 @@ Die Version-Check läuft automatisch:
 - ✅ Täglich um 2:00 Uhr (zusammen mit Log-Cleanup)
 - ✅ On-Demand via API: `GET /api/system/version?force_check=true`
 
-Weitere Details: [docs/deployment/VERSIONING.md](docs/docs/deployment/VERSIONING.md)
+Weitere Details: [Versioning & Releases](docs/docs/deployment/VERSIONING.md)
 
 ## Pipeline-Repository-Struktur
 
@@ -613,7 +624,7 @@ requests==2.31.0
 
 ---
 
-*Weitere Dokumentation siehe `docs/docs/deployment/CONFIGURATION.md`*
+*Weitere Doku: [Pipelines – Übersicht](docs/docs/pipelines/uebersicht.md), [Konfiguration](docs/docs/deployment/CONFIGURATION.md)*
 
 ## ❓ Troubleshooting
 
@@ -643,4 +654,6 @@ Dieses Projekt befindet sich in einem **Frühen Stadium / Beta-Status**. Da der 
 - **Nutzung auf eigene Gefahr:** Die Software wird „wie besehen“ (as is) zur Verfügung gestellt. Der Autor übernimmt keinerlei Haftung für Schäden an Hardware, Datenverlust, Sicherheitslücken oder Betriebsunterbrechungen, die durch die Nutzung dieser Software entstehen könnten.
 - **Keine Gewährleistung:** Es gibt keine Garantie für die Richtigkeit, Funktionsfähigkeit oder ständige Verfügbarkeit der Software.
 - **Sicherheitsempfehlung:** Betreiben Sie diesen Orchestrator niemals ungeschützt im öffentlichen Internet. Nutzen Sie immer den empfohlenen Docker-Socket-Proxy und eine starke Authentifizierung.
-- 
+
+Ausführlich in der Doku: [Disclaimer & Haftungsausschluss](docs/docs/disclaimer.md).
+ 

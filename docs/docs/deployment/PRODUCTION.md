@@ -1,3 +1,7 @@
+---
+sidebar_position: 3
+---
+
 # 🚀 Deployment Guide
 
 Dieser Guide beschreibt Best Practices für das Deployment von Fast-Flow in einer Produktionsumgebung.
@@ -85,3 +89,9 @@ Sichern Sie regelmäßig folgende Verzeichnisse:
 1. `data/fastflow.db` (SQLite Datenbank)
 2. `.env` (Konfiguration)
 3. `pipelines/` (Pipeline-Code, falls nicht in einem externen Git-Repo gehostet)
+
+## Siehe auch
+
+- [Konfiguration](/docs/deployment/CONFIGURATION) – Environment-Variablen
+- [Docker Socket Proxy](/docs/deployment/DOCKER_PROXY) – Sicherheitslayer
+- [Git-Deployment](/docs/deployment/GIT_DEPLOYMENT) – Push-to-Deploy

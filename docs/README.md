@@ -1,41 +1,76 @@
-# Website
+# Fast-Flow Doku (Docusaurus)
 
-This website is built using [Docusaurus](https://docusaurus.io/), a modern static website generator.
+Die Dokumentation wird mit [Docusaurus](https://docusaurus.io/) erzeugt.
+
+## Voraussetzungen
+
+- **Node.js** ≥ 20
+- **npm** (im Projektroot: `npm install` für Workspaces)
 
 ## Installation
 
-```bash
-yarn
-```
-
-## Local Development
+Im Projektroot:
 
 ```bash
-yarn start
+npm install
 ```
 
-This command starts a local development server and opens up a browser window. Most changes are reflected live without having to restart the server.
+Oder nur im `docs/`-Ordner:
+
+```bash
+cd docs
+npm install
+```
+
+## Lokale Entwicklung
+
+```bash
+# Ab Projektroot
+npm run docs:dev
+```
+
+oder
+
+```bash
+cd docs
+npm run start
+```
+
+Die Doku läuft unter [http://localhost:3000](http://localhost:3000). Änderungen an Markdown werden automatisch neu geladen.
 
 ## Build
 
 ```bash
-yarn build
+# Ab Projektroot
+npm run docs:build
 ```
 
-This command generates static content into the `build` directory and can be served using any static contents hosting service.
-
-## Deployment
-
-Using SSH:
+oder
 
 ```bash
-USE_SSH=true yarn deploy
+cd docs
+npm run build
 ```
 
-Not using SSH:
+Die statischen Dateien liegen in `docs/build/`. Lokaler Vorschau-Server: `npm run serve` (in `docs/`).
+
+## Deployment (z.B. GitHub Pages)
 
 ```bash
-GIT_USER=<Your GitHub username> yarn deploy
+cd docs
+npm run deploy
 ```
 
-If you are using GitHub pages for hosting, this command is a convenient way to build the website and push to the `gh-pages` branch.
+Für GitHub Pages mit SSH: `USE_SSH=true npm run deploy`.  
+Ohne SSH: `GIT_USER=<Dein-GitHub-User> npm run deploy`.
+
+## Mermaid-Diagramme
+
+In Markdown werden [Mermaid](https://mermaid.js.org/)-Diagramme per ` ```mermaid ` Code-Blöcke gerendert (z.B. in `docs/architektur.md`).
+
+## Struktur
+
+- `docs/` – Markdown-Quellen
+- `src/` – React-Komponenten, CSS
+- `static/img/` – Bilder, Favicon, Logo
+- `sidebars.ts` – Sidebar-Reihenfolge (autogeneriert aus `docs/`)

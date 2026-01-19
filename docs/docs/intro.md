@@ -28,4 +28,10 @@ Nutze das **[fastflow-pipeline-template](https://github.com/ttuhin03/fastflow-pi
 ## Nächste Schritte
 
 - [**Schnellstart**](/docs/schnellstart) – Fast-Flow in wenigen Minuten starten
+- [**Setup-Anleitung**](/docs/setup) – Ausführlich: Env-Variablen, OAuth, Verzeichnisse
+- [**Erste Pipeline**](/docs/pipelines/erste-pipeline) – Tutorial von null an
 - [**Manifesto**](/docs/manifesto) – Die Philosophie und der Vergleich zu Airflow, Dagster, Mage
+- [**Architektur**](/docs/architektur) – Runner-Cache, Container-Lifecycle, Datenfluss
+- [**Pipelines**](/docs/pipelines/uebersicht) – Struktur, `main.py`, `requirements.txt`, `pipeline.json`
+- [**Troubleshooting**](/docs/troubleshooting) – Häufige Fehler und Lösungen
+- [**Disclaimer & Haftungsausschluss**](/docs/disclaimer) – Sicherheit, Beta-Status, Haftung

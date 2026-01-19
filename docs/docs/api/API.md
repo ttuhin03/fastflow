@@ -1,3 +1,7 @@
+---
+slug: api
+---
+
 # API-Dokumentation
 
 Diese Dokumentation beschreibt alle verfügbaren REST-API-Endpoints des Fast-Flow Orchestrators.
@@ -971,3 +975,9 @@ Beispiel:
   "detail": "Pipeline nicht gefunden: pipeline_x"
 }
 ```
+
+## Siehe auch
+
+- [OAuth (GitHub & Google)](/docs/oauth/readme) – Login, Token
+- [Konfiguration](/docs/deployment/CONFIGURATION) – `JWT_*`, `ENCRYPTION_KEY`
+- [Schnellstart](/docs/schnellstart) – Erste Schritte

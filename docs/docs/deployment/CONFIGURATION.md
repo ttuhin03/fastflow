@@ -1,3 +1,7 @@
+---
+sidebar_position: 1
+---
+
 # ⚙️ Konfiguration
 
 Fast-Flow wird primär über Environment-Variablen in einer `.env` Datei konfiguriert. Diese Datei sollte im Root-Verzeichnis des Projekts liegen (basierend auf `.env.example`).
@@ -68,7 +72,7 @@ Fast-Flow wird primär über Environment-Variablen in einer `.env` Datei konfigu
 | `GOOGLE_CLIENT_SECRET` | *Leer* | OAuth 2.0 Client Secret (Google). | Optional |
 | `SKIP_OAUTH_VERIFICATION` | *Leer* | `1`/`true`: HTTP-Verifizierung der OAuth-Credentials beim Start überspringen (z.B. CI/Tests). Die Prüfung „mind. ein Provider vollständig“ bleibt aktiv. | Optional |
 | `INITIAL_ADMIN_EMAIL` | *Leer* | E-Mail des ersten Admins (Zutritt ohne Einladung, GitHub oder Google). | **Empfohlen** |
-| `FRONTEND_URL` / `BASE_URL` | s. [OAuth (GitHub, Google)](../oauth/README.md) | Für OAuth-Callback und Einladungs-Links. | Anpassen |
+| `FRONTEND_URL` / `BASE_URL` | s. [OAuth (GitHub & Google)](/docs/oauth/readme) | Für OAuth-Callback und Einladungs-Links. | Anpassen |
 
 **OAuth beim Start:** Es muss mindestens ein OAuth-Provider (GitHub oder Google) vollständig konfiguriert sein (jeweils `CLIENT_ID` und `CLIENT_SECRET`). Ohne dies startet die App nicht. Beim Start werden die gesetzten Credentials per Request an den jeweiligen Anbieter verifiziert; bei ungültigen Werten oder Redirect-URI-Mismatch startet die App ebenfalls nicht.
 

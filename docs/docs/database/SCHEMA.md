@@ -124,3 +124,8 @@ Persistente Sessions (JWT-Token in DB).
 - Alle Zeitstempel werden als **UTC** gespeichert.
 - SQLite verwendet **WAL-Mode** (Write-Ahead Logging) für bessere Concurrency.
 - JSON-Felder werden in SQLite als TEXT und in PostgreSQL als JSONB gespeichert.
+
+## Siehe auch
+
+- [Migrationen](/docs/database/MIGRATIONS) – Schema-Änderungen, Alembic
+- [Konfiguration](/docs/deployment/CONFIGURATION) – `DATABASE_URL`

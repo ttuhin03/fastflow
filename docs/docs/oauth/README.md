@@ -1,3 +1,7 @@
+---
+slug: readme
+---
+
 # OAuth (GitHub & Google)
 
 Fast-Flow unterstützt **GitHub OAuth** und **Google OAuth** für Login. Beide können pro User verknüpft werden („Link-Konto“ in den Einstellungen).

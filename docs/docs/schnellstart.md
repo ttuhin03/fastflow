@@ -44,8 +44,9 @@ cp .env.example .env
 # -> ENCRYPTION_KEY in .env setzen
 
 # 3. Starten
-./start-dev.sh
-# oder: uvicorn app.main:app --reload (Backend); cd frontend && npm run dev (Frontend)
+# Backend:
+uvicorn app.main:app --reload
+# Frontend (in anderem Terminal): cd frontend && npm run dev
 ```
 
 ## Login (GitHub OAuth, Google OAuth)
@@ -57,10 +58,14 @@ cp .env.example .env
    **Dev (Frontend :3000, Backend :8000):** `FRONTEND_URL=http://localhost:3000`, `BASE_URL=http://localhost:8000`.
 
 :::tip
-Ausführliche Schritte, Einladung, Konto verknüpfen: [OAuth (GitHub & Google)](https://github.com/ttuhin03/fastflow/blob/main/docs/oauth/README.md) im Haupt-Repo.
+Ausführliche Schritte, Einladung, Konto verknüpfen, Beitrittsanfragen: [OAuth (GitHub & Google)](/docs/oauth/readme).
 :::
 
 ## Nächste Schritte
 
-- Pipelines über `pipelines/` (Volume) oder Git-Sync hinzufügen
-- [Pipeline-Template](https://github.com/ttuhin03/fastflow-pipeline-template) für eine vorgefertigte Struktur nutzen
+- [**Setup-Anleitung**](/docs/setup) – Ausführliche Erklärung der Env-Variablen, OAuth, Verzeichnisse
+- [**Erste Pipeline**](/docs/pipelines/erste-pipeline) – Tutorial: erste Pipeline von null an schreiben
+- [**Pipelines – Übersicht**](/docs/pipelines/uebersicht) – Struktur, `main.py`, `requirements.txt`; Volume oder Git-Sync
+- [**Pipeline-Template**](https://github.com/ttuhin03/fastflow-pipeline-template) – vorgefertigte Struktur
+- [**Architektur**](/docs/architektur) – Runner-Cache, Container-Lifecycle
+- [**Konfiguration**](/docs/deployment/CONFIGURATION) – alle Environment-Variablen (Referenz)
