@@ -144,9 +144,12 @@ async def lifespan(app: FastAPI):
 
     # Telemetry: instance_heartbeat täglich 03:00 UTC (Storage, RAM, CPU, total_users_bucket)
     try:
-        from app.analytics import schedule_telemetry_heartbeat
+        from app.analytics import run_instance_heartbeat_sync, schedule_telemetry_heartbeat
         schedule_telemetry_heartbeat()
         logger.info("Telemetry instance_heartbeat geplant")
+        # Einmalig beim Start: Instance-Heartbeat (total_users_bucket, Pipelines, Storage, RAM, CPU)
+        # Nur gesendet wenn enable_telemetry; danach wie geplant (z.B. täglich 03:00 UTC)
+        asyncio.create_task(asyncio.to_thread(run_instance_heartbeat_sync))
     except Exception as e:
         logger.warning("Telemetry Heartbeat konnte nicht geplant werden: %s", e)
 

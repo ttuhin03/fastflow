@@ -289,8 +289,9 @@ def track_instance_heartbeat(session: Session) -> None:
 
 def run_instance_heartbeat_sync() -> None:
     """
-    Synchrone Ausführung für den Scheduler: einmal täglich instance_heartbeat
-    inkl. Storage/RAM/CPU senden. Nur aktiv wenn enable_telemetry.
+    Synchrone Ausführung für instance_heartbeat (total_users_bucket, Pipelines, Storage, RAM, CPU).
+    Wird einmal beim App-Start und danach nach Plan (täglich 03:00 UTC) aufgerufen.
+    Nur aktiv wenn enable_telemetry; sonst keine Aktion.
     """
     try:
         from sqlmodel import Session
@@ -298,6 +299,8 @@ def run_instance_heartbeat_sync() -> None:
         from app.database import engine
 
         with Session(engine) as session:
+            if get_posthog_client_for_telemetry(session) is None:
+                return
             track_instance_heartbeat(session)
     except Exception as e:
         logger.warning("Telemetry instance_heartbeat fehlgeschlagen: %s", e)
