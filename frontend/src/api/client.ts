@@ -2,6 +2,7 @@ import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios'
 import { showError } from '../utils/toast'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
+const LOGIN_PATH = import.meta.env.VITE_LOGIN_PATH || '/login'
 
 export const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -109,13 +110,13 @@ apiClient.interceptors.response.use(
           sessionStorage.removeItem('auth_token')
 
           // Zeige benutzerfreundliche Nachricht wenn Session abgelaufen ist
-          if (isSessionExpired && window.location.pathname !== '/login') {
+          if (isSessionExpired && window.location.pathname !== LOGIN_PATH) {
             showError('Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.')
           }
 
           // Nur redirecten wenn nicht bereits auf Login-Seite
-          if (window.location.pathname !== '/login') {
-            window.location.href = '/login'
+          if (window.location.pathname !== LOGIN_PATH) {
+            window.location.href = LOGIN_PATH
           }
           return Promise.reject(refreshError)
         }
@@ -125,8 +126,8 @@ apiClient.interceptors.response.use(
         isRefreshing = false
         sessionStorage.removeItem('auth_token')
         // Nur redirecten wenn nicht bereits auf Login-Seite
-        if (window.location.pathname !== '/login') {
-          window.location.href = '/login'
+        if (window.location.pathname !== LOGIN_PATH) {
+          window.location.href = LOGIN_PATH
         }
         return Promise.reject(error)
       }

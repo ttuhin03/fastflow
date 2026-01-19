@@ -9,7 +9,7 @@ Dieses Modul enthält alle REST-API-Endpoints für Git-Synchronisation:
 from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import JSONResponse, RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlmodel import Session
 from datetime import datetime
 import json
@@ -42,7 +42,7 @@ router = APIRouter(prefix="/sync", tags=["sync"])
 
 class SyncRequest(BaseModel):
     """Request-Model für Git-Sync."""
-    branch: Optional[str] = None
+    branch: Optional[str] = Field(default=None, min_length=1, max_length=255, description="Git-Branch (z.B. main)")
 
 
 @router.post("", response_model=Dict[str, Any])

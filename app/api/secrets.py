@@ -123,8 +123,8 @@ async def get_secrets(
 @router.post("", response_model=Dict[str, Any])
 async def create_secret(
     request: SecretCreateRequest,
-    current_user = Depends(require_write),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_write),
 ) -> Dict[str, Any]:
     """
     Erstellt ein neues Secret (Value wird verschlüsselt gespeichert).
@@ -193,8 +193,8 @@ async def create_secret(
 async def update_secret(
     key: str,
     request: SecretUpdateRequest,
-    current_user = Depends(require_write),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_write),
 ) -> Dict[str, Any]:
     """
     Aktualisiert ein bestehendes Secret (Value wird verschlüsselt gespeichert).
@@ -264,8 +264,8 @@ async def update_secret(
 @router.delete("/{key:path}")
 async def delete_secret(
     key: str,
-    current_user = Depends(require_write),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_write),
 ) -> Dict[str, Any]:
     """
     Löscht ein Secret. Key darf / enthalten (z.B. "env/DATABASE_URL").

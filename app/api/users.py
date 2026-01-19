@@ -48,6 +48,23 @@ class UserResponse(BaseModel):
     class Config:
         from_attributes = True
 
+    @classmethod
+    def from_user(cls, user: "User") -> "UserResponse":
+        """Erstellt UserResponse aus einem User-Model."""
+        return cls(
+            id=str(user.id),
+            username=user.username,
+            email=user.email,
+            role=user.role.value,
+            blocked=user.blocked,
+            created_at=user.created_at.isoformat(),
+            microsoft_id=user.microsoft_id,
+            github_id=user.github_id,
+            github_login=getattr(user, "github_login", None),
+            google_id=user.google_id,
+            status=getattr(user, "status", "active"),
+        )
+
 
 class ApproveUserRequest(BaseModel):
     """Request-Model für Freigabe einer Beitrittsanfrage."""

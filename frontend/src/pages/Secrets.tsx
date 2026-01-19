@@ -15,6 +15,22 @@ interface Secret {
   updated_at: string
 }
 
+// Entspricht der API: A–Z, a–z, 0–9, _, -, /; kein '..'; 1–255 Zeichen
+const SECRET_KEY_REGEX = /^[A-Za-z0-9_/\-]+$/
+
+function validateSecretKey(key: string): string | null {
+  if (!key || key.length > 255) {
+    return 'Key muss 1–255 Zeichen haben.'
+  }
+  if (key.includes('..')) {
+    return "Key darf '..' nicht enthalten."
+  }
+  if (!SECRET_KEY_REGEX.test(key)) {
+    return 'Key darf nur A–Z, a–z, 0–9, _, - und / enthalten.'
+  }
+  return null
+}
+
 export default function Secrets() {
   const queryClient = useQueryClient()
   const { isReadonly } = useAuth()
@@ -88,6 +104,11 @@ export default function Secrets() {
       showError('Bitte füllen Sie alle Felder aus')
       return
     }
+    const keyErr = validateSecretKey(formKey)
+    if (keyErr) {
+      showError(keyErr)
+      return
+    }
 
     if (editingKey) {
       updateMutation.mutate({ key: formKey, value: formValue, isParameter: isParameter })
@@ -146,7 +167,7 @@ export default function Secrets() {
             <div className="form-group">
               <label htmlFor="secret-key">
                 Key:
-                <InfoIcon content="Eindeutiger Schlüssel für das Secret/Parameter" />
+                <InfoIcon content="Eindeutiger Schlüssel (A–Z, a–z, 0–9, _, -, /); max. 255 Zeichen." />
               </label>
               <input
                 id="secret-key"
