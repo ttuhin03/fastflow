@@ -98,12 +98,26 @@ services:
     
     environment:
       - VITE_API_URL=http://localhost:8000/api
+      - VITE_DOCS_URL=http://localhost:3001
       - CHOKIDAR_USEPOLLING=true  # Für Hot-Reload in Docker
     
     depends_on:
       - orchestrator
       - docker-proxy
     
+    networks:
+      - fastflow-network
+
+  # Docusaurus-Doku (statisch, Port 3001)
+  docs:
+    build:
+      context: .
+      dockerfile: Dockerfile.docs
+    container_name: fastflow-docs
+    image: fastflow-docs:latest
+    ports:
+      - "3001:3001"
+    restart: unless-stopped
     networks:
       - fastflow-network
 

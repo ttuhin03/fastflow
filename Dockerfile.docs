@@ -1,0 +1,19 @@
+# Docusaurus-Doku bauen und mit serve ausliefern
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+COPY docs/package.json ./
+RUN npm install
+
+COPY docs/ ./
+RUN npm run build
+
+# Serve der statischen Doku (SPA-Routing)
+FROM node:20-alpine
+
+WORKDIR /app
+COPY --from=builder /app/build ./build
+
+EXPOSE 3001
+CMD ["npx", "serve", "-s", "build", "-l", "3001"]

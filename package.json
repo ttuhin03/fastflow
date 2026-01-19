@@ -1,0 +1,12 @@
+{
+  "name": "fastflow",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "docs"
+  ],
+  "scripts": {
+    "docs:dev": "npm run start --workspace=docs",
+    "docs:build": "npm run build --workspace=docs"
+  }
+}

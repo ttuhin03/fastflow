@@ -17,7 +17,8 @@ import {
   MdPause,
   MdMenu,
   MdClose,
-  MdCode
+  MdCode,
+  MdMenuBook
 } from 'react-icons/md'
 import NotificationCenter from './NotificationCenter'
 import Tooltip from './Tooltip'
@@ -221,6 +222,16 @@ export default function Layout() {
               {backendStatus === 'online' ? 'Online' : backendStatus === 'offline' ? 'Offline' : 'Prüfe...'}
             </span>
           </div>
+
+          <a
+            href={import.meta.env.VITE_DOCS_URL || 'http://localhost:3001'}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="sidebar-docs-link"
+          >
+            <MdMenuBook style={{ flexShrink: 0, width: 16, height: 16 }} />
+            <span>Doku</span>
+          </a>
 
           <a
             href="https://github.com/ttuhin03/fastflow"
