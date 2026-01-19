@@ -418,10 +418,10 @@ export default function PipelineDetail() {
                       {run.status}
                     </span>
                   </td>
-                  <td>{new Date(run.started_at).toLocaleString('de-DE')}</td>
+                  <td>{new Date(run.started_at).toLocaleString('de-DE', { timeZone: 'UTC' })} UTC</td>
                   <td>
                     {run.finished_at
-                      ? new Date(run.finished_at).toLocaleString('de-DE')
+                      ? `${new Date(run.finished_at).toLocaleString('de-DE', { timeZone: 'UTC' })} UTC`
                       : '-'}
                   </td>
                   <td>

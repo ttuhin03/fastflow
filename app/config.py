@@ -402,6 +402,15 @@ class Config:
     Beispiel: "http://localhost:8000" oder "https://fastflow.example.com"
     """
     
+    SKIP_OAUTH_VERIFICATION: bool = (
+        os.getenv("SKIP_OAUTH_VERIFICATION", "").lower() in ("1", "true", "yes")
+    )
+    """
+    Überspringt die HTTP-Verifizierung der OAuth-Credentials beim Start.
+    Nützlich für Tests/CI. Die Prüfung „mind. ein OAuth-Provider vollständig“
+    wird weiterhin ausgeführt.
+    """
+
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development").lower()
     """
     Umgebungsmodus der App (development oder production).
