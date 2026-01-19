@@ -24,6 +24,7 @@ from app.models import PipelineRun, RunStatus, User
 from app.notifications import send_email_notification, send_teams_notification
 from app.executor import _get_docker_client
 from app.auth import require_write, get_current_user
+from app.errors import get_500_detail
 from sqlmodel import text
 
 logger = logging.getLogger(__name__)
@@ -479,9 +480,13 @@ async def force_cleanup(
 
 
 @router.get("/system-metrics", response_model=Dict[str, Any])
-async def get_system_metrics() -> Dict[str, Any]:
+async def get_system_metrics(
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
     """
     Gibt System-Metriken zurück (Docker-Container, RAM, CPU).
+    
+    Erfordert Authentifizierung.
     
     Returns:
         Dictionary mit:
@@ -609,140 +614,8 @@ async def get_system_metrics() -> Dict[str, Any]:
         return metrics
         
     except Exception as e:
+        logger.exception("Fehler beim Abrufen der System-Metriken")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Fehler beim Abrufen der System-Metriken: {str(e)}"
-        )
-    """
-    Gibt System-Metriken zurück (Docker-Container, RAM, CPU).
-    
-    Returns:
-        Dictionary mit:
-        - active_containers: Anzahl aktiver Pipeline-Container
-        - containers_ram_mb: Gesamter RAM-Verbrauch der Container in MB
-        - containers_cpu_percent: Gesamter CPU-Verbrauch der Container in Prozent
-        - api_ram_mb: RAM-Verbrauch der API in MB
-        - api_cpu_percent: CPU-Verbrauch der API in Prozent
-        - system_ram_total_mb: Gesamter System-RAM in MB
-        - system_ram_used_mb: Verwendeter System-RAM in MB
-        - system_ram_percent: System-RAM-Auslastung in Prozent
-        - system_cpu_percent: System-CPU-Auslastung in Prozent
-        - container_details: Liste mit Details zu jedem Container
-    """
-    try:
-        metrics = {
-            "active_containers": 0,
-            "containers_ram_mb": 0.0,
-            "containers_cpu_percent": 0.0,
-            "api_ram_mb": 0.0,
-            "api_cpu_percent": 0.0,
-            "system_ram_total_mb": 0.0,
-            "system_ram_used_mb": 0.0,
-            "system_ram_percent": 0.0,
-            "system_cpu_percent": 0.0,
-            "container_details": []
-        }
-        
-        # API-Prozess-Metriken (psutil)
-        try:
-            process = psutil.Process()
-            api_memory_info = process.memory_info()
-            metrics["api_ram_mb"] = round(api_memory_info.rss / (1024 * 1024), 2)
-            metrics["api_cpu_percent"] = round(process.cpu_percent(interval=0.1), 2)
-        except Exception as e:
-            logger.warning(f"Fehler beim Ermitteln der API-Metriken: {e}")
-        
-        # System-Metriken
-        try:
-            system_memory = psutil.virtual_memory()
-            metrics["system_ram_total_mb"] = round(system_memory.total / (1024 * 1024), 2)
-            metrics["system_ram_used_mb"] = round(system_memory.used / (1024 * 1024), 2)
-            metrics["system_ram_percent"] = round(system_memory.percent, 2)
-            metrics["system_cpu_percent"] = round(psutil.cpu_percent(interval=0.1), 2)
-        except Exception as e:
-            logger.warning(f"Fehler beim Ermitteln der System-Metriken: {e}")
-        
-        # Docker-Container-Metriken
-        try:
-            docker_client = _get_docker_client()
-            
-            # Alle Container mit fastflow-run-id Label finden
-            containers = docker_client.containers.list(
-                filters={"label": "fastflow-run-id"},
-                all=False  # Nur laufende Container
-            )
-            
-            metrics["active_containers"] = len(containers)
-            
-            total_ram_mb = 0.0
-            total_cpu_percent = 0.0
-            container_details = []
-            
-            for container in containers:
-                try:
-                    # Container-Stats abrufen
-                    stats = container.stats(stream=False)
-                    
-                    # RAM-Verbrauch berechnen
-                    memory_usage = stats.get("memory_stats", {}).get("usage", 0)
-                    memory_limit = stats.get("memory_stats", {}).get("limit", 0)
-                    ram_mb = memory_usage / (1024 * 1024) if memory_usage else 0
-                    ram_percent = (memory_usage / memory_limit * 100) if memory_limit > 0 else 0
-                    
-                    # CPU-Verbrauch berechnen
-                    cpu_percent = 0.0
-                    cpu_stats = stats.get("cpu_stats", {})
-                    precpu_stats = stats.get("precpu_stats", {})
-                    
-                    if cpu_stats and precpu_stats:
-                        cpu_delta = (
-                            cpu_stats.get("cpu_usage", {}).get("total_usage", 0) -
-                            precpu_stats.get("cpu_usage", {}).get("total_usage", 0)
-                        )
-                        system_delta = (
-                            cpu_stats.get("system_cpu_usage", 0) -
-                            precpu_stats.get("system_cpu_usage", 0)
-                        )
-                        
-                        if system_delta > 0:
-                            online_cpus = len(cpu_stats.get("cpu_usage", {}).get("percpu_usage", [])) or 1
-                            cpu_percent = (cpu_delta / system_delta) * online_cpus * 100.0
-                    
-                    total_ram_mb += ram_mb
-                    total_cpu_percent += cpu_percent
-                    
-                    # Container-Details
-                    run_id = container.labels.get("fastflow-run-id", "unknown")
-                    pipeline_name = container.labels.get("fastflow-pipeline", "unknown")
-                    
-                    container_details.append({
-                        "run_id": run_id,
-                        "pipeline_name": pipeline_name,
-                        "container_id": container.id[:12],
-                        "ram_mb": round(ram_mb, 2),
-                        "ram_percent": round(ram_percent, 2),
-                        "cpu_percent": round(cpu_percent, 2),
-                        "status": container.status
-                    })
-                    
-                except Exception as e:
-                    logger.warning(f"Fehler beim Ermitteln der Container-Stats für {container.id}: {e}")
-                    continue
-            
-            metrics["containers_ram_mb"] = round(total_ram_mb, 2)
-            metrics["containers_cpu_percent"] = round(total_cpu_percent, 2)
-            metrics["container_details"] = container_details
-            
-        except RuntimeError:
-            # Docker-Client nicht verfügbar
-            pass
-        except Exception as e:
-            logger.warning(f"Fehler beim Ermitteln der Docker-Container-Metriken: {e}")
-        
-        return metrics
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Fehler beim Abrufen der System-Metriken: {str(e)}"
+            detail=get_500_detail(e),
         )

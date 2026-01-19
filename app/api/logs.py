@@ -14,7 +14,7 @@ import aiofiles
 from pathlib import Path
 from typing import Optional
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import StreamingResponse, PlainTextResponse
 from sqlmodel import Session
 
@@ -23,6 +23,7 @@ from app.models import PipelineRun
 from app.executor import get_log_queue
 from app.config import config
 from app.auth import get_current_user
+from app.errors import get_500_detail
 from app.models import User
 import logging
 
@@ -34,7 +35,7 @@ router = APIRouter(prefix="/runs", tags=["logs"])
 @router.get("/{run_id}/logs")
 async def get_run_logs(
     run_id: UUID,
-    tail: Optional[int] = None,
+    tail: Optional[int] = Query(default=None, ge=1, le=100_000, description="Letzte N Zeilen (max. 100.000)"),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ) -> PlainTextResponse:
@@ -115,9 +116,10 @@ async def get_run_logs(
         return PlainTextResponse(content=contents, media_type="text/plain")
         
     except Exception as e:
+        logger.exception("Fehler beim Lesen der Log-Datei")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Fehler beim Lesen der Log-Datei: {str(e)}"
+            detail=get_500_detail(e),
         )
 
 

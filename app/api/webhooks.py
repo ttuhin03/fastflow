@@ -5,15 +5,19 @@ Dieses Modul enthält REST-API-Endpoints für Webhook-Trigger:
 - POST /webhooks/{pipeline_name}/{webhook_key} - Pipeline via Webhook starten
 """
 
+import logging
+import secrets as secrets_module
 from typing import Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlmodel import Session
 
 from app.database import get_session
+from app.errors import get_500_detail
 from app.executor import run_pipeline
 from app.middleware.rate_limiting import limiter
 from app.pipeline_discovery import get_pipeline as get_discovered_pipeline
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
 
@@ -71,8 +75,8 @@ async def trigger_pipeline_via_webhook(
             detail=f"Webhooks sind für diese Pipeline deaktiviert: {pipeline_name}"
         )
     
-    # Validiere webhook_key
-    if webhook_key != pipeline_webhook_key:
+    # Validiere webhook_key (constant-time Vergleich gegen Timing-Angriffe)
+    if not secrets_module.compare_digest(webhook_key, pipeline_webhook_key):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Ungültiger Webhook-Schlüssel"
@@ -108,7 +112,8 @@ async def trigger_pipeline_via_webhook(
             detail=str(e)
         )
     except Exception as e:
+        logger.exception("Fehler beim Starten der Pipeline via Webhook")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Fehler beim Starten der Pipeline: {str(e)}"
+            detail=get_500_detail(e),
         )

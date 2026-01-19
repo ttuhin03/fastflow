@@ -255,8 +255,8 @@ export default function RunDetail() {
   const logsEndRef = useRef<HTMLDivElement>(null)
   const [logs, setLogs] = useState<string[]>([])
   const [metrics, setMetrics] = useState<Metric[]>([])
-  const eventSourceRef = useRef<EventSource | null>(null)
-  const metricsEventSourceRef = useRef<EventSource | null>(null)
+  const logStreamAbortRef = useRef<AbortController | null>(null)
+  const metricsStreamAbortRef = useRef<AbortController | null>(null)
   const [logReconnectAttempts, setLogReconnectAttempts] = useState(0)
   const [metricsReconnectAttempts, setMetricsReconnectAttempts] = useState(0)
   const [logConnectionStatus, setLogConnectionStatus] = useState<'connected' | 'disconnected' | 'reconnecting'>('connected')
@@ -378,23 +378,19 @@ export default function RunDetail() {
     },
   })
 
-  // Log-Streaming mit SSE (mit Re-Connect-Handling)
+  // Log-Streaming mit SSE via fetch (Authorization-Header, kein Token in URL)
   useEffect(() => {
     if (!run || activeTab !== 'logs') {
-      // Cleanup wenn Tab gewechselt wird
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close()
-        eventSourceRef.current = null
-      }
+      logStreamAbortRef.current?.abort()
+      logStreamAbortRef.current = null
       return
     }
 
     const isRunning = run.status === 'RUNNING' || run.status === 'PENDING'
     let reconnectTimeout: ReturnType<typeof setTimeout> | null = null
     const MAX_RECONNECT_ATTEMPTS = 5
-    const RECONNECT_DELAY = 3000 // 3 Sekunden
-    
-    // Lade historische Logs nur für abgeschlossene Runs
+    const RECONNECT_DELAY = 3000
+
     const loadHistoricalLogs = async () => {
       try {
         const response = await apiClient.get(`/runs/${runId}/logs?tail=1000`, { responseType: 'text' })
@@ -405,214 +401,188 @@ export default function RunDetail() {
         setLogs([])
       }
     }
-    
+
     const connectLogStream = () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close()
-      }
-      
+      logStreamAbortRef.current?.abort()
+      const ctrl = new AbortController()
+      logStreamAbortRef.current = ctrl
+
       setLogConnectionStatus('reconnecting')
-      // EventSource unterstützt keine Custom Headers
-      // Daher Token als Query-Parameter übergeben
       const token = sessionStorage.getItem('auth_token')
       if (!token) {
         console.error('Kein Auth-Token gefunden, kann Log-Stream nicht verbinden')
         setLogConnectionStatus('disconnected')
         return
       }
-      
-      // Konstruiere URL - baseURL enthält bereits /api, daher direkt anhängen
+
       const baseURL = apiClient.defaults.baseURL || 'http://localhost:8000/api'
-      // Token als Query-Parameter hinzufügen (URL-encoded)
-      const streamURL = `${baseURL}/runs/${runId}/logs/stream?token=${encodeURIComponent(token)}`
-      console.log('Connecting to log stream:', streamURL.replace(token, '[TOKEN]')) // Token in Log ausblenden
-      
-      const eventSource = new EventSource(streamURL)
-      eventSourceRef.current = eventSource
+      const url = `${baseURL}/runs/${runId}/logs/stream`
 
-      eventSource.onopen = () => {
-        console.log('Log stream connected, readyState:', eventSource.readyState)
-        setLogConnectionStatus('connected')
-        setLogReconnectAttempts(0)
-      }
-
-      eventSource.onmessage = (event) => {
-        setLogConnectionStatus('connected')
-        // Ignoriere Keep-Alive-Nachrichten
-        if (event.data.trim() === '' || event.data.startsWith(':')) {
-          return
-        }
+      ;(async () => {
         try {
-          const data = JSON.parse(event.data)
-          if (data.line) {
-            console.log('Received log line:', data.line.substring(0, 100))
-            setLogs((prev) => {
-              // Verhindere Duplikate
-              if (prev.length > 0 && prev[prev.length - 1] === data.line) {
-                return prev
+          const res = await fetch(url, {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: ctrl.signal,
+          })
+          if (!res.ok) throw new Error(res.statusText)
+          setLogConnectionStatus('connected')
+          setLogReconnectAttempts(0)
+          const reader = res.body!.getReader()
+          const dec = new TextDecoder()
+          let buf = ''
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            buf += dec.decode(value, { stream: true })
+            for (;;) {
+              const i = buf.indexOf('\n\n')
+              if (i === -1) break
+              const block = buf.slice(0, i).trimEnd()
+              buf = buf.slice(i + 2)
+              if (block.startsWith('data: ')) {
+                const payload = block.slice(6)
+                try {
+                  const data = JSON.parse(payload)
+                  if (data.line) {
+                    setLogs((prev) => {
+                      if (prev.length > 0 && prev[prev.length - 1] === data.line) return prev
+                      return [...prev, data.line]
+                    })
+                  } else if (data.error) console.error('Log stream error from server:', data.error)
+                } catch {
+                  if (payload) setLogs((prev) => [...prev, payload])
+                }
               }
-              return [...prev, data.line]
-            })
-          } else if (data.error) {
-            console.error('Log stream error from server:', data.error)
+            }
           }
-        } catch (e) {
-          // Fallback: Direkt als Text behandeln
-          if (event.data && !event.data.startsWith(':')) {
-            console.log('Received log line (fallback):', event.data.substring(0, 100))
-            setLogs((prev) => {
-              if (prev.length > 0 && prev[prev.length - 1] === event.data) {
-                return prev
-              }
-              return [...prev, event.data]
-            })
-          }
-        }
-      }
-
-      eventSource.onerror = (error) => {
-        console.error('Log stream error:', error)
-        console.log('EventSource readyState:', eventSource.readyState)
-        // readyState: 0 = CONNECTING, 1 = OPEN, 2 = CLOSED
-        if (eventSource.readyState === EventSource.CLOSED) {
           setLogConnectionStatus('disconnected')
-          eventSource.close()
-          
-          // Re-Connect versuchen nur wenn noch nicht zu viele Versuche
           if (logReconnectAttempts < MAX_RECONNECT_ATTEMPTS && isRunning) {
             reconnectTimeout = setTimeout(() => {
               setLogReconnectAttempts((prev) => prev + 1)
-              console.log(`Reconnecting log stream (attempt ${logReconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})`)
+              connectLogStream()
+            }, RECONNECT_DELAY)
+          }
+        } catch (e: unknown) {
+          if ((e as { name?: string })?.name === 'AbortError') return
+          console.error('Log stream error:', e)
+          setLogConnectionStatus('disconnected')
+          logStreamAbortRef.current = null
+          if (logReconnectAttempts < MAX_RECONNECT_ATTEMPTS && isRunning) {
+            reconnectTimeout = setTimeout(() => {
+              setLogReconnectAttempts((prev) => prev + 1)
               connectLogStream()
             }, RECONNECT_DELAY)
           }
         }
-      }
+      })()
     }
-    
+
     if (isRunning) {
-      // Für laufende Runs: Lade zuerst vorhandene Logs, dann starte Stream
-      // Das Backend sendet alle vorhandenen Logs aus der Queue beim Connect
-      console.log('Starting log stream for running run')
-      setLogs([]) // Leere Logs zuerst
+      setLogs([])
       connectLogStream()
-      
       return () => {
         if (reconnectTimeout) clearTimeout(reconnectTimeout)
-        if (eventSourceRef.current) {
-          console.log('Closing log stream')
-          eventSourceRef.current.close()
-          eventSourceRef.current = null
-        }
+        logStreamAbortRef.current?.abort()
+        logStreamAbortRef.current = null
       }
     } else {
-      // Für abgeschlossene Runs: Lade Logs aus Datei
-      console.log('Loading historical logs for finished run')
       loadHistoricalLogs()
     }
   }, [runId, run, activeTab, logReconnectAttempts])
 
-  // Metrics-Streaming mit SSE (mit Re-Connect-Handling)
+  // Metrics-Streaming mit SSE via fetch (Authorization-Header, kein Token in URL)
   useEffect(() => {
-    if (!run || activeTab !== 'metrics') return
+    if (!run || activeTab !== 'metrics') {
+      metricsStreamAbortRef.current?.abort()
+      metricsStreamAbortRef.current = null
+      return
+    }
 
     const isRunning = run.status === 'RUNNING' || run.status === 'PENDING'
     let reconnectTimeout: ReturnType<typeof setTimeout> | null = null
     const MAX_RECONNECT_ATTEMPTS = 5
-    const RECONNECT_DELAY = 3000 // 3 Sekunden
-    
+    const RECONNECT_DELAY = 3000
+
     const connectMetricsStream = () => {
-      if (metricsEventSourceRef.current) {
-        metricsEventSourceRef.current.close()
-      }
-      
+      metricsStreamAbortRef.current?.abort()
+      const ctrl = new AbortController()
+      metricsStreamAbortRef.current = ctrl
+
       setMetricsConnectionStatus('reconnecting')
-      // EventSource unterstützt keine Custom Headers
-      // Daher Token als Query-Parameter übergeben
       const token = sessionStorage.getItem('auth_token')
       if (!token) {
         console.error('Kein Auth-Token gefunden, kann Metrics-Stream nicht verbinden')
         setMetricsConnectionStatus('disconnected')
         return
       }
-      
-      // Konstruiere URL - baseURL enthält bereits /api, daher direkt anhängen
+
       const baseURL = apiClient.defaults.baseURL || 'http://localhost:8000/api'
-      // Token als Query-Parameter hinzufügen (URL-encoded)
-      const streamURL = `${baseURL}/runs/${runId}/metrics/stream?token=${encodeURIComponent(token)}`
-      console.log('Connecting to metrics stream:', streamURL.replace(token, '[TOKEN]')) // Token in Log ausblenden
-      
-      const eventSource = new EventSource(streamURL)
-      metricsEventSourceRef.current = eventSource
+      const url = `${baseURL}/runs/${runId}/metrics/stream`
 
-      eventSource.onopen = () => {
-        console.log('Metrics stream connected, readyState:', eventSource.readyState)
-        setMetricsConnectionStatus('connected')
-        setMetricsReconnectAttempts(0)
-      }
-
-      eventSource.onmessage = (event) => {
-        setMetricsConnectionStatus('connected')
-        // Ignoriere Keep-Alive-Nachrichten
-        if (event.data.trim() === '' || event.data.startsWith(':')) {
-          return
-        }
+      ;(async () => {
         try {
-          const metric = JSON.parse(event.data)
-          if (metric.timestamp) {
-            setMetrics((prev) => [...prev, metric])
-          } else if (metric.error) {
-            console.error('Metrics stream error from server:', metric.error)
+          const res = await fetch(url, {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: ctrl.signal,
+          })
+          if (!res.ok) throw new Error(res.statusText)
+          setMetricsConnectionStatus('connected')
+          setMetricsReconnectAttempts(0)
+          const reader = res.body!.getReader()
+          const dec = new TextDecoder()
+          let buf = ''
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            buf += dec.decode(value, { stream: true })
+            for (;;) {
+              const i = buf.indexOf('\n\n')
+              if (i === -1) break
+              const block = buf.slice(0, i).trimEnd()
+              buf = buf.slice(i + 2)
+              if (block.startsWith('data: ')) {
+                try {
+                  const metric = JSON.parse(block.slice(6))
+                  if (metric.timestamp) setMetrics((prev) => [...prev, metric])
+                  else if (metric.error) console.error('Metrics stream error from server:', metric.error)
+                } catch (e) {
+                  console.error('Fehler beim Parsen der Metrics:', e)
+                }
+              }
+            }
           }
-        } catch (e) {
-          console.error('Fehler beim Parsen der Metrics:', e)
-        }
-      }
-
-      eventSource.onerror = (error) => {
-        console.error('Metrics stream error:', error)
-        console.log('EventSource readyState:', eventSource.readyState)
-        // readyState: 0 = CONNECTING, 1 = OPEN, 2 = CLOSED
-        if (eventSource.readyState === EventSource.CLOSED) {
           setMetricsConnectionStatus('disconnected')
-          eventSource.close()
-          
-          // Re-Connect versuchen nur wenn noch nicht zu viele Versuche
           if (metricsReconnectAttempts < MAX_RECONNECT_ATTEMPTS && isRunning) {
             reconnectTimeout = setTimeout(() => {
               setMetricsReconnectAttempts((prev) => prev + 1)
-              console.log(`Reconnecting metrics stream (attempt ${metricsReconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})`)
+              connectMetricsStream()
+            }, RECONNECT_DELAY)
+          }
+        } catch (e: unknown) {
+          if ((e as { name?: string })?.name === 'AbortError') return
+          console.error('Metrics stream error:', e)
+          setMetricsConnectionStatus('disconnected')
+          metricsStreamAbortRef.current = null
+          if (metricsReconnectAttempts < MAX_RECONNECT_ATTEMPTS && isRunning) {
+            reconnectTimeout = setTimeout(() => {
+              setMetricsReconnectAttempts((prev) => prev + 1)
               connectMetricsStream()
             }, RECONNECT_DELAY)
           }
         }
-      }
+      })()
     }
-    
+
     if (isRunning) {
-      // Für laufende Runs: Starte Metrics-Stream
-      console.log('Starting metrics stream for running run')
-      setMetrics([]) // Leere Metrics zuerst
+      setMetrics([])
       connectMetricsStream()
-      
       return () => {
         if (reconnectTimeout) clearTimeout(reconnectTimeout)
-        if (metricsEventSourceRef.current) {
-          console.log('Closing metrics stream')
-          metricsEventSourceRef.current.close()
-          metricsEventSourceRef.current = null
-        }
+        metricsStreamAbortRef.current?.abort()
+        metricsStreamAbortRef.current = null
       }
     } else if (run.metrics_file) {
-      // Metrics aus Datei laden für abgeschlossene Runs
-      apiClient
-        .get(`/runs/${runId}/metrics`)
-        .then((response) => {
-          setMetrics(response.data)
-        })
-        .catch((error) => {
-          console.error('Fehler beim Laden der Metrics:', error)
-        })
+      apiClient.get(`/runs/${runId}/metrics`).then((r) => setMetrics(r.data)).catch((e) => console.error('Fehler beim Laden der Metrics:', e))
     }
   }, [runId, run, activeTab, metricsReconnectAttempts])
 

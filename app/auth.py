@@ -242,7 +242,11 @@ async def get_current_user(
         # Standard: Token aus Authorization Header
         auth_token = credentials.credentials
     elif token is not None:
-        # Fallback: Token aus Query-Parameter (für EventSource/SSE)
+        # Fallback: Token aus Query-Parameter (veraltet, unsicher: wird in URLs geloggt)
+        logger.warning(
+            "Token-Übergabe per Query-Parameter ist veraltet und unsicher (z.B. Logs, Referrer). "
+            "Bitte Authorization-Header verwenden (z.B. fetch mit SSE)."
+        )
         auth_token = token
     
     if auth_token is None:

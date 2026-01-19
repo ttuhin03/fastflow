@@ -8,6 +8,7 @@ Dieses Modul enthält alle REST-API-Endpoints für Secrets-Management:
 - Secret löschen
 """
 
+import re
 from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
@@ -17,8 +18,39 @@ from app.database import get_session
 from app.models import Secret, User
 from app.secrets import encrypt, decrypt
 from app.auth import require_write, get_current_user
+from app.errors import get_500_detail
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/secrets", tags=["secrets"])
+
+# Secret-Key: alphanumeric, underscore, hyphen, Schrägstrich; kein '..'; max 255 Zeichen
+_SECRET_KEY_PATTERN = re.compile(r"^[A-Za-z0-9_/\-]+$")
+
+
+def _validate_secret_key(key: str) -> None:
+    """Validiert Secret-Key. Erlaubt auch /.
+
+    Raises:
+        HTTPException: Bei ungültigem Key
+    """
+    if not key or len(key) > 255:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Secret-Key muss 1–255 Zeichen haben (Zeichen: A–Z, a–z, 0–9, _, -, /).",
+        )
+    if ".." in key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Secret-Key darf '..' nicht enthalten.",
+        )
+    if not _SECRET_KEY_PATTERN.match(key):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Secret-Key darf nur A–Z, a–z, 0–9, _, - und / enthalten.",
+        )
 
 
 class SecretCreateRequest(BaseModel):
@@ -81,9 +113,10 @@ async def get_secrets(
         return result
         
     except Exception as e:
+        logger.exception("Fehler beim Abrufen der Secrets")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Fehler beim Abrufen der Secrets: {str(e)}"
+            detail=get_500_detail(e),
         ) from e
 
 
@@ -109,6 +142,7 @@ async def create_secret(
     Raises:
         HTTPException: Wenn Secret bereits existiert oder Fehler bei Verschlüsselung auftritt
     """
+    _validate_secret_key(request.key)
     try:
         # Prüfe ob Secret bereits existiert
         statement = select(Secret).where(Secret.key == request.key)
@@ -148,13 +182,14 @@ async def create_secret(
         raise
     except Exception as e:
         session.rollback()
+        logger.exception("Fehler beim Erstellen des Secrets")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Fehler beim Erstellen des Secrets: {str(e)}"
+            detail=get_500_detail(e),
         ) from e
 
 
-@router.put("/{key}", response_model=Dict[str, Any])
+@router.put("/{key:path}", response_model=Dict[str, Any])
 async def update_secret(
     key: str,
     request: SecretUpdateRequest,
@@ -163,23 +198,25 @@ async def update_secret(
 ) -> Dict[str, Any]:
     """
     Aktualisiert ein bestehendes Secret (Value wird verschlüsselt gespeichert).
-    
+    Key darf / enthalten (z.B. "env/DATABASE_URL").
+
     Verschlüsselt den Wert vor der Speicherung in der Datenbank.
     Wenn das Secret nicht existiert, wird ein Fehler zurückgegeben.
-    
+
     Args:
-        key: Secret-Key
+        key: Secret-Key (darf / enthalten)
         request: Request-Body mit neuem value
         session: SQLModel Session
-        
+
     Returns:
         Dictionary mit aktualisiertem Secret (entschlüsselt)
-        
+
     Raises:
         HTTPException: Wenn Secret nicht existiert oder Fehler bei Verschlüsselung auftritt
     """
     from datetime import datetime
-    
+
+    _validate_secret_key(key)
     try:
         # Secret abrufen
         statement = select(Secret).where(Secret.key == key)
@@ -217,31 +254,33 @@ async def update_secret(
         raise
     except Exception as e:
         session.rollback()
+        logger.exception("Fehler beim Aktualisieren des Secrets")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Fehler beim Aktualisieren des Secrets: {str(e)}"
+            detail=get_500_detail(e),
         ) from e
 
 
-@router.delete("/{key}")
+@router.delete("/{key:path}")
 async def delete_secret(
     key: str,
     current_user = Depends(require_write),
     session: Session = Depends(get_session)
 ) -> Dict[str, Any]:
     """
-    Löscht ein Secret.
-    
+    Löscht ein Secret. Key darf / enthalten (z.B. "env/DATABASE_URL").
+
     Args:
-        key: Secret-Key
+        key: Secret-Key (darf / enthalten)
         session: SQLModel Session
-        
+
     Returns:
         Dictionary mit Bestätigung der Löschung
-        
+
     Raises:
         HTTPException: Wenn Secret nicht existiert
     """
+    _validate_secret_key(key)
     try:
         # Secret abrufen
         statement = select(Secret).where(Secret.key == key)
@@ -265,7 +304,8 @@ async def delete_secret(
         raise
     except Exception as e:
         session.rollback()
+        logger.exception("Fehler beim Löschen des Secrets")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Fehler beim Löschen des Secrets: {str(e)}"
+            detail=get_500_detail(e),
         ) from e
