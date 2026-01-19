@@ -53,28 +53,30 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # - self: Eigene Domain
         # - 'unsafe-inline' für inline scripts/styles (notwendig für React in Dev)
         # - 'unsafe-eval' für eval (notwendig für React Dev Mode)
-        # In Produktion sollte CSP restriktiver sein
+        # PostHog: script-src + connect-src für eu-assets (array.js, config), eu.i (Ingest), eu (App)
+        posthog_script = "https://eu-assets.i.posthog.com"
+        posthog_connect = "https://eu.i.posthog.com https://eu.posthog.com https://eu-assets.i.posthog.com"
         if config.ENVIRONMENT == "production":
             # Produktion: Restriktive CSP
             # style-src: fonts.googleapis.com für Google Fonts CSS; font-src: fonts.gstatic.com für Font-Dateien (.woff2)
             csp = (
                 "default-src 'self'; "
-                "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+                f"script-src 'self' 'unsafe-inline' 'unsafe-eval' {posthog_script}; "
                 "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
                 "img-src 'self' data: https:; "
                 "font-src 'self' data: https://fonts.gstatic.com; "
-                "connect-src 'self'; "
+                f"connect-src 'self' {posthog_connect}; "
                 "frame-ancestors 'none';"
             )
         else:
             # Development: Weniger restriktiv für Dev-Tools
             csp = (
                 "default-src 'self'; "
-                "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+                f"script-src 'self' 'unsafe-inline' 'unsafe-eval' {posthog_script}; "
                 "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
                 "img-src 'self' data: https:; "
                 "font-src 'self' data: https://fonts.gstatic.com; "
-                "connect-src 'self' ws: wss:; "
+                f"connect-src 'self' ws: wss: {posthog_connect}; "
                 "frame-ancestors 'none';"
             )
         

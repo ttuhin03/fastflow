@@ -25,6 +25,7 @@ from app.auth import (
 from app.config import config
 from app.database import get_session
 from app.github_oauth import delete_oauth_state, generate_oauth_state, store_oauth_state
+from app.posthog_client import get_system_settings
 from app.github_oauth_user import get_github_authorize_url, get_github_user_data
 from app.google_oauth_user import get_google_authorize_url, get_google_user_data
 from app.middleware.rate_limiting import limiter
@@ -235,13 +236,20 @@ async def link_github(
 
 @router.get("/me", response_model=dict, status_code=status.HTTP_200_OK)
 async def get_current_user_info(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
 ) -> dict:
     """
     Gibt Informationen über den aktuell angemeldeten Benutzer zurück.
-    Erweitet um email, has_github, has_google, avatar_url für die Konten-UI.
+    Erweitet um email, has_github, has_google, avatar_url, is_setup_completed.
     """
     role_val = current_user.role.value if hasattr(current_user, "role") and current_user.role else "readonly"
+    is_setup_completed = False
+    try:
+        ss = get_system_settings(session)
+        is_setup_completed = ss.is_setup_completed
+    except Exception:
+        pass
     return {
         "username": current_user.username,
         "id": str(current_user.id),
@@ -251,6 +259,7 @@ async def get_current_user_info(
         "avatar_url": getattr(current_user, "avatar_url", None),
         "created_at": current_user.created_at.isoformat(),
         "role": role_val,
+        "is_setup_completed": is_setup_completed,
     }
 
 

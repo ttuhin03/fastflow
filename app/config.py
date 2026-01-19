@@ -384,7 +384,12 @@ class Config:
     Webhook-URL kann in Teams-Kanal über "Connectors" erstellt werden.
     Format: https://outlook.office.com/webhook/...
     """
-    
+
+    # PostHog (Phase 1: Error-Tracking; Phase 2: Session Replay, Product Analytics, Survey)
+    # Host fest auf EU; API-Key derzeit fest. Steuerung nur über SystemSettings.enable_error_reporting.
+    POSTHOG_API_KEY: str = "phc_PxPEXdUC56hAwgi8A2Tge84wvt2BOnWV0CyH1zenKg9"
+    POSTHOG_HOST: str = "https://eu.posthog.com"
+
     FRONTEND_URL: Optional[str] = os.getenv("FRONTEND_URL")
     """
     Frontend-URL für Links in Benachrichtigungen.

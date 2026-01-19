@@ -297,6 +297,31 @@ class Invitation(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class SystemSettings(SQLModel, table=True):
+    """
+    SystemSettings-Model (Singleton, id=1).
+    
+    Steuert First-Run-Wizard, Error-Tracking (Phase 1) und
+    zukünftig Telemetrie (Phase 2: Product Analytics, Session Replay, Survey).
+    """
+    __tablename__ = "system_settings"
+
+    id: int = Field(primary_key=True, default=1, description="Singleton (immer 1)")
+    is_setup_completed: bool = Field(default=False, description="Wizard abgeschlossen?")
+    enable_telemetry: bool = Field(
+        default=False,
+        description="Phase 2: Nutzungsstatistiken, Product Analytics, Session Replay, Survey",
+    )
+    enable_error_reporting: bool = Field(
+        default=False,
+        description="Phase 1: PostHog Error-Tracking (Autocapture + FastAPI-Handler)",
+    )
+    telemetry_distinct_id: Optional[str] = Field(
+        default=None,
+        description="Anonyme UUID für PostHog distinct_id (keine E-Mail/Klarnamen)",
+    )
+
+
 class Session(SQLModel, table=True):
     """
     Session-Model.
