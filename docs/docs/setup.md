@@ -2,6 +2,9 @@
 sidebar_position: 3
 ---
 
+import GenerateEncryptionKey from '@site/src/components/GenerateEncryptionKey';
+import GenerateJwtSecret from '@site/src/components/GenerateJwtSecret';
+
 # Setup-Anleitung
 
 Diese Anleitung führt dich Schritt für Schritt durch das Aufsetzen von Fast-Flow – inklusive der wichtigsten Umgebungsvariablen und was sie bewirken.
@@ -59,11 +62,15 @@ Ohne diese Werte startet die Anwendung nicht oder blockiert den Start in Produkt
 
 **So erzeugen:**
 
+<GenerateEncryptionKey />
+
+Oder per Kommandozeile:
+
 ```bash
 python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-Es erscheint eine Zeichenkette wie `xYz123...=`. Diese **komplett** in `.env` eintragen:
+Es erscheint eine Zeichenkette wie `xYz123...=`. Diese **komplett** in `.env` eintragen (den per Button erzeugten Key kannst du mit „Kopieren“ übernehmen):
 
 ```
 ENCRYPTION_KEY=xYz123...=
@@ -81,7 +88,11 @@ ENCRYPTION_KEY=xYz123...=
 
 **Lokal/Entwicklung:** Der Wert aus `.env.example` reicht zum Testen.
 
-**Produktion:** Mindestens 32 Zeichen, zufällig. Beispiele zum Erzeugen:
+**Produktion:** Mindestens 32 Zeichen, zufällig. So erzeugen:
+
+<GenerateJwtSecret />
+
+Oder per Kommandozeile:
 
 ```bash
 openssl rand -base64 32
@@ -89,7 +100,7 @@ openssl rand -base64 32
 python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
-In `.env`:
+In `.env` eintragen (per-Button-Wert mit „Kopieren“ übernehmen):
 
 ```
 JWT_SECRET_KEY=dein-langer-zufaelliger-string
