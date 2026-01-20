@@ -22,6 +22,77 @@ from app.models import PipelineRun, RunStatus, User
 logger = logging.getLogger(__name__)
 
 
+async def notify_s3_backup_failed(run: PipelineRun, error_message: str) -> None:
+    """
+    Benachrichtigt bei S3-Backup-Fehler: E-Mail an EMAIL_RECIPIENTS und
+    Microsoft Teams (falls TEAMS_ENABLED und TEAMS_WEBHOOK_URL gesetzt).
+    Wird vom Cleanup aufgerufen, wenn upload_run_logs fehlschlägt (Fall 4).
+    """
+    logger.warning(
+        "S3-Backup fehlgeschlagen für Run %s (%s): %s",
+        run.id,
+        run.pipeline_name,
+        error_message,
+    )
+    # E-Mail an alle EMAIL_RECIPIENTS
+    if config.EMAIL_ENABLED and config.SMTP_HOST and config.SMTP_FROM and config.EMAIL_RECIPIENTS:
+        try:
+            subject = f"[FastFlow] S3 Log-Backup fehlgeschlagen: {run.pipeline_name} (Run {run.id})"
+            body = f"""Das S3-Backup der Pipeline-Logs ist fehlgeschlagen. Die lokalen Log-Dateien wurden nicht gelöscht.
+
+Pipeline: {run.pipeline_name}
+Run-ID: {run.id}
+Fehler: {error_message}
+
+Bitte S3/MinIO-Konfiguration und -Erreichbarkeit prüfen. Der Run und die Dateien bleiben lokal erhalten; ein erneuter Backup-Versuch erfolgt beim nächsten Cleanup.
+"""
+            message = MIMEMultipart("alternative")
+            message["From"] = config.SMTP_FROM
+            message["To"] = ", ".join(config.EMAIL_RECIPIENTS)
+            message["Subject"] = subject
+            message.attach(MIMEText(body, "plain"))
+            smtp = aiosmtplib.SMTP(
+                hostname=config.SMTP_HOST,
+                port=config.SMTP_PORT,
+                use_tls=config.SMTP_PORT == 587,
+            )
+            await smtp.connect()
+            if config.SMTP_USER and config.SMTP_PASSWORD:
+                await smtp.login(config.SMTP_USER, config.SMTP_PASSWORD)
+            await smtp.send_message(message)
+            await smtp.quit()
+            logger.info("E-Mail (S3-Backup-Fehler) an EMAIL_RECIPIENTS gesendet, Run %s", run.id)
+        except Exception as e:
+            logger.error("Fehler beim Senden der S3-Backup-Fehler-E-Mail für Run %s: %s", run.id, e, exc_info=True)
+    # Microsoft Teams (wenn TEAMS_ENABLED und TEAMS_WEBHOOK_URL gesetzt)
+    if config.TEAMS_ENABLED and config.TEAMS_WEBHOOK_URL:
+        try:
+            frontend_url = getattr(config, "FRONTEND_URL", None) or config.BASE_URL or ""
+            run_url = f"{frontend_url.rstrip('/')}/runs/{run.id}" if frontend_url else None
+            card = {
+                "@type": "MessageCard",
+                "@context": "https://schema.org/extensions",
+                "summary": f"S3 Log-Backup fehlgeschlagen: {run.pipeline_name}",
+                "themeColor": "F44336",
+                "title": "S3 Log-Backup fehlgeschlagen",
+                "sections": [{
+                    "activityTitle": f"Pipeline: {run.pipeline_name}",
+                    "facts": [
+                        {"title": "Run-ID", "value": str(run.id)},
+                        {"title": "Fehler", "value": error_message[:500]},
+                    ],
+                    "markdown": True,
+                }],
+            }
+            if run_url:
+                card["potentialAction"] = [{"@type": "OpenUri", "name": "Run anzeigen", "targets": [{"os": "default", "uri": run_url}]}]
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                await client.post(config.TEAMS_WEBHOOK_URL, json=card)
+            logger.info("Teams (S3-Backup-Fehler) gesendet, Run %s", run.id)
+        except Exception as e:
+            logger.error("Fehler beim Senden der S3-Backup-Fehler-Teams-Nachricht für Run %s: %s", run.id, e, exc_info=True)
+
+
 async def notify_admin_join_request(user: User) -> None:
     """
     Benachrichtigt Admins über eine neue Beitrittsanfrage (Anklopfen).

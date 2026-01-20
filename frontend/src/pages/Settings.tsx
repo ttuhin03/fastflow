@@ -92,6 +92,15 @@ export default function Settings() {
     enabled: isAdmin,
   })
 
+  const { data: backupStatus } = useQuery<{ failures: unknown[]; last_backup_at: string | null }>({
+    queryKey: ['settings', 'backup-failures'],
+    queryFn: async () => {
+      const r = await apiClient.get('/settings/backup-failures')
+      return r.data
+    },
+    staleTime: 90 * 1000,
+  })
+
   const updateSystemSettingsMutation = useMutation({
     mutationFn: async (patch: { enable_telemetry?: boolean; enable_error_reporting?: boolean }) => {
       const response = await apiClient.put('/settings/system', patch)
@@ -177,6 +186,7 @@ export default function Settings() {
       }
       
       showSuccess(message.replace(/\n/g, ' ')) // Replace newlines for toast
+      queryClient.invalidateQueries({ queryKey: ['settings', 'backup-failures'] })
     },
     onError: (error: any) => {
       showError(`Fehler beim Cleanup: ${error.response?.data?.detail || error.message}`)
@@ -457,6 +467,15 @@ export default function Settings() {
                   disabled={isReadonly}
                 />
               </div>
+            </div>
+            <div className="backup-last-run">
+              <span className="setting-label">Letztes S3-Backup</span>
+              <span className="backup-last-run-value">
+                {backupStatus?.last_backup_at
+                  ? new Date(backupStatus.last_backup_at).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })
+                  : '–'}
+              </span>
+              <InfoIcon content="Zeitpunkt des letzten erfolgreichen Uploads von Logs nach S3/MinIO (wird beim Neustart zurückgesetzt)." />
             </div>
           </div>
 

@@ -21,6 +21,7 @@ import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { NotificationProvider } from './contexts/NotificationContext'
 import { useRunNotifications } from './hooks/useRunNotifications'
+import { useBackupFailurePolling } from './hooks/useBackupFailurePolling'
 import './App.css'
 
 const queryClient = new QueryClient({
@@ -54,8 +55,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AppRoutes() {
-  // Automatische Run-Notifications aktivieren
   useRunNotifications()
+  useBackupFailurePolling()
 
   return (
     <Routes>

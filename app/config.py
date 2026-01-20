@@ -230,6 +230,36 @@ class Config:
     ist rate-limited.
     """
     
+    # Log-Backup (S3/MinIO)
+    S3_BACKUP_ENABLED: bool = os.getenv("S3_BACKUP_ENABLED", "false").lower() == "true"
+    """
+    Aktiviert S3-Backup von Pipeline-Logs vor der lokalen Löschung.
+    
+    Wenn True: Log- und Metrics-Dateien werden vor dem Cleanup nach S3/MinIO
+    hochgeladen. Lokale Löschung erfolgt nur bei erfolgreichem Upload.
+    """
+    
+    S3_ENDPOINT_URL: Optional[str] = os.getenv("S3_ENDPOINT_URL")
+    """S3-kompatibler Endpoint (z.B. http://minio:9000 für MinIO)."""
+    
+    S3_BUCKET: Optional[str] = os.getenv("S3_BUCKET")
+    """S3-Bucket für Log-Backups."""
+    
+    S3_ACCESS_KEY: Optional[str] = os.getenv("S3_ACCESS_KEY")
+    """Access Key für S3/MinIO."""
+    
+    S3_SECRET_ACCESS_KEY: Optional[str] = os.getenv("S3_SECRET_ACCESS_KEY")
+    """Secret Access Key für S3/MinIO."""
+    
+    S3_REGION: str = os.getenv("S3_REGION", "us-east-1")
+    """S3-Region (MinIO oft egal, z.B. us-east-1)."""
+    
+    S3_PREFIX: str = os.getenv("S3_PREFIX", "pipeline-logs")
+    """Prefix für S3-Objektkeys (z.B. pipeline-logs/pipeline_name/run_id/run.log)."""
+    
+    S3_USE_PATH_STYLE: bool = os.getenv("S3_USE_PATH_STYLE", "true").lower() == "true"
+    """Path-Style-URLs für S3 (für MinIO typischerweise true)."""
+    
     # Secrets-Verschlüsselung
     ENCRYPTION_KEY: Optional[str] = os.getenv("ENCRYPTION_KEY")
     """

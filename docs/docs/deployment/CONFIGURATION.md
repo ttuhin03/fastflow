@@ -54,6 +54,21 @@ Fast-Flow wird primär über Environment-Variablen in einer `.env` Datei konfigu
 | `LOG_MAX_SIZE_MB` | *Leer* (Unbegrenzt) | Maximale Größe einer Log-Datei in MB. |
 | `LOG_STREAM_RATE_LIMIT`| `100` | Maximale Anzahl an Log-Zeilen pro Sekunde für das Live-Streaming (SSE). |
 
+## Log-Backup (S3/MinIO, optional)
+
+Pipeline-Logs werden vor der lokalen Löschung (Cleanup) auf S3/MinIO gesichert. Details: [S3 Log-Backup](S3_LOG_BACKUP.md).
+
+| Variable | Standardwert | Beschreibung |
+|----------|--------------|--------------|
+| `S3_BACKUP_ENABLED` | `false` | Aktiviert S3-Backup vor lokaler Löschung. |
+| `S3_ENDPOINT_URL` | *Leer* | S3-Endpoint (z.B. `http://minio:9000`). |
+| `S3_BUCKET` | *Leer* | Bucket-Name. |
+| `S3_ACCESS_KEY` | *Leer* | Access Key. |
+| `S3_SECRET_ACCESS_KEY` | *Leer* | Secret Access Key. |
+| `S3_REGION` | `us-east-1` | Region (MinIO oft egal). |
+| `S3_PREFIX` | `pipeline-logs` | Prefix für Objektkeys. |
+| `S3_USE_PATH_STYLE` | `true` | Path-Style-URLs (für MinIO typisch). |
+
 ## Sicherheit & Authentifizierung
 
 > [!IMPORTANT]

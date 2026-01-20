@@ -306,6 +306,7 @@ Während Airflow eine Postgres-DB, einen Redis-Broker, einen Scheduler, einen We
 - **Live-Monitoring**: Echtzeit-Logs und Metriken während der Ausführung
 - **Git-Sync**: Automatische Synchronisation mit Git-Repositories
 - **Secrets-Management**: Sichere Verwaltung von Secrets und Parametern
+- **S3 Log-Backup** (optional): Pipeline-Logs werden vor der lokalen Löschung (Cleanup) nach S3/MinIO gesichert; gelöscht wird nur bei erfolgreichem Upload. Bei Fehlern: UI-Hinweis und E-Mail an `EMAIL_RECIPIENTS`. Siehe [Log-Backup (S3/MinIO)](docs/docs/deployment/S3_LOG_BACKUP.md).
 
 ## 🔒 Sicherheit: Docker Socket Proxy
 
@@ -350,6 +351,8 @@ Die Doku liegt unter `docs/docs/` und wird mit Docusaurus bereitgestellt (lokal:
 - **[Erweiterte Pipelines](docs/docs/pipelines/erweiterte-pipelines.md)** – Retries, Timeout, Scheduling, Webhooks, Struktur
 - **[Pipelines – pipeline.json Referenz](docs/docs/pipelines/referenz.md)** – Metadaten, Limits, `default_env`
 - **[Konfiguration](docs/docs/deployment/CONFIGURATION.md)** – Environment-Variablen
+- **[Log-Backup (S3/MinIO)](docs/docs/deployment/S3_LOG_BACKUP.md)** – Wann/Was wird gesichert, Fehlerfall (UI + E-Mail)
+- **[Compliance & Datensicherheit (MinIO Backup)](docs/docs/compliance-security.md)** – DSGVO, Datenhoheit, Rechenschaftspflicht, technische Sicherheit für Unternehmenskunden
 - **[Deployment](docs/docs/deployment/PRODUCTION.md)** – Produktions-Setup
 - **[Git-Deployment](docs/docs/deployment/GIT_DEPLOYMENT.md)** – Push-to-Deploy, Git als Source of Truth
 - **[Versioning & Releases](docs/docs/deployment/VERSIONING.md)** – Version-Management und Release-Prozess
