@@ -73,7 +73,7 @@ Wenn die UI Fehler zu den Pipeline-Metadaten anzeigt:
 Fast-Flow zielt auf **„Wenn es lokal läuft, läuft es in Fast-Flow“** – gleiche Laufzeit (uv), keine eigenen Pipeline-Images. Tritt trotzdem ein Unterschied auf, zuerst prüfen:
 
 - **Lokaler Lauf wie im Orchestrator:**  
-  `uv run --with-requirements requirements.txt main.py` (oder `pip install -r requirements.txt` und `python main.py`). Python-Version und Pakete sollten vergleichbar sein.
+  `uv run --python {version} --with-requirements requirements.txt main.py` (oder `pip install -r requirements.txt` und `python main.py`). `{version}` aus `pipeline.json` (`python_version`, beliebig pro Pipeline) – Python-Version und Pakete sollten vergleichbar sein.
 - **`requirements.txt`:** Alle genutzten externen Pakete müssen drinstehen.
 - **Pfade:** Im Container ist das Arbeitsverzeichnis der Pipeline-Ordner. Relative Pfade von `main.py` aus ansetzen.
 - **Secrets/Env:** In der UI gesetzte Werte werden als Umgebungsvariablen übergeben. Fehlt z.B. `API_KEY`, kann `os.getenv("API_KEY")` `None` liefern.

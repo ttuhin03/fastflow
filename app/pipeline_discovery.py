@@ -36,7 +36,8 @@ class PipelineMetadata:
         tags: Optional[List[str]] = None,
         enabled: bool = True,
         default_env: Optional[Dict[str, str]] = None,
-        webhook_key: Optional[str] = None
+        webhook_key: Optional[str] = None,
+        python_version: Optional[str] = None
     ):
         """
         Initialisiert Pipeline-Metadaten.
@@ -58,6 +59,7 @@ class PipelineMetadata:
             enabled: Pipeline aktiviert/deaktiviert (Standard: true)
             default_env: Pipeline-spezifische Default-Env-Vars (werden bei jedem Start gesetzt)
             webhook_key: Webhook-Schlüssel für externe Trigger (optional, None oder leer = Webhooks deaktiviert)
+            python_version: Python-Version (z.B. "3.11", "3.12"). Fehlt: DEFAULT_PYTHON_VERSION wird genutzt.
         """
         self.cpu_hard_limit = cpu_hard_limit
         self.mem_hard_limit = mem_hard_limit
@@ -72,6 +74,7 @@ class PipelineMetadata:
         self.default_env = default_env or {}
         # Normalize empty strings to None (webhooks disabled)
         self.webhook_key = webhook_key if webhook_key and webhook_key.strip() else None
+        self.python_version = python_version if python_version and str(python_version).strip() else None
     
     def to_dict(self) -> Dict[str, Any]:
         """
@@ -106,6 +109,8 @@ class PipelineMetadata:
         # Only include webhook_key if it's set and non-empty
         if self.webhook_key:
             result["webhook_key"] = self.webhook_key
+        if self.python_version:
+            result["python_version"] = self.python_version
         return result
 
 
@@ -164,6 +169,16 @@ class DiscoveredPipeline:
             Anzahl Retry-Versuche oder None wenn nicht gesetzt
         """
         return self.metadata.retry_attempts
+    
+    def get_python_version(self) -> str:
+        """
+        Gibt die Python-Version für diese Pipeline zurück.
+        
+        Returns:
+            Python-Version (z.B. "3.11", "3.12"). Nutzt DEFAULT_PYTHON_VERSION, wenn
+            python_version in pipeline.json fehlt.
+        """
+        return self.metadata.python_version or config.DEFAULT_PYTHON_VERSION
 
 
 # Cache für Pipeline-Liste
@@ -298,6 +313,13 @@ def _load_pipeline_metadata(
             if not webhook_key:
                 webhook_key = None
         
+        # Normalize python_version: empty or null -> None (dann DEFAULT_PYTHON_VERSION)
+        python_version = data.get("python_version")
+        if python_version == "" or python_version is None:
+            python_version = None
+        else:
+            python_version = str(python_version).strip() or None
+        
         metadata = PipelineMetadata(
             cpu_hard_limit=data.get("cpu_hard_limit"),
             mem_hard_limit=data.get("mem_hard_limit"),
@@ -310,7 +332,8 @@ def _load_pipeline_metadata(
             tags=data.get("tags"),
             enabled=data.get("enabled", True),  # Standard: true
             default_env=data.get("default_env", {}),
-            webhook_key=webhook_key
+            webhook_key=webhook_key,
+            python_version=python_version
         )
         
         return metadata

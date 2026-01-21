@@ -17,7 +17,7 @@ In Fast-Flow ist dein **Git-Repository die einzige Wahrheit**. Es gibt keinen "U
 ## Der Fast-Flow Weg: "Source of Truth"
 
 - **Zero-Build Deployment:** Code-Änderungen werden per Webhook oder manuellem Sync gezogen. Dank uv-JIT ist die neue Version sofort lauffähig.
-- **Vollständige Rückverfolgbarkeit:** `pipeline.json` und `requirements.txt` liegen im Git – wer hat wann Limits oder Dependencies geändert, steht im Git-Log.
+- **Vollständige Rückverfolgbarkeit:** `pipeline.json` und `requirements.txt` liegen im Git – wer hat wann Limits, Dependencies oder die **pro Pipeline wählbare** Python-Version geändert, steht im Git-Log.
 - **Atomic Sync:** Pipelines lesen keine "halben" Dateien; Änderungen werden atomar eingespielt.
 
 | Feature | Traditionelle Tools | Fast-Flow |

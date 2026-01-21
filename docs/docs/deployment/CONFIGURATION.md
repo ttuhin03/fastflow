@@ -26,12 +26,15 @@ Fast-Flow wird primär über Environment-Variablen in einer `.env` Datei konfigu
 | `LOGS_DIR` | `./logs` | Pfad für persistente Log-Dateien. |
 | `DATA_DIR` | `./data` | Pfad für SQLite-DB und andere Daten. |
 | `UV_CACHE_DIR` | `./data/uv_cache` | Pfad für den globalen `uv` Cache (shared zwischen Containern). |
+| `UV_PYTHON_INSTALL_DIR` | `{DATA_DIR}/uv_python` | Verzeichnis für `uv python install` (Python-Versionen für Worker). Muss persistent sein. |
+| `UV_PYTHON_INSTALL_HOST_DIR` | *Leer* | Host-Pfad für Worker-Volume-Mounts (optional; sonst Ableitung aus Orchestrator-Volumes). |
+| `DEFAULT_PYTHON_VERSION` | `3.11` | Standard-Python-Version, wenn `python_version` in pipeline.json fehlt. Die Python-Version ist beliebig pro Pipeline konfigurierbar (z.B. 3.10, 3.11, 3.12). |
 
 ## Docker & Executor
 
 | Variable | Standardwert | Beschreibung |
 |----------|--------------|--------------|
-| `WORKER_BASE_IMAGE` | `ghcr.io/astral-sh/uv...` | Das Basis-Image für alle Pipeline-Container (muss `uv` enthalten). |
+| `WORKER_BASE_IMAGE` | `ghcr.io/astral-sh/uv:python3.11-bookworm-slim` | Basis-Image für Pipeline-Container (muss `uv` enthalten). Für minimales Setup nur mit uv: `ghcr.io/astral-sh/uv:bookworm-slim` oder eigenes Image aus `Dockerfile.worker` (dann muss Preheating Python vorhalten). |
 | `MAX_CONCURRENT_RUNS` | `10` | Maximale Anzahl gleichzeitig laufender Pipelines. |
 | `CONTAINER_TIMEOUT` | *Leer* (Kein Timeout) | Globales Timeout für Pipeline-Runs in Sekunden. |
 | `RETRY_ATTEMPTS` | `0` | Standard-Anzahl an Wiederholungsversuchen bei Fehlschlag. |

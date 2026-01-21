@@ -50,6 +50,8 @@ services:
       - ${DATA_DIR:-./data}:/app/data:rw
       # UV-Cache-Verzeichnis (shared zwischen allen Container-Runs)
       - ${UV_CACHE_DIR:-./data/uv_cache}:/app/data/uv_cache:rw
+      # UV-Python-Installationen (uv python install; für Preheating und Worker)
+      - ${DATA_DIR:-./data}/uv_python:/app/data/uv_python:rw
     
     # Environment-Variablen (aus .env oder direkt)
     env_file:
@@ -60,6 +62,7 @@ services:
       - LOGS_DIR=/app/logs
       - DATA_DIR=/app/data
       - UV_CACHE_DIR=/app/data/uv_cache
+      - UV_PYTHON_INSTALL_DIR=/app/data/uv_python
       # OAuth-Redirect: Frontend wird vom gleichen Server (Orchestrator) auf :8000 ausgeliefert
       - FRONTEND_URL=http://localhost:${PORT:-8000}
       - BASE_URL=http://localhost:${PORT:-8000}

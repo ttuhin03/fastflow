@@ -444,16 +444,27 @@ async def _run_container_task(
         uv_cache_host_path = _get_host_path_for_volume(
             client, str(config.UV_CACHE_DIR), config.UV_CACHE_HOST_DIR
         )
+        uv_python_host_path = _get_host_path_for_volume(
+            client, str(config.UV_PYTHON_INSTALL_DIR), config.UV_PYTHON_INSTALL_HOST_DIR
+        )
+        
+        # Basis-Env für uv (Cache + Python-Install); env_vars/Secrets können überschreiben
+        base_env = {
+            "UV_CACHE_DIR": "/root/.cache/uv",
+            "UV_PYTHON_INSTALL_DIR": "/cache/uv_python",
+        }
+        container_env = {**base_env, **env_vars}
         
         # Container-Konfiguration für docker-socket-proxy
         container_config = {
             "image": config.WORKER_BASE_IMAGE,
             "command": _build_container_command(pipeline),
-            "environment": env_vars,
+            "environment": container_env,
             # Volumes als Dictionary (korrektes Format für docker Python library)
             "volumes": {
                 pipeline_host_path: {"bind": "/app", "mode": "ro"},
-                uv_cache_host_path: {"bind": "/root/.cache/uv", "mode": "rw"}
+                uv_cache_host_path: {"bind": "/root/.cache/uv", "mode": "rw"},
+                uv_python_host_path: {"bind": "/cache/uv_python", "mode": "ro"},
             },
             "labels": {
                 "fastflow-run-id": str(run_id),
@@ -860,17 +871,17 @@ def _build_container_command(pipeline: DiscoveredPipeline) -> List[str]:
         pipeline: DiscoveredPipeline-Objekt
     
     Returns:
-        Liste mit Container-Befehl (uv run main.py)
+        Liste mit Container-Befehl (uv run --python {version} ...)
     """
+    py = pipeline.get_python_version()
     if pipeline.has_requirements:
         requirements_path = "/app/requirements.txt"
         return [
-            "uv", "run",
+            "uv", "run", "--python", py,
             "--with-requirements", requirements_path,
             "python", "-u", "-c", _SETUP_READY_WRAPPER
         ]
-    else:
-        return ["uv", "run", "python", "-u", "-c", _SETUP_READY_WRAPPER]
+    return ["uv", "run", "--python", py, "python", "-u", "-c", _SETUP_READY_WRAPPER]
 
 
 async def _get_uv_version(container: docker.models.containers.Container) -> Optional[str]:

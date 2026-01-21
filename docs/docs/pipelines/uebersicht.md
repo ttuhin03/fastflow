@@ -17,7 +17,7 @@ Du musst Pipelines **nicht** in einer Datenbank oder der UI anlegen. Vier Schrit
 1. **Ordner anlegen:** Neues Verzeichnis unter `pipelines/` (z.B. `pipelines/data_sync/`). Der **Ordnername** = **Pipeline-Name** in der UI.
 2. **`main.py`:** Einstiegspunkt. Fast-Flow führt diese Datei aus.
 3. **`requirements.txt` (optional):** Externe Pakete. Standard-Python-Format.
-4. **`pipeline.json` (optional):** Limits, Retries, Timeout, Beschreibung, Tags, `webhook_key`. [Referenz](/docs/pipelines/referenz).
+4. **`pipeline.json` (optional):** Limits, Retries, Timeout, Beschreibung, Tags, `python_version` (beliebig pro Pipeline, z.B. 3.10, 3.11, 3.12), `webhook_key`. [Referenz](/docs/pipelines/referenz).
 
 Nach Sync bzw. Neustart erscheint die Pipeline in der UI. Kein `docker build`, kein manueller Upload.
 
@@ -75,6 +75,7 @@ Fast-Flow nutzt **keine** eigenen Docker-Images pro Pipeline, sondern JIT-Contai
 |--------|--------------|
 | **Sofort live** | Kein 5‑Minuten-`docker build` und `docker push`. Nach `git push` und Sync ist der Code lauffähig. |
 | **uv** | Dependencies werden zur Laufzeit mit `uv` installiert. |
+| **Python-Version** | Beliebig pro Pipeline (z.B. 3.10, 3.11, 3.12) über `python_version` in pipeline.json. |
 | **Caching** | Projektweiter, geteilter uv-Cache → Installation oft **&lt; 500 ms** bei gecachten Paketen. |
 | **Isolation** | Jeder Run läuft in einem **sauberen, isolierten** Docker-Container (Sicherheit, Ressourcenbegrenzung). |
 
@@ -91,6 +92,7 @@ Fast-Flow nutzt **keine** eigenen Docker-Images pro Pipeline, sondern JIT-Contai
 | **Laufzeit-Test** | Verzögerung (z.B. `time.sleep(20)`) zum Prüfen von Status/Logs | `main.py`, ggf. `pipeline.json` (timeout) |
 | **Retry-Demo** | Zufälliger Erfolg/Fehler zur Erprobung von `retry_attempts`/`retry_strategy` | `main.py`, `pipeline.json` |
 | **Ressourcen-Limits** | OOM- oder CPU-Test mit `mem_hard_limit`/`cpu_hard_limit` | `main.py` (z.B. Speicher allokieren), `pipeline.json` |
+| **Verschiedene Python-Versionen** | Jede Pipeline mit eigener Version (z.B. A mit 3.11, B mit 3.12) | `main.py`, `pipeline.json` mit `python_version` |
 
 Viele davon sind im [fastflow-pipeline-template](https://github.com/ttuhin03/fastflow-pipeline-template) vorkonfiguriert.
 
@@ -98,7 +100,7 @@ Viele davon sind im [fastflow-pipeline-template](https://github.com/ttuhin03/fas
 
 Jede Pipeline braucht eine `main.py` im eigenen Verzeichnis.
 
-**Ausführung:** `uv run --with-requirements {requirements.txt} {main.py}`
+**Ausführung:** `uv run --python {version} --with-requirements {requirements.txt} {main.py}` – `{version}` kommt aus `python_version` in pipeline.json (beliebig pro Pipeline: 3.10, 3.11, 3.12, …) oder `DEFAULT_PYTHON_VERSION` (z.B. 3.11).
 
 - Code kann von oben nach unten laufen (keine `main()` nötig).
 - Optional: `main()` mit `if __name__ == "__main__"`.
@@ -142,7 +144,7 @@ numpy==1.24.3
 
 ## `pipeline.json` (optional)
 
-Metadaten für Limits, Timeout, Retries, Beschreibung, Tags und `default_env`.
+Metadaten für Limits, Timeout, Retries, Beschreibung, Tags, `python_version` (beliebig pro Pipeline konfigurierbar) und `default_env`.
 
 - **Dateinamen:** `pipeline.json` (bevorzugt) oder `{pipeline_name}.json` (z.B. `data_processor.json`).
 

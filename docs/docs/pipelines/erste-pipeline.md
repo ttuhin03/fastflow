@@ -115,6 +115,7 @@ Mit einer `pipeline.json` (oder `{pipeline_name}.json`, z.B. `hello_world.json`)
 - eine **Beschreibung** angeben (wird in der UI angezeigt),
 - **Ressourcen-Limits** (CPU, RAM) setzen,
 - **Timeout** und **Retries** konfigurieren,
+- die **Python-Version** setzen (`python_version`, z.B. `"3.12"`) – **beliebig pro Pipeline**, jede Pipeline kann 3.10, 3.11, 3.12 o. Ä. nutzen; fehlt es, gilt `DEFAULT_PYTHON_VERSION`,
 - **Tags** vergeben.
 
 ### Einfaches Beispiel
