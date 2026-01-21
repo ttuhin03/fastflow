@@ -93,6 +93,13 @@ class Config:
     wenn der Code in einem Docker-Container läuft, um den Host-Pfad zu verwenden.
     """
     
+    UV_PYTHON_INSTALL_HOST_DIR: Optional[str] = os.getenv("UV_PYTHON_INSTALL_HOST_DIR")
+    """
+    Host-Pfad für UV-Python-Installationen (für Docker Volume-Mounts in Worker-Container).
+    
+    Optional. Wenn nicht gesetzt, wird aus den Orchestrator-Mounts abgeleitet.
+    """
+    
     # Docker & UV-Konfiguration
     DOCKER_PROXY_URL: str = os.getenv("DOCKER_PROXY_URL", "http://docker-proxy:2375")
     """
@@ -129,6 +136,20 @@ class Config:
     Wenn True: `uv pip compile` wird für alle requirements.txt ausgeführt,
     um Dependencies im Cache vorzubereiten. Verhindert Wartezeiten beim
     ersten Pipeline-Start nach einem Sync.
+    """
+    
+    DEFAULT_PYTHON_VERSION: str = os.getenv("DEFAULT_PYTHON_VERSION", "3.11")
+    """
+    Standard-Python-Version, wenn python_version in pipeline.json fehlt.
+    Wird für uv run --python und Pre-Heating genutzt.
+    """
+    
+    UV_PYTHON_INSTALL_DIR: Path = Path(
+        os.getenv("UV_PYTHON_INSTALL_DIR", str(Path(os.getenv("DATA_DIR", "./data")).resolve() / "uv_python"))
+    ).resolve()
+    """
+    Verzeichnis für von uv verwaltete Python-Installationen (uv python install).
+    Muss auf ein persistentes Volume zeigen, damit Worker-Container darauf zugreifen.
     """
     
     # Concurrency & Timeouts
@@ -489,11 +510,13 @@ class Config:
         - LOGS_DIR: Log-Dateien
         - DATA_DIR: Datenbank und persistente Daten
         - UV_CACHE_DIR: UV-Package-Cache
+        - UV_PYTHON_INSTALL_DIR: uv python install (Python-Versionen für Worker)
         """
         cls.PIPELINES_DIR.mkdir(parents=True, exist_ok=True)
         cls.LOGS_DIR.mkdir(parents=True, exist_ok=True)
         cls.DATA_DIR.mkdir(parents=True, exist_ok=True)
         cls.UV_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        cls.UV_PYTHON_INSTALL_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # Globale Config-Instanz

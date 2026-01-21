@@ -108,7 +108,7 @@ Im Gegensatz zu klassischen Orchestratoren, die oft "Dependency Hell" in ihren W
 
 - **The Singleton Brain**: Ein einzelner FastAPI-Prozess verwaltet den Zustand, den Scheduler und den Git-Sync.
 - **Ephemeral Workers**: Jede Pipeline startet in einem isolierten Docker-Container. Keine Seiteneffekte, keine Rückstände.
-- **uv-Acceleration**: Durch das Mounten eines globalen uv-Caches vom Host in den Container werden Dependencies in Millisekunden bereitgestellt. Es fühlt sich an wie ein lokales venv, ist aber ein sauberer Container.
+- **uv-Acceleration**: Der globale uv-Cache und die uv-Python-Installationen (z.B. 3.11, 3.12) werden als persistente Volumes in den Container gemountet. Dependencies und die **pro Pipeline wählbare** Python-Version (aus `pipeline.json` oder `DEFAULT_PYTHON_VERSION`) sind so in Millisekunden verfügbar – ohne festes Python im Basis-Image.
 - **Live-Streaming**: Logs und Ressourcen-Metriken (CPU/RAM) werden per SSE (Server-Sent Events) in Echtzeit direkt aus dem Docker-Socket an das React-Frontend gestreamt.
 
 ## 🛠 Der Container-Prozess & Lifecycle
@@ -124,12 +124,13 @@ Sobald ein Run über das React-Frontend (manuell) oder den APScheduler (geplant)
 
 ### 2. Die "Zero-Build" Execution
 
-Hier liegt der Kern der Fast-Flow Performance. Statt ein Docker-Image zu bauen, wird ein generisches Basis-Image gestartet:
+Hier liegt der Kern der Fast-Flow Performance. Statt ein Docker-Image zu bauen, wird ein generisches Basis-Image (nur uv, optional mit vorinstalliertem Python) gestartet:
 
-- **Mounting**: Das spezifische Pipeline-Verzeichnis (read-only) und der globale uv-Cache des Hosts werden in den Container gemountet.
-- **Just-In-Time Environment**: Innerhalb des Containers führt `uv` den Befehl `uv run` aus.
-  - **Existieren die Abhängigkeiten im Cache?** Sie werden in Millisekunden per Hardlink verknüpft.
-  - **Neue Abhängigkeiten?** Sie werden einmalig geladen und sofort im Host-Cache für zukünftige Runs gesichert.
+- **Mounting**: Pipeline-Verzeichnis (read-only), uv-Cache und uv-Python-Installationen (`/data/uv_python`) werden vom Host in den Container gemountet.
+- **Just-In-Time Environment**: `uv run --python {version}` – die Version ist **beliebig pro Pipeline** konfigurierbar (`python_version` in pipeline.json, z.B. 3.10, 3.11, 3.12) oder `DEFAULT_PYTHON_VERSION`. Python stammt aus `uv python install` (Preheating), nicht aus dem Image.
+  - **Abhängigkeiten im Cache?** → In Millisekunden per Hardlink verknüpft.
+  - **Neue Abhängigkeiten?** → Einmalig geladen und im Host-Cache für zukünftige Runs gesichert.
+- **Preheating**: Beim Start und nach Git-Sync führt der Orchestrator `uv python install {version}` und `uv pip compile --python {version}` aus – Low Latency beim ersten Run.
 
 ### 3. Monitoring & Kommunikation (Headless Architecture)
 
@@ -170,8 +171,9 @@ graph TB
     end
     
     subgraph "Execution Layer"
-        G["📦 Pipeline Container<br/><small>ghcr.io/astral-sh/uv</small>"]
-        H["📚 Shared uv-Cache<br/><small>/data/uv_cache</small>"]
+        G["📦 Pipeline Container<br/><small>uv run --python {version}</small>"]
+        H["📚 uv-Cache<br/><small>/data/uv_cache</small>"]
+        J["🐍 uv-Python-Installationen<br/><small>/data/uv_python</small>"]
         I["📝 Pipeline Code<br/><small>/app:ro</small>"]
     end
     
@@ -182,6 +184,7 @@ graph TB
     E -->|"Unix Socket<br/>/var/run/docker.sock:ro"| F
     F -->|"Creates & Manages"| G
     G -.->|"Read/Write"| H
+    G -.->|"Read-Only"| J
     G -.->|"Read-Only"| I
     B -.->|"Logs & Stats<br/>via Proxy"| G
     
@@ -197,7 +200,7 @@ graph TB
     class E security
     class F infra
     class G execution
-    class H,I storage
+    class H,I,J storage
 ```
 
 ### Warum dieser Ansatz?

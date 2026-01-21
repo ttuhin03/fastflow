@@ -21,6 +21,7 @@ Optionale Metadaten-Datei für Resource-Limits, Timeout, Retries, Beschreibung, 
   "description": "Prozessiert täglich eingehende Daten",
   "tags": ["data-processing", "daily"],
   "enabled": true,
+  "python_version": "3.12",
   "default_env": {
     "LOG_LEVEL": "INFO",
     "DEBUG": "false"
@@ -47,6 +48,7 @@ Optionale Metadaten-Datei für Resource-Limits, Timeout, Retries, Beschreibung, 
 | `retry_attempts` | Integer, optional | Anzahl Retries bei Fehlern (überschreibt globales `RETRY_ATTEMPTS`). |
 | `retry_strategy` | Object, optional | Wartezeit-Strategie zwischen Retries. Siehe [Retry-Strategien](#retry-strategien). |
 | `enabled` | Boolean, optional | Pipeline aktiviert/deaktiviert (Standard: `true`). |
+| `python_version` | String, optional | Python-Version für `uv run --python` – **beliebig pro Pipeline** (z.B. `"3.10"`, `"3.11"`, `"3.12"`). Jede Pipeline kann eine andere Version nutzen. Fehlt: `DEFAULT_PYTHON_VERSION` (Standard 3.11). |
 
 ### Webhooks
 

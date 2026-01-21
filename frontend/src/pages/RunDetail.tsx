@@ -31,6 +31,7 @@ interface Pipeline {
     mem_hard_limit?: string
     cpu_soft_limit?: number
     mem_soft_limit?: string
+    python_version?: string
   }
 }
 
@@ -482,6 +483,10 @@ export default function RunDetail() {
         <div className="info-row">
           <span className="info-label">Pipeline:</span>
           <span className="info-value">{run.pipeline_name}</span>
+        </div>
+        <div className="info-row">
+          <span className="info-label">Python-Version:</span>
+          <span className="info-value">{pipeline?.metadata?.python_version || '3.11 (Standard)'}</span>
         </div>
         <div className="info-row">
           <span className="info-label">Status:</span>

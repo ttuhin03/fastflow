@@ -1,0 +1,16 @@
+# Minimales Worker-Image für Fast-Flow Pipeline-Container.
+# Enthält nur uv – keine vorinstallierte Python-Version.
+# Python wird via `uv python install` in UV_PYTHON_INSTALL_DIR bereitgestellt
+# (Preheater im Orchestrator). Worker erhalten UV_PYTHON_INSTALL_DIR und
+# UV_CACHE_DIR als Volume-Mounts und Env.
+#
+# Build: docker build -f Dockerfile.worker -t fastflow-worker:latest .
+# Nutzung: WORKER_BASE_IMAGE=fastflow-worker:latest
+
+FROM ghcr.io/astral-sh/uv:bookworm-slim
+
+LABEL maintainer="Fast-Flow Orchestrator"
+LABEL description="Minimaler Pipeline-Worker: nur uv, Python via uv python install"
+
+# Keine weiteren Installationen nötig – uv ist im Base-Image.
+# /cache/uv_python und /root/.cache/uv werden zur Laufzeit gemountet.

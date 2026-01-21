@@ -21,7 +21,7 @@ Nutze das **[fastflow-pipeline-template](https://github.com/ttuhin03/fastflow-pi
 ## Was ist Fast-Flow?
 
 - **Code First:** Dein Python-Skript läuft, wie es ist – ohne DAG-Dekorateure, Operatoren oder IO-Manager.
-- **uv + Docker:** Jede Pipeline läuft in einem isolierten Container; Dependencies kommen per uv-Cache in Millisekunden.
+- **uv + Docker:** Jede Pipeline läuft in einem isolierten Container; Dependencies kommen per uv-Cache in Millisekunden. Die Python-Version ist beliebig pro Pipeline wählbar (z.B. 3.10, 3.11, 3.12).
 - **Git als Quelle:** Push to Deploy – kein Image-Build, kein manueller Upload. Der Orchestrator zieht Änderungen per Webhook oder Sync.
 - **Ein Container:** Kein Cluster, keine Worker-Farm. Ein FastAPI-Container plus Docker-Socket-Proxy.
 

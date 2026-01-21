@@ -236,9 +236,23 @@ DATABASE_URL=postgresql://user:password@host:5432/fastflow
 
 ---
 
+### 3.4a `UV_PYTHON_INSTALL_DIR` und `DEFAULT_PYTHON_VERSION`
+
+**UV_PYTHON_INSTALL_DIR:** Verzeichnis für `uv python install` (von uv verwaltete Python-Versionen). Muss persistent sein (Volume). Standard: `{DATA_DIR}/uv_python`.
+
+**DEFAULT_PYTHON_VERSION:** Standard-Python-Version, wenn in `pipeline.json` kein `python_version` steht. Standard: `3.11`. Die Python-Version ist beliebig pro Pipeline konfigurierbar (z.B. 3.10, 3.11, 3.12).
+
+**Wann anpassen:** Meist nicht nötig. `DEFAULT_PYTHON_VERSION` nur, wenn du global z.B. 3.12 nutzen willst.
+
+---
+
 ### 3.5 `UV_PRE_HEAT`
 
-**Was es ist:** `true` oder `false`. Wenn `true`, werden beim **Git-Sync** die in `requirements.txt` genannten Pakete schon mal geladen („vorgewärmt“). Beim ersten Pipeline-Run sind sie dann oft sofort aus dem Cache da.
+**Was es ist:** `true` oder `false`. Wenn `true`, laufen beim **Git-Sync** und beim **Start**:
+- `uv python install {version}` für alle von Pipelines benötigten Python-Versionen,
+- `uv pip compile --python {version}` für jede `requirements.txt` (Dependencies im Cache).
+
+Beim ersten Pipeline-Run sind Python und Pakete dann in der Regel schon da (Low Latency).
 
 **Empfehlung:** `true` lassen.
 

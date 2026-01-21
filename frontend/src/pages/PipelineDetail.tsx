@@ -28,7 +28,7 @@ interface Pipeline {
   successful_runs: number
   failed_runs: number
   enabled: boolean
-  metadata: {
+    metadata: {
     cpu_hard_limit?: number
     mem_hard_limit?: string
     cpu_soft_limit?: number
@@ -38,6 +38,7 @@ interface Pipeline {
     timeout?: number
     retry_attempts?: number
     webhook_key?: string
+    python_version?: string
   }
 }
 
@@ -181,6 +182,13 @@ export default function PipelineDetail() {
               {pipeline.has_requirements ? 'Ja' : 'Nein'}
             </span>
             <InfoIcon content="Zeigt an, ob eine requirements.txt Datei vorhanden ist" />
+          </div>
+          <div className="info-item">
+            <span className="info-label">Python-Version:</span>
+            <span className="info-value">
+              {pipeline.metadata.python_version || '3.11 (Standard)'}
+            </span>
+            <InfoIcon content="Wird in pipeline.json über python_version gesetzt – beliebig pro Pipeline (z.B. 3.10, 3.11, 3.12). Fehlt es, gilt die Standardversion (z.B. 3.11)." />
           </div>
           {pipeline.last_cache_warmup && (
             <div className="info-item">

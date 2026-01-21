@@ -9,13 +9,14 @@ Dieses Modul verwaltet die Git-Synchronisation des Pipeline-Repositories:
 """
 
 import asyncio
+import os
 import subprocess
 import logging
 import time
 import json
 import aiofiles
 from pathlib import Path
-from typing import Dict, Any, Optional, Tuple, List
+from typing import Dict, Any, Optional, Tuple, List, Set
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor
 
@@ -312,22 +313,104 @@ async def _git_pull(branch: str, pipelines_dir: Path) -> Tuple[bool, str]:
     return (True, f"Git Pull erfolgreich: {stdout.strip()}")
 
 
-async def _pre_heat_pipeline(pipeline_name: str, requirements_path: Path, session: Session) -> Tuple[bool, str]:
+def get_required_python_versions() -> Set[str]:
     """
-    Pre-Heating für eine Pipeline (uv pip compile).
+    Sammelt alle von Pipelines benötigten Python-Versionen.
+    
+    Returns:
+        Set von Versions-Strings (z.B. {"3.11", "3.12"}).
+    """
+    discovered = discover_pipelines(force_refresh=True)
+    return {p.get_python_version() for p in discovered}
+
+
+def _ensure_python_versions(versions: Set[str]) -> None:
+    """
+    Installiert die angegebenen Python-Versionen via uv python install.
+    Fehler werden nur geloggt, der Ablauf bricht nicht ab.
+    
+    Args:
+        versions: Set von Versions-Strings (z.B. {"3.11", "3.12"}).
+    """
+    if not versions:
+        return
+    env = {
+        **os.environ.copy(),
+        "UV_PYTHON_INSTALL_DIR": str(config.UV_PYTHON_INSTALL_DIR),
+        "UV_CACHE_DIR": str(config.UV_CACHE_DIR),
+    }
+    for v in sorted(versions):
+        try:
+            result = subprocess.run(
+                ["uv", "python", "install", v],
+                capture_output=True,
+                text=True,
+                timeout=300,
+                env=env,
+            )
+            if result.returncode == 0:
+                logger.info("uv python install %s ok", v)
+            else:
+                logger.warning("uv python install %s fehlgeschlagen: %s", v, result.stderr or result.stdout or "")
+        except subprocess.TimeoutExpired:
+            logger.warning("uv python install %s Timeout", v)
+        except Exception as e:
+            logger.warning("uv python install %s Fehler: %s", v, e)
+
+
+async def _run_python_preheat(session: Session) -> Dict[str, Dict[str, Any]]:
+    """
+    Führt das vollständige Python-Preheating aus:
+    1) uv python install für alle benötigten Versionen
+    2) uv pip compile --python {version} für jede Pipeline mit requirements.txt
+    
+    Returns:
+        pre_heat_results: {pipeline_name: {"success": bool, "message": str}}
+    """
+    pre_heat_results: Dict[str, Dict[str, Any]] = {}
+    versions = get_required_python_versions()
+    if versions:
+        await asyncio.get_event_loop().run_in_executor(
+            _executor, lambda: _ensure_python_versions(versions)
+        )
+    discovered = discover_pipelines(force_refresh=True)
+    for p in discovered:
+        if not p.has_requirements:
+            continue
+        req = p.path / "requirements.txt"
+        if not req.exists():
+            continue
+        ok, msg = await _pre_heat_pipeline(p.name, req, p.get_python_version(), session)
+        pre_heat_results[p.name] = {"success": ok, "message": msg}
+    return pre_heat_results
+
+
+async def _pre_heat_pipeline(
+    pipeline_name: str, requirements_path: Path, python_version: str, session: Session
+) -> Tuple[bool, str]:
+    """
+    Pre-Heating für eine Pipeline (uv pip compile --python {version}).
     
     Args:
         pipeline_name: Name der Pipeline
         requirements_path: Pfad zur requirements.txt
+        python_version: Python-Version (z.B. "3.11", "3.12")
         session: SQLModel Session
         
     Returns:
         Tuple (success, message)
     """
     try:
-        # uv pip compile ausführen (lädt alle Pakete in Cache)
-        cmd = ["uv", "pip", "compile", str(requirements_path)]
-        
+        env = {
+            **os.environ.copy(),
+            "UV_CACHE_DIR": str(config.UV_CACHE_DIR),
+            "UV_PYTHON_INSTALL_DIR": str(config.UV_PYTHON_INSTALL_DIR),
+        }
+        cmd = [
+            "uv", "pip", "compile", str(requirements_path),
+            "--python", python_version,
+            "-o", os.devnull,
+        ]
         result = await asyncio.get_event_loop().run_in_executor(
             _executor,
             lambda: subprocess.run(
@@ -335,7 +418,8 @@ async def _pre_heat_pipeline(pipeline_name: str, requirements_path: Path, sessio
                 cwd=requirements_path.parent,
                 capture_output=True,
                 text=True,
-                timeout=600  # 10 Minuten Timeout
+                timeout=600,
+                env=env,
             )
         )
         
@@ -376,33 +460,21 @@ async def run_pre_heat_at_startup() -> None:
     """
     UV Pre-Heating beim API-Start (Hintergrund-Task).
     
-    Wenn UV_PRE_HEAT aktiviert ist: für jede Pipeline mit requirements.txt
-    wird `uv pip compile` ausgeführt (lädt alle Pakete in den Cache).
+    Wenn UV_PRE_HEAT aktiviert ist: uv python install für benötigte Versionen,
+    dann uv pip compile --python {version} für jede Pipeline mit requirements.txt.
     Läuft asynchron, blockiert den App-Start nicht.
     """
     if not config.UV_PRE_HEAT:
         return
     try:
-        discovered = discover_pipelines(force_refresh=True)
-        with_req = [p for p in discovered if p.has_requirements]
-        if not with_req:
-            logger.debug("Keine Pipelines mit requirements.txt für Pre-Heating beim Start")
-            return
-        logger.info("Starte UV Pre-Heating beim Start für %d Pipeline(s)", len(with_req))
         from app.database import get_session
         session_gen = get_session()
         session = next(session_gen)
         try:
-            ok, fail = 0, 0
-            for p in with_req:
-                req = p.path / "requirements.txt"
-                if not req.exists():
-                    continue
-                success, _ = await _pre_heat_pipeline(p.name, req, session)
-                if success:
-                    ok += 1
-                else:
-                    fail += 1
+            logger.info("Starte UV Pre-Heating beim Start (Python-Install + pip compile)")
+            pre_heat_results = await _run_python_preheat(session)
+            ok = sum(1 for v in pre_heat_results.values() if v.get("success"))
+            fail = len(pre_heat_results) - ok
             logger.info("UV Pre-Heating beim Start abgeschlossen: %d ok, %d fehlgeschlagen", ok, fail)
         finally:
             session.close()
@@ -472,33 +544,17 @@ async def sync_pipelines(
             # Step 3: Discovery (Suche nach allen requirements.txt)
             discovered_pipelines = discover_pipelines(force_refresh=True)
             
-            # Step 4: UV Pre-Heating (wenn UV_PRE_HEAT aktiviert)
+            # Step 4: UV Pre-Heating (wenn UV_PRE_HEAT aktiviert: uv python install + pip compile)
             pre_heat_results: Dict[str, Dict[str, Any]] = {}
             
             if config.UV_PRE_HEAT:
-                logger.info("Starte UV Pre-Heating für alle Pipelines mit requirements.txt")
-                
-                for pipeline in discovered_pipelines:
-                    if pipeline.has_requirements:
-                        requirements_path = pipeline.path / "requirements.txt"
-                        
-                        if requirements_path.exists():
-                            # Pre-Heating ausführen
-                            pre_success, pre_message = await _pre_heat_pipeline(
-                                pipeline.name,
-                                requirements_path,
-                                session
-                            )
-                            
-                            pre_heat_results[pipeline.name] = {
-                                "success": pre_success,
-                                "message": pre_message
-                            }
-                            
-                            if pre_success:
-                                logger.info(f"Pre-Heating erfolgreich für {pipeline.name}")
-                            else:
-                                logger.warning(f"Pre-Heating fehlgeschlagen für {pipeline.name}: {pre_message}")
+                logger.info("Starte UV Pre-Heating (Python-Install + pip compile für requirements.txt)")
+                pre_heat_results = await _run_python_preheat(session)
+                for name, res in pre_heat_results.items():
+                    if res.get("success"):
+                        logger.info("Pre-Heating erfolgreich für %s", name)
+                    else:
+                        logger.warning("Pre-Heating fehlgeschlagen für %s: %s", name, res.get("message", ""))
             
             sync_end_time = datetime.utcnow()
             sync_duration = (sync_end_time - sync_start_time).total_seconds()
