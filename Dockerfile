@@ -16,6 +16,10 @@ WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json* ./
 COPY VERSION /app/VERSION
 
+# VITE_DOCS_URL für Doku-Link (default: Doku auf Port 3001)
+ARG VITE_DOCS_URL=http://localhost:3001
+ENV VITE_DOCS_URL=$VITE_DOCS_URL
+
 # Verwende npm ci wenn package-lock.json vorhanden, sonst npm install
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 

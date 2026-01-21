@@ -20,6 +20,7 @@ from sqlmodel import Session
 from app.database import get_session, database_url, engine
 from app.config import config
 from app.cleanup import cleanup_logs, cleanup_docker_resources
+from app.s3_backup import get_backup_failures, get_last_backup_timestamp
 from app.models import PipelineRun, RunStatus, User
 from app.notifications import send_email_notification, send_teams_notification
 from app.executor import _get_docker_client
@@ -502,6 +503,41 @@ async def test_teams(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Fehler beim Senden der Test-Teams-Nachricht: {str(e)}"
         )
+
+
+class BackupFailureItem(BaseModel):
+    run_id: str
+    pipeline_name: str
+    error_message: str
+    created_at: str
+
+
+class BackupFailuresResponse(BaseModel):
+    failures: List[BackupFailureItem]
+    last_backup_at: Optional[str] = None
+
+
+@router.get("/backup-failures", response_model=BackupFailuresResponse)
+async def get_backup_failures_endpoint(
+    current_user: User = Depends(get_current_user),
+) -> BackupFailuresResponse:
+    """
+    Gibt die letzten S3-Backup-Fehler und den Zeitstempel des letzten erfolgreichen
+    Backups zurück (für UI-Benachrichtigungen und Anzeige in Einstellungen).
+    Erfordert Authentifizierung.
+    """
+    items = [
+        BackupFailureItem(
+            run_id=f["run_id"],
+            pipeline_name=f["pipeline_name"],
+            error_message=f["error_message"],
+            created_at=f["created_at"],
+        )
+        for f in get_backup_failures()
+    ]
+    ts = get_last_backup_timestamp()
+    last_backup_at = ts.isoformat() if ts else None
+    return BackupFailuresResponse(failures=items, last_backup_at=last_backup_at)
 
 
 @router.post("/cleanup/force", response_model=Dict[str, Any])

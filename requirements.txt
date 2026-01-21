@@ -8,6 +8,7 @@ email-validator
 python-multipart
 aiofiles
 alembic
+boto3
 python-dotenv
 python-jose[cryptography]
 cryptography

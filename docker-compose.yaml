@@ -88,6 +88,19 @@ services:
     networks:
       - fastflow-network
 
+  # Docusaurus-Doku (statisch, Port 3001)
+  docs:
+    build:
+      context: .
+      dockerfile: Dockerfile.docs
+    container_name: fastflow-docs
+    image: fastflow-docs:latest
+    ports:
+      - "3001:3001"
+    restart: unless-stopped
+    networks:
+      - fastflow-network
+
 # Netzwerk-Definition
 networks:
   fastflow-network:

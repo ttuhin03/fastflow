@@ -75,6 +75,26 @@
   gap: var(--spacing-lg);
 }
 
+.backup-last-run {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-sm);
+  padding-top: var(--spacing-sm);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.backup-last-run .setting-label {
+  margin: 0;
+  font-weight: var(--font-weight-normal);
+}
+
+.backup-last-run-value {
+  font-variant-numeric: tabular-nums;
+}
+
 .setting-item {
   display: flex;
   flex-direction: column;

@@ -21,8 +21,10 @@ from docker.errors import DockerException, APIError
 from sqlmodel import Session, select, update, func
 
 from app.config import config
-from app.models import PipelineRun, Pipeline
 from app.database import get_session
+from app.models import PipelineRun, Pipeline
+from app.s3_backup import _s3_backup, append_backup_failure
+from app.notifications import notify_s3_backup_failed
 
 logger = logging.getLogger(__name__)
 
@@ -149,6 +151,11 @@ async def _cleanup_by_retention_runs(session: Session, max_runs: int) -> int:
             
             # Runs löschen (Logs, Metrics und DB-Einträge)
             for run in old_runs:
+                ok, err = await _s3_backup.upload_run_logs(run)
+                if not ok:
+                    append_backup_failure(str(run.id), run.pipeline_name, err or "Unbekannt")
+                    asyncio.create_task(notify_s3_backup_failed(run, err or "Unbekannt"))
+                    continue
                 await _delete_run_files(run)
                 # Datenbank-Eintrag löschen
                 session.delete(run)
@@ -193,6 +200,11 @@ async def _cleanup_by_retention_days(session: Session, max_days: int) -> int:
         
         # Runs löschen (Logs, Metrics und DB-Einträge)
         for run in old_runs:
+            ok, err = await _s3_backup.upload_run_logs(run)
+            if not ok:
+                append_backup_failure(str(run.id), run.pipeline_name, err or "Unbekannt")
+                asyncio.create_task(notify_s3_backup_failed(run, err or "Unbekannt"))
+                continue
             await _delete_run_files(run)
             # Datenbank-Eintrag löschen
             session.delete(run)
@@ -253,7 +265,12 @@ async def _cleanup_oversized_logs(session: Session, max_size_mb: int) -> int:
                     )
                 except Exception as e:
                     logger.warning(f"Fehler beim Kürzen von Log-Datei {run.log_file}: {e}")
-                    # Bei Fehler: Datei löschen und DB-Eintrag bereinigen
+                    # Bei Fehler: S3-Backup, dann Datei löschen und DB-Eintrag bereinigen
+                    ok, err = await _s3_backup.upload_run_logs(run)
+                    if not ok:
+                        append_backup_failure(str(run.id), run.pipeline_name, err or "Unbekannt")
+                        asyncio.create_task(notify_s3_backup_failed(run, err or "Unbekannt"))
+                        continue
                     await _delete_run_files(run)
                     run.log_file = None
                     run.metrics_file = None
