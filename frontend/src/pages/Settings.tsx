@@ -346,22 +346,30 @@ export default function Settings() {
 
   const currentSettings = localSettings || settings
 
+  const renderNav = () => (
+    <nav className="settings-nav" role="tablist" aria-label="Einstellungsbereiche">
+      <div className="settings-nav-tray">
+        {sectionItems.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            role="tab"
+            aria-selected={section === item.id}
+            className={`settings-nav-pill ${section === item.id ? 'active' : ''}`}
+            onClick={() => setSection(item.id)}
+          >
+            {item.icon}
+            <span>{item.label}</span>
+          </button>
+        ))}
+      </div>
+    </nav>
+  )
+
   if (section === 'git-sync') {
     return (
       <div className="settings-page">
-        <nav className="settings-sidebar">
-          {sectionItems.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={`settings-sidebar-item ${section === item.id ? 'active' : ''}`}
-              onClick={() => setSection(item.id)}
-            >
-              {item.icon}
-              <span>{item.label}</span>
-            </button>
-          ))}
-        </nav>
+        {renderNav()}
         <div className="settings-content settings-embedded">
           <Sync />
         </div>
@@ -372,19 +380,7 @@ export default function Settings() {
   if (section === 'nutzer') {
     return (
       <div className="settings-page">
-        <nav className="settings-sidebar">
-          {sectionItems.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={`settings-sidebar-item ${section === item.id ? 'active' : ''}`}
-              onClick={() => setSection(item.id)}
-            >
-              {item.icon}
-              <span>{item.label}</span>
-            </button>
-          ))}
-        </nav>
+        {renderNav()}
         <div className="settings-content settings-embedded">
           <Users />
         </div>
@@ -394,19 +390,7 @@ export default function Settings() {
 
   return (
     <div className="settings-page">
-      <nav className="settings-sidebar">
-        {sectionItems.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className={`settings-sidebar-item ${section === item.id ? 'active' : ''}`}
-            onClick={() => setSection(item.id)}
-          >
-            {item.icon}
-            <span>{item.label}</span>
-          </button>
-        ))}
-      </nav>
+      {renderNav()}
       <div className="settings-content">
         {section === 'account' && (
           <div className="settings">

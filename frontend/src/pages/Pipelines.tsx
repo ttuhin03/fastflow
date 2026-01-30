@@ -88,26 +88,30 @@ export default function Pipelines() {
     return parseFloat(((pipeline.successful_runs / pipeline.total_runs) * 100).toFixed(1))
   }
 
-  const renderSidebar = () => (
-    <nav className="pipelines-sidebar">
-      {sectionItems.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          className={`pipelines-sidebar-item ${section === item.id ? 'active' : ''}`}
-          onClick={() => setSection(item.id)}
-        >
-          {item.icon}
-          <span>{item.label}</span>
-        </button>
-      ))}
+  const renderNav = () => (
+    <nav className="pipelines-nav" role="tablist" aria-label="Pipelines-Bereiche">
+      <div className="pipelines-nav-tray">
+        {sectionItems.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            role="tab"
+            aria-selected={section === item.id}
+            className={`pipelines-nav-pill ${section === item.id ? 'active' : ''}`}
+            onClick={() => setSection(item.id)}
+          >
+            {item.icon}
+            <span>{item.label}</span>
+          </button>
+        ))}
+      </div>
     </nav>
   )
 
   if (section === 'runs') {
     return (
       <div className="pipelines-page">
-        {renderSidebar()}
+        {renderNav()}
         <div className="pipelines-content pipelines-embedded">
           <Runs />
         </div>
@@ -117,7 +121,7 @@ export default function Pipelines() {
   if (section === 'scheduler') {
     return (
       <div className="pipelines-page">
-        {renderSidebar()}
+        {renderNav()}
         <div className="pipelines-content pipelines-embedded">
           <Scheduler />
         </div>
@@ -127,7 +131,7 @@ export default function Pipelines() {
   if (section === 'secrets') {
     return (
       <div className="pipelines-page">
-        {renderSidebar()}
+        {renderNav()}
         <div className="pipelines-content pipelines-embedded">
           <Secrets />
         </div>
@@ -137,7 +141,7 @@ export default function Pipelines() {
   if (section === 'dependencies') {
     return (
       <div className="pipelines-page">
-        {renderSidebar()}
+        {renderNav()}
         <div className="pipelines-content pipelines-embedded">
           <Dependencies />
         </div>
@@ -148,7 +152,7 @@ export default function Pipelines() {
   if (isLoading) {
     return (
       <div className="pipelines-page">
-        {renderSidebar()}
+        {renderNav()}
         <div className="pipelines-content">
           <div className="pipelines">
             <div className="pipelines-grid">
@@ -179,7 +183,7 @@ export default function Pipelines() {
 
   return (
     <div className="pipelines-page">
-      {renderSidebar()}
+      {renderNav()}
       <div className="pipelines-content">
     <div className="pipelines">
       {pipelines && pipelines.length > 0 ? (
