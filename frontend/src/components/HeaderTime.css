@@ -2,19 +2,19 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  padding: 6px var(--spacing-md);
-  background-color: var(--color-surface-variant);
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  margin-right: var(--spacing-sm);
-  transition: all var(--transition-base);
-  height: 36px;
-  /* Match height of other controls roughly or let it size naturally */
+  padding: 8px var(--spacing-md);
+  background: color-mix(in srgb, var(--color-surface-variant) 70%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-border) 40%, transparent);
+  border-radius: var(--radius-lg);
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  height: 40px;
+  box-sizing: border-box;
 }
 
 .header-time-container:hover {
-  border-color: var(--color-border);
-  background-color: var(--color-surface);
+  border-color: color-mix(in srgb, var(--color-border) 70%, transparent);
+  background: var(--color-surface-variant);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .header-time-content {

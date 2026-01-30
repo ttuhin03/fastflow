@@ -4,29 +4,34 @@
 
 .notification-center-toggle {
   position: relative;
-  background: transparent;
-  border: none;
+  background: color-mix(in srgb, var(--color-surface-variant) 60%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-border) 40%, transparent);
+  border-radius: var(--radius-lg);
   color: var(--color-text-secondary, #888);
-  font-size: 1.5rem;
+  font-size: 1.35rem;
   cursor: pointer;
   padding: var(--spacing-sm);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: color var(--transition-base);
+  transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
   min-width: 44px;
   min-height: 44px;
+  box-sizing: border-box;
 }
 
 .notification-center-toggle:hover {
   color: var(--color-primary, #2196f3);
+  background: var(--color-surface-variant);
+  border-color: color-mix(in srgb, var(--color-border) 70%, transparent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .notification-badge {
   position: absolute;
-  top: 4px;
-  right: 4px;
-  background: var(--color-error, #f44336);
+  top: 2px;
+  right: 2px;
+  background: linear-gradient(135deg, var(--color-error, #f44336), #d32f2f);
   color: white;
   font-size: 0.7rem;
   font-weight: 600;
@@ -37,6 +42,7 @@
   align-items: center;
   justify-content: center;
   padding: 0 4px;
+  box-shadow: 0 2px 6px rgba(244, 67, 54, 0.4);
 }
 
 .notification-overlay {
@@ -55,10 +61,10 @@
   right: 0;
   width: 400px;
   max-height: 600px;
-  background: var(--color-surface, #1e1e1e);
-  border: 1px solid var(--color-border, #444);
-  border-radius: var(--radius-md, 8px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  background: color-mix(in srgb, var(--color-surface) 98%, var(--color-background));
+  border: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25), 0 1px 0 rgba(255, 255, 255, 0.04);
   z-index: 1000;
   display: flex;
   flex-direction: column;
