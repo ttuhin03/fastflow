@@ -13,6 +13,8 @@ interface DailyStat {
 interface CalendarHeatmapProps {
   dailyStats: DailyStat[]
   days?: number
+  /** Wenn false, wird die Überschrift „Laufhistorie“ nicht angezeigt (z. B. wenn die Seite bereits einen Sektionstitel hat). */
+  showTitle?: boolean
 }
 
 interface DayData {
@@ -25,7 +27,7 @@ interface DayData {
   run_ids?: string[]
 }
 
-export default function CalendarHeatmap({ dailyStats, days = 365 }: CalendarHeatmapProps) {
+export default function CalendarHeatmap({ dailyStats, days = 365, showTitle = true }: CalendarHeatmapProps) {
   const [hoveredDay, setHoveredDay] = useState<string | null>(null)
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 })
 
@@ -186,7 +188,7 @@ export default function CalendarHeatmap({ dailyStats, days = 365 }: CalendarHeat
   return (
     <div className="calendar-heatmap">
       <div className="calendar-heatmap-header">
-        <h3>Laufhistorie</h3>
+        {showTitle && <h3>Laufhistorie</h3>}
         <div className="calendar-legend">
           <span className="legend-label">Weniger</span>
           <div className="legend-colors">

@@ -1,70 +1,93 @@
 .calendar-heatmap {
   position: relative;
-  background-color: #2a2a2a;
-  padding: 1.5rem;
-  border-radius: 8px;
-  margin-bottom: 1.5rem;
+  background-color: var(--color-surface);
+  padding: var(--spacing-lg);
+  border-radius: var(--radius-lg);
+  border: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  margin-bottom: 0;
 }
 
 .calendar-heatmap-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-md);
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+}
+
+.calendar-heatmap-header:not(:has(h3)) {
+  justify-content: flex-end;
 }
 
 .calendar-heatmap-header h3 {
   margin: 0;
-  color: white;
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  letter-spacing: -0.02em;
 }
 
 .calendar-legend {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: color-mix(in srgb, var(--color-surface-variant) 50%, transparent);
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--color-border) 40%, transparent);
 }
 
 .legend-label {
-  font-size: 0.75rem;
-  color: #888;
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  color: var(--color-text-secondary);
 }
 
 .legend-colors {
   display: flex;
-  gap: 2px;
+  gap: 3px;
+  align-items: center;
 }
 
 .legend-color {
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-sm);
+  transition: transform 0.15s ease;
+}
+
+.legend-color:hover {
+  transform: scale(1.15);
 }
 
 .calendar-grid {
   display: flex;
-  gap: 0.25rem;
+  gap: var(--spacing-xs);
   overflow-x: auto;
-  padding-bottom: 0.5rem;
+  padding-bottom: var(--spacing-sm);
   position: relative;
+  scrollbar-width: thin;
 }
 
 .calendar-weeks-container {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--spacing-xs);
   flex: 1;
 }
 
 .calendar-month-labels {
   position: relative;
-  height: 20px;
-  margin-bottom: 0.5rem;
-  margin-left: 30px; /* Account for week labels column */
+  height: 22px;
+  margin-bottom: var(--spacing-xs);
+  margin-left: 32px;
 }
 
 .calendar-month-label {
-  font-size: 0.7rem;
-  color: #888;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
   text-align: left;
   white-space: nowrap;
   font-weight: 500;
@@ -75,22 +98,22 @@
 .calendar-week-labels {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  padding-right: 0.5rem;
-  font-size: 0.7rem;
-  color: #888;
+  gap: var(--spacing-xs);
+  padding-right: var(--spacing-sm);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
   justify-content: space-around;
-  min-width: 30px;
+  min-width: 32px;
 }
 
 .calendar-week-labels span {
-  height: 11px;
-  line-height: 11px;
+  height: 12px;
+  line-height: 12px;
 }
 
 .calendar-weeks {
   display: flex;
-  gap: 0.25rem;
+  gap: var(--spacing-xs);
   flex: 1;
   position: relative;
 }
@@ -98,15 +121,15 @@
 .calendar-week {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--spacing-xs);
 }
 
 .calendar-day {
-  width: 11px;
-  height: 11px;
-  border-radius: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
   position: relative;
 }
 
@@ -116,15 +139,15 @@
 }
 
 .calendar-day:hover:not(.empty) {
-  transform: scale(1.3);
+  transform: scale(1.35);
   z-index: 10;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 0 2px var(--color-primary), 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .calendar-day.hovered {
-  transform: scale(1.3);
+  transform: scale(1.35);
   z-index: 10;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5);
+  box-shadow: 0 0 0 2px var(--color-primary), 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 /* Intensitäts-Klassen für zusätzliche visuelle Unterscheidung */
@@ -151,128 +174,132 @@
 
 .calendar-tooltip {
   position: fixed;
-  background-color: #1a1a1a;
-  border: 1px solid #444;
-  border-radius: 6px;
-  padding: 0.75rem;
+  background: color-mix(in srgb, var(--color-surface) 98%, var(--color-background));
+  border: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md);
   z-index: 1000;
   pointer-events: none;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-  min-width: 200px;
-  max-width: 300px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 12px 32px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.08);
+  min-width: 220px;
+  max-width: 320px;
 }
 
 .tooltip-date {
   font-weight: 600;
-  color: white;
-  margin-bottom: 0.5rem;
-  font-size: 0.9rem;
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  letter-spacing: 0.01em;
 }
 
 .tooltip-stats {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--spacing-xs);
 }
 
 .tooltip-stat {
   display: flex;
   justify-content: space-between;
-  font-size: 0.85rem;
+  font-size: var(--font-size-sm);
+  align-items: center;
 }
 
 .tooltip-label {
-  color: #888;
-}
-
-.tooltip-value {
-  color: white;
+  color: var(--color-text-secondary);
   font-weight: 500;
 }
 
+.tooltip-value {
+  color: var(--color-text-primary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
 .tooltip-value.success {
-  color: #4caf50;
+  color: var(--color-success);
 }
 
 .tooltip-value.error {
-  color: #f44336;
+  color: var(--color-error);
 }
 
 .tooltip-run-ids {
-  margin-top: 0.75rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid #444;
+  margin-top: var(--spacing-sm);
+  padding-top: var(--spacing-sm);
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent);
 }
 
 .tooltip-run-ids-label {
-  font-size: 0.75rem;
-  color: #888;
-  margin-bottom: 0.5rem;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-xs);
   font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .tooltip-run-ids-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--spacing-xs);
 }
 
 .tooltip-run-id-link {
-  font-size: 0.75rem;
-  color: #2196f3;
+  font-size: var(--font-size-xs);
+  color: var(--color-primary);
   text-decoration: none;
-  padding: 0.2rem 0.4rem;
-  background-color: rgba(33, 150, 243, 0.1);
-  border-radius: 4px;
-  transition: background-color 0.2s;
+  padding: 4px 8px;
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+  transition: background 0.2s ease, border-color 0.2s ease;
   font-family: monospace;
   pointer-events: auto;
 }
 
 .tooltip-run-id-link:hover {
-  background-color: rgba(33, 150, 243, 0.2);
-  text-decoration: underline;
+  background: color-mix(in srgb, var(--color-primary) 22%, transparent);
+  border-color: var(--color-primary);
 }
 
 .tooltip-run-ids-more {
-  font-size: 0.75rem;
-  color: #888;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
   font-style: italic;
 }
 
 /* Responsive Design */
 @media (max-width: 768px) {
   .calendar-heatmap {
-    padding: 1rem;
+    padding: var(--spacing-md);
   }
 
   .calendar-heatmap-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.5rem;
-  }
-
-  .calendar-grid {
-    gap: 0.15rem;
+    gap: var(--spacing-sm);
   }
 
   .calendar-day {
-    width: 9px;
-    height: 9px;
+    width: 10px;
+    height: 10px;
   }
 
   .calendar-week-labels {
-    min-width: 25px;
+    min-width: 28px;
     font-size: 0.65rem;
   }
 
   .calendar-week-labels span {
-    height: 9px;
-    line-height: 9px;
+    height: 10px;
+    line-height: 10px;
   }
 
   .calendar-month-labels {
-    height: 18px;
+    height: 20px;
+    margin-left: 28px;
   }
 
   .calendar-month-label {
@@ -280,16 +307,15 @@
   }
 
   .calendar-tooltip {
-    min-width: 180px;
-    max-width: 250px;
-    font-size: 0.8rem;
+    min-width: 200px;
+    max-width: 280px;
   }
 }
 
 @media (max-width: 480px) {
   .calendar-day {
-    width: 8px;
-    height: 8px;
+    width: 9px;
+    height: 9px;
   }
 
   .calendar-week-labels {
@@ -297,7 +323,8 @@
   }
 
   .calendar-month-labels {
-    height: 16px;
+    height: 18px;
+    margin-left: 0;
   }
 
   .calendar-month-label {
@@ -305,16 +332,16 @@
   }
 
   .calendar-tooltip {
-    min-width: 160px;
-    max-width: 200px;
-    padding: 0.5rem;
+    min-width: 180px;
+    max-width: 240px;
+    padding: var(--spacing-sm);
   }
 
   .tooltip-date {
-    font-size: 0.8rem;
+    font-size: var(--font-size-xs);
   }
 
   .tooltip-stat {
-    font-size: 0.75rem;
+    font-size: var(--font-size-xs);
   }
 }

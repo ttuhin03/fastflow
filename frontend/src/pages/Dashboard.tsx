@@ -236,13 +236,9 @@ export default function Dashboard() {
 
       {allPipelinesDailyStats && allPipelinesDailyStats.daily_stats && allPipelinesDailyStats.daily_stats.length > 0 && (
         <div className="dashboard-calendar-section">
-          <h3 className="section-title">Gesamt-Übersicht aller Pipelines</h3>
+          <h3 className="section-title">Laufhistorie</h3>
           <div className="dashboard-calendar-wrapper">
-            <CalendarHeatmap dailyStats={allPipelinesDailyStats.daily_stats} days={365} />
-          </div>
-          {/* Debug: Zeige die letzten 5 Tage */}
-          <div style={{ marginTop: '10px', fontSize: '12px', color: '#666' }}>
-            Letzte 5 Tage: {allPipelinesDailyStats.daily_stats.slice(-5).map((s: { date: string; total_runs: number; successful_runs: number; failed_runs: number; success_rate: number }) => `${s.date}: ${s.total_runs} runs`).join(', ')}
+            <CalendarHeatmap dailyStats={allPipelinesDailyStats.daily_stats} days={365} showTitle={false} />
           </div>
         </div>
       )}
