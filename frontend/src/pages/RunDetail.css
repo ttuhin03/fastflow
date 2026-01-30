@@ -19,7 +19,7 @@
 .retry-button {
   padding: 0.5rem 1rem;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 0.9rem;
 }
@@ -52,7 +52,7 @@
 .error-type-badge {
   display: inline-block;
   padding: 0.25rem 0.5rem;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-size: 0.75rem;
   font-weight: 600;
   margin-left: 0.5rem;
@@ -72,7 +72,7 @@
 .error-message {
   display: block;
   padding: 0.5rem;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-size: 0.9rem;
   margin-top: 0.25rem;
 }
@@ -92,7 +92,7 @@
 .run-info-card {
   background-color: #2a2a2a;
   padding: 1.5rem;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   margin-bottom: 1rem;
 }
 
@@ -120,7 +120,7 @@
 
 .status {
   padding: 0.25rem 0.75rem;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-size: 0.875rem;
   font-weight: 500;
 }
@@ -174,7 +174,7 @@
   gap: 0.5rem;
   padding: 0.5rem;
   background-color: #1a1a1a;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
 .env-key,
@@ -235,7 +235,7 @@
 .logs-container,
 .metrics-container {
   background-color: #2a2a2a;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 1rem;
 }
 
@@ -253,7 +253,7 @@
   background-color: #1a1a1a;
   color: white;
   border: 1px solid #444;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-size: 0.9rem;
 }
 
@@ -275,7 +275,7 @@
   background-color: #646cff;
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 0.9rem;
 }
@@ -286,7 +286,7 @@
 
 .logs-viewer {
   background-color: #1a1a1a;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   padding: 1rem;
   max-height: 600px;
   overflow-y: auto;
@@ -316,7 +316,7 @@
 
 .cell-log-section {
   border: 1px solid #444;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
@@ -344,7 +344,7 @@
 
 .cell-status-badge {
   padding: 0.15rem 0.5rem;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-size: 0.75rem;
   text-transform: uppercase;
 }
@@ -414,7 +414,7 @@
 .cell-log-image {
   max-width: 100%;
   max-height: 300px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   border: 1px solid #444;
 }
 
@@ -432,7 +432,7 @@
 .metrics-chart {
   background-color: #1a1a1a;
   padding: 1rem;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
 .metrics-chart h4 {
@@ -445,7 +445,7 @@
   overflow-x: auto;
   padding: 0.5rem;
   background-color: #1a1a1a;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
 .line-chart {
@@ -473,7 +473,7 @@
   width: 100%;
   border-collapse: collapse;
   background-color: #1a1a1a;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
@@ -499,14 +499,14 @@
   padding: 0.25rem 0.5rem;
   background-color: #ff9800;
   color: white;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-size: 0.75rem;
   font-weight: 500;
 }
 
 .health-status {
   padding: 0.25rem 0.75rem;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-size: 0.875rem;
   font-weight: 500;
 }
@@ -523,7 +523,7 @@
 
 .health-badge {
   padding: 0.25rem 0.5rem;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-size: 0.75rem;
   font-weight: 500;
   margin-left: 0.5rem;
@@ -541,7 +541,7 @@
 
 .connection-status {
   padding: 0.25rem 0.75rem;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-size: 0.85rem;
   font-weight: 500;
 }
