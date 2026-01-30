@@ -342,6 +342,14 @@ class SystemSettings(SQLModel, table=True):
         default=None,
         description="Anonyme UUID für PostHog distinct_id (keine E-Mail/Klarnamen)",
     )
+    dependency_audit_enabled: bool = Field(
+        default=False,
+        description="Automatische Sicherheitsprüfung (pip-audit) täglich; Benachrichtigung bei Schwachstellen",
+    )
+    dependency_audit_cron: str = Field(
+        default="0 3 * * *",
+        description="Cron-Ausdruck für Zeitpunkt (Standard: 3:00 Uhr täglich)",
+    )
 
 
 class Session(SQLModel, table=True):

@@ -22,6 +22,7 @@ from app.models import Pipeline, PipelineRun, RunStatus, User
 from app.executor import run_pipeline
 from app.pipeline_discovery import discover_pipelines, get_pipeline as get_discovered_pipeline
 from app.auth import require_write, get_current_user
+from app import dependencies as deps_module
 
 router = APIRouter(prefix="/pipelines", tags=["pipelines"])
 
@@ -206,6 +207,59 @@ async def get_pipelines(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Fehler beim Abrufen der Pipelines: {str(e)}"
         )
+
+
+@router.get("/dependencies", response_model=List[Dict[str, Any]])
+async def get_pipelines_dependencies(
+    audit: bool = Query(False, description="Run pip-audit for vulnerabilities (can be slow)"),
+    current_user: User = Depends(get_current_user),
+) -> List[Dict[str, Any]]:
+    """
+    Returns dependencies (packages + versions) for all pipelines that have requirements.txt.
+    If audit=true, runs pip-audit per pipeline and includes vulnerabilities (CVE).
+    """
+    pipelines = discover_pipelines()
+    result: List[Dict[str, Any]] = []
+    for p in pipelines:
+        if not p.has_requirements:
+            continue
+        packages = deps_module.get_pipeline_packages(p.name)
+        entry: Dict[str, Any] = {"pipeline": p.name, "packages": packages}
+        if audit:
+            req_path = p.path / "requirements.txt"
+            vulns, err = await deps_module.run_pip_audit(req_path)
+            entry["vulnerabilities"] = vulns
+            if err:
+                entry["audit_error"] = err
+        result.append(entry)
+    return result
+
+
+@router.get("/{name}/dependencies", response_model=Dict[str, Any])
+async def get_pipeline_dependencies(
+    name: str,
+    audit: bool = Query(False, description="Run pip-audit for vulnerabilities"),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    Returns dependencies (packages + versions) for one pipeline.
+    If audit=true, runs pip-audit and includes vulnerabilities.
+    """
+    discovered = get_discovered_pipeline(name)
+    if discovered is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Pipeline nicht gefunden: {name}"
+        )
+    packages = deps_module.get_pipeline_packages(name)
+    result: Dict[str, Any] = {"pipeline": name, "packages": packages}
+    if discovered.has_requirements and audit:
+        req_path = discovered.path / "requirements.txt"
+        vulns, err = await deps_module.run_pip_audit(req_path)
+        result["vulnerabilities"] = vulns
+        if err:
+            result["audit_error"] = err
+    return result
 
 
 @router.post("/{name}/run", response_model=Dict[str, Any])

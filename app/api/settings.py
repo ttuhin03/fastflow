@@ -83,10 +83,12 @@ class SettingsResponse(BaseModel):
 
 
 class SystemSettingsResponse(BaseModel):
-    """Response für System-Konfiguration (Wizard, Nutzer-Tab)."""
+    """Response für System-Konfiguration (Wizard, Nutzer-Tab, Abhängigkeiten-Audit)."""
     is_setup_completed: bool
     enable_telemetry: bool
     enable_error_reporting: bool
+    dependency_audit_enabled: bool = False
+    dependency_audit_cron: str = "0 3 * * *"
 
 
 class SystemSettingsUpdate(BaseModel):
@@ -94,6 +96,8 @@ class SystemSettingsUpdate(BaseModel):
     is_setup_completed: Optional[bool] = None
     enable_telemetry: Optional[bool] = None
     enable_error_reporting: Optional[bool] = None
+    dependency_audit_enabled: Optional[bool] = None
+    dependency_audit_cron: Optional[str] = None
 
 
 class SettingsUpdate(BaseModel):
@@ -190,6 +194,8 @@ async def get_system_settings_endpoint(
         is_setup_completed=ss.is_setup_completed,
         enable_telemetry=ss.enable_telemetry,
         enable_error_reporting=ss.enable_error_reporting,
+        dependency_audit_enabled=getattr(ss, "dependency_audit_enabled", False),
+        dependency_audit_cron=getattr(ss, "dependency_audit_cron", "0 3 * * *") or "0 3 * * *",
     )
 
 
@@ -210,15 +216,27 @@ async def update_system_settings_endpoint(
         ss.enable_telemetry = body.enable_telemetry
     if body.enable_error_reporting is not None:
         ss.enable_error_reporting = body.enable_error_reporting
+    if body.dependency_audit_enabled is not None:
+        ss.dependency_audit_enabled = body.dependency_audit_enabled
+    if body.dependency_audit_cron is not None:
+        ss.dependency_audit_cron = (body.dependency_audit_cron or "0 3 * * *").strip()
     session.add(ss)
     session.commit()
     session.refresh(ss)
     if ss.enable_error_reporting is False:
         shutdown_posthog()
+    # Dependency-Audit-Job neu planen (Cron/Enabled geändert)
+    try:
+        from app.dependency_audit import schedule_dependency_audit_job
+        schedule_dependency_audit_job()
+    except Exception as e:
+        logger.warning("Dependency-Audit-Job nach Einstellungs-Update nicht neu geplant: %s", e)
     return SystemSettingsResponse(
         is_setup_completed=ss.is_setup_completed,
         enable_telemetry=ss.enable_telemetry,
         enable_error_reporting=ss.enable_error_reporting,
+        dependency_audit_enabled=getattr(ss, "dependency_audit_enabled", False),
+        dependency_audit_cron=getattr(ss, "dependency_audit_cron", "0 3 * * *") or "0 3 * * *",
     )
 
 

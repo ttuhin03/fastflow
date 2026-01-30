@@ -21,6 +21,8 @@ Du musst Pipelines **nicht** in einer Datenbank oder der UI anlegen. Vier Schrit
 
 Nach Sync bzw. Neustart erscheint die Pipeline in der UI. Kein `docker build`, kein manueller Upload.
 
+**Abhängigkeiten & Sicherheit:** Welche Libraries welche Pipelines nutzen und ob bekannte Schwachstellen (CVE) vorliegen, siehst du unter **Abhängigkeiten** in der UI. Optional: [automatische tägliche Prüfung und E-Mail/Teams-Benachrichtigung bei Fund](/docs/pipelines/abhaengigkeiten-sicherheit).
+
 ---
 
 ## Verzeichnisstruktur

@@ -41,6 +41,7 @@ export default function Settings() {
   const { isReadonly, isAdmin } = useAuth()
   const [localSettings, setLocalSettings] = useState<Settings | null>(null)
   const [showCleanupInfo, setShowCleanupInfo] = useState(false)
+  const [localDependencyAuditCron, setLocalDependencyAuditCron] = useState<string | null>(null)
 
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -81,6 +82,8 @@ export default function Settings() {
     is_setup_completed: boolean
     enable_telemetry: boolean
     enable_error_reporting: boolean
+    dependency_audit_enabled: boolean
+    dependency_audit_cron: string
   }>({
     queryKey: ['settings-system'],
     queryFn: async () => {
@@ -102,7 +105,12 @@ export default function Settings() {
   })
 
   const updateSystemSettingsMutation = useMutation({
-    mutationFn: async (patch: { enable_telemetry?: boolean; enable_error_reporting?: boolean }) => {
+    mutationFn: async (patch: {
+      enable_telemetry?: boolean
+      enable_error_reporting?: boolean
+      dependency_audit_enabled?: boolean
+      dependency_audit_cron?: string
+    }) => {
       const response = await apiClient.put('/settings/system', patch)
       return response.data
     },
@@ -395,6 +403,60 @@ export default function Settings() {
           </div>
           <p className="settings-telemetry-note">
             Session Recording (Bildschirmaufzeichnung / Replay) wird ausdrücklich nicht verwendet.
+          </p>
+        </div>
+      )}
+
+      {isAdmin && (
+        <div className="settings-section card">
+          <h3 className="section-title">
+            Abhängigkeiten – automatische Sicherheitsprüfung
+            <InfoIcon content="Täglich (pip-audit) werden alle Pipelines mit requirements.txt auf bekannte Schwachstellen (CVE) geprüft. Bei Fund: E-Mail und/oder Teams (wie unter Benachrichtigungen konfiguriert)." />
+          </h3>
+          <div className="settings-telemetry-toggles">
+            <label className="settings-telemetry-toggle">
+              <input
+                type="checkbox"
+                checked={systemSettings?.dependency_audit_enabled ?? false}
+                disabled={updateSystemSettingsMutation.isPending || isReadonly}
+                onChange={(e) =>
+                  updateSystemSettingsMutation.mutate({ dependency_audit_enabled: e.target.checked })
+                }
+              />
+              Automatische Sicherheitsprüfung (täglich in der Nacht)
+            </label>
+          </div>
+          <div className="setting-item" style={{ marginTop: '0.75rem' }}>
+            <label htmlFor="dependency_audit_cron" className="setting-label">
+              Zeitpunkt (Cron)
+              <span className="setting-hint">(z. B. 0 3 * * * = täglich 3:00 Uhr)</span>
+              <InfoIcon content="Cron mit 5 Feldern: Minute Stunde Tag Monat Wochentag. Standard: 0 3 * * * (täglich 3:00 Uhr)." />
+            </label>
+            <input
+              id="dependency_audit_cron"
+              type="text"
+              className="form-input"
+              value={systemSettings?.dependency_audit_cron ?? '0 3 * * *'}
+              onChange={(e) => setLocalDependencyAuditCron(e.target.value)}
+              onBlur={() => {
+                const v = (localDependencyAuditCron ?? systemSettings?.dependency_audit_cron ?? '0 3 * * *').trim() || '0 3 * * *'
+                if (v !== (systemSettings?.dependency_audit_cron ?? '0 3 * * *')) {
+                  updateSystemSettingsMutation.mutate(
+                    { dependency_audit_cron: v },
+                    { onSettled: () => setLocalDependencyAuditCron(null) }
+                  )
+                } else {
+                  setLocalDependencyAuditCron(null)
+                }
+              }}
+              placeholder="0 3 * * *"
+              disabled={updateSystemSettingsMutation.isPending || isReadonly}
+              style={{ maxWidth: '12rem', fontFamily: 'monospace' }}
+            />
+          </div>
+          <p className="settings-telemetry-note">
+            Bei gefundenen Schwachstellen werden E-Mail und/oder Microsoft Teams (wie unter
+            Benachrichtigungen konfiguriert) benachrichtigt.
           </p>
         </div>
       )}

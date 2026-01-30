@@ -642,3 +642,84 @@ async def send_scheduler_error_notification(pipeline_name: str, error_message: s
                 logger.error(f"Fehler beim Senden der Scheduler-Error-Teams-Nachricht: {e}")
     except Exception as e:
         logger.error(f"Fehler beim Senden der Scheduler-Error-Benachrichtigung: {e}")
+
+
+async def send_dependency_vuln_notification(
+    results: List[dict],
+) -> None:
+    """
+    Sendet E-Mail und/oder Teams-Benachrichtigung, wenn bei der automatischen
+    Sicherheitsprüfung (pip-audit) Schwachstellen gefunden wurden.
+
+    results: Liste von {"pipeline": str, "vulnerabilities": list, "audit_error": str | None}
+    """
+    # Nur benachrichtigen, wenn mindestens eine Pipeline Schwachstellen hat
+    vuln_entries = [r for r in results if (r.get("vulnerabilities") or []) and not r.get("audit_error")]
+    if not vuln_entries:
+        return
+    if not config.EMAIL_ENABLED and not config.TEAMS_ENABLED:
+        return
+
+    lines: List[str] = []
+    for r in vuln_entries:
+        pipeline = r.get("pipeline", "?")
+        vulns = r.get("vulnerabilities") or []
+        lines.append(f"  - {pipeline}: {len(vulns)} Schwachstelle(n)")
+        for v in vulns[:10]:
+            vid = v.get("id") or v.get("name") or "?"
+            lines.append(f"    · {vid}")
+        if len(vulns) > 10:
+            lines.append(f"    · … und {len(vulns) - 10} weitere")
+
+    body_text = "Bei der automatischen Sicherheitsprüfung (pip-audit) wurden Schwachstellen gefunden:\n\n" + "\n".join(lines)
+    body_text += "\n\nBitte prüfen Sie die Abhängigkeiten unter: Abhängigkeiten (Frontend)."
+
+    subject = "[FastFlow] Sicherheitsprüfung: Schwachstellen in Pipeline-Abhängigkeiten gefunden"
+
+    if config.EMAIL_ENABLED and config.SMTP_HOST and config.SMTP_FROM and config.EMAIL_RECIPIENTS:
+        try:
+            message = MIMEMultipart("alternative")
+            message["From"] = config.SMTP_FROM
+            message["To"] = ", ".join(config.EMAIL_RECIPIENTS)
+            message["Subject"] = subject
+            message.attach(MIMEText(body_text, "plain"))
+            smtp = aiosmtplib.SMTP(
+                hostname=config.SMTP_HOST,
+                port=config.SMTP_PORT,
+                use_tls=config.SMTP_PORT == 587,
+            )
+            await smtp.connect()
+            if config.SMTP_USER and config.SMTP_PASSWORD:
+                await smtp.login(config.SMTP_USER, config.SMTP_PASSWORD)
+            await smtp.send_message(message)
+            await smtp.quit()
+            logger.info("E-Mail (Dependency-Audit Schwachstellen) an EMAIL_RECIPIENTS gesendet")
+        except Exception as e:
+            logger.error("Fehler beim Senden der Dependency-Audit-E-Mail: %s", e, exc_info=True)
+
+    if config.TEAMS_ENABLED and config.TEAMS_WEBHOOK_URL:
+        try:
+            frontend_url = getattr(config, "FRONTEND_URL", None) or config.BASE_URL or ""
+            deps_url = f"{frontend_url.rstrip('/')}/dependencies" if frontend_url else None
+            facts = [{"title": "Pipelines mit Schwachstellen", "value": str(len(vuln_entries))}]
+            for r in vuln_entries[:5]:
+                facts.append({"title": r.get("pipeline", "?"), "value": f"{len(r.get('vulnerabilities') or [])} CVE(s)"})
+            card = {
+                "@type": "MessageCard",
+                "@context": "https://schema.org/extensions",
+                "summary": subject,
+                "themeColor": "F44336",
+                "title": "Sicherheitsprüfung: Schwachstellen gefunden",
+                "sections": [{
+                    "activityTitle": "pip-audit hat Schwachstellen in Pipeline-Abhängigkeiten gefunden",
+                    "facts": facts,
+                    "markdown": True,
+                }],
+            }
+            if deps_url:
+                card["potentialAction"] = [{"@type": "OpenUri", "name": "Abhängigkeiten anzeigen", "targets": [{"os": "default", "uri": deps_url}]}]
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                await client.post(config.TEAMS_WEBHOOK_URL, json=card)
+            logger.info("Teams (Dependency-Audit Schwachstellen) gesendet")
+        except Exception as e:
+            logger.error("Fehler beim Senden der Dependency-Audit-Teams-Nachricht: %s", e, exc_info=True)

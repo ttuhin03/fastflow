@@ -129,7 +129,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Fehler bei Cleanup-Service-Initialisierung: {e}")
         # Nicht kritisch, App kann trotzdem starten
-    
+
+    # Dependency-Audit-Job (pip-audit täglich; Benachrichtigung bei Schwachstellen)
+    try:
+        from app.dependency_audit import schedule_dependency_audit_job
+        schedule_dependency_audit_job()
+        logger.info("Dependency-Audit-Job aus SystemSettings geladen")
+    except Exception as e:
+        logger.warning("Dependency-Audit-Job konnte nicht geplant werden: %s", e)
+
     # Version Check initialisieren und planen (Phase 12)
     try:
         from app.version_checker import check_version_update, schedule_version_check

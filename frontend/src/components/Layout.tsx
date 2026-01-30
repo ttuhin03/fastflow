@@ -18,7 +18,8 @@ import {
   MdMenu,
   MdClose,
   MdCode,
-  MdMenuBook
+  MdMenuBook,
+  MdExtension
 } from 'react-icons/md'
 import NotificationCenter from './NotificationCenter'
 import Tooltip from './Tooltip'
@@ -40,6 +41,7 @@ const navItems: NavItem[] = [
   { path: '/scheduler', label: 'Scheduler', icon: <MdSchedule /> },
   { path: '/secrets', label: 'Secrets', icon: <MdLock /> },
   { path: '/sync', label: 'Git Sync', icon: <MdSync /> },
+  { path: '/dependencies', label: 'Abhängigkeiten', icon: <MdExtension /> },
   { path: '/users', label: 'Nutzer', icon: <MdPeople /> },
   { path: '/settings', label: 'Einstellungen', icon: <MdSettings /> },
 ]

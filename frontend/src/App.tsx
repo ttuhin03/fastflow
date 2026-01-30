@@ -17,6 +17,7 @@ import Secrets from './pages/Secrets'
 import Sync from './pages/Sync'
 import Settings from './pages/Settings'
 import Users from './pages/Users'
+import Dependencies from './pages/Dependencies'
 import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { NotificationProvider } from './contexts/NotificationContext'
@@ -82,6 +83,7 @@ function AppRoutes() {
         <Route path="scheduler" element={<Scheduler />} />
         <Route path="secrets" element={<Secrets />} />
         <Route path="sync" element={<Sync />} />
+        <Route path="dependencies" element={<Dependencies />} />
         <Route path="settings" element={<Settings />} />
         <Route path="users" element={<Users />} />
       </Route>

@@ -114,3 +114,5 @@ Für die Authentifizierung bei privaten GitHub Repositories via GitHub App.
 | `EMAIL_RECIPIENTS` | Kommagetrennte Liste der Empfänger |
 | `TEAMS_ENABLED` | `true` oder `false` |
 | `TEAMS_WEBHOOK_URL`| Webhook URL für Microsoft Teams Channel |
+
+Diese Einstellungen werden auch für **Benachrichtigungen bei der automatischen Sicherheitsprüfung (Abhängigkeiten-Audit)** genutzt: Wenn täglich pip-audit läuft und Schwachstellen (CVE) findet, werden E-Mail und/oder Teams wie oben konfiguriert versendet. Die Aktivierung und der Zeitpunkt (Cron) werden in der **UI unter Einstellungen → Abhängigkeiten – automatische Sicherheitsprüfung** gesetzt (nur Admins). Details: [Abhängigkeiten und Sicherheitsprüfung](/docs/pipelines/abhaengigkeiten-sicherheit).
