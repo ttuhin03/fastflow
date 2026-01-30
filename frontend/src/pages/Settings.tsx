@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
-import { MdSave, MdRefresh, MdInfo, MdWarning, MdEmail, MdGroup, MdLink, MdCheck } from 'react-icons/md'
+import { MdSave, MdRefresh, MdInfo, MdWarning, MdEmail, MdGroup, MdLink, MdCheck, MdPerson, MdSync, MdStorage, MdPlayCircle, MdNotifications, MdPeople } from 'react-icons/md'
 import { showError, showSuccess } from '../utils/toast'
 import { captureException } from '../utils/posthog'
 
@@ -15,7 +15,11 @@ import Tooltip from '../components/Tooltip'
 import InfoIcon from '../components/InfoIcon'
 import StorageStats from '../components/StorageStats'
 import SystemMetrics from '../components/SystemMetrics'
+import Sync from './Sync'
+import Users from './Users'
 import './Settings.css'
+
+export type SettingsSection = 'account' | 'system' | 'pipeline' | 'notifications' | 'git-sync' | 'nutzer'
 
 interface Settings {
   log_retention_runs: number | null
@@ -44,6 +48,21 @@ export default function Settings() {
   const [localDependencyAuditCron, setLocalDependencyAuditCron] = useState<string | null>(null)
 
   const [searchParams, setSearchParams] = useSearchParams()
+  const section = (searchParams.get('section') as SettingsSection) || 'account'
+  const setSection = (s: SettingsSection) => {
+    const np = new URLSearchParams(searchParams)
+    np.set('section', s)
+    setSearchParams(np, { replace: true })
+  }
+
+  const sectionItems: { id: SettingsSection; label: string; icon: React.ReactNode }[] = [
+    { id: 'account', label: 'Mein Konto', icon: <MdPerson /> },
+    { id: 'system', label: 'System', icon: <MdStorage /> },
+    { id: 'pipeline', label: 'Pipeline & Runs', icon: <MdPlayCircle /> },
+    { id: 'notifications', label: 'Benachrichtigungen', icon: <MdNotifications /> },
+    { id: 'git-sync', label: 'Git Sync', icon: <MdSync /> },
+    ...(isAdmin ? [{ id: 'nutzer' as const, label: 'Nutzer', icon: <MdPeople /> }] : []),
+  ]
 
   const { data: settings, isLoading } = useQuery<Settings>({
     queryKey: ['settings'],
@@ -327,19 +346,81 @@ export default function Settings() {
 
   const currentSettings = localSettings || settings
 
-  return (
-    <div className="settings">
-      <div className="settings-header card">
-        <h2>System-Einstellungen</h2>
-        <p className="settings-info">
-          <MdInfo />
-          Einstellungen werden aktuell nur aus Environment-Variablen geladen.
-          Änderungen erfordern einen Neustart der Anwendung.
-        </p>
+  if (section === 'git-sync') {
+    return (
+      <div className="settings-page">
+        <nav className="settings-sidebar">
+          {sectionItems.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`settings-sidebar-item ${section === item.id ? 'active' : ''}`}
+              onClick={() => setSection(item.id)}
+            >
+              {item.icon}
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="settings-content settings-embedded">
+          <Sync />
+        </div>
       </div>
+    )
+  }
 
-      <div className="settings-section card">
-        <h3 className="section-title">Verknüpfte Konten</h3>
+  if (section === 'nutzer') {
+    return (
+      <div className="settings-page">
+        <nav className="settings-sidebar">
+          {sectionItems.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`settings-sidebar-item ${section === item.id ? 'active' : ''}`}
+              onClick={() => setSection(item.id)}
+            >
+              {item.icon}
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="settings-content settings-embedded">
+          <Users />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="settings-page">
+      <nav className="settings-sidebar">
+        {sectionItems.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={`settings-sidebar-item ${section === item.id ? 'active' : ''}`}
+            onClick={() => setSection(item.id)}
+          >
+            {item.icon}
+            <span>{item.label}</span>
+          </button>
+        ))}
+      </nav>
+      <div className="settings-content">
+        {section === 'account' && (
+          <div className="settings">
+            <div className="settings-header card">
+              <h2>Mein Konto</h2>
+              <p className="settings-info">
+                <MdInfo />
+                Einstellungen werden aktuell nur aus Environment-Variablen geladen.
+                Änderungen erfordern einen Neustart der Anwendung.
+              </p>
+            </div>
+
+            <div className="settings-section card">
+              <h3 className="section-title">Verknüpfte Konten</h3>
         <p className="setting-hint" style={{ marginBottom: '1rem' }}>
           Verknüpfe GitHub und Google, um mit beiden Accounts einzuloggen. E-Mail kann je Provider abweichen; Verknüpfung funktioniert über „Jetzt verbinden“.
         </p>
@@ -374,7 +455,11 @@ export default function Settings() {
           </div>
         </div>
       </div>
+          </div>
+        )}
 
+        {section === 'system' && (
+          <div className="settings">
       {isAdmin && (
         <div className="settings-section card">
           <h3 className="section-title">
@@ -470,7 +555,42 @@ export default function Settings() {
         <SystemMetrics />
       </div>
 
-      {currentSettings && (
+      {health?.environment === 'development' && (
+        <div className="settings-section card" style={{ marginTop: '1rem' }}>
+          <h3 className="section-title">Entwicklung</h3>
+          <p className="setting-hint" style={{ marginBottom: '0.75rem' }}>
+            Sichtbar, wenn in der .env <code>ENVIRONMENT=development</code>. Sendet Test-Exceptions an PostHog. Auswählen: Backend oder Frontend.
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <button
+              type="button"
+              onClick={handleTestFrontendException}
+              className="btn btn-outlined"
+            >
+              Test-Exception (Frontend) senden
+            </button>
+            <button
+              type="button"
+              onClick={() => triggerTestExceptionBackendMutation.mutate()}
+              disabled={triggerTestExceptionBackendMutation.isPending}
+              className="btn btn-outlined"
+            >
+              {triggerTestExceptionBackendMutation.isPending ? 'Sende…' : 'Test-Exception (Backend) senden'}
+            </button>
+          </div>
+        </div>
+      )}
+          </div>
+        )}
+
+        {section === 'pipeline' && (
+          <div className="settings">
+        {!currentSettings ? (
+          <div className="loading-container">
+            <div className="spinner"></div>
+            <p>Einstellungen werden geladen...</p>
+          </div>
+        ) : (
         <div className="settings-sections">
           {/* Log Retention Settings */}
           <div className="settings-section card">
@@ -635,6 +755,54 @@ export default function Settings() {
             </div>
           </div>
 
+          {/* Actions */}
+          {!isReadonly && (
+            <div className="settings-actions card">
+              <h3 className="section-title">Aktionen</h3>
+              <div className="actions-grid">
+                <button
+                  onClick={handleSave}
+                  disabled={updateSettingsMutation.isPending || !localSettings}
+                  className="btn btn-primary"
+                >
+                  <MdSave />
+                  Einstellungen speichern
+                </button>
+                <Tooltip content="Führt sofortiges Cleanup durch: Löscht alte Logs gemäß Retention-Regeln, bereinigt verwaiste Docker-Container. Kann nicht rückgängig gemacht werden.">
+                  <button
+                    onClick={handleForceCleanup}
+                    disabled={forceCleanupMutation.isPending}
+                    className="btn btn-warning"
+                  >
+                    <MdRefresh />
+                    {forceCleanupMutation.isPending ? 'Cleanup läuft...' : 'Force Flush (Cleanup)'}
+                  </button>
+                </Tooltip>
+              </div>
+              <div className="warning-box">
+                <MdWarning />
+                <p>
+                  <strong>Hinweis:</strong> Einstellungen werden aktuell nur aus Environment-Variablen geladen.
+                  Um Einstellungen dauerhaft zu ändern, bearbeiten Sie die .env-Datei oder setzen Sie
+                  Environment-Variablen. Ein Neustart der Anwendung ist erforderlich.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+        )}
+          </div>
+        )}
+
+        {section === 'notifications' && (
+          <div className="settings">
+        {!currentSettings ? (
+          <div className="loading-container">
+            <div className="spinner"></div>
+            <p>Einstellungen werden geladen...</p>
+          </div>
+        ) : (
+          <>
           {/* Email Notifications */}
           <div className="settings-section card">
             <h3 className="section-title">
@@ -815,69 +983,11 @@ export default function Settings() {
               </div>
             </div>
           </div>
-
-          {/* Actions */}
-          {!isReadonly && (
-            <div className="settings-actions card">
-              <h3 className="section-title">Aktionen</h3>
-              <div className="actions-grid">
-                <button
-                  onClick={handleSave}
-                  disabled={updateSettingsMutation.isPending || !localSettings}
-                  className="btn btn-primary"
-                >
-                  <MdSave />
-                  Einstellungen speichern
-                </button>
-                <Tooltip content="Führt sofortiges Cleanup durch: Löscht alte Logs gemäß Retention-Regeln, bereinigt verwaiste Docker-Container. Kann nicht rückgängig gemacht werden.">
-                  <button
-                    onClick={handleForceCleanup}
-                    disabled={forceCleanupMutation.isPending}
-                    className="btn btn-warning"
-                  >
-                    <MdRefresh />
-                    {forceCleanupMutation.isPending ? 'Cleanup läuft...' : 'Force Flush (Cleanup)'}
-                  </button>
-                </Tooltip>
-              </div>
-              <div className="warning-box">
-                <MdWarning />
-                <p>
-                  <strong>Hinweis:</strong> Einstellungen werden aktuell nur aus Environment-Variablen geladen.
-                  Um Einstellungen dauerhaft zu ändern, bearbeiten Sie die .env-Datei oder setzen Sie
-                  Environment-Variablen. Ein Neustart der Anwendung ist erforderlich.
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {health?.environment === 'development' && (
-        <div className="settings-section card" style={{ marginTop: '1rem' }}>
-          <h3 className="section-title">Entwicklung</h3>
-          <p className="setting-hint" style={{ marginBottom: '0.75rem' }}>
-            Sichtbar, wenn in der .env <code>ENVIRONMENT=development</code>. Sendet Test-Exceptions an PostHog. Auswählen: Backend oder Frontend.
-          </p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-            <button
-              type="button"
-              onClick={handleTestFrontendException}
-              className="btn btn-outlined"
-            >
-              Test-Exception (Frontend) senden
-            </button>
-            <button
-              type="button"
-              onClick={() => triggerTestExceptionBackendMutation.mutate()}
-              disabled={triggerTestExceptionBackendMutation.isPending}
-              className="btn btn-outlined"
-            >
-              {triggerTestExceptionBackendMutation.isPending ? 'Sende…' : 'Test-Exception (Backend) senden'}
-            </button>
+          </>
+        )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Cleanup Info Modal */}
       {showCleanupInfo && currentSettings && (

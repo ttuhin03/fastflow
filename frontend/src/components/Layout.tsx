@@ -6,20 +6,13 @@ import apiClient from '../api/client'
 import {
   MdDashboard,
   MdAccountTree,
-  MdPlayArrow,
-  MdSchedule,
-  MdLock,
-  MdSync,
   MdSettings,
-  MdPeople,
   MdLogout,
   MdCircle,
-  MdPause,
   MdMenu,
   MdClose,
   MdCode,
   MdMenuBook,
-  MdExtension
 } from 'react-icons/md'
 import NotificationCenter from './NotificationCenter'
 import Tooltip from './Tooltip'
@@ -37,12 +30,6 @@ interface NavItem {
 const navItems: NavItem[] = [
   { path: '/', label: 'Dashboard', icon: <MdDashboard /> },
   { path: '/pipelines', label: 'Pipelines', icon: <MdAccountTree /> },
-  { path: '/runs', label: 'Runs', icon: <MdPlayArrow /> },
-  { path: '/scheduler', label: 'Scheduler', icon: <MdSchedule /> },
-  { path: '/secrets', label: 'Secrets', icon: <MdLock /> },
-  { path: '/sync', label: 'Git Sync', icon: <MdSync /> },
-  { path: '/dependencies', label: 'Abhängigkeiten', icon: <MdExtension /> },
-  { path: '/users', label: 'Nutzer', icon: <MdPeople /> },
   { path: '/settings', label: 'Einstellungen', icon: <MdSettings /> },
 ]
 
@@ -125,6 +112,9 @@ export default function Layout() {
     if (path === '/') {
       return location.pathname === '/'
     }
+    if (path === '/pipelines') {
+      return location.pathname.startsWith('/pipelines') || location.pathname.startsWith('/runs')
+    }
     return location.pathname.startsWith(path)
   }
 
@@ -136,7 +126,7 @@ export default function Layout() {
       return newSet
     })
     // Nach Animation wieder entfernen (länger für Runs wegen Pause-Icon)
-    const animationDuration = path === '/runs' ? 800 : 600
+    const animationDuration = 600
     setTimeout(() => {
       setClickedIcons(prev => {
         const newSet = new Set(prev)
@@ -181,16 +171,8 @@ export default function Layout() {
           {navItems.map((item) => {
             const iconClass = clickedIcons.has(item.path) ? 'icon-clicked' : ''
             const iconType = item.path === '/settings' ? 'settings-icon' :
-              item.path === '/sync' ? 'sync-icon' :
-                item.path === '/scheduler' ? 'scheduler-icon' :
-                  item.path === '/runs' ? 'runs-icon' :
-                    item.path === '/pipelines' ? 'pipelines-icon' :
-                      item.path === '/' ? 'dashboard-icon' :
-                        item.path === '/secrets' ? 'secrets-icon' :
-                          item.path === '/users' ? 'users-icon' : 'default-icon'
-
-            // Für Runs: Pause-Icon während Animation zeigen
-            const showPauseIcon = item.path === '/runs' && clickedIcons.has(item.path)
+              item.path === '/pipelines' ? 'pipelines-icon' :
+                item.path === '/' ? 'dashboard-icon' : 'default-icon'
 
             return (
               <Link
@@ -203,10 +185,10 @@ export default function Layout() {
                 }}
               >
                 <span className={`nav-icon ${iconClass} ${iconType}`}>
-                  {showPauseIcon ? <MdPause /> : item.icon}
+                  {item.icon}
                 </span>
                 <span className="nav-label">{item.label}</span>
-                {item.path === '/users' && pendingCount > 0 && (
+                {item.path === '/settings' && pendingCount > 0 && (
                   <span className="nav-badge" title="Offene Beitrittsanfragen">
                     {pendingCount > 99 ? '99+' : pendingCount}
                   </span>

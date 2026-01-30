@@ -1,13 +1,19 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import { showError, showSuccess, showConfirm } from '../utils/toast'
-import { MdInfo, MdRefresh, MdMemory } from 'react-icons/md'
+import { MdInfo, MdRefresh, MdMemory, MdPlayArrow, MdSchedule, MdLock, MdExtension, MdAccountTree } from 'react-icons/md'
 import RunStatusCircles from '../components/RunStatusCircles'
 import ProgressBar from '../components/ProgressBar'
 import Skeleton from '../components/Skeleton'
+import Runs from './Runs'
+import Scheduler from './Scheduler'
+import Secrets from './Secrets'
+import Dependencies from './Dependencies'
 import './Pipelines.css'
+
+export type PipelinesSection = 'pipelines' | 'runs' | 'scheduler' | 'secrets' | 'dependencies'
 
 interface Pipeline {
   name: string
@@ -31,6 +37,21 @@ export default function Pipelines() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { isReadonly } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const section = (searchParams.get('section') as PipelinesSection) || 'pipelines'
+  const setSection = (s: PipelinesSection) => {
+    const np = new URLSearchParams(searchParams)
+    np.set('section', s)
+    setSearchParams(np, { replace: true })
+  }
+
+  const sectionItems: { id: PipelinesSection; label: string; icon: React.ReactNode }[] = [
+    { id: 'pipelines', label: 'Pipelines', icon: <MdAccountTree /> },
+    { id: 'runs', label: 'Runs', icon: <MdPlayArrow /> },
+    { id: 'scheduler', label: 'Scheduler', icon: <MdSchedule /> },
+    { id: 'secrets', label: 'Secrets', icon: <MdLock /> },
+    { id: 'dependencies', label: 'Abhängigkeiten', icon: <MdExtension /> },
+  ]
 
   const { data: pipelines, isLoading } = useQuery<Pipeline[]>({
     queryKey: ['pipelines'],
@@ -67,34 +88,99 @@ export default function Pipelines() {
     return parseFloat(((pipeline.successful_runs / pipeline.total_runs) * 100).toFixed(1))
   }
 
+  const renderSidebar = () => (
+    <nav className="pipelines-sidebar">
+      {sectionItems.map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          className={`pipelines-sidebar-item ${section === item.id ? 'active' : ''}`}
+          onClick={() => setSection(item.id)}
+        >
+          {item.icon}
+          <span>{item.label}</span>
+        </button>
+      ))}
+    </nav>
+  )
+
+  if (section === 'runs') {
+    return (
+      <div className="pipelines-page">
+        {renderSidebar()}
+        <div className="pipelines-content pipelines-embedded">
+          <Runs />
+        </div>
+      </div>
+    )
+  }
+  if (section === 'scheduler') {
+    return (
+      <div className="pipelines-page">
+        {renderSidebar()}
+        <div className="pipelines-content pipelines-embedded">
+          <Scheduler />
+        </div>
+      </div>
+    )
+  }
+  if (section === 'secrets') {
+    return (
+      <div className="pipelines-page">
+        {renderSidebar()}
+        <div className="pipelines-content pipelines-embedded">
+          <Secrets />
+        </div>
+      </div>
+    )
+  }
+  if (section === 'dependencies') {
+    return (
+      <div className="pipelines-page">
+        {renderSidebar()}
+        <div className="pipelines-content pipelines-embedded">
+          <Dependencies />
+        </div>
+      </div>
+    )
+  }
+
   if (isLoading) {
     return (
-      <div className="pipelines">
-        <div className="pipelines-grid">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="pipeline-card card">
-              <div className="pipeline-header">
-                <Skeleton width="60%" height="24px" />
-                <Skeleton width="60px" height="24px" variant="rectangular" />
-              </div>
-              <Skeleton width="100%" height="16px" />
-              <div className="pipeline-stats">
-                <Skeleton width="100%" height="40px" />
-              </div>
-              <Skeleton width="100%" height="8px" />
-              <Skeleton width="100%" height="28px" />
-              <div className="pipeline-actions">
-                <Skeleton width="50%" height="36px" />
-                <Skeleton width="50%" height="36px" />
-              </div>
+      <div className="pipelines-page">
+        {renderSidebar()}
+        <div className="pipelines-content">
+          <div className="pipelines">
+            <div className="pipelines-grid">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="pipeline-card card">
+                  <div className="pipeline-header">
+                    <Skeleton width="60%" height="24px" />
+                    <Skeleton width="60px" height="24px" variant="rectangular" />
+                  </div>
+                  <Skeleton width="100%" height="16px" />
+                  <div className="pipeline-stats">
+                    <Skeleton width="100%" height="40px" />
+                  </div>
+                  <Skeleton width="100%" height="8px" />
+                  <Skeleton width="100%" height="28px" />
+                  <div className="pipeline-actions">
+                    <Skeleton width="50%" height="36px" />
+                    <Skeleton width="50%" height="36px" />
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
         </div>
       </div>
     )
   }
 
   return (
+    <div className="pipelines-page">
+      {renderSidebar()}
+      <div className="pipelines-content">
     <div className="pipelines">
       {pipelines && pipelines.length > 0 ? (
         <div className="pipelines-grid">
@@ -203,6 +289,8 @@ export default function Pipelines() {
           <p>Keine Pipelines gefunden</p>
         </div>
       )}
+    </div>
+      </div>
     </div>
   )
 }

@@ -10,14 +10,8 @@ import AccountBlocked from './pages/AccountBlocked'
 import Dashboard from './pages/Dashboard'
 import Pipelines from './pages/Pipelines'
 import PipelineDetail from './pages/PipelineDetail'
-import Runs from './pages/Runs'
 import RunDetail from './pages/RunDetail'
-import Scheduler from './pages/Scheduler'
-import Secrets from './pages/Secrets'
-import Sync from './pages/Sync'
 import Settings from './pages/Settings'
-import Users from './pages/Users'
-import Dependencies from './pages/Dependencies'
 import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { NotificationProvider } from './contexts/NotificationContext'
@@ -78,14 +72,14 @@ function AppRoutes() {
         <Route index element={<Dashboard />} />
         <Route path="pipelines" element={<Pipelines />} />
         <Route path="pipelines/:name" element={<PipelineDetail />} />
-        <Route path="runs" element={<Runs />} />
+        <Route path="runs" element={<Navigate to="/pipelines?section=runs" replace />} />
         <Route path="runs/:runId" element={<RunDetail />} />
-        <Route path="scheduler" element={<Scheduler />} />
-        <Route path="secrets" element={<Secrets />} />
-        <Route path="sync" element={<Sync />} />
-        <Route path="dependencies" element={<Dependencies />} />
+        <Route path="scheduler" element={<Navigate to="/pipelines?section=scheduler" replace />} />
+        <Route path="secrets" element={<Navigate to="/pipelines?section=secrets" replace />} />
+        <Route path="sync" element={<Navigate to="/settings?section=git-sync" replace />} />
+        <Route path="dependencies" element={<Navigate to="/pipelines?section=dependencies" replace />} />
         <Route path="settings" element={<Settings />} />
-        <Route path="users" element={<Users />} />
+        <Route path="users" element={<Navigate to="/settings?section=nutzer" replace />} />
       </Route>
     </Routes>
   )
