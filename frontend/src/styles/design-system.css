@@ -1,20 +1,32 @@
-/* Material Design System - Reusable Components */
+/* Material Design System - Reusable Components (elevated) */
 
 /* Cards */
 .card {
   background-color: var(--color-card);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   padding: var(--spacing-lg);
-  box-shadow: var(--shadow-md);
-  transition: box-shadow var(--transition-base);
+  border: 1px solid color-mix(in srgb, var(--color-border) 55%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    var(--shadow-md),
+    0 0 0 1px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
 }
 
 .card:hover {
-  box-shadow: var(--shadow-lg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    var(--shadow-lg),
+    0 0 0 1px rgba(0, 0, 0, 0.04);
+  border-color: color-mix(in srgb, var(--color-border) 75%, transparent);
 }
 
 .card-elevated {
-  box-shadow: var(--shadow-lg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    var(--shadow-lg),
+    0 0 0 1px rgba(0, 0, 0, 0.05);
+  border-color: color-mix(in srgb, var(--color-border) 65%, transparent);
 }
 
 /* Buttons */
@@ -25,12 +37,12 @@
   gap: var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-md);
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-lg);
   font-family: var(--font-family);
   font-size: var(--font-size-base);
-  font-weight: var(--font-weight-medium);
+  font-weight: 500;
   cursor: pointer;
-  transition: all var(--transition-base);
+  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
   text-decoration: none;
   outline: none;
 }
@@ -43,11 +55,12 @@
 .btn-primary {
   background-color: var(--color-primary);
   color: var(--color-text-primary);
+  box-shadow: 0 2px 8px rgba(33, 150, 243, 0.25);
 }
 
 .btn-primary:hover:not(:disabled) {
   background-color: var(--color-primary-dark);
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 4px 16px rgba(33, 150, 243, 0.35);
   transform: translateY(-1px);
 }
 
@@ -58,16 +71,20 @@
 
 .btn-secondary:hover:not(:disabled) {
   background-color: var(--color-secondary-dark);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  transform: translateY(-1px);
 }
 
 .btn-outlined {
   background-color: transparent;
   color: var(--color-primary);
-  border: 1px solid var(--color-primary);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 70%, transparent);
 }
 
 .btn-outlined:hover:not(:disabled) {
   background-color: rgba(33, 150, 243, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: 0 2px 8px rgba(33, 150, 243, 0.15);
   transform: translateY(-1px);
 }
 
@@ -78,6 +95,8 @@
 
 .btn-success:hover:not(:disabled) {
   background-color: var(--color-success-dark);
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+  transform: translateY(-1px);
 }
 
 .btn-error {
@@ -87,6 +106,8 @@
 
 .btn-error:hover:not(:disabled) {
   background-color: var(--color-error-dark);
+  box-shadow: 0 4px 12px rgba(244, 67, 54, 0.3);
+  transform: translateY(-1px);
 }
 
 .btn-warning {
@@ -96,6 +117,8 @@
 
 .btn-warning:hover:not(:disabled) {
   background-color: var(--color-warning-dark);
+  box-shadow: 0 4px 12px rgba(255, 152, 0, 0.3);
+  transform: translateY(-1px);
 }
 
 /* Badges / Chips */
@@ -144,18 +167,19 @@
   width: 100%;
   padding: var(--spacing-sm) var(--spacing-md);
   background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent);
+  border-radius: var(--radius-md);
   color: var(--color-text-primary);
   font-family: var(--font-family);
   font-size: var(--font-size-base);
-  transition: border-color var(--transition-base);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
 .form-input:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
+  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.2);
+  background-color: color-mix(in srgb, var(--color-surface) 98%, white);
 }
 
 .form-input::placeholder {
