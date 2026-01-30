@@ -66,6 +66,25 @@ def create_access_token(username: str, expires_delta: Optional[timedelta] = None
     return encoded_jwt
 
 
+def create_log_download_token(run_id: UUID) -> str:
+    """
+    Erstellt ein kurzlebiges JWT für Log-Download (60 Sekunden).
+    Wird für Direktlinks verwendet, damit der Browser den Download nativ ausführt.
+    """
+    expire = datetime.utcnow() + timedelta(seconds=60)
+    to_encode = {"sub": str(run_id), "exp": expire, "type": "log_download"}
+    return jwt.encode(to_encode, config.JWT_SECRET_KEY, algorithm=config.JWT_ALGORITHM)
+
+
+def verify_log_download_token(token: str, run_id: UUID) -> bool:
+    """Prüft, ob ein Log-Download-Token für die angegebene run_id gültig ist."""
+    try:
+        payload = jwt.decode(token, config.JWT_SECRET_KEY, algorithms=[config.JWT_ALGORITHM])
+        return payload.get("type") == "log_download" and payload.get("sub") == str(run_id)
+    except JWTError:
+        return False
+
+
 def verify_token(token: str) -> Optional[str]:
     """
     Verifiziert ein JWT-Token und gibt den Benutzernamen zurück.

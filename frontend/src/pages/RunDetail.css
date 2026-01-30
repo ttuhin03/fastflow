@@ -278,10 +278,17 @@
   border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 0.9rem;
+  text-decoration: none;
+  display: inline-block;
 }
 
 .download-button:hover {
   background-color: #535bf2;
+}
+
+.download-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .logs-viewer {

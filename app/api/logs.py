@@ -14,22 +14,66 @@ import aiofiles
 from pathlib import Path
 from typing import Optional
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from fastapi.responses import StreamingResponse, PlainTextResponse
-from sqlmodel import Session
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlmodel import Session, select
 
-from app.database import get_session
-from app.models import PipelineRun
+from app.database import get_session, retry_on_sqlite_io
+from app.models import PipelineRun, User
 from app.executor import get_log_queue
 from app.config import config
-from app.auth import get_current_user
+from app.auth import (
+    get_current_user,
+    create_log_download_token,
+    verify_log_download_token,
+    verify_token,
+    get_session_by_token,
+)
 from app.errors import get_500_detail
-from app.models import User
 import logging
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/runs", tags=["logs"])
+_security = HTTPBearer(auto_error=False)
+
+
+async def require_log_access(
+    run_id: UUID,
+    request: Request,
+    session: Session = Depends(get_session),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_security),
+) -> None:
+    """Prüft Bearer-Auth ODER gültigen download_token."""
+    download_token = request.query_params.get("download_token")
+
+    if credentials is not None:
+        token = credentials.credentials
+        if verify_token(token) and get_session_by_token(session, token):
+            return
+
+    if download_token and verify_log_download_token(download_token, run_id):
+        return
+
+    raise HTTPException(status_code=401, detail="Authentifizierung erforderlich")
+
+
+@router.get("/{run_id}/logs/download-url")
+async def get_logs_download_url(
+    run_id: UUID,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """
+    Liefert einen kurzlebigen Download-Token für die Log-Datei.
+    Das Frontend baut die URL (gleicher Origin wie API-Requests).
+    """
+    run = session.get(PipelineRun, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"Run nicht gefunden: {run_id}")
+    token = create_log_download_token(run_id)
+    return {"token": token}
 
 
 @router.get("/{run_id}/logs")
@@ -37,7 +81,7 @@ async def get_run_logs(
     run_id: UUID,
     tail: Optional[int] = Query(default=None, ge=1, le=100_000, description="Letzte N Zeilen (max. 100.000)"),
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    _: None = Depends(require_log_access),
 ) -> PlainTextResponse:
     """
     Gibt Logs aus Datei lesen (für abgeschlossene Runs).
@@ -113,7 +157,12 @@ async def get_run_logs(
             lines = contents.split("\n")
             contents = "\n".join(lines[-tail:])
         
-        return PlainTextResponse(content=contents, media_type="text/plain")
+        filename = f"run-{run_id}-logs.txt"
+        return PlainTextResponse(
+            content=contents,
+            media_type="text/plain",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        )
         
     except Exception as e:
         logger.exception("Fehler beim Lesen der Log-Datei")

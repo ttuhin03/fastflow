@@ -106,6 +106,18 @@ export default function RunDetail() {
     enabled: !!run?.pipeline_name,
   })
 
+  const { data: logsDownloadUrl, isError: logsDownloadUrlError } = useQuery({
+    queryKey: ['logs-download-url', runId],
+    queryFn: async () => {
+      const { data } = await apiClient.get<{ token: string }>(`/runs/${runId}/logs/download-url`)
+      if (!data?.token) return ''
+      const base = (apiClient.defaults.baseURL || '/api').replace(/\/api\/?$/, '') || window.location.origin
+      return `${base}/api/runs/${runId}/logs?download_token=${encodeURIComponent(data.token)}`
+    },
+    enabled: !!runId && !!run && activeTab === 'logs',
+    staleTime: 30_000,
+  })
+
   // Invalidate daily-stats when run completes
   const prevStatusRef = useRef<string | null>(null)
   useEffect(() => {
@@ -401,47 +413,6 @@ export default function RunDetail() {
     }
   }, [logs, autoScroll])
 
-  const handleDownloadLogs = async () => {
-    if (!run) return
-    try {
-      const response = await apiClient.get(`/runs/${runId}/logs`, { responseType: 'blob' })
-      if (response.status !== 200) {
-        const text = await (response.data as Blob).text()
-        let detail = 'Log-Datei nicht verfügbar.'
-        try {
-          const json = JSON.parse(text)
-          detail = json.detail ?? detail
-        } catch {
-          if (text) detail = text.slice(0, 200)
-        }
-        showError(detail)
-        return
-      }
-      const blob = response.data instanceof Blob ? response.data : new Blob([response.data])
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.setAttribute('download', `run-${runId}-logs.txt`)
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      setTimeout(() => window.URL.revokeObjectURL(url), 200)
-    } catch (err: any) {
-      const data = err.response?.data
-      let message = err.response?.data?.detail ?? err.message ?? 'Download fehlgeschlagen.'
-      if (data instanceof Blob) {
-        try {
-          const text = await data.text()
-          const json = JSON.parse(text)
-          message = json.detail ?? message
-        } catch {
-          message = 'Log-Datei nicht verfügbar.'
-        }
-      }
-      showError(typeof message === 'string' ? message : 'Download fehlgeschlagen.')
-    }
-  }
-
   const handleDownloadMetrics = () => {
     if (!metrics.length) return
     const dataStr = JSON.stringify(metrics, null, 2)
@@ -651,9 +622,26 @@ export default function RunDetail() {
                  '✗ Getrennt'}
               </span>
             )}
-            <button onClick={handleDownloadLogs} className="download-button">
-              Download Logs
-            </button>
+            {logsDownloadUrl ? (
+              <a
+                href={logsDownloadUrl}
+                download={`run-${runId}-logs.txt`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="download-button"
+              >
+                Download Logs
+              </a>
+            ) : (
+              <button
+                className="download-button"
+                disabled={!logsDownloadUrlError}
+                title={logsDownloadUrlError ? 'Erneut versuchen' : 'Lade Download-URL…'}
+                onClick={() => logsDownloadUrlError && queryClient.invalidateQueries({ queryKey: ['logs-download-url', runId] })}
+              >
+                {logsDownloadUrlError ? 'Erneut versuchen' : 'Download Logs'}
+              </button>
+            )}
           </div>
           <div className="logs-viewer">
             {run.cell_logs && run.cell_logs.length > 0 ? (
