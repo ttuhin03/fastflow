@@ -308,6 +308,121 @@
   padding: 2rem;
 }
 
+.cell-logs-grouped {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.cell-log-section {
+  border: 1px solid #444;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.cell-log-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background-color: #252525;
+  border: none;
+  color: #ccc;
+  font-size: 0.9rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.cell-log-header:hover {
+  background-color: #2a2a2a;
+}
+
+.cell-log-header-title {
+  font-weight: 600;
+}
+
+.cell-status-badge {
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.cell-status-success {
+  background-color: rgba(76, 175, 80, 0.3);
+  color: #4caf50;
+}
+
+.cell-status-failed {
+  background-color: rgba(244, 67, 54, 0.3);
+  color: #f44336;
+}
+
+.cell-status-retrying {
+  background-color: rgba(255, 152, 0, 0.3);
+  color: #ff9800;
+}
+
+.cell-status-running {
+  background-color: rgba(33, 150, 243, 0.3);
+  color: #2196f3;
+}
+
+.cell-log-header-toggle {
+  margin-left: auto;
+  font-size: 0.7rem;
+}
+
+.cell-log-content {
+  padding: 0.75rem;
+  background-color: #1a1a1a;
+  border-top: 1px solid #333;
+}
+
+.cell-log-stdout,
+.cell-log-stderr {
+  margin-bottom: 0.5rem;
+}
+
+.cell-log-stream-label {
+  font-size: 0.75rem;
+  color: #888;
+  margin-bottom: 0.25rem;
+}
+
+.cell-log-stdout pre,
+.cell-log-stderr pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.8rem;
+  color: #ccc;
+}
+
+.cell-log-stderr pre {
+  color: #f44336;
+}
+
+.cell-log-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.cell-log-image {
+  max-width: 100%;
+  max-height: 300px;
+  border-radius: 4px;
+  border: 1px solid #444;
+}
+
+.cell-log-empty {
+  color: #666;
+  font-size: 0.85rem;
+}
+
 .metrics-viewer {
   display: flex;
   flex-direction: column;

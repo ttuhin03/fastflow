@@ -44,6 +44,8 @@ services:
     volumes:
       # Pipeline-Repository (wird als Volume gemountet, konfigurierbar)
       - ${PIPELINES_DIR:-./pipelines}:/app/pipelines:rw
+      # Runner-Skripte (Notebook-Runner etc.) – Host-Pfad wird für Worker-Volume benötigt
+      - ./app/runners:/app/app/runners:ro
       # Log-Verzeichnis (persistente Logs)
       - ${LOGS_DIR:-./logs}:/app/logs:rw
       # Daten-Verzeichnis (Datenbank, persistente Daten)

@@ -37,7 +37,8 @@ class PipelineMetadata:
         enabled: bool = True,
         default_env: Optional[Dict[str, str]] = None,
         webhook_key: Optional[str] = None,
-        python_version: Optional[str] = None
+        python_version: Optional[str] = None,
+        type: Optional[str] = None
     ):
         """
         Initialisiert Pipeline-Metadaten.
@@ -60,6 +61,7 @@ class PipelineMetadata:
             default_env: Pipeline-spezifische Default-Env-Vars (werden bei jedem Start gesetzt)
             webhook_key: Webhook-Schlüssel für externe Trigger (optional, None oder leer = Webhooks deaktiviert)
             python_version: Python-Version (z.B. "3.11", "3.12"). Fehlt: DEFAULT_PYTHON_VERSION wird genutzt.
+            type: "script" (Default) oder "notebook". Bei "notebook" muss main.ipynb existieren.
         """
         self.cpu_hard_limit = cpu_hard_limit
         self.mem_hard_limit = mem_hard_limit
@@ -75,6 +77,9 @@ class PipelineMetadata:
         # Normalize empty strings to None (webhooks disabled)
         self.webhook_key = webhook_key if webhook_key and webhook_key.strip() else None
         self.python_version = python_version if python_version and str(python_version).strip() else None
+        self.type = (type or "script").strip().lower() if type else "script"
+        if self.type not in ("script", "notebook"):
+            self.type = "script"
     
     def to_dict(self) -> Dict[str, Any]:
         """
@@ -111,6 +116,8 @@ class PipelineMetadata:
             result["webhook_key"] = self.webhook_key
         if self.python_version:
             result["python_version"] = self.python_version
+        if self.type != "script":
+            result["type"] = self.type
         return result
 
 
@@ -179,6 +186,15 @@ class DiscoveredPipeline:
             python_version in pipeline.json fehlt.
         """
         return self.metadata.python_version or config.DEFAULT_PYTHON_VERSION
+    
+    def get_entry_type(self) -> str:
+        """
+        Gibt den Einstiegstyp der Pipeline zurück (script | notebook).
+        
+        Returns:
+            "script" wenn main.py, "notebook" wenn main.ipynb (type in pipeline.json).
+        """
+        return self.metadata.type
 
 
 # Cache für Pipeline-Liste
@@ -238,25 +254,32 @@ def discover_pipelines(force_refresh: bool = False) -> List[DiscoveredPipeline]:
             continue
         
         pipeline_name = item.name
-        main_py_path = item / "main.py"
+        # Metadaten zuerst laden (für type script | notebook)
+        metadata = _load_pipeline_metadata(item, pipeline_name)
+        meta = metadata or PipelineMetadata()
+        is_notebook = meta.type == "notebook"
         
-        # Validierung: Pipeline muss main.py enthalten
-        if not main_py_path.exists() or not main_py_path.is_file():
-            continue
+        if is_notebook:
+            # Notebook: nur main.ipynb erlaubt
+            main_ipynb_path = item / "main.ipynb"
+            if not main_ipynb_path.exists() or not main_ipynb_path.is_file():
+                continue
+        else:
+            # Script (Default): main.py erforderlich
+            main_py_path = item / "main.py"
+            if not main_py_path.exists() or not main_py_path.is_file():
+                continue
         
         # Prüfe ob requirements.txt vorhanden ist
         requirements_path = item / "requirements.txt"
         has_requirements = requirements_path.exists() and requirements_path.is_file()
-        
-        # Metadaten-JSON laden (optional)
-        metadata = _load_pipeline_metadata(item, pipeline_name)
         
         # Pipeline zur Liste hinzufügen
         pipeline = DiscoveredPipeline(
             name=pipeline_name,
             path=item,
             has_requirements=has_requirements,
-            metadata=metadata
+            metadata=meta
         )
         discovered.append(pipeline)
     
@@ -298,6 +321,7 @@ def _load_pipeline_metadata(
     if not metadata_path.exists() or not metadata_path.is_file():
         return None
     
+    # Für Notebook-Typ brauchen wir die Metadaten (type) vor der Validierung
     try:
         # JSON-Datei laden
         with open(metadata_path, "r", encoding="utf-8") as f:
@@ -320,6 +344,15 @@ def _load_pipeline_metadata(
         else:
             python_version = str(python_version).strip() or None
         
+        # Normalize type: "script" | "notebook", default "script"
+        pipeline_type = data.get("type")
+        if pipeline_type == "" or pipeline_type is None:
+            pipeline_type = "script"
+        else:
+            pipeline_type = str(pipeline_type).strip().lower()
+            if pipeline_type not in ("script", "notebook"):
+                pipeline_type = "script"
+        
         metadata = PipelineMetadata(
             cpu_hard_limit=data.get("cpu_hard_limit"),
             mem_hard_limit=data.get("mem_hard_limit"),
@@ -333,7 +366,8 @@ def _load_pipeline_metadata(
             enabled=data.get("enabled", True),  # Standard: true
             default_env=data.get("default_env", {}),
             webhook_key=webhook_key,
-            python_version=python_version
+            python_version=python_version,
+            type=pipeline_type
         )
         
         return metadata

@@ -58,7 +58,7 @@ async def sync(
     - Step 1: Git Pull (Aktualisierung des Codes)
     - Step 2: Discovery (Suche nach allen requirements.txt)
     - Step 3: Pre-Heating: Für jede Pipeline mit requirements.txt wird
-      `uv pip compile` ausgeführt (lädt alle Pakete in Host-Cache)
+      `uv pip compile` + `uv pip install` ausgeführt (erstellt Lock-File und cached Pakete)
     
     Args:
         request: Request-Body mit optionalem Branch (Standard: config.GIT_BRANCH)

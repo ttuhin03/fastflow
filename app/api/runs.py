@@ -15,7 +15,7 @@ from sqlmodel import Session, select, func
 from pydantic import BaseModel
 
 from app.database import get_session
-from app.models import PipelineRun, RunStatus, User
+from app.models import PipelineRun, RunStatus, User, RunCellLog
 from app.executor import cancel_run, check_container_health
 from app.auth import get_current_user, require_write
 
@@ -181,6 +181,20 @@ async def get_run_details(
         error_type = run.env_vars.get("_fastflow_error_type")
         error_message = run.env_vars.get("_fastflow_error_message")
     
+    # Zellen-Logs (Notebook-Pipelines) laden
+    cell_logs_stmt = select(RunCellLog).where(RunCellLog.run_id == run_id).order_by(RunCellLog.cell_index)
+    cell_logs = list(session.exec(cell_logs_stmt).all())
+    cell_logs_data = [
+        {
+            "cell_index": c.cell_index,
+            "status": c.status,
+            "stdout": c.stdout or "",
+            "stderr": c.stderr or "",
+            "outputs": c.outputs,
+        }
+        for c in cell_logs
+    ]
+
     return {
         "id": str(run.id),
         "pipeline_name": run.pipeline_name,
@@ -195,8 +209,45 @@ async def get_run_details(
         "uv_version": run.uv_version,
         "error_type": error_type,  # "pipeline_error" oder "infrastructure_error"
         "error_message": error_message,
-        "setup_duration": run.setup_duration
+        "setup_duration": run.setup_duration,
+        "cell_logs": cell_logs_data,
     }
+
+
+@router.get("/{run_id}/cells", response_model=List[Dict[str, Any]])
+async def get_run_cells(
+    run_id: UUID,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+) -> List[Dict[str, Any]]:
+    """
+    Gibt die Zellen-Logs eines Runs zurück (Notebook-Pipelines).
+    
+    Args:
+        run_id: Run-ID (UUID)
+        session: SQLModel Session
+        
+    Returns:
+        Liste der Zellen-Logs, sortiert nach cell_index
+    """
+    run = session.get(PipelineRun, run_id)
+    if run is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Run nicht gefunden: {run_id}"
+        )
+    stmt = select(RunCellLog).where(RunCellLog.run_id == run_id).order_by(RunCellLog.cell_index)
+    cells = list(session.exec(stmt).all())
+    return [
+        {
+            "cell_index": c.cell_index,
+            "status": c.status,
+            "stdout": c.stdout or "",
+            "stderr": c.stderr or "",
+            "outputs": c.outputs,
+        }
+        for c in cells
+    ]
 
 
 @router.post("/{run_id}/cancel", response_model=Dict[str, str])

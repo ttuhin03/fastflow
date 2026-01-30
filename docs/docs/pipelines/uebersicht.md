@@ -15,9 +15,9 @@ Nutze das **[fastflow-pipeline-template](https://github.com/ttuhin03/fastflow-pi
 Du musst Pipelines **nicht** in einer Datenbank oder der UI anlegen. Vier Schritte:
 
 1. **Ordner anlegen:** Neues Verzeichnis unter `pipelines/` (z.B. `pipelines/data_sync/`). Der **Ordnername** = **Pipeline-Name** in der UI.
-2. **`main.py`:** Einstiegspunkt. Fast-Flow führt diese Datei aus.
-3. **`requirements.txt` (optional):** Externe Pakete. Standard-Python-Format.
-4. **`pipeline.json` (optional):** Limits, Retries, Timeout, Beschreibung, Tags, `python_version` (beliebig pro Pipeline, z.B. 3.10, 3.11, 3.12), `webhook_key`. [Referenz](/docs/pipelines/referenz).
+2. **Einstieg:** Entweder **`main.py`** (Skript-Pipeline) oder **`main.ipynb`** (Notebook-Pipeline, mit `"type": "notebook"` in `pipeline.json`). Fast-Flow führt Skripte bzw. das Notebook Zelle für Zelle aus.
+3. **`requirements.txt` (optional):** Externe Pakete. Bei Notebook-Pipelines mindestens `nbclient`, `nbformat`, `ipykernel`. [Notebook-Pipelines](/docs/pipelines/notebook-pipelines).
+4. **`pipeline.json` (optional):** Limits, Retries, Timeout, Beschreibung, Tags, `python_version`, `webhook_key`; bei Notebooks zusätzlich **`cells`** für Zellen-Retries. [Referenz](/docs/pipelines/referenz).
 
 Nach Sync bzw. Neustart erscheint die Pipeline in der UI. Kein `docker build`, kein manueller Upload.
 
@@ -36,6 +36,10 @@ pipelines/
 │   └── data_processor.json
 ├── pipeline_c/              # Minimal: nur main.py
 │   └── main.py
+├── notebook_example/        # Notebook-Pipeline: main.ipynb, type: "notebook", cells für Zellen-Retries
+│   ├── main.ipynb
+│   ├── pipeline.json
+│   └── requirements.txt
 └── failing_pipeline/        # Beispiel: bewusst fehlerschlagend (für UI/Retry-Tests)
     ├── main.py
     └── pipeline.json
@@ -93,12 +97,19 @@ Fast-Flow nutzt **keine** eigenen Docker-Images pro Pipeline, sondern JIT-Contai
 | **Retry-Demo** | Zufälliger Erfolg/Fehler zur Erprobung von `retry_attempts`/`retry_strategy` | `main.py`, `pipeline.json` |
 | **Ressourcen-Limits** | OOM- oder CPU-Test mit `mem_hard_limit`/`cpu_hard_limit` | `main.py` (z.B. Speicher allokieren), `pipeline.json` |
 | **Verschiedene Python-Versionen** | Jede Pipeline mit eigener Version (z.B. A mit 3.11, B mit 3.12) | `main.py`, `pipeline.json` mit `python_version` |
+| **Notebook-Pipeline** | Jupyter-Notebook Zelle für Zelle, Zellen-Retries, Logs pro Zelle. Siehe [Notebook-Pipelines](/docs/pipelines/notebook-pipelines). | `main.ipynb`, `pipeline.json` (`type: "notebook"`, optional `cells`) |
 
 Viele davon sind im [fastflow-pipeline-template](https://github.com/ttuhin03/fastflow-pipeline-template) vorkonfiguriert.
 
-## `main.py` (erforderlich)
+## Einstieg: `main.py` oder `main.ipynb`
 
-Jede Pipeline braucht eine `main.py` im eigenen Verzeichnis.
+**Skript-Pipeline:** Im Ordner muss **`main.py`** liegen. Fast-Flow führt sie mit `uv run` aus.
+
+**Notebook-Pipeline:** Im Ordner muss **`main.ipynb`** liegen und in **`pipeline.json`** muss **`"type": "notebook"`** stehen. Das Notebook wird Zelle für Zelle ausgeführt; pro Code-Zelle sind Retries und Logs konfigurierbar. Details: [Notebook-Pipelines](/docs/pipelines/notebook-pipelines).
+
+### `main.py` (Skript-Pipeline)
+
+Jede **Skript-**Pipeline braucht eine `main.py` im eigenen Verzeichnis.
 
 **Ausführung:** `uv run --python {version} --with-requirements {requirements.txt} {main.py}` – `{version}` kommt aus `python_version` in pipeline.json (beliebig pro Pipeline: 3.10, 3.11, 3.12, …) oder `DEFAULT_PYTHON_VERSION` (z.B. 3.11).
 
@@ -154,7 +165,7 @@ Vollständige Feldbeschreibung: [pipeline.json Referenz](/docs/pipelines/referen
 
 - **Discovery:** Automatisch beim Git-Sync (oder beim Start, wenn Verzeichnis gemountet ist).
 - **Name:** Verzeichnisname = Pipeline-Name (z.B. `pipeline_a/` → `pipeline_a`).
-- **Pflicht:** Ordner muss `main.py` enthalten, sonst wird er ignoriert.
+- **Pflicht:** Ordner muss **entweder** `main.py` (Skript) **oder** `main.ipynb` mit `"type": "notebook"` in `pipeline.json` enthalten; sonst wird er ignoriert.
 - **Keine manuelle Registrierung** nötig.
 
 ## Vollständiges Beispiel
@@ -207,5 +218,6 @@ requests==2.31.0
 
 - [**Erste Pipeline**](/docs/pipelines/erste-pipeline) – Tutorial: Von null zur ersten laufenden Pipeline
 - [**Erweiterte Pipelines**](/docs/pipelines/erweiterte-pipelines) – Retries, Timeout, Scheduling, Webhooks, Struktur
-- [**pipeline.json Referenz**](/docs/pipelines/referenz) – Alle Felder und das Verhalten von Limits
+- [**Notebook-Pipelines**](/docs/pipelines/notebook-pipelines) – Jupyter-Notebooks, Zellen-Retries, Logs pro Zelle
+- [**pipeline.json Referenz**](/docs/pipelines/referenz) – Alle Felder inkl. `type`, `cells`, Limits
 - [**Konfiguration**](/docs/deployment/CONFIGURATION) – `PIPELINES_DIR`, `UV_CACHE_DIR`, Git-Sync

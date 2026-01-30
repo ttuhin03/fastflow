@@ -39,11 +39,17 @@ from sqlmodel import Session, select, update
 
 from app.analytics import track_pipeline_run_finished, track_pipeline_run_started
 from app.config import config
-from app.models import Pipeline, PipelineRun, RunStatus
+from app.models import Pipeline, PipelineRun, RunStatus, RunCellLog
 from app.pipeline_discovery import DiscoveredPipeline, get_pipeline
 from app.retry_strategy import wait_for_retry
+from app.database import get_session
 
 logger = logging.getLogger(__name__)
+
+# Präfixe für Notebook-Zellen-Log-Protokoll (nb_runner.py)
+PREFIX_CELL_START = "FASTFLOW_CELL_START\t"
+PREFIX_CELL_END = "FASTFLOW_CELL_END\t"
+PREFIX_CELL_OUTPUT = "FASTFLOW_CELL_OUTPUT\t"
 
 # Thread Pool für synchrone Docker-Operationen
 _executor = ThreadPoolExecutor(max_workers=10)
@@ -449,23 +455,33 @@ async def _run_container_task(
         )
         
         # Basis-Env für uv (Cache + Python-Install); env_vars/Secrets können überschreiben
+        # UV_LINK_MODE=copy verhindert Probleme mit Hardlinks in Docker-Volumes
         base_env = {
             "UV_CACHE_DIR": "/root/.cache/uv",
             "UV_PYTHON_INSTALL_DIR": "/cache/uv_python",
+            "UV_LINK_MODE": "copy",
         }
         container_env = {**base_env, **env_vars}
         
+        # Bei Notebook-Pipelines: Runner-Verzeichnis (app/runners) nach /runner mounten
+        volumes_dict: Dict[str, Dict[str, str]] = {
+            pipeline_host_path: {"bind": "/app", "mode": "ro"},
+            uv_cache_host_path: {"bind": "/root/.cache/uv", "mode": "rw"},
+            uv_python_host_path: {"bind": "/cache/uv_python", "mode": "rw"},
+        }
+        if pipeline.get_entry_type() == "notebook":
+            runners_host_path = _get_host_path_for_volume(
+                client, str(config.RUNNERS_DIR), config.RUNNERS_HOST_DIR
+            )
+            volumes_dict[runners_host_path] = {"bind": "/runner", "mode": "ro"}
+
         # Container-Konfiguration für docker-socket-proxy
         container_config = {
             "image": config.WORKER_BASE_IMAGE,
             "command": _build_container_command(pipeline),
             "environment": container_env,
             # Volumes als Dictionary (korrektes Format für docker Python library)
-            "volumes": {
-                pipeline_host_path: {"bind": "/app", "mode": "ro"},
-                uv_cache_host_path: {"bind": "/root/.cache/uv", "mode": "rw"},
-                uv_python_host_path: {"bind": "/cache/uv_python", "mode": "ro"},
-            },
+            "volumes": volumes_dict,
             "labels": {
                 "fastflow-run-id": str(run_id),
                 "fastflow-pipeline": pipeline.name
@@ -707,51 +723,55 @@ async def _run_container_task(
         # Pipeline-Statistiken aktualisieren (atomar)
         await _update_pipeline_stats(pipeline.name, exit_code_value == 0, session, triggered_by=run.triggered_by)
         
-        # Retry-Logik: Prüfe ob Retry nötig ist
+        # Retry-Logik: Prüfe ob Retry nötig ist (nur für Script-Pipelines; Notebooks haben Zellen-Retry im selben Run)
         if exit_code_value != 0:
-            # Bestimme Retry-Attempts
-            retry_attempts = pipeline.get_retry_attempts()
-            if retry_attempts is None:
-                retry_attempts = config.RETRY_ATTEMPTS
-            
-            # Lade aktuellen Run aus DB um retry_count zu prüfen
             run = session.get(PipelineRun, run_id)
-            if run and retry_attempts > 0:
-                # Prüfe ob wir bereits retries gemacht haben (über retry_count in env_vars)
-                current_retry_count = run.env_vars.get("_fastflow_retry_count", "0")
-                try:
-                    current_retry_count = int(current_retry_count)
-                except (ValueError, TypeError):
-                    current_retry_count = 0
-                
-                if current_retry_count < retry_attempts:
-                    # Retry nötig
-                    retry_strategy = pipeline.metadata.retry_strategy
+            if pipeline.get_entry_type() == "notebook":
+                # Notebook: Kein Pipeline-Retry (neuer Run). Retries passieren nur auf Zellen-Ebene im selben Run.
+                pass
+            else:
+                # Script-Pipeline: ggf. neuen Run als Retry starten
+                retry_attempts = pipeline.get_retry_attempts()
+                if retry_attempts is None:
+                    retry_attempts = config.RETRY_ATTEMPTS
+
+                if run and retry_attempts > 0:
+                    # Prüfe ob wir bereits retries gemacht haben (über retry_count in env_vars)
+                    current_retry_count = run.env_vars.get("_fastflow_retry_count", "0")
+                    try:
+                        current_retry_count = int(current_retry_count)
+                    except (ValueError, TypeError):
+                        current_retry_count = 0
                     
-                    # Warte basierend auf Retry-Strategie
-                    await wait_for_retry(current_retry_count + 1, retry_strategy)
-                    
-                    # Starte neuen Run mit erhöhtem retry_count
-                    new_env_vars = env_vars.copy()
-                    new_env_vars["_fastflow_retry_count"] = str(current_retry_count + 1)
-                    new_env_vars["_fastflow_previous_run_id"] = str(run_id)
-                    
-                    logger.info(f"Starte Retry-Versuch {current_retry_count + 1}/{retry_attempts} für Pipeline {pipeline.name} (vorheriger Run: {run_id})")
-                    
-                    # Neuen Run starten
-                    from app.executor import run_pipeline
-                    await run_pipeline(
-                        pipeline.name,
-                        env_vars=new_env_vars,
-                        parameters=None,  # Parameter werden nicht retry'd
-                        session=session,
-                        triggered_by=f"{run.triggered_by}_retry"
-                    )
-                    return  # Originaler Run bleibt als FAILED, neuer Run wird gestartet
+                    if current_retry_count < retry_attempts:
+                        # Retry nötig
+                        retry_strategy = pipeline.metadata.retry_strategy
+                        
+                        # Warte basierend auf Retry-Strategie
+                        await wait_for_retry(current_retry_count + 1, retry_strategy)
+                        
+                        # Starte neuen Run mit erhöhtem retry_count
+                        new_env_vars = env_vars.copy()
+                        new_env_vars["_fastflow_retry_count"] = str(current_retry_count + 1)
+                        new_env_vars["_fastflow_previous_run_id"] = str(run_id)
+                        
+                        logger.info(f"Starte Retry-Versuch {current_retry_count + 1}/{retry_attempts} für Pipeline {pipeline.name} (vorheriger Run: {run_id})")
+                        
+                        # Neuen Run starten
+                        from app.executor import run_pipeline
+                        await run_pipeline(
+                            pipeline.name,
+                            env_vars=new_env_vars,
+                            parameters=None,  # Parameter werden nicht retry'd
+                            session=session,
+                            triggered_by=f"{run.triggered_by}_retry"
+                        )
+                        return  # Originaler Run bleibt als FAILED, neuer Run wird gestartet
             
             # Benachrichtigungen senden (nur bei finalen Fehlern)
-            from app.notifications import send_notifications
-            await send_notifications(run, RunStatus.FAILED)
+            if run:
+                from app.notifications import send_notifications
+                await send_notifications(run, RunStatus.FAILED)
         
     except (docker.errors.APIError, docker.errors.DockerException, ConnectionError, OSError) as e:
         # Infrastructure Error: Docker-Proxy-Verbindungsfehler oder Docker-API-Fehler
@@ -792,10 +812,10 @@ async def _run_container_task(
             # Pipeline-Statistiken aktualisieren (Fehler)
             await _update_pipeline_stats(run.pipeline_name, False, session, triggered_by=run.triggered_by)
             
-            # Retry-Logik auch für Exceptions
+            # Retry-Logik auch für Exceptions (nur für Script-Pipelines; Notebooks haben Zellen-Retry im selben Run)
             if run:
                 pipeline = get_pipeline(run.pipeline_name)
-                if pipeline:
+                if pipeline and pipeline.get_entry_type() != "notebook":
                     retry_attempts = pipeline.get_retry_attempts()
                     if retry_attempts is None:
                         retry_attempts = config.RETRY_ATTEMPTS
@@ -828,8 +848,9 @@ async def _run_container_task(
                         return
             
             # Benachrichtigungen senden (nur bei finalen Fehlern)
-            from app.notifications import send_notifications
-            await send_notifications(run, RunStatus.FAILED)
+            if run:
+                from app.notifications import send_notifications
+                await send_notifications(run, RunStatus.FAILED)
         
     finally:
         # Container-Cleanup
@@ -865,7 +886,7 @@ def _build_container_command(pipeline: DiscoveredPipeline) -> List[str]:
     damit Logs sofort ausgegeben werden und nicht gepuffert werden.
     
     Das Pipeline-Verzeichnis wird nach /app gemountet, daher sind die Pfade
-    relativ zu /app (z.B. /app/main.py, /app/requirements.txt).
+    relativ zu /app (z.B. /app/main.py, /app/requirements.txt, /app/main.ipynb).
     
     Args:
         pipeline: DiscoveredPipeline-Objekt
@@ -874,13 +895,32 @@ def _build_container_command(pipeline: DiscoveredPipeline) -> List[str]:
         Liste mit Container-Befehl (uv run --python {version} ...)
     """
     py = pipeline.get_python_version()
+    is_notebook = pipeline.get_entry_type() == "notebook"
+    nb_runner_cmd = ["python", "-u", "/runner/nb_runner.py", "/app/main.ipynb"]
+
     if pipeline.has_requirements:
         requirements_path = "/app/requirements.txt"
-        return [
-            "uv", "run", "--python", py,
-            "--with-requirements", requirements_path,
-            "python", "-u", "-c", _SETUP_READY_WRAPPER
-        ]
+        lock_file_path_host = pipeline.path / "requirements.txt.lock"
+
+        if lock_file_path_host.exists():
+            lock_file_path_container = "/app/requirements.txt.lock"
+            base = [
+                "uv", "run", "--python", py,
+                "--with-requirements", lock_file_path_container,
+            ]
+            if is_notebook:
+                return base + nb_runner_cmd
+            return base + ["python", "-u", "-c", _SETUP_READY_WRAPPER]
+        else:
+            base = [
+                "uv", "run", "--python", py,
+                "--with-requirements", requirements_path,
+            ]
+            if is_notebook:
+                return base + nb_runner_cmd
+            return base + ["python", "-u", "-c", _SETUP_READY_WRAPPER]
+    if is_notebook:
+        return ["uv", "run", "--python", py] + nb_runner_cmd
     return ["uv", "run", "--python", py, "python", "-u", "-c", _SETUP_READY_WRAPPER]
 
 
@@ -907,6 +947,131 @@ async def _get_uv_version(container: docker.models.containers.Container) -> Opti
         logger.warning(f"Fehler beim Ermitteln der UV-Version: {e}")
     
     return None
+
+
+def _cell_line_to_readable_log(line: str) -> Optional[str]:
+    """
+    Wandelt eine FASTFLOW_CELL_*-Zeile in eine lesbare Log-Zeile um.
+    Returns None für OUTPUT (keine Doppelausgabe) oder wenn nicht erkennbar.
+    """
+    if line.startswith(PREFIX_CELL_START):
+        try:
+            cell_index = int(line[len(PREFIX_CELL_START) :].strip())
+            return f"[Notebook] Zelle {cell_index}: Start"
+        except ValueError:
+            return None
+    if line.startswith(PREFIX_CELL_END):
+        rest = line[len(PREFIX_CELL_END) :].strip()
+        parts = rest.split("\t", 2)
+        if len(parts) < 2:
+            return None
+        try:
+            cell_index = int(parts[0])
+            status = parts[1].upper()
+            msg = parts[2].strip() if len(parts) > 2 else ""
+            if status == "SUCCESS":
+                return f"[Notebook] Zelle {cell_index}: Erfolg"
+            if status == "FAILED":
+                return f"[Notebook] Zelle {cell_index}: Fehlgeschlagen" + (f" ({msg[:200]})" if msg else "")
+            if status == "RETRYING":
+                attempt_part = msg.split("\t", 1)
+                attempt_num = attempt_part[0] if attempt_part else "?"
+                err = attempt_part[1].strip() if len(attempt_part) > 1 and attempt_part[1] else ""
+                if err:
+                    return f"[Notebook] Zelle {cell_index}: Retry-Versuch {attempt_num} ({err[:150]})"
+                return f"[Notebook] Zelle {cell_index}: Retry-Versuch {attempt_num}"
+            return f"[Notebook] Zelle {cell_index}: {status}"
+        except (ValueError, IndexError):
+            return None
+    return None
+
+
+def _parse_and_persist_cell_line(run_id: UUID, line: str) -> None:
+    """
+    Parst eine FASTFLOW_CELL_*-Zeile vom Notebook-Runner und schreibt in RunCellLog.
+    Wird synchron im ThreadPool ausgeführt (DB-Zugriff).
+    """
+    import base64
+    session_gen = get_session()
+    try:
+        session = next(session_gen)
+    except StopIteration:
+        return
+    try:
+        if line.startswith(PREFIX_CELL_START):
+            cell_index = int(line[len(PREFIX_CELL_START) :].strip())
+            existing = session.get(RunCellLog, (run_id, cell_index))
+            if existing:
+                existing.status = "RUNNING"
+            else:
+                session.add(
+                    RunCellLog(run_id=run_id, cell_index=cell_index, status="RUNNING")
+                )
+            session.commit()
+            return
+        if line.startswith(PREFIX_CELL_END):
+            rest = line[len(PREFIX_CELL_END) :].strip()
+            parts = rest.split("\t", 2)
+            if len(parts) < 2:
+                return
+            cell_index = int(parts[0])
+            status = parts[1].upper()
+            msg = parts[2].strip() if len(parts) > 2 else ""
+            existing = session.get(RunCellLog, (run_id, cell_index))
+            if not existing:
+                existing = RunCellLog(run_id=run_id, cell_index=cell_index, status=status)
+                session.add(existing)
+                session.flush()
+            else:
+                existing.status = status
+            # Alle Versuche in stderr sammeln (Retries + Final), damit sie in der UI sichtbar sind
+            if status == "RETRYING" and msg:
+                attempt_part = msg.split("\t", 1)
+                attempt_num = attempt_part[0] if attempt_part else "?"
+                err_text = attempt_part[1].strip() if len(attempt_part) > 1 else ""
+                existing.stderr = (existing.stderr or "") + f"--- Retry-Versuch {attempt_num} fehlgeschlagen ---\n{err_text}\n\n"
+            elif status == "FAILED":
+                existing.stderr = (existing.stderr or "") + "--- Endgültig fehlgeschlagen ---\n"
+            session.commit()
+            return
+        if line.startswith(PREFIX_CELL_OUTPUT):
+            rest = line[len(PREFIX_CELL_OUTPUT) :]
+            parts = rest.split("\t", 3)
+            if len(parts) < 3:
+                return
+            cell_index = int(parts[0])
+            stream = parts[1]
+            third = parts[2]
+            payload = parts[3] if len(parts) > 3 else ""
+            existing = session.get(RunCellLog, (run_id, cell_index))
+            if not existing:
+                existing = RunCellLog(run_id=run_id, cell_index=cell_index, status="RUNNING")
+                session.add(existing)
+                session.flush()
+            if stream in ("stdout", "stderr"):
+                encoding = third
+                if encoding == "base64":
+                    try:
+                        payload = base64.b64decode(payload).decode("utf-8")
+                    except Exception:
+                        payload = ""
+                if stream == "stdout":
+                    existing.stdout = (existing.stdout or "") + payload + "\n"
+                else:
+                    existing.stderr = (existing.stderr or "") + payload + "\n"
+            elif stream == "image":
+                mime = third
+                if existing.outputs is None:
+                    existing.outputs = {"images": []}
+                existing.outputs.setdefault("images", []).append({"mime": mime, "data": payload})
+            session.commit()
+    except Exception as e:
+        logger.warning("Fehler beim Parsen/Persistieren einer Zellen-Log-Zeile: %s", e)
+    finally:
+        try:
+            next(session_gen)
+        except StopIteration:
+            pass
 
 
 async def _stream_logs(
@@ -988,13 +1153,29 @@ async def _stream_logs(
                             if first_log_event is not None:
                                 first_log_event.set()
                             continue
+                        is_cell_protocol = (
+                            log_line.startswith(PREFIX_CELL_START)
+                            or log_line.startswith(PREFIX_CELL_END)
+                            or log_line.startswith(PREFIX_CELL_OUTPUT)
+                        )
+                        if is_cell_protocol:
+                            await asyncio.get_event_loop().run_in_executor(
+                                _executor,
+                                lambda l=log_line: _parse_and_persist_cell_line(run_id, l),
+                            )
+                            # Lesbare Zeile für Log/SSE (Retries etc.); OUTPUT nicht doppelt ausgeben
+                            line_to_write = _cell_line_to_readable_log(log_line)
+                            if line_to_write is None:
+                                continue  # z. B. CELL_OUTPUT – kein Eintrag in Log (Inhalt in Zellen-UI)
+                        else:
+                            line_to_write = log_line
                         if not first_log_received:
-                            logger.info(f"Erste Log-Zeile für Run {run_id} empfangen: {log_line[:100]}")
+                            logger.info(f"Erste Log-Zeile für Run {run_id} empfangen: {line_to_write[:100]}")
                             first_log_received = True
                         
                         # Zeitstempel hinzufügen (Format: YYYY-MM-DD HH:MM:SS.mmm)
                         timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-                        log_line_with_timestamp = f"[{timestamp}] {log_line}"
+                        log_line_with_timestamp = f"[{timestamp}] {line_to_write}"
                         
                         # In Datei schreiben (asynchron)
                         await log_file.write(log_line_with_timestamp + "\n")
@@ -1004,7 +1185,6 @@ async def _stream_logs(
                         try:
                             log_queue.put_nowait(log_line_with_timestamp)
                         except asyncio.QueueFull:
-                            # Queue voll, alte Einträge entfernen (Ring-Buffer-Verhalten)
                             try:
                                 log_queue.get_nowait()
                                 log_queue.put_nowait(log_line_with_timestamp)

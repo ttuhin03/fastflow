@@ -79,6 +79,12 @@ class Config:
     wenn der Code in einem Docker-Container läuft, um den Host-Pfad zu verwenden.
     """
     
+    RUNNERS_DIR: Path = (Path(__file__).resolve().parent / "runners").resolve()
+    """Pfad zum Runner-Verzeichnis (app/runners, z. B. nb_runner.py für Notebook-Pipelines)."""
+    
+    RUNNERS_HOST_DIR: Optional[str] = os.getenv("RUNNERS_HOST_DIR")
+    """Host-Pfad für RUNNERS_DIR (für Docker Volume-Mount in Worker bei Notebook-Pipelines)."""
+    
     LOGS_DIR: Path = Path(os.getenv("LOGS_DIR", "./logs")).resolve()
     """Verzeichnis für persistente Log-Dateien aller Pipeline-Runs."""
     
@@ -133,9 +139,10 @@ class Config:
     """
     Automatisches Pre-Heating von Dependencies beim Git-Sync.
     
-    Wenn True: `uv pip compile` wird für alle requirements.txt ausgeführt,
-    um Dependencies im Cache vorzubereiten. Verhindert Wartezeiten beim
-    ersten Pipeline-Start nach einem Sync.
+    Wenn True: `uv pip compile` + `uv pip install` wird für alle requirements.txt ausgeführt,
+    um Lock-Files zu erstellen und Dependencies im Cache zu speichern. Beim Pipeline-Run
+    wird dann `uv run --frozen` verwendet, um die Resolution zu überspringen und nur den Cache zu nutzen.
+    Verhindert Wartezeiten beim ersten Pipeline-Start nach einem Sync.
     """
     
     DEFAULT_PYTHON_VERSION: str = os.getenv("DEFAULT_PYTHON_VERSION", "3.11")

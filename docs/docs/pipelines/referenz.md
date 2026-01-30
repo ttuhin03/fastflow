@@ -1,5 +1,5 @@
 ---
-sidebar_position: 4
+sidebar_position: 5
 ---
 
 # pipeline.json – Referenz
@@ -9,6 +9,8 @@ Optionale Metadaten-Datei für Resource-Limits, Timeout, Retries, Beschreibung, 
 **Dateinamen:** `pipeline.json` (bevorzugt) oder `{pipeline_name}.json` (z.B. `data_processor.json`).
 
 ## JSON-Format (Beispiel)
+
+**Skript-Pipeline:**
 
 ```json
 {
@@ -29,6 +31,23 @@ Optionale Metadaten-Datei für Resource-Limits, Timeout, Retries, Beschreibung, 
 }
 ```
 
+**Notebook-Pipeline** (mit Zellen-Retries):
+
+```json
+{
+  "type": "notebook",
+  "enabled": true,
+  "description": "Notebook mit Zellen-Retries",
+  "python_version": "3.12",
+  "timeout": 120,
+  "cells": [
+    { "retries": 2, "delay_seconds": 1 },
+    { "retries": 0 },
+    { "retries": 3, "delay_seconds": 1 }
+  ]
+}
+```
+
 ## Felder
 
 ### Resource-Limits
@@ -40,15 +59,29 @@ Optionale Metadaten-Datei für Resource-Limits, Timeout, Retries, Beschreibung, 
 | `cpu_soft_limit` | – | CPU-Schwelle nur für **Monitoring/Warnungen** in der UI, keine Limitierung. |
 | `mem_soft_limit` | – | RAM-Schwelle nur für **Monitoring/Warnungen** in der UI, keine Limitierung. |
 
+### Pipeline-Typ
+
+| Feld | Typ | Beschreibung |
+|------|-----|--------------|
+| `type` | String, optional | **`"script"`** (Standard) oder **`"notebook"`**. Bei `"notebook"` muss im Pipeline-Ordner **`main.ipynb`** existieren; dann wird das Notebook Zelle für Zelle ausgeführt (siehe [Notebook-Pipelines](/docs/pipelines/notebook-pipelines)). Bei `"script"` wird **`main.py`** ausgeführt. |
+
 ### Pipeline-Konfiguration
 
 | Feld | Typ | Beschreibung |
 |------|-----|--------------|
 | `timeout` | Integer, optional | Timeout in Sekunden (überschreibt globales `CONTAINER_TIMEOUT`). |
-| `retry_attempts` | Integer, optional | Anzahl Retries bei Fehlern (überschreibt globales `RETRY_ATTEMPTS`). |
-| `retry_strategy` | Object, optional | Wartezeit-Strategie zwischen Retries. Siehe [Retry-Strategien](#retry-strategien). |
+| `retry_attempts` | Integer, optional | Anzahl Retries bei Fehlern (überschreibt globales `RETRY_ATTEMPTS`). **Hinweis:** Bei Notebook-Pipelines werden **Pipeline-Level-Retries** nicht ausgeführt; es gelten nur die [Zellen-Retries](/docs/pipelines/notebook-pipelines#zellen-retries-das-cells-array) in `cells` bzw. Zellen-Metadaten. |
+| `retry_strategy` | Object, optional | Wartezeit-Strategie zwischen Retries. Siehe [Retry-Strategien](#retry-strategien). Gilt nur für Skript-Pipelines. |
 | `enabled` | Boolean, optional | Pipeline aktiviert/deaktiviert (Standard: `true`). |
 | `python_version` | String, optional | Python-Version für `uv run --python` – **beliebig pro Pipeline** (z.B. `"3.10"`, `"3.11"`, `"3.12"`). Jede Pipeline kann eine andere Version nutzen. Fehlt: `DEFAULT_PYTHON_VERSION` (Standard 3.11). |
+
+### Notebook-Pipelines: Zellen-Retries (`cells`)
+
+Nur relevant, wenn **`type`** = **`"notebook"`**. Siehe ausführlich [Notebook-Pipelines – Zellen-Retries](/docs/pipelines/notebook-pipelines#zellen-retries-das-cells-array).
+
+| Feld | Typ | Beschreibung |
+|------|-----|--------------|
+| `cells` | Array, optional | Pro **Code-Zelle** ein Eintrag (Index 0 = erste Code-Zelle, 1 = zweite, …). Jeder Eintrag kann **`retries`** (Integer) und **`delay_seconds`** (Number) enthalten. Fehlt ein Eintrag oder das Array: 0 Retries, 1 s Pause. Zellen-Metadaten im Notebook (`metadata.fastflow`) überschreiben die Werte für die jeweilige Zelle. |
 
 ### Webhooks
 
@@ -160,6 +193,7 @@ Die Webhook-URL (mit deinem Schlüssel) wird in der Pipeline-Detailansicht der U
 ## Siehe auch
 
 - [Pipelines – Übersicht](/docs/pipelines/uebersicht)
+- [Notebook-Pipelines](/docs/pipelines/notebook-pipelines) – `type: "notebook"`, `cells`, Zellen-Retries, Logs pro Zelle
 - [Erweiterte Pipelines](/docs/pipelines/erweiterte-pipelines) – Webhooks, Best Practices
 - [API](/docs/api/api) – Webhook-Endpoint `POST /api/webhooks/{pipeline_name}/{webhook_key}`
 - [Konfiguration](/docs/deployment/CONFIGURATION) – globale Limits, `CONTAINER_TIMEOUT`, `RETRY_ATTEMPTS`

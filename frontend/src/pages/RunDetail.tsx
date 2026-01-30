@@ -22,6 +22,7 @@ interface Run {
   metrics_file: string | null
   error_type?: string | null  // "pipeline_error" oder "infrastructure_error"
   error_message?: string | null
+  cell_logs?: CellLog[]
 }
 
 interface Pipeline {
@@ -43,6 +44,14 @@ interface Metric {
   soft_limit_exceeded?: boolean
 }
 
+interface CellLog {
+  cell_index: number
+  status: string
+  stdout: string
+  stderr: string
+  outputs?: { images?: Array<{ mime: string; data: string }> }
+}
+
 export default function RunDetail() {
   const { runId } = useParams()
   const navigate = useNavigate()
@@ -59,6 +68,7 @@ export default function RunDetail() {
   const [metricsReconnectAttempts, setMetricsReconnectAttempts] = useState(0)
   const [logConnectionStatus, setLogConnectionStatus] = useState<'connected' | 'disconnected' | 'reconnecting'>('connected')
   const [metricsConnectionStatus, setMetricsConnectionStatus] = useState<'connected' | 'disconnected' | 'reconnecting'>('connected')
+  const [cellExpanded, setCellExpanded] = useState<Record<number, boolean>>({})
 
   const { data: run, isLoading } = useQuery<Run>({
     queryKey: ['run', runId],
@@ -391,19 +401,45 @@ export default function RunDetail() {
     }
   }, [logs, autoScroll])
 
-  const handleDownloadLogs = () => {
+  const handleDownloadLogs = async () => {
     if (!run) return
-    apiClient
-      .get(`/runs/${runId}/logs`, { responseType: 'blob' })
-      .then((response) => {
-        const url = window.URL.createObjectURL(new Blob([response.data]))
-        const link = document.createElement('a')
-        link.href = url
-        link.setAttribute('download', `run-${runId}-logs.txt`)
-        document.body.appendChild(link)
-        link.click()
-        link.remove()
-      })
+    try {
+      const response = await apiClient.get(`/runs/${runId}/logs`, { responseType: 'blob' })
+      if (response.status !== 200) {
+        const text = await (response.data as Blob).text()
+        let detail = 'Log-Datei nicht verfügbar.'
+        try {
+          const json = JSON.parse(text)
+          detail = json.detail ?? detail
+        } catch {
+          if (text) detail = text.slice(0, 200)
+        }
+        showError(detail)
+        return
+      }
+      const blob = response.data instanceof Blob ? response.data : new Blob([response.data])
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `run-${runId}-logs.txt`)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      setTimeout(() => window.URL.revokeObjectURL(url), 200)
+    } catch (err: any) {
+      const data = err.response?.data
+      let message = err.response?.data?.detail ?? err.message ?? 'Download fehlgeschlagen.'
+      if (data instanceof Blob) {
+        try {
+          const text = await data.text()
+          const json = JSON.parse(text)
+          message = json.detail ?? message
+        } catch {
+          message = 'Log-Datei nicht verfügbar.'
+        }
+      }
+      showError(typeof message === 'string' ? message : 'Download fehlgeschlagen.')
+    }
   }
 
   const handleDownloadMetrics = () => {
@@ -620,7 +656,77 @@ export default function RunDetail() {
             </button>
           </div>
           <div className="logs-viewer">
-            {filteredLogs.length > 0 ? (
+            {run.cell_logs && run.cell_logs.length > 0 ? (
+              <div className="cell-logs-grouped">
+                {run.cell_logs.map((cell) => {
+                  const isExpanded = cellExpanded[cell.cell_index] !== false
+                  const toggle = () =>
+                    setCellExpanded((prev) => ({ ...prev, [cell.cell_index]: !isExpanded }))
+                  const statusClass =
+                    cell.status === 'SUCCESS'
+                      ? 'cell-status-success'
+                      : cell.status === 'FAILED'
+                        ? 'cell-status-failed'
+                        : cell.status === 'RETRYING'
+                          ? 'cell-status-retrying'
+                          : 'cell-status-running'
+                  return (
+                    <div key={cell.cell_index} className="cell-log-section">
+                      <button
+                        type="button"
+                        className="cell-log-header"
+                        onClick={toggle}
+                        aria-expanded={isExpanded}
+                      >
+                        <span className="cell-log-header-title">
+                          Zelle {cell.cell_index}
+                        </span>
+                        <span className={`cell-status-badge ${statusClass}`}>
+                          {cell.status}
+                        </span>
+                        <span className="cell-log-header-toggle">
+                          {isExpanded ? '▼' : '▶'}
+                        </span>
+                      </button>
+                      {isExpanded && (
+                        <div className="cell-log-content">
+                          {cell.stdout && (
+                            <div className="cell-log-stdout">
+                              <div className="cell-log-stream-label">stdout</div>
+                              <pre>{cell.stdout}</pre>
+                            </div>
+                          )}
+                          {cell.stderr && (
+                            <div className="cell-log-stderr">
+                              <div className="cell-log-stream-label">stderr</div>
+                              <pre>{cell.stderr}</pre>
+                            </div>
+                          )}
+                          {(() => {
+                            const images = cell.outputs?.images ?? [];
+                            return images.length > 0 ? (
+                              <div className="cell-log-images">
+                                {images.map((img, i) => (
+                                  <img
+                                    key={i}
+                                    src={`data:${img.mime};base64,${img.data}`}
+                                    alt={`Zelle ${cell.cell_index} Ausgabe ${i + 1}`}
+                                    className="cell-log-image"
+                                  />
+                                ))}
+                              </div>
+                            ) : null;
+                          })()}
+                          {!cell.stdout && !cell.stderr && (!cell.outputs?.images?.length) && (
+                            <div className="cell-log-empty">Keine Ausgabe</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            ) : filteredLogs.length > 0 ? (
               filteredLogs.map((log, index) => (
                 <div key={index} className="log-line">
                   {log}

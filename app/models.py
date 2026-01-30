@@ -14,6 +14,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any, Literal
 from uuid import uuid4, UUID
 from enum import Enum
+from sqlalchemy import Text
 from sqlmodel import SQLModel, Field, JSON, Column
 
 
@@ -138,6 +139,27 @@ class PipelineRun(SQLModel, table=True):
     triggered_by: str = Field(
         default="manual",
         description="Trigger-Quelle: 'manual', 'webhook', oder 'scheduler'"
+    )
+
+
+class RunCellLog(SQLModel, table=True):
+    """
+    Zellen-Log für Notebook-Pipeline-Runs.
+    
+    Pro Run und Code-Zelle eine Zeile: Status, stdout, stderr, optionale Ausgaben (z. B. Bilder).
+    """
+    __tablename__ = "run_cell_logs"
+    __table_args__ = ({"sqlite_autoincrement": False})
+
+    run_id: UUID = Field(foreign_key="pipeline_runs.id", primary_key=True, description="Run-ID")
+    cell_index: int = Field(primary_key=True, description="Index der Code-Zelle (0-basiert)")
+    status: str = Field(default="RUNNING", description="SUCCESS | FAILED | RETRYING | RUNNING")
+    stdout: str = Field(default="", sa_column=Column(Text()), description="Stdout der Zelle")
+    stderr: str = Field(default="", sa_column=Column(Text()), description="Stderr der Zelle")
+    outputs: Optional[Dict[str, Any]] = Field(
+        default=None,
+        sa_column=Column(JSON),
+        description="Optionale Ausgaben (z. B. Bilder als Base64)",
     )
 
 

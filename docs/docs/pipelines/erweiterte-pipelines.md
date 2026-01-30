@@ -320,6 +320,7 @@ Wenn eine Pipeline **mehrmals** läuft (Retry, doppelter Webhook, geplanter Lauf
 | **Große Daten / lange Läufe** | Chunks, Checkpoints, idempotente Logik |
 | **Wartezeit zwischen Retries** | `retry_strategy` in `pipeline.json` (exponential_backoff, fixed_delay, custom_schedule) |
 | **Webhook-Trigger** | `webhook_key` in `pipeline.json`, `POST /api/webhooks/{pipeline_name}/{webhook_key}` |
+| **Notebook: Retries pro Zelle** | `type: "notebook"` + `cells` in `pipeline.json` und/oder Zellen-Metadaten `fastflow`. Siehe [Notebook-Pipelines](/docs/pipelines/notebook-pipelines). |
 
 ---
 
@@ -351,8 +352,9 @@ Weitere Schritte und typische Ursachen: [Troubleshooting – Pipeline läuft lok
 
 ## Siehe auch
 
-- [pipeline.json Referenz](/docs/pipelines/referenz) – alle Felder inkl. Soft-Limits, Tags, `enabled`
-- [Pipelines – Übersicht](/docs/pipelines/uebersicht) – Grundstruktur, `main.py`, `requirements.txt`
+- [pipeline.json Referenz](/docs/pipelines/referenz) – alle Felder inkl. Soft-Limits, Tags, `enabled`, `type`, `cells`
+- [Notebook-Pipelines](/docs/pipelines/notebook-pipelines) – Jupyter-Notebooks, Zellen-Retries, Logs pro Zelle
+- [Pipelines – Übersicht](/docs/pipelines/uebersicht) – Grundstruktur, `main.py`, `main.ipynb`, `requirements.txt`
 - [Erste Pipeline](/docs/pipelines/erste-pipeline) – Einstieg von null
 - [Konfiguration](/docs/deployment/CONFIGURATION) – globale Werte (`RETRY_ATTEMPTS`, `CONTAINER_TIMEOUT`, …)
 - [API](/docs/api/api) – Scheduler, Webhooks, Runs

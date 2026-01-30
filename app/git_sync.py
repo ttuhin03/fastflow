@@ -362,7 +362,8 @@ async def _run_python_preheat(session: Session) -> Dict[str, Dict[str, Any]]:
     """
     Führt das vollständige Python-Preheating aus:
     1) uv python install für alle benötigten Versionen
-    2) uv pip compile --python {version} für jede Pipeline mit requirements.txt
+    2) uv pip compile + uv pip install für jede Pipeline mit requirements.txt
+       (erstellt Lock-File und cached alle Pakete)
     
     Returns:
         pre_heat_results: {pipeline_name: {"success": bool, "message": str}}
@@ -374,14 +375,19 @@ async def _run_python_preheat(session: Session) -> Dict[str, Dict[str, Any]]:
             _executor, lambda: _ensure_python_versions(versions)
         )
     discovered = discover_pipelines(force_refresh=True)
+    logger.info("Gefundene Pipelines für Pre-Heating: %d", len(discovered))
+    # Verarbeite ALLE Pipelines, nicht nur die mit has_requirements=True
+    # (has_requirements könnte veraltet sein oder sich geändert haben)
+    requirements_count = 0
     for p in discovered:
-        if not p.has_requirements:
-            continue
         req = p.path / "requirements.txt"
-        if not req.exists():
+        # Prüfe ob requirements.txt existiert (auch wenn has_requirements=False ist)
+        if not req.exists() or not req.is_file():
             continue
+        requirements_count += 1
         ok, msg = await _pre_heat_pipeline(p.name, req, p.get_python_version(), session)
         pre_heat_results[p.name] = {"success": ok, "message": msg}
+    logger.info("Requirements.txt Dateien gefunden: %d (von %d Pipelines)", requirements_count, len(discovered))
     return pre_heat_results
 
 
@@ -389,7 +395,11 @@ async def _pre_heat_pipeline(
     pipeline_name: str, requirements_path: Path, python_version: str, session: Session
 ) -> Tuple[bool, str]:
     """
-    Pre-Heating für eine Pipeline (uv pip compile --python {version}).
+    Pre-Heating für eine Pipeline (Lock-File-basiert mit Managed Environments).
+    
+    Erstellt ein Lock-File mit uv pip compile und erstellt dann eine Managed Environment
+    mit uv run. uv run erstellt automatisch eine Managed Environment im Cache basierend
+    auf dem Hash des Lock-Files. Diese wird beim Pipeline-Run wiederverwendet.
     
     Args:
         pipeline_name: Name der Pipeline
@@ -405,16 +415,23 @@ async def _pre_heat_pipeline(
             **os.environ.copy(),
             "UV_CACHE_DIR": str(config.UV_CACHE_DIR),
             "UV_PYTHON_INSTALL_DIR": str(config.UV_PYTHON_INSTALL_DIR),
+            "UV_LINK_MODE": "copy",  # Verhindert Probleme mit Hardlinks in Docker-Volumes
         }
-        cmd = [
-            "uv", "pip", "compile", str(requirements_path),
+        
+        # Schritt 1: Erstelle Lock-File (uv pip compile)
+        # Dies fixiert die Versionen und verhindert Re-Resolution beim Run
+        lock_file_path = requirements_path.parent / "requirements.txt.lock"
+        compile_cmd = [
+            "uv", "pip", "compile",
             "--python", python_version,
-            "-o", os.devnull,
+            str(requirements_path),
+            "-o", str(lock_file_path),
         ]
-        result = await asyncio.get_event_loop().run_in_executor(
+        
+        compile_result = await asyncio.get_event_loop().run_in_executor(
             _executor,
             lambda: subprocess.run(
-                cmd,
+                compile_cmd,
                 cwd=requirements_path.parent,
                 capture_output=True,
                 text=True,
@@ -423,10 +440,88 @@ async def _pre_heat_pipeline(
             )
         )
         
-        if result.returncode != 0:
-            error_msg = f"Pre-Heating fehlgeschlagen für {pipeline_name}: {result.stderr or ''}"
+        if compile_result.returncode != 0:
+            error_msg = f"Pre-Heating Lock-File-Erstellung fehlgeschlagen für {pipeline_name}: {compile_result.stderr or compile_result.stdout or ''}"
             logger.warning(error_msg)
             return (False, error_msg)
+        
+        # Schritt 2: Pre-Heat Managed Environment mit uv run
+        # WICHTIG: Der Hash für Managed Environments basiert auf dem absoluten Pfad!
+        # Beim Run ist der absolute Pfad /app/requirements.txt.lock (cwd=/app, Pipeline nach /app gemountet)
+        # Beim Pre-Heating müssen wir den GLEICHEN absoluten Pfad verwenden
+        # Lösung: Erstelle temporären symlink /app -> Pipeline-Verzeichnis (nur wenn /app nicht existiert)
+        #         Dann verwenden beide den gleichen absoluten Pfad /app/requirements.txt.lock
+        
+        pipeline_dir = requirements_path.parent
+        app_path = Path("/app")
+        temp_app_created = False
+        
+        try:
+            # Prüfe ob /app existiert
+            if not app_path.exists():
+                # Erstelle symlink /app -> Pipeline-Verzeichnis (temporär)
+                app_path.symlink_to(pipeline_dir)
+                temp_app_created = True
+                logger.debug(f"Temporärer symlink /app -> {pipeline_dir} erstellt für Pre-Heating")
+            elif app_path.is_symlink():
+                # /app ist bereits ein symlink, prüfe ob er auf das richtige Verzeichnis zeigt
+                if app_path.resolve() != pipeline_dir.resolve():
+                    logger.warning(f"/app existiert bereits als symlink zu {app_path.resolve()}, nicht {pipeline_dir}")
+                    # Verwende den tatsächlichen absoluten Pfad (Managed Environment wird nicht wiederverwendet)
+                    lock_file_absolute = str(lock_file_path.resolve())
+                else:
+                    # /app zeigt bereits auf das richtige Verzeichnis
+                    lock_file_absolute = "/app/requirements.txt.lock"
+            else:
+                # /app existiert als Verzeichnis
+                logger.warning("/app existiert bereits als Verzeichnis, verwende tatsächlichen absoluten Pfad")
+                lock_file_absolute = str(lock_file_path.resolve())
+            
+            # Wenn /app nicht existiert oder auf das richtige Verzeichnis zeigt, verwende /app/requirements.txt.lock
+            if not temp_app_created and (not app_path.exists() or (app_path.is_symlink() and app_path.resolve() == pipeline_dir.resolve())):
+                lock_file_absolute = "/app/requirements.txt.lock"
+            elif not temp_app_created:
+                # Verwende tatsächlichen absoluten Pfad
+                lock_file_absolute = str(lock_file_path.resolve())
+            
+            run_cmd = [
+                "uv", "run",
+                "--python", python_version,
+                "--with-requirements", lock_file_absolute,
+                "python", "-c", "pass",  # Dummy-Befehl, nur um Managed Environment zu erstellen
+            ]
+            
+            install_cmd = run_cmd
+            
+            # WICHTIG: cwd muss /app sein (wie beim Run), damit der absolute Pfad /app/requirements.txt.lock ist
+            cwd_for_run = app_path if app_path.exists() or temp_app_created else pipeline_dir
+            
+            install_result = await asyncio.get_event_loop().run_in_executor(
+                _executor,
+                lambda: subprocess.run(
+                    install_cmd,
+                    cwd=str(cwd_for_run),  # /app (wie beim Run) oder Pipeline-Verzeichnis
+                    capture_output=True,
+                    text=True,
+                    timeout=600,
+                    env=env,
+                )
+            )
+        finally:
+            # Cleanup: Entferne temporären symlink
+            if temp_app_created and app_path.is_symlink():
+                try:
+                    app_path.unlink()
+                    logger.debug("Temporärer symlink /app entfernt")
+                except Exception as e:
+                    logger.warning(f"Fehler beim Entfernen des temporären symlinks /app: {e}")
+        
+        if install_result.returncode != 0:
+            error_msg = f"Pre-Heating Installation fehlgeschlagen für {pipeline_name}: {install_result.stderr or install_result.stdout or ''}"
+            logger.warning(error_msg)
+            return (False, error_msg)
+        
+        logger.debug(f"Pre-Heating erfolgreich für {pipeline_name}: Lock-File erstellt und Pakete installiert/gecacht")
         
         # Status in DB aktualisieren (last_cache_warmup)
         pipeline = session.get(Pipeline, pipeline_name)
@@ -461,7 +556,7 @@ async def run_pre_heat_at_startup() -> None:
     UV Pre-Heating beim API-Start (Hintergrund-Task).
     
     Wenn UV_PRE_HEAT aktiviert ist: uv python install für benötigte Versionen,
-    dann uv pip compile --python {version} für jede Pipeline mit requirements.txt.
+    dann uv pip compile + uv pip install für jede Pipeline mit requirements.txt.
     Läuft asynchron, blockiert den App-Start nicht.
     """
     if not config.UV_PRE_HEAT:
@@ -471,11 +566,15 @@ async def run_pre_heat_at_startup() -> None:
         session_gen = get_session()
         session = next(session_gen)
         try:
-            logger.info("Starte UV Pre-Heating beim Start (Python-Install + pip compile)")
+            logger.info("Starte UV Pre-Heating beim Start (Python-Install + pip compile/install)")
             pre_heat_results = await _run_python_preheat(session)
             ok = sum(1 for v in pre_heat_results.values() if v.get("success"))
             fail = len(pre_heat_results) - ok
-            logger.info("UV Pre-Heating beim Start abgeschlossen: %d ok, %d fehlgeschlagen", ok, fail)
+            total_pipelines = len(discover_pipelines(force_refresh=False))
+            logger.info(
+                "UV Pre-Heating beim Start abgeschlossen: %d ok, %d fehlgeschlagen (von %d Pipelines insgesamt, %d mit requirements.txt)",
+                ok, fail, total_pipelines, len(pre_heat_results)
+            )
         finally:
             session.close()
     except Exception as e:
