@@ -73,7 +73,7 @@
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 420px;
+  max-width: 440px;
   display: flex;
   flex-direction: column;
   gap: var(--spacing-xl);
@@ -82,20 +82,23 @@
 .login-card {
   width: 100%;
   padding: var(--spacing-2xl);
-  backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
   background: linear-gradient(
-    135deg,
-    rgba(42, 42, 42, 0.85) 0%,
-    rgba(30, 30, 30, 0.9) 100%
+    165deg,
+    color-mix(in srgb, var(--color-surface) 92%, white) 0%,
+    color-mix(in srgb, var(--color-surface) 98%, var(--color-background)) 100%
   );
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 
-    0 8px 32px rgba(0, 0, 0, 0.4),
-    0 0 0 1px rgba(255, 255, 255, 0.05) inset,
-    0 0 60px rgba(33, 150, 243, 0.1);
-  animation: cardFadeIn 0.6s ease-out;
+  border: 1px solid color-mix(in srgb, var(--color-border) 50%, rgba(255, 255, 255, 0.08));
+  border-radius: var(--radius-lg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 24px 48px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(0, 0, 0, 0.1),
+    0 0 80px rgba(33, 150, 243, 0.08);
+  animation: cardFadeIn 0.6s cubic-bezier(0.22, 1, 0.36, 1);
   position: relative;
   overflow: hidden;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.2s ease;
 }
 
 .login-card::before {
@@ -107,12 +110,14 @@
   height: 1px;
   background: linear-gradient(
     90deg,
-    transparent,
-    rgba(33, 150, 243, 0.5),
-    rgba(156, 39, 176, 0.5),
-    transparent
+    transparent 0%,
+    rgba(33, 150, 243, 0.4) 20%,
+    rgba(156, 39, 176, 0.4) 50%,
+    rgba(33, 150, 243, 0.4) 80%,
+    transparent 100%
   );
-  animation: borderGlow 3s ease-in-out infinite;
+  opacity: 0.7;
+  animation: borderGlow 4s ease-in-out infinite;
 }
 
 @keyframes borderGlow {
@@ -120,18 +125,19 @@
     opacity: 0.5;
   }
   50% {
-    opacity: 1;
+    opacity: 0.9;
   }
 }
 
 @media (hover: hover) {
   .login-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 
-      0 12px 40px rgba(0, 0, 0, 0.5),
-      0 0 0 1px rgba(255, 255, 255, 0.1) inset,
-      0 0 80px rgba(33, 150, 243, 0.15);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    transform: translateY(-4px);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      0 32px 64px rgba(0, 0, 0, 0.4),
+      0 0 0 1px rgba(0, 0, 0, 0.08),
+      0 0 100px rgba(33, 150, 243, 0.12);
+    border-color: color-mix(in srgb, var(--color-border) 70%, rgba(255, 255, 255, 0.1));
   }
 }
 
@@ -152,79 +158,65 @@
 }
 
 .login-icon {
-  width: 80px;
-  height: 80px;
+  width: 88px;
+  height: 88px;
   margin: 0 auto var(--spacing-lg);
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, rgba(33, 150, 243, 0.2), rgba(156, 39, 176, 0.2));
-  border-radius: var(--radius-full);
+  background: linear-gradient(145deg, rgba(33, 150, 243, 0.25), rgba(156, 39, 176, 0.15));
+  border-radius: var(--radius-lg);
   color: var(--color-primary);
-  box-shadow: 
-    0 4px 20px rgba(33, 150, 243, 0.3),
-    0 0 0 4px rgba(33, 150, 243, 0.1);
-  animation: iconPulse 3s ease-in-out infinite;
+  border: 1px solid rgba(33, 150, 243, 0.25);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 8px 24px rgba(33, 150, 243, 0.25),
+    0 0 0 1px rgba(33, 150, 243, 0.08);
+  animation: iconPulse 4s ease-in-out infinite;
   position: relative;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.login-icon::before {
-  content: '';
-  position: absolute;
-  top: -2px;
-  left: -2px;
-  right: -2px;
-  bottom: -2px;
-  border-radius: var(--radius-full);
-  background: linear-gradient(135deg, rgba(33, 150, 243, 0.4), rgba(156, 39, 176, 0.4));
-  z-index: -1;
-  opacity: 0;
-  animation: iconGlow 3s ease-in-out infinite;
+.login-icon:hover {
+  transform: scale(1.03);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 12px 32px rgba(33, 150, 243, 0.35),
+    0 0 0 1px rgba(33, 150, 243, 0.12);
 }
 
 @keyframes iconPulse {
   0%, 100% {
-    transform: scale(1);
-    box-shadow: 
-      0 4px 20px rgba(33, 150, 243, 0.3),
-      0 0 0 4px rgba(33, 150, 243, 0.1);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.1),
+      0 8px 24px rgba(33, 150, 243, 0.25),
+      0 0 0 1px rgba(33, 150, 243, 0.08);
   }
   50% {
-    transform: scale(1.05);
-    box-shadow: 
-      0 6px 30px rgba(33, 150, 243, 0.5),
-      0 0 0 6px rgba(33, 150, 243, 0.15);
-  }
-}
-
-@keyframes iconGlow {
-  0%, 100% {
-    opacity: 0;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.6;
-    transform: scale(1.1);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.12),
+      0 10px 28px rgba(33, 150, 243, 0.35),
+      0 0 0 1px rgba(33, 150, 243, 0.12);
   }
 }
 
 .login-icon svg {
-  font-size: 2.5rem;
+  font-size: 2.75rem;
   position: relative;
   z-index: 1;
 }
 
 .login-card h1 {
   font-size: var(--font-size-3xl);
-  font-weight: var(--font-weight-bold);
-  background: linear-gradient(135deg, var(--color-primary), #9c27b0);
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--color-primary) 0%, #9c27b0 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
   margin-bottom: var(--spacing-sm);
-  letter-spacing: -0.5px;
-  text-shadow: 0 2px 10px rgba(33, 150, 243, 0.3);
-  animation: titleFadeIn 0.8s ease-out 0.2s both;
+  letter-spacing: -0.02em;
+  filter: drop-shadow(0 0 24px rgba(33, 150, 243, 0.2));
+  animation: titleFadeIn 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
 }
 
 @keyframes titleFadeIn {
@@ -242,10 +234,9 @@
   color: var(--color-text-secondary);
   font-size: var(--font-size-base);
   margin: 0;
-  font-weight: var(--font-weight-normal);
-  letter-spacing: 0.5px;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
-  animation: subtitleFadeIn 0.8s ease-out 0.4s both;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  animation: subtitleFadeIn 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.3s both;
 }
 
 @keyframes subtitleFadeIn {
@@ -416,16 +407,18 @@
   background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
 }
 
-/* "Sign in with GitHub" / "Sign in with Google" – gleicher Stil wie "View on GitHub" (.github-link) */
+/* OAuth buttons – elevated, aligned with app design */
 .login-btn-github,
 .login-btn-google {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-surface-variant) 60%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-border) 50%, rgba(255, 255, 255, 0.06));
+  border-radius: var(--radius-lg);
   color: var(--color-text-primary);
   font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
+  font-weight: 500;
+  padding: 14px var(--spacing-lg);
   backdrop-filter: blur(10px);
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .login-btn-google {
@@ -434,18 +427,19 @@
 
 .login-btn-github .login-btn-github-icon,
 .login-btn-google .login-btn-google-icon {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   flex-shrink: 0;
   color: var(--color-primary);
+  opacity: 0.95;
 }
 
 .login-btn-github:hover:not(:disabled),
 .login-btn-google:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: color-mix(in srgb, var(--color-surface-variant) 90%, transparent);
+  border-color: color-mix(in srgb, var(--color-border) 80%, rgba(255, 255, 255, 0.1));
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
 .login-btn-github:hover:not(:disabled)::before,
@@ -580,31 +574,32 @@
 }
 
 .github-link {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: var(--spacing-sm);
-  padding: var(--spacing-sm) var(--spacing-lg);
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: var(--radius-md);
+  padding: 10px var(--spacing-lg);
+  background: color-mix(in srgb, var(--color-surface-variant) 50%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-border) 45%, rgba(255, 255, 255, 0.06));
+  border-radius: var(--radius-lg);
   color: var(--color-text-primary);
   text-decoration: none;
   font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  transition: all var(--transition-base);
+  font-weight: 500;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
   backdrop-filter: blur(10px);
 }
 
 .github-link:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: color-mix(in srgb, var(--color-surface-variant) 85%, transparent);
+  border-color: color-mix(in srgb, var(--color-border) 75%, rgba(255, 255, 255, 0.1));
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.03);
 }
 
 .github-link svg {
-  font-size: 1.25rem;
+  font-size: 1.2rem;
   color: var(--color-primary);
+  opacity: 0.9;
 }
 
 .login-footer-text {
