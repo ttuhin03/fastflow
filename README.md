@@ -2,7 +2,6 @@
 
 **The lightweight, Docker-native, Python-centric task orchestrator for 2026.**
 
-![Fast-Flow Banner](docs/static/img/fastflow_banner.png)
 Fast-Flow ist die Antwort auf die Komplexität von Airflow und die Schwerfälligkeit traditioneller CI/CD-Tools. Er wurde für Entwickler gebaut, die echte Isolation wollen, ohne auf die Geschwindigkeit lokaler Skripte zu verzichten.
 > [!NOTE]
 >  Lies unser [Anti-Overhead Manifesto](docs/docs/manifesto.md), um zu verstehen, warum Fast-Flow die bessere Alternative zu Airflow, Dagster & Co. ist.
@@ -12,7 +11,6 @@ Fast-Flow ist die Antwort auf die Komplexität von Airflow und die Schwerfällig
 
 ## 📖 Inhaltsverzeichnis
 - [🚀 Schnellstart](#-schnellstart)
-- [📋 Zuletzt umgesetzt](#-zuletzt-umgesetzt)
 - [🏗 Architektur: Das "Runner-Cache"-Prinzip](#-architektur-das-runner-cache-prinzip)
 - [🛠 Der Container-Prozess & Lifecycle](#-der-container-prozess--lifecycle)
 - [🔄 Git-Native Deployment](#-git-native-deployment)
@@ -88,19 +86,6 @@ Die Anmeldung erfolgt **über GitHub oder Google**:
 > Ausführliche Schritte, Einladung, Konto verknüpfen, **Beitrittsanfragen**: [OAuth (GitHub & Google)](docs/docs/oauth/README.md).
 
 **Beitrittsanfragen (Anklopfen):** Unbekannte Nutzer (ohne Einladung) können per OAuth eine Anfrage stellen. Sie erhalten **keine Session**, werden auf `/request-sent` umgeleitet und erscheinen unter **Users → Beitrittsanfragen**. Nach Freigabe durch einen Admin können sie sich normal anmelden. Abgelehnte bzw. noch wartende Nutzer landen bei erneutem OAuth-Login auf `/request-sent` bzw. `/request-rejected` (ebenfalls ohne Session).
-
-### 📋 Zuletzt umgesetzt
-
-- **Beitrittsanfragen (Anklopfen)** – Unbekannte OAuth-Nutzer legen eine Anfrage ab (Status `pending`), erhalten keine Session und sehen `/request-sent`. Admins können unter **Users → Beitrittsanfragen** freigeben oder ablehnen. Bei Freigabe optional E-Mail an den Nutzer; bei neuer Anfrage Log + optional E-Mail an Admins (`EMAIL_RECIPIENTS`).
-- **Google OAuth** – Zweiter Login-Provider neben GitHub (Login, Einladung, Konto verknüpfen). User-Model um `google_id` und `avatar_url` erweitert.
-- **Konto verknüpfen** – In **Einstellungen → Verknüpfte Konten** können eingeloggte Nutzer GitHub und/oder Google an ihr Profil anbinden; Login dann mit beiden möglich (z.B. wenn E-Mails je Provider unterschiedlich sind). In **Users** ist sichtbar, welche Konten pro Nutzer verknüpft sind.
-- **Einladungen** – Einladungslinks lassen sich mit **GitHub oder Google** einlösen; die OAuth-E-Mail muss der Einladungs-E-Mail entsprechen.
-- **Migrationen automatisch** – Beim Container-Start führt `entrypoint.sh` zuerst `alembic upgrade head` aus, danach startet die App. Manuelles Migrieren entfällt bei `./start-docker.sh` / `docker-compose up`.
-- **OAuth-Logging** – Erfolgreiche Matches werden geloggt (`match=direct|email|link|initial_admin|invitation`, inkl. Provider und User), ebenso abgelehnte Logins und fehlgeschlagene Link-Flows. Hilfreich für Debugging: `docker-compose logs -f orchestrator | grep -E "OAuth:|initial_admin"`.
-- **Dokumentation** – OAuth-Doku in `docs/docs/oauth/` (README, GITHUB.md, GOOGLE.md); `docs/GITHUB_OAUTH.md` entfernt.
-- **Error-Tracking & Telemetrie (PostHog)** – Phase 1: Fehlerberichte (Backend + Frontend) an PostHog Cloud EU. First-Run-Wizard für Admins, Einstellungen → Global Privacy & Telemetry. Anonym (UUID), Scrubbing, URL/Path in Backend-Fehlern. Details: [Telemetrie (PostHog)](docs/docs/telemetry/README.md).
-
----
 
 ## 🏗 Architektur: Das "Runner-Cache"-Prinzip
 
