@@ -99,6 +99,7 @@ flowchart TB
 
 ## Nächste Schritte
 
+- [**Konzepte & Glossar**](/docs/konzepte) – Runner-Cache, uv, JIT, Disposable Worker kurz erklärt
 - [Pipelines – Übersicht](/docs/pipelines/uebersicht) – Wie du Pipelines strukturierst
 - [Git-Deployment](/docs/deployment/GIT_DEPLOYMENT) – Push-to-Deploy
 - [Docker Socket Proxy](/docs/deployment/DOCKER_PROXY) – Sicherheitslayer

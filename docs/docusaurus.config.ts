@@ -101,6 +101,8 @@ const config: Config = {
         {
           title: 'Mehr',
           items: [
+            {label: 'Pipeline-Template', href: 'https://github.com/ttuhin03/fastflow-pipeline-template'},
+            {label: 'Konzepte & Glossar', to: '/docs/konzepte'},
             {label: 'GitHub', href: 'https://github.com/ttuhin03/fastflow'},
             {label: 'Disclaimer', to: '/docs/disclaimer'},
           ],

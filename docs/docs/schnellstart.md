@@ -4,7 +4,7 @@ sidebar_position: 2
 
 # Schnellstart
 
-Fast-Flow in wenigen Minuten starten.
+**~5 Min.** – Fast-Flow in wenigen Minuten starten.
 
 ## Voraussetzungen
 
@@ -44,9 +44,10 @@ cp .env.example .env
 # -> ENCRYPTION_KEY in .env setzen
 
 # 3. Starten
-# Backend:
+# Terminal 1 – Backend:
 uvicorn app.main:app --reload
-# Frontend (in anderem Terminal): cd frontend && npm run dev
+# Terminal 2 – Frontend:
+cd frontend && npm run dev
 ```
 
 **Optional – Schnelltest mit minimaler Pipeline:** Ordner `pipelines/hello/` anlegen und `main.py` mit folgendem Inhalt (Standard `PIPELINES_DIR` ist `./pipelines`):

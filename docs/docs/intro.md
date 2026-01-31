@@ -10,6 +10,10 @@ sidebar_position: 1
 
 Fast-Flow ist die Antwort auf die Komplexität von Airflow und die Schwerfälligkeit traditioneller CI/CD-Tools. Er wurde für Entwickler gebaut, die echte Isolation wollen, ohne auf die Geschwindigkeit lokaler Skripte zu verzichten.
 
+:::tip In 30 Sekunden
+**Ein Python-Skript pro Pipeline.** Kein DAG, kein Image-Build. `git push` → Sync → Run. Jede Pipeline läuft in einem isolierten Docker-Container mit **uv** (JIT-Dependencies). Ein FastAPI-Container + Docker-Socket-Proxy – fertig.
+:::
+
 :::tip
 Lies das [Anti-Overhead-Manifesto](/docs/manifesto), um zu verstehen, warum Fast-Flow die Alternative zu Airflow, Dagster & Co. ist.
 :::
@@ -27,11 +31,13 @@ Nutze das **[fastflow-pipeline-template](https://github.com/ttuhin03/fastflow-pi
 
 ## Nächste Schritte
 
-- [**Schnellstart**](/docs/schnellstart) – Fast-Flow in wenigen Minuten starten
-- [**Setup-Anleitung**](/docs/setup) – Ausführlich: Env-Variablen, OAuth, Verzeichnisse
-- [**Erste Pipeline**](/docs/pipelines/erste-pipeline) – Tutorial von null an
-- [**Manifesto**](/docs/manifesto) – Die Philosophie und der Vergleich zu Airflow, Dagster, Mage
-- [**Architektur**](/docs/architektur) – Runner-Cache, Container-Lifecycle, Datenfluss
-- [**Pipelines**](/docs/pipelines/uebersicht) – Struktur, `main.py`, `requirements.txt`, `pipeline.json`
-- [**Troubleshooting**](/docs/troubleshooting) – Häufige Fehler und Lösungen
-- [**Disclaimer & Haftungsausschluss**](/docs/disclaimer) – Sicherheit, Beta-Status, Haftung
+| Ziel | Seite | Dauer (ca.) |
+|------|--------|-------------|
+| Sofort starten | [**Schnellstart**](/docs/schnellstart) | ~5 Min. |
+| Vollständig einrichten | [**Setup-Anleitung**](/docs/setup) | ~15 Min. |
+| Erste Pipeline schreiben | [**Erste Pipeline**](/docs/pipelines/erste-pipeline) | ~10 Min. |
+| Philosophie verstehen | [**Manifesto**](/docs/manifesto) | ~5 Min. |
+| Architektur verstehen | [**Architektur**](/docs/architektur) | ~5 Min. |
+| Pipelines im Detail | [**Pipelines – Übersicht**](/docs/pipelines/uebersicht) | — |
+| Probleme lösen | [**Troubleshooting**](/docs/troubleshooting) | — |
+| Rechtliches | [**Disclaimer**](/docs/disclaimer) | — |

@@ -1,8 +1,14 @@
 # Fast-Flow Orchestrator
 
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/) [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker)](docker-compose.yaml)
+
 **The lightweight, Docker-native, Python-centric task orchestrator for 2026.**
 
 Fast-Flow ist die Antwort auf die Komplexität von Airflow und die Schwerfälligkeit traditioneller CI/CD-Tools. Er wurde für Entwickler gebaut, die echte Isolation wollen, ohne auf die Geschwindigkeit lokaler Skripte zu verzichten.
+
+<!-- 60-Sekunden-Überblick -->
+**In 60 Sekunden:** Ein Python-Skript pro Pipeline, kein DAG, kein Image-Build. `git push` → Sync → Run. Jede Pipeline läuft in einem isolierten Docker-Container mit **uv** (JIT-Dependencies). Ein FastAPI-Container + Docker-Socket-Proxy, fertig.
+
 > [!NOTE]
 >  Lies unser [Anti-Overhead Manifesto](docs/docs/manifesto.md), um zu verstehen, warum Fast-Flow die bessere Alternative zu Airflow, Dagster & Co. ist.
 
@@ -68,8 +74,9 @@ cp .env.example .env
 # -> ENCRYPTION_KEY in .env setzen (siehe oben)
 
 # 3. Starten
-./start-dev.sh
-# oder manuell: uvicorn app.main:app --reload (Backend); Frontend: cd frontend && npm run dev
+# Backend (Terminal 1):
+uvicorn app.main:app --reload
+# Frontend (Terminal 2): cd frontend && npm run dev
 ```
 
 ### 🔐 Login (GitHub OAuth, Google OAuth)
@@ -328,29 +335,16 @@ Der Orchestrator kommuniziert mit dem Proxy über `http://docker-proxy:2375` sta
 
 ## Dokumentation
 
-Die Doku liegt unter `docs/docs/` und wird mit Docusaurus bereitgestellt (lokal: `cd docs && npm run start` → `/docs`).
+Die Doku liegt unter `docs/docs/` und wird mit **Docusaurus** bereitgestellt. Lokal starten: `cd docs && npm run start` → [http://localhost:3000/docs](http://localhost:3000/docs).
 
-- **[Setup-Anleitung](docs/docs/setup.md)** – Ausführlich: Env-Variablen, OAuth, Verzeichnisse
-- **[Philosophie: Das Anti-Overhead Manifesto](docs/docs/manifesto.md)** – Warum Fast-Flow entstanden ist und was es anders macht
-- **[Architektur](docs/docs/architektur.md)** – Runner-Cache-Prinzip, Container-Lifecycle, Datenfluss
-- **[OAuth (GitHub & Google)](docs/docs/oauth/README.md)** – Login, Einladungen, Konto verknüpfen, Beitrittsanfragen
-- **[Pipelines – Übersicht](docs/docs/pipelines/uebersicht.md)** – Struktur, `main.py`, `requirements.txt`, Erkennung
-- **[Erste Pipeline](docs/docs/pipelines/erste-pipeline.md)** – Tutorial: erste Pipeline von null an
-- **[Erweiterte Pipelines](docs/docs/pipelines/erweiterte-pipelines.md)** – Retries, Timeout, Scheduling, Webhooks, Struktur
-- **[Pipelines – pipeline.json Referenz](docs/docs/pipelines/referenz.md)** – Metadaten, Limits, `default_env`
-- **[Konfiguration](docs/docs/deployment/CONFIGURATION.md)** – Environment-Variablen
-- **[Log-Backup (S3/MinIO)](docs/docs/deployment/S3_LOG_BACKUP.md)** – Wann/Was wird gesichert, Fehlerfall (UI + E-Mail)
-- **[Compliance & Datensicherheit (MinIO Backup)](docs/docs/compliance-security.md)** – DSGVO, Datenhoheit, Rechenschaftspflicht, technische Sicherheit für Unternehmenskunden
-- **[Deployment](docs/docs/deployment/PRODUCTION.md)** – Produktions-Setup
-- **[Git-Deployment](docs/docs/deployment/GIT_DEPLOYMENT.md)** – Push-to-Deploy, Git als Source of Truth
-- **[Versioning & Releases](docs/docs/deployment/VERSIONING.md)** – Version-Management und Release-Prozess
-- **[Datenbank](docs/docs/database/SCHEMA.md)** – Schema und [Migrationen](docs/docs/database/MIGRATIONS.md)
-- **[Docker Socket Proxy](docs/docs/deployment/DOCKER_PROXY.md)** – Sicherheitsarchitektur und Proxy-Konfiguration
-- **[API](docs/docs/api/API.md)** – API-Referenz
-- **[Frontend](docs/docs/frontend/FRONTEND.md)** – Frontend-Komponenten und Seiten
-- **[Error-Tracking & Telemetrie (PostHog)](docs/docs/telemetry/README.md)** – Fehlerberichte, First-Run-Wizard, Einstellungen, CSP
-- **[Troubleshooting](docs/docs/troubleshooting.md)** – Häufige Fehler und Lösungen
-- **[Disclaimer & Haftungsausschluss](docs/docs/disclaimer.md)** – Sicherheit, Beta-Status, Haftung
+| Bereich | Links |
+|--------|--------|
+| **Einstieg** | [Schnellstart](docs/docs/schnellstart.md) · [Setup-Anleitung](docs/docs/setup.md) · [Manifesto](docs/docs/manifesto.md) · [Architektur](docs/docs/architektur.md) |
+| **Pipelines** | [Übersicht](docs/docs/pipelines/uebersicht.md) · [Erste Pipeline](docs/docs/pipelines/erste-pipeline.md) · [Erweiterte Pipelines](docs/docs/pipelines/erweiterte-pipelines.md) · [pipeline.json Referenz](docs/docs/pipelines/referenz.md) |
+| **Betrieb** | [Konfiguration](docs/docs/deployment/CONFIGURATION.md) · [Produktion](docs/docs/deployment/PRODUCTION.md) · [Git-Deployment](docs/docs/deployment/GIT_DEPLOYMENT.md) · [Docker Socket Proxy](docs/docs/deployment/DOCKER_PROXY.md) |
+| **Sicherheit & Ops** | [OAuth (GitHub & Google)](docs/docs/oauth/README.md) · [S3 Log-Backup](docs/docs/deployment/S3_LOG_BACKUP.md) · [Compliance](docs/docs/compliance-security.md) |
+| **Referenz** | [API](docs/docs/api/API.md) · [Datenbank/Schema](docs/docs/database/SCHEMA.md) · [Versioning](docs/docs/deployment/VERSIONING.md) · [Telemetrie](docs/docs/telemetry/README.md) |
+| **Hilfe** | [Troubleshooting](docs/docs/troubleshooting.md) · [Disclaimer](docs/docs/disclaimer.md) |
 
 ## 📦 Versioning & Releases
 

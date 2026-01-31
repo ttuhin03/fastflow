@@ -4,7 +4,7 @@ sidebar_position: 2
 
 # Erste Pipeline schreiben
 
-Dieses Tutorial führt dich von null bis zur ersten lauffähigen Pipeline – mit Erklärungen zu jedem Schritt. Du brauchst ein laufendes Fast-Flow (siehe [Schnellstart](/docs/schnellstart) oder [Setup-Anleitung](/docs/setup)).
+**~10 Min.** – Dieses Tutorial führt dich von null bis zur ersten lauffähigen Pipeline – mit Erklärungen zu jedem Schritt. Du brauchst ein laufendes Fast-Flow (siehe [Schnellstart](/docs/schnellstart) oder [Setup-Anleitung](/docs/setup)).
 
 ---
 
