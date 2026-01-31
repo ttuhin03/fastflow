@@ -1,3 +1,4 @@
+import { useRef, useState, useLayoutEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
@@ -53,6 +54,19 @@ export default function Pipelines() {
     { id: 'dependencies', label: 'Abhängigkeiten', icon: <MdExtension /> },
   ]
 
+  const trayRef = useRef<HTMLDivElement>(null)
+  const [indicator, setIndicator] = useState({ left: 0, width: 0 })
+
+  useLayoutEffect(() => {
+    const tray = trayRef.current
+    if (!tray) return
+    const pill = tray.querySelector<HTMLElement>(`[data-section="${section}"]`)
+    if (!pill) return
+    const tr = tray.getBoundingClientRect()
+    const pr = pill.getBoundingClientRect()
+    setIndicator({ left: pr.left - tr.left, width: pr.width })
+  }, [section])
+
   const { data: pipelines, isLoading } = useQuery<Pipeline[]>({
     queryKey: ['pipelines'],
     queryFn: async () => {
@@ -90,12 +104,21 @@ export default function Pipelines() {
 
   const renderNav = () => (
     <nav className="pipelines-nav" role="tablist" aria-label="Pipelines-Bereiche">
-      <div className="pipelines-nav-tray">
+      <div ref={trayRef} className="pipelines-nav-tray">
+        <div
+          className="pipelines-nav-indicator"
+          style={{
+            left: indicator.left,
+            width: indicator.width,
+          }}
+          aria-hidden
+        />
         {sectionItems.map((item) => (
           <button
             key={item.id}
             type="button"
             role="tab"
+            data-section={item.id}
             aria-selected={section === item.id}
             className={`pipelines-nav-pill ${section === item.id ? 'active' : ''}`}
             onClick={() => setSection(item.id)}

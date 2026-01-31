@@ -14,6 +14,7 @@
 }
 
 .settings-nav-tray {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 2px;
@@ -29,11 +30,25 @@
   -webkit-overflow-scrolling: touch;
 }
 
+.settings-nav-indicator {
+  position: absolute;
+  top: 4px;
+  height: calc(100% - 8px);
+  border-radius: var(--radius-full);
+  background-color: var(--color-primary);
+  box-shadow: var(--shadow-sm);
+  pointer-events: none;
+  z-index: 0;
+  transition: left 0.25s ease-out, width 0.25s ease-out;
+}
+
 .settings-nav-tray::-webkit-scrollbar {
   height: 4px;
 }
 
 .settings-nav-pill {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-sm);
@@ -56,9 +71,12 @@
 }
 
 .settings-nav-pill.active {
-  background-color: var(--color-primary);
+  background: transparent;
   color: white;
-  box-shadow: var(--shadow-sm);
+}
+
+.settings-nav-pill.active:hover {
+  background: transparent;
 }
 
 .settings-nav-pill:active {

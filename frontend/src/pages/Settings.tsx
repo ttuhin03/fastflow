@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useLayoutEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
@@ -63,6 +63,19 @@ export default function Settings() {
     { id: 'git-sync', label: 'Git Sync', icon: <MdSync /> },
     ...(isAdmin ? [{ id: 'nutzer' as const, label: 'Nutzer', icon: <MdPeople /> }] : []),
   ]
+
+  const trayRef = useRef<HTMLDivElement>(null)
+  const [indicator, setIndicator] = useState({ left: 0, width: 0 })
+
+  useLayoutEffect(() => {
+    const tray = trayRef.current
+    if (!tray) return
+    const pill = tray.querySelector<HTMLElement>(`[data-section="${section}"]`)
+    if (!pill) return
+    const tr = tray.getBoundingClientRect()
+    const pr = pill.getBoundingClientRect()
+    setIndicator({ left: pr.left - tr.left, width: pr.width })
+  }, [section, sectionItems.length])
 
   const { data: settings, isLoading } = useQuery<Settings>({
     queryKey: ['settings'],
@@ -348,12 +361,21 @@ export default function Settings() {
 
   const renderNav = () => (
     <nav className="settings-nav" role="tablist" aria-label="Einstellungsbereiche">
-      <div className="settings-nav-tray">
+      <div ref={trayRef} className="settings-nav-tray">
+        <div
+          className="settings-nav-indicator"
+          style={{
+            left: indicator.left,
+            width: indicator.width,
+          }}
+          aria-hidden
+        />
         {sectionItems.map((item) => (
           <button
             key={item.id}
             type="button"
             role="tab"
+            data-section={item.id}
             aria-selected={section === item.id}
             className={`settings-nav-pill ${section === item.id ? 'active' : ''}`}
             onClick={() => setSection(item.id)}
