@@ -232,7 +232,7 @@ export default function Layout() {
           <p className="sidebar-footer-text">
             Made with <Tooltip content="Made with heart... and fueled by the healthy desire to never see a broken DAG again. Life is too short for over-engineering."><span className="heart">❤️</span></Tooltip> by <strong>ttuhin03</strong>
             <span style={{ marginLeft: '8px', opacity: 0.5, fontSize: '10px' }}>
-              <VersionInfo />
+              <VersionInfo variant="footer" />
             </span>
           </p>
           <button onClick={handleLogout} className="logout-btn">
@@ -248,6 +248,9 @@ export default function Layout() {
             <h2 className="page-title">
               {navItems.find(item => isActive(item.path))?.label || 'Dashboard'}
             </h2>
+            <div className="header-center">
+              <VersionInfo variant="banner" />
+            </div>
             <div className="header-actions">
               <HeaderTime />
               <NotificationCenter />
