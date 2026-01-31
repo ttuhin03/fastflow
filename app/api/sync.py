@@ -87,9 +87,10 @@ async def sync(
     except HTTPException:
         raise
     except Exception as e:
+        logger.exception("Fehler beim Git-Sync")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Fehler beim Git-Sync: {str(e)}"
+            detail=get_500_detail(e)
         )
 
 
@@ -115,9 +116,10 @@ async def sync_status(
         return status_info
         
     except Exception as e:
+        logger.exception("Fehler beim Abrufen des Git-Status")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Fehler beim Abrufen des Git-Status: {str(e)}"
+            detail=get_500_detail(e)
         )
 
 
@@ -202,9 +204,10 @@ async def get_sync_logs_endpoint(
         logs = await get_sync_logs(limit=limit)
         return logs
     except Exception as e:
+        logger.exception("Fehler beim Abrufen der Sync-Logs")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Fehler beim Abrufen der Sync-Logs: {str(e)}"
+            detail=get_500_detail(e)
         )
 
 
@@ -231,9 +234,10 @@ async def get_github_config(
         config_data = load_github_config()
         return config_data
     except Exception as e:
+        logger.exception("Fehler beim Abrufen der GitHub Config")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Fehler beim Abrufen der GitHub Config: {str(e)}"
+            detail=get_500_detail(e)
         )
 
 
@@ -289,9 +293,10 @@ async def save_github_config_endpoint(
     except HTTPException:
         raise
     except Exception as e:
+        logger.exception("Fehler beim Speichern der GitHub Config")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Fehler beim Speichern der GitHub Config: {str(e)}"
+            detail=get_500_detail(e)
         )
 
 
@@ -323,9 +328,10 @@ async def test_github_config(
             }
             
     except Exception as e:
+        logger.exception("Fehler beim Testen der GitHub Config")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Fehler beim Testen der GitHub Config: {str(e)}"
+            detail=get_500_detail(e)
         )
 
 
@@ -402,9 +408,10 @@ async def github_installation_callback(
     except HTTPException:
         raise
     except Exception as e:
+        logger.exception("Fehler beim Verarbeiten der Installation")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Fehler beim Verarbeiten der Installation: {str(e)}"
+            detail=get_500_detail(e)
         )
 
 
@@ -547,9 +554,10 @@ async def github_manifest_authorize():
         return HTMLResponse(content=html)
         
     except Exception as e:
+        logger.exception("Fehler beim Generieren des Manifest-Formulars")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Fehler beim Generieren des Manifest-Formulars: {str(e)}"
+            detail=get_500_detail(e)
         )
 
 
@@ -776,12 +784,14 @@ async def github_manifest_exchange(
     except HTTPException:
         raise
     except requests.RequestException as e:
+        logger.exception("Fehler beim Code-Exchange mit GitHub API")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Fehler beim Code-Exchange mit GitHub API: {str(e)}"
+            detail=get_500_detail(e)
         )
     except Exception as e:
+        logger.exception("Fehler beim Manifest Exchange")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Fehler beim Manifest Exchange: {str(e)}"
+            detail=get_500_detail(e)
         )

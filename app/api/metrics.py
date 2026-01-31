@@ -233,8 +233,8 @@ async def stream_run_metrics(
             # Client hat Verbindung getrennt
             pass
         except Exception as e:
-            # Fehler: Sende Fehler-Event
-            error_data = json.dumps({"error": str(e)})
+            logger.exception("Fehler beim Metrics-SSE-Stream")
+            error_data = json.dumps({"error": get_500_detail(e)})
             yield f"data: {error_data}\n\n"
     
     return StreamingResponse(
