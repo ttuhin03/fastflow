@@ -22,9 +22,19 @@ from app.models import Pipeline, PipelineRun, RunStatus, User
 from app.executor import run_pipeline
 from app.pipeline_discovery import discover_pipelines, get_pipeline as get_discovered_pipeline
 from app.auth import require_write, get_current_user
+from app.config import config
 from app import dependencies as deps_module
 
 router = APIRouter(prefix="/pipelines", tags=["pipelines"])
+
+
+def _path_within_pipelines_dir(path: Path) -> bool:
+    """Prüft ob der Pfad innerhalb von PIPELINES_DIR liegt (Path Traversal-Schutz)."""
+    try:
+        path.resolve().relative_to(config.PIPELINES_DIR.resolve())
+        return True
+    except ValueError:
+        return False
 
 
 class PipelineResponse(BaseModel):
@@ -561,41 +571,46 @@ async def get_pipeline_source_files(
         )
     
     pipeline_dir = discovered.path
+    # Path Traversal-Schutz: Sicherstellen dass pipeline_dir innerhalb PIPELINES_DIR liegt
+    if not _path_within_pipelines_dir(pipeline_dir):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Zugriff auf Pipeline-Dateien verweigert"
+        )
     result = PipelineSourceFilesResponse()
-    
+
+    # Verwende discovered.name statt user-provided name für Pfadkonstruktion
+    pipeline_name = discovered.name
+
     # main.py lesen
     main_py_path = pipeline_dir / "main.py"
-    if main_py_path.exists() and main_py_path.is_file():
+    if main_py_path.exists() and main_py_path.is_file() and _path_within_pipelines_dir(main_py_path):
         try:
             with open(main_py_path, "r", encoding="utf-8") as f:
                 result.main_py = f.read()
-        except Exception as e:
-            # Fehler beim Lesen: None lassen, aber nicht abbrechen
+        except Exception:
             pass
-    
+
     # requirements.txt lesen
     requirements_path = pipeline_dir / "requirements.txt"
-    if requirements_path.exists() and requirements_path.is_file():
+    if requirements_path.exists() and requirements_path.is_file() and _path_within_pipelines_dir(requirements_path):
         try:
             with open(requirements_path, "r", encoding="utf-8") as f:
                 result.requirements_txt = f.read()
-        except Exception as e:
-            # Fehler beim Lesen: None lassen, aber nicht abbrechen
+        except Exception:
             pass
-    
-    # pipeline.json lesen (oder {pipeline_name}.json)
+
+    # pipeline.json lesen (oder {pipeline_name}.json) - pipeline_name aus Discovery, nicht aus Request
     metadata_path = pipeline_dir / "pipeline.json"
     if not metadata_path.exists():
-        metadata_path = pipeline_dir / f"{name}.json"
-    
-    if metadata_path.exists() and metadata_path.is_file():
+        metadata_path = pipeline_dir / f"{pipeline_name}.json"
+    if metadata_path.exists() and metadata_path.is_file() and _path_within_pipelines_dir(metadata_path):
         try:
             with open(metadata_path, "r", encoding="utf-8") as f:
                 result.pipeline_json = f.read()
-        except Exception as e:
-            # Fehler beim Lesen: None lassen, aber nicht abbrechen
+        except Exception:
             pass
-    
+
     return result
 
 

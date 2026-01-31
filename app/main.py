@@ -590,36 +590,27 @@ if os.path.exists(static_dir):
         if full_path.startswith("api") or full_path == "health" or full_path.startswith("static"):
             return JSONResponse({"detail": "Not found"}, status_code=404)
         
-        # Path Traversal-Schutz: Normalisiere Pfad und prüfe dass er innerhalb static_dir liegt
+        # Path Traversal-Schutz: Verwende pathlib für sichere Pfad-Auflösung
         try:
-            # Normalisiere den Pfad (entfernt .. und .)
-            normalized_path = os.path.normpath(full_path)
-            
-            # Verhindere absolute Pfade oder Pfade die mit .. beginnen
-            if os.path.isabs(normalized_path) or normalized_path.startswith(".."):
+            static_path = PathLib(static_dir).resolve()
+            # Konstruiere Pfad nur aus user input - kein direktes Join
+            request_path = PathLib(full_path)
+            if request_path.is_absolute() or ".." in request_path.parts:
                 return JSONResponse({"detail": "Not found"}, status_code=404)
-            
-            # Konstruiere finalen Pfad
-            file_path = os.path.join(static_dir, normalized_path)
-            file_path = os.path.normpath(file_path)
-            
-            # WICHTIG: Sicherstellen dass der finale Pfad wirklich innerhalb static_dir liegt
-            # Verhindert Path Traversal auch wenn normalized_path bereits normalisiert war
-            static_dir_abs = os.path.abspath(static_dir)
-            file_path_abs = os.path.abspath(file_path)
-            
-            if not file_path_abs.startswith(static_dir_abs):
-                logger.warning(f"Path Traversal-Versuch erkannt: {full_path} -> {file_path_abs}")
+            # Resolve innerhalb static_dir um Path Traversal zu verhindern
+            file_path = (static_path / request_path).resolve()
+            try:
+                file_path.relative_to(static_path)
+            except ValueError:
+                logger.warning(f"Path Traversal-Versuch erkannt: {full_path} -> {file_path}")
                 return JSONResponse({"detail": "Not found"}, status_code=404)
-            
             # Prüfe ob Datei existiert (für static assets wie JS/CSS)
-            if os.path.exists(file_path) and os.path.isfile(file_path):
-                return FileResponse(file_path)
-            
+            if file_path.exists() and file_path.is_file():
+                return FileResponse(str(file_path))
             # Ansonsten serve index.html (für React Router)
-            index_path = os.path.join(static_dir, "index.html")
-            if os.path.exists(index_path):
-                return FileResponse(index_path)
+            index_path = static_path / "index.html"
+            if index_path.exists():
+                return FileResponse(str(index_path))
             
         except Exception as e:
             logger.error(f"Fehler beim Servieren von {full_path}: {e}")

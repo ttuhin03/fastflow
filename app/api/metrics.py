@@ -20,12 +20,35 @@ from app.database import get_session
 from app.models import PipelineRun, User
 from app.executor import get_metrics_queue
 from app.auth import get_current_user
+from app.config import config
 from app.errors import get_500_detail
 
 import logging
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/runs", tags=["metrics"])
+
+
+def _resolve_metrics_path(metrics_file: str) -> Path:
+    """
+    Resolve metrics file path and validate it is within LOGS_DIR.
+    Prevents path traversal when metrics_file comes from database.
+    """
+    path = Path(metrics_file)
+    if not path.is_absolute():
+        path = (config.LOGS_DIR / path).resolve()
+    else:
+        path = path.resolve()
+
+    logs_dir_abs = config.LOGS_DIR.resolve()
+    try:
+        path.resolve().relative_to(logs_dir_abs)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Zugriff auf Metrics-Datei verweigert"
+        )
+    return path
 
 
 @router.get("/{run_id}/metrics")
@@ -63,9 +86,18 @@ async def get_run_metrics(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Metrics-Datei nicht vorhanden für Run {run_id}"
         )
-    
-    metrics_file_path = Path(run.metrics_file)
-    
+
+    try:
+        metrics_file_path = _resolve_metrics_path(run.metrics_file)
+    except HTTPException:
+        raise
+    except (ValueError, OSError) as e:
+        logger.error(f"Fehler bei Pfad-Validierung für Metrics-Datei: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Fehler beim Validieren des Metrics-Pfads"
+        ) from e
+
     if not metrics_file_path.exists():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -136,8 +168,13 @@ async def stream_run_metrics(
         # Queue nicht vorhanden (Run ist bereits beendet oder noch nicht gestartet)
         # Versuche Metrics aus Datei zu lesen (für abgeschlossene Runs)
         if run.metrics_file:
-            metrics_file_path = Path(run.metrics_file)
-            if metrics_file_path.exists():
+            try:
+                metrics_file_path = _resolve_metrics_path(run.metrics_file)
+            except HTTPException:
+                raise
+            except (ValueError, OSError):
+                metrics_file_path = None
+            if metrics_file_path is not None and metrics_file_path.exists():
                 try:
                     # Lese alle Metrics aus Datei und sende als SSE-Events
                     async def generate():
