@@ -40,6 +40,18 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/sync", tags=["sync"])
 
 
+def _safe_frontend_redirect(path: str, **query_params: Optional[str]) -> str:
+    """
+    Build redirect URL using only allowlisted base (config).
+    Query values are URL-encoded to prevent open-redirect or injection.
+    """
+    base = (config.FRONTEND_URL or config.BASE_URL or "http://localhost:3000").rstrip("/")
+    safe_params = {k: (v or "") for k, v in query_params.items()}
+    if safe_params:
+        return f"{base}{path}?{urllib.parse.urlencode(safe_params)}"
+    return f"{base}{path}"
+
+
 class SyncRequest(BaseModel):
     """Request-Model für Git-Sync."""
     branch: Optional[str] = Field(default=None, min_length=1, max_length=255, description="Git-Branch (z.B. main)")
@@ -400,9 +412,8 @@ async def github_installation_callback(
         if state:
             delete_oauth_state(state)
         
-        # Redirect zum Frontend mit Erfolgs-Message
-        frontend_url = config.FRONTEND_URL or config.BASE_URL or "http://localhost:3000"
-        redirect_url = f"{frontend_url}/sync?tab=github&installation_success=true"
+        # Redirect zum Frontend mit Erfolgs-Message (allowlisted base only)
+        redirect_url = _safe_frontend_redirect("/sync", tab="github", installation_success="true")
         return RedirectResponse(url=redirect_url)
         
     except HTTPException:
@@ -620,9 +631,8 @@ async def github_manifest_callback(
                         if state:
                             delete_oauth_state(state)
                         
-                        # Redirect zum Frontend mit Erfolgs-Message
-                        frontend_url = config.FRONTEND_URL or config.BASE_URL or "http://localhost:3000"
-                        redirect_url = f"{frontend_url}/sync?tab=github&setup_success=true"
+                        # Redirect zum Frontend mit Erfolgs-Message (allowlisted base only)
+                        redirect_url = _safe_frontend_redirect("/sync", tab="github", setup_success="true")
                         return RedirectResponse(url=redirect_url)
                     else:
                         # Installation ID fehlt - speichere App-Daten zuerst
@@ -651,31 +661,34 @@ async def github_manifest_callback(
                             })
                         
                         # SOFORTIGER Redirect zur Installation (Coolify-Methode)
-                        # User landet direkt in der Repository-Auswahl
+                        # User landet direkt in der Repository-Auswahl (state encoded to prevent injection)
                         install_url = f"https://github.com/apps/{app_slug}/installations/new"
                         if state:
-                            install_url += f"?state={state}"
+                            install_url += "?" + urllib.parse.urlencode({"state": state})
                         
                         return RedirectResponse(url=install_url)
             
             # Exchange fehlgeschlagen - weiterleiten mit Code für manuellen Exchange
             # (z.B. wenn User Token erforderlich ist)
-            frontend_url = config.FRONTEND_URL or config.BASE_URL or "http://localhost:3000"
-            redirect_url = f"{frontend_url}/sync?tab=github&manifest_code={code}&state={state}&exchange_error=true"
+            redirect_url = _safe_frontend_redirect(
+                "/sync", tab="github", manifest_code=code or "", state=state or "", exchange_error="true"
+            )
             return RedirectResponse(url=redirect_url)
             
         except requests.RequestException:
             # Netzwerk-Fehler - weiterleiten mit Code
-            frontend_url = config.FRONTEND_URL or config.BASE_URL or "http://localhost:3000"
-            redirect_url = f"{frontend_url}/sync?tab=github&manifest_code={code}&state={state}&exchange_error=true"
+            redirect_url = _safe_frontend_redirect(
+                "/sync", tab="github", manifest_code=code or "", state=state or "", exchange_error="true"
+            )
             return RedirectResponse(url=redirect_url)
         
     except HTTPException:
         raise
     except Exception as e:
         # Bei anderen Fehlern: Weiterleiten mit Code
-        frontend_url = config.FRONTEND_URL or config.BASE_URL or "http://localhost:3000"
-        redirect_url = f"{frontend_url}/sync?tab=github&manifest_code={code}&state={state}&exchange_error=true"
+        redirect_url = _safe_frontend_redirect(
+            "/sync", tab="github", manifest_code=code or "", state=state or "", exchange_error="true"
+        )
         return RedirectResponse(url=redirect_url)
 
 

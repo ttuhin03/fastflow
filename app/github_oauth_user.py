@@ -7,6 +7,7 @@ Token-Einladungs-Flow und INITIAL_ADMIN_EMAIL-Login.
 
 import logging
 from typing import Any
+from urllib.parse import urlencode
 
 import httpx
 from fastapi import HTTPException
@@ -45,8 +46,7 @@ def get_github_authorize_url(state: str) -> str:
         "scope": SCOPE,
         "state": state,
     }
-    q = "&".join(f"{k}={v}" for k, v in params.items())
-    return f"{GITHUB_AUTHORIZE_URL}?{q}"
+    return f"{GITHUB_AUTHORIZE_URL}?{urlencode(params)}"
 
 
 async def get_github_user_data(code: str) -> dict[str, Any]:

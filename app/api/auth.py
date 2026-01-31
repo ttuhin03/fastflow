@@ -27,8 +27,16 @@ from app.database import get_session
 from app.analytics import track_user_logged_in, track_user_registered
 from app.github_oauth import delete_oauth_state, generate_oauth_state, store_oauth_state
 from app.posthog_client import get_system_settings
-from app.github_oauth_user import get_github_authorize_url, get_github_user_data
-from app.google_oauth_user import get_google_authorize_url, get_google_user_data
+from app.github_oauth_user import (
+    GITHUB_AUTHORIZE_URL,
+    get_github_authorize_url,
+    get_github_user_data,
+)
+from app.google_oauth_user import (
+    GOOGLE_AUTHORIZE_URL,
+    get_google_authorize_url,
+    get_google_user_data,
+)
 from app.middleware.rate_limiting import limiter
 from app.models import User
 from app.oauth_processing import process_oauth_login
@@ -95,6 +103,8 @@ async def github_authorize(
     if not state:
         store_oauth_state(s, {"purpose": "login"})
     url = get_github_authorize_url(s)
+    if not url.startswith(GITHUB_AUTHORIZE_URL):
+        raise HTTPException(status_code=400, detail="Invalid redirect target")
     return RedirectResponse(url=url, status_code=302)
 
 
@@ -165,6 +175,8 @@ async def google_authorize(
     if not state:
         store_oauth_state(s, {"purpose": "login"})
     url = get_google_authorize_url(s)
+    if not url.startswith(GOOGLE_AUTHORIZE_URL):
+        raise HTTPException(status_code=400, detail="Invalid redirect target")
     return RedirectResponse(url=url, status_code=302)
 
 
@@ -232,6 +244,8 @@ async def link_google(
     s = generate_oauth_state()
     store_oauth_state(s, {"purpose": "link_google", "user_id": str(current_user.id)})
     url = get_google_authorize_url(s)
+    if not url.startswith(GOOGLE_AUTHORIZE_URL):
+        raise HTTPException(status_code=400, detail="Invalid redirect target")
     logger.info("OAuth: Link-Flow gestartet provider=google user=%s", current_user.username)
     return RedirectResponse(url=url, status_code=302)
 
@@ -251,6 +265,8 @@ async def link_github(
     s = generate_oauth_state()
     store_oauth_state(s, {"purpose": "link_github", "user_id": str(current_user.id)})
     url = get_github_authorize_url(s)
+    if not url.startswith(GITHUB_AUTHORIZE_URL):
+        raise HTTPException(status_code=400, detail="Invalid redirect target")
     logger.info("OAuth: Link-Flow gestartet provider=github user=%s", current_user.username)
     return RedirectResponse(url=url, status_code=302)
 

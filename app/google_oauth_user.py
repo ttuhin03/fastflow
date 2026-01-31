@@ -7,6 +7,7 @@ Einladungs-Flow, INITIAL_ADMIN_EMAIL und Link-Account.
 
 import logging
 from typing import Any
+from urllib.parse import urlencode
 
 import httpx
 from fastapi import HTTPException
@@ -47,8 +48,7 @@ def get_google_authorize_url(state: str) -> str:
         "access_type": "offline",
         "prompt": "consent",
     }
-    q = "&".join(f"{k}={v}" for k, v in params.items())
-    return f"{GOOGLE_AUTHORIZE_URL}?{q}"
+    return f"{GOOGLE_AUTHORIZE_URL}?{urlencode(params)}"
 
 
 async def get_google_user_data(code: str) -> dict[str, Any]:
