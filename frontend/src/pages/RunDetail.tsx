@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useLayoutEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
 import apiClient from '../api/client'
@@ -69,6 +69,18 @@ export default function RunDetail() {
   const [logConnectionStatus, setLogConnectionStatus] = useState<'connected' | 'disconnected' | 'reconnecting'>('connected')
   const [metricsConnectionStatus, setMetricsConnectionStatus] = useState<'connected' | 'disconnected' | 'reconnecting'>('connected')
   const [cellExpanded, setCellExpanded] = useState<Record<number, boolean>>({})
+  const tabsRef = useRef<HTMLDivElement>(null)
+  const [tabIndicator, setTabIndicator] = useState({ left: 0, width: 0 })
+
+  useLayoutEffect(() => {
+    const container = tabsRef.current
+    if (!container) return
+    const btn = container.querySelector<HTMLElement>(`[data-tab="${activeTab}"]`)
+    if (!btn) return
+    const cr = container.getBoundingClientRect()
+    const br = btn.getBoundingClientRect()
+    setTabIndicator({ left: br.left - cr.left, width: br.width })
+  }, [activeTab])
 
   const { data: run, isLoading } = useQuery<Run>({
     queryKey: ['run', runId],
@@ -570,26 +582,35 @@ export default function RunDetail() {
         )}
       </div>
 
-      <div className="tabs">
+      <div ref={tabsRef} className="tabs">
+        <div
+          className="tabs-indicator"
+          style={{ left: tabIndicator.left, width: tabIndicator.width }}
+          aria-hidden
+        />
         <button
+          data-tab="info"
           className={activeTab === 'info' ? 'active' : ''}
           onClick={() => setActiveTab('info')}
         >
           Info
         </button>
         <button
+          data-tab="env"
           className={activeTab === 'env' ? 'active' : ''}
           onClick={() => setActiveTab('env')}
         >
           Environment-Variablen
         </button>
         <button
+          data-tab="logs"
           className={activeTab === 'logs' ? 'active' : ''}
           onClick={() => setActiveTab('logs')}
         >
           Logs {logs.length > 0 && `(${logs.length})`}
         </button>
         <button
+          data-tab="metrics"
           className={activeTab === 'metrics' ? 'active' : ''}
           onClick={() => setActiveTab('metrics')}
         >

@@ -264,8 +264,8 @@ export default function Runs() {
                 </tr>
               </thead>
               <tbody>
-                {filteredAndSortedRuns.map((run) => (
-                  <tr key={run.id}>
+                {filteredAndSortedRuns.map((run, index) => (
+                  <tr key={run.id} style={{ animationDelay: `${index * 0.03}s` }}>
                     <td className="run-id">{run.id.substring(0, 8)}...</td>
                     <td>{run.pipeline_name}</td>
                     <td>
@@ -322,8 +322,8 @@ export default function Runs() {
 
           {/* Mobile Card View */}
           <div className="runs-cards-container mobile-only">
-            {filteredAndSortedRuns.map((run) => (
-              <div key={run.id} className="run-card card">
+            {filteredAndSortedRuns.map((run, index) => (
+              <div key={run.id} className="run-card card" style={{ animationDelay: `${index * 0.04}s` }}>
                 <div className="run-card-header">
                   <div className="run-card-id">
                     {getStatusIcon(run.status)}

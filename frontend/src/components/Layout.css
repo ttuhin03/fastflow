@@ -79,13 +79,31 @@
 
 /* Navigation */
 .sidebar-nav {
+  position: relative;
   flex: 1;
   padding: var(--spacing-md) var(--spacing-sm);
   overflow-y: auto;
   overflow-x: hidden;
 }
 
+.sidebar-nav-indicator {
+  position: absolute;
+  left: var(--spacing-sm);
+  right: var(--spacing-sm);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(
+    90deg,
+    rgba(33, 150, 243, 0.25) 0%,
+    rgba(33, 150, 243, 0.1) 100%
+  );
+  pointer-events: none;
+  z-index: 0;
+  transition: top 0.25s ease-out, height 0.25s ease-out;
+}
+
 .nav-item {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: var(--spacing-md);
@@ -97,7 +115,6 @@
   transition: background-color 0.2s ease, color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
   font-size: var(--font-size-sm);
   font-weight: 500;
-  position: relative;
   letter-spacing: 0.01em;
 }
 
@@ -108,21 +125,12 @@
 }
 
 .nav-item.active {
-  background: linear-gradient(
-    90deg,
-    rgba(33, 150, 243, 0.2) 0%,
-    rgba(33, 150, 243, 0.08) 100%
-  );
+  background: transparent;
   color: var(--color-primary);
-  box-shadow: inset 3px 0 0 var(--color-primary);
 }
 
 .nav-item.active:hover {
-  background: linear-gradient(
-    90deg,
-    rgba(33, 150, 243, 0.25) 0%,
-    rgba(33, 150, 243, 0.1) 100%
-  );
+  background: transparent;
 }
 
 .nav-badge {
@@ -589,6 +597,21 @@
   /* Space for footer */
 }
 
+.page-transition-wrap {
+  animation: pageFadeIn 0.25s ease-out;
+}
+
+@keyframes pageFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* Layout Footer */
 .layout-footer {
   position: fixed;
@@ -706,7 +729,14 @@
   bottom: 0;
   background-color: rgba(0, 0, 0, 0.5);
   z-index: var(--z-sidebar) - 1;
-  animation: fade-in 0.3s ease-out;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease-out;
+}
+
+.sidebar-overlay.visible {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 /* Responsive Design */
@@ -719,6 +749,10 @@
 
   .sidebar-overlay {
     display: block;
+  }
+
+  .sidebar-overlay:not(.visible) {
+    pointer-events: none;
   }
 
   .sidebar {

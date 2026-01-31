@@ -228,6 +228,7 @@
   gap: var(--spacing-md);
   padding: var(--spacing-lg);
   transition: transform var(--transition-base), box-shadow var(--transition-base);
+  animation: fade-in 0.35s ease-out both;
 }
 
 .pipeline-card:hover {

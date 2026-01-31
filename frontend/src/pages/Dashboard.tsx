@@ -252,8 +252,8 @@ export default function Dashboard() {
         <h3 className="section-title">Pipelines</h3>
         {pipelines && pipelines.length > 0 ? (
           <div className="pipeline-grid">
-            {pipelines.map((pipeline) => (
-              <div key={pipeline.name} className="pipeline-card card">
+            {pipelines.map((pipeline, index) => (
+              <div key={pipeline.name} className="pipeline-card card" style={{ animationDelay: `${index * 0.05}s` }}>
                 <div className="pipeline-header">
                   <h4 className="pipeline-name">{pipeline.name}</h4>
                   <Tooltip content="Aktiv: Pipeline kann ausgeführt werden | Inaktiv: Pipeline ist deaktiviert">

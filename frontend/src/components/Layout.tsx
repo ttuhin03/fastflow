@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useLayoutEffect } from 'react'
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
@@ -42,6 +42,20 @@ export default function Layout() {
   const [clickedIcons, setClickedIcons] = useState<Set<string>>(new Set())
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const previousStatusRef = useRef<'online' | 'offline' | 'checking'>('checking')
+  const navRef = useRef<HTMLElement>(null)
+  const [navIndicator, setNavIndicator] = useState({ top: 0, height: 0 })
+
+  useLayoutEffect(() => {
+    const nav = navRef.current
+    if (!nav) return
+    const activePath = navItems.find((item) => isActive(item.path))?.path
+    if (!activePath) return
+    const el = nav.querySelector<HTMLElement>(`[data-nav-path="${activePath}"]`)
+    if (!el) return
+    const nr = nav.getBoundingClientRect()
+    const er = el.getBoundingClientRect()
+    setNavIndicator({ top: er.top - nr.top, height: er.height })
+  }, [location.pathname])
 
   const { data: health, isError, error, isFetching } = useQuery({
     queryKey: ['health'],
@@ -147,10 +161,12 @@ export default function Layout() {
   return (
     <div className="layout">
       <SetupWizard />
-      {/* Mobile Sidebar Overlay */}
-      {sidebarOpen && (
-        <div className="sidebar-overlay" onClick={closeSidebar}></div>
-      )}
+      {/* Mobile Sidebar Overlay - always in DOM for fade transition */}
+      <div
+        className={`sidebar-overlay ${sidebarOpen ? 'visible' : ''}`}
+        onClick={closeSidebar}
+        aria-hidden
+      />
 
       {/* Mobile Menu Button */}
       <button className="mobile-menu-button" onClick={toggleSidebar} aria-label="Menu">
@@ -167,7 +183,12 @@ export default function Layout() {
           </div>
         </div>
 
-        <nav className="sidebar-nav">
+        <nav ref={navRef} className="sidebar-nav">
+          <div
+            className="sidebar-nav-indicator"
+            style={{ top: navIndicator.top, height: navIndicator.height }}
+            aria-hidden
+          />
           {navItems.map((item) => {
             const iconClass = clickedIcons.has(item.path) ? 'icon-clicked' : ''
             const iconType = item.path === '/settings' ? 'settings-icon' :
@@ -178,6 +199,7 @@ export default function Layout() {
               <Link
                 key={item.path}
                 to={item.path}
+                data-nav-path={item.path}
                 className={`nav-item ${isActive(item.path) ? 'active' : ''}`}
                 onClick={() => {
                   handleNavClick(item.path)
@@ -259,7 +281,9 @@ export default function Layout() {
         </header>
 
         <main className="main-content">
-          <Outlet />
+          <div key={`${location.pathname}${location.search}`} className="page-transition-wrap">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>

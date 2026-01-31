@@ -211,8 +211,8 @@ export default function Pipelines() {
     <div className="pipelines">
       {pipelines && pipelines.length > 0 ? (
         <div className="pipelines-grid">
-          {pipelines.map((pipeline) => (
-            <div key={pipeline.name} className="pipeline-card card">
+          {pipelines.map((pipeline, index) => (
+            <div key={pipeline.name} className="pipeline-card card" style={{ animationDelay: `${index * 0.04}s` }}>
               <div className="pipeline-header">
                 <h3 className="pipeline-name">{pipeline.name}</h3>
                 <span className={`badge ${pipeline.enabled ? 'badge-success' : 'badge-secondary'}`}>
