@@ -281,7 +281,7 @@ export default function Layout() {
         </header>
 
         <main className="main-content">
-          <div key={`${location.pathname}${location.search}`} className="page-transition-wrap">
+          <div key={location.pathname} className="page-transition-wrap">
             <Outlet />
           </div>
         </main>
