@@ -24,4 +24,3 @@ pytest-cov
 slowapi
 posthog
 pip-audit
-
