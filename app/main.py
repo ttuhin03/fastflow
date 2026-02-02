@@ -21,6 +21,7 @@ from app.config import config
 from app.database import init_db
 from app.github_oauth_user import GITHUB_ACCESS_TOKEN_URL
 from app.google_oauth_user import GOOGLE_TOKEN_URL
+from app.metrics_prometheus import setup_prometheus_metrics
 
 # Logger konfigurieren (Level/Format werden in lifespan aus config gesetzt)
 logging.basicConfig(
@@ -564,6 +565,10 @@ app.add_middleware(BodyLimitMiddleware)
 from app.middleware.request_id import RequestIDMiddleware
 app.add_middleware(RequestIDMiddleware)
 
+# Performance-Tracking: Request-Dauer messen, Slow-Request-Detection
+from app.middleware.performance import PerformanceTrackingMiddleware
+app.add_middleware(PerformanceTrackingMiddleware)
+
 # Signal-Handler einrichten
 setup_signal_handlers()
 
@@ -669,6 +674,9 @@ app.include_router(webhooks_api.router, prefix="/api")
 # System/Version-Endpoints
 from app.api import version as version_api
 app.include_router(version_api.router, prefix="/api")
+
+# Prometheus-Metriken initialisieren (NACH allen API-Routen, BEVOR Static-Files)
+setup_prometheus_metrics(app)
 
 # Static Files für React-Frontend
 # Prüfe ob static-Verzeichnis existiert (nach Build)

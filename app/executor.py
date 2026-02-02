@@ -39,6 +39,7 @@ from sqlmodel import Session, select, update
 
 from app.analytics import track_pipeline_run_finished, track_pipeline_run_started
 from app.config import config
+from app.metrics_prometheus import track_run_started, track_run_finished
 from app.models import Pipeline, PipelineRun, RunStatus, RunCellLog
 from app.pipeline_discovery import DiscoveredPipeline, get_pipeline
 from app.retry_strategy import wait_for_retry
@@ -538,6 +539,12 @@ async def _run_container_task(
         session.add(run)
         session.commit()
         
+        # Prometheus-Metriken: Run gestartet
+        try:
+            track_run_started(pipeline.name)
+        except Exception as e:
+            logger.debug(f"Prometheus track_run_started fehlgeschlagen: {e}")
+        
         # WICHTIG: Log-Streaming SOFORT starten, damit keine Logs verloren gehen
         # Laut IMPLEMENTATION_PLAN sollen Logs während des gesamten Container-Laufs gestreamt werden
         logger.debug(f"Starte Log-Streaming für Run {run_id}")
@@ -711,14 +718,27 @@ async def _run_container_task(
         session.add(run)
         session.commit()
 
+        # Dauer berechnen für Metriken
+        duration_seconds = (run.finished_at - run.started_at).total_seconds() if run.finished_at and run.started_at else 0.0
+
         if exit_code_value == 0:
-            dur = (run.finished_at - run.started_at).total_seconds() if run.finished_at and run.started_at else None
             try:
                 track_pipeline_run_finished(
-                    session, pipeline.name, "SUCCESS", run.triggered_by, dur, pipeline.has_requirements
+                    session, pipeline.name, "SUCCESS", run.triggered_by, duration_seconds, pipeline.has_requirements
                 )
             except Exception:
                 pass
+            # Prometheus-Metriken: Run erfolgreich beendet
+            try:
+                track_run_finished(pipeline.name, "completed", duration_seconds)
+            except Exception as e:
+                logger.debug(f"Prometheus track_run_finished fehlgeschlagen: {e}")
+        else:
+            # Prometheus-Metriken: Run fehlgeschlagen
+            try:
+                track_run_finished(pipeline.name, "failed", duration_seconds)
+            except Exception as e:
+                logger.debug(f"Prometheus track_run_finished fehlgeschlagen: {e}")
         
         # Pipeline-Statistiken aktualisieren (atomar)
         await _update_pipeline_stats(pipeline.name, exit_code_value == 0, session, triggered_by=run.triggered_by)
@@ -790,6 +810,13 @@ async def _run_container_task(
             run.env_vars["_fastflow_error_message"] = str(e)
             session.add(run)
             session.commit()
+            
+            # Prometheus-Metriken: Run fehlgeschlagen (Docker-Fehler)
+            duration_seconds = (run.finished_at - run.started_at).total_seconds() if run.finished_at and run.started_at else 0.0
+            try:
+                track_run_finished(pipeline.name, "failed", duration_seconds)
+            except Exception as prom_err:
+                logger.debug(f"Prometheus track_run_finished fehlgeschlagen: {prom_err}")
     except Exception as e:
         # Andere Exceptions (könnten auch Infrastructure-Fehler sein)
         logger.error(f"Unerwarteter Fehler bei Container-Ausführung für Run {run_id}: {e}", exc_info=True)
@@ -808,6 +835,13 @@ async def _run_container_task(
                 run.env_vars["_fastflow_error_message"] = str(e)
             session.add(run)
             session.commit()
+            
+            # Prometheus-Metriken: Run fehlgeschlagen (Exception)
+            duration_seconds = (run.finished_at - run.started_at).total_seconds() if run.finished_at and run.started_at else 0.0
+            try:
+                track_run_finished(run.pipeline_name, "failed", duration_seconds)
+            except Exception as prom_err:
+                logger.debug(f"Prometheus track_run_finished fehlgeschlagen: {prom_err}")
             
             # Pipeline-Statistiken aktualisieren (Fehler)
             await _update_pipeline_stats(run.pipeline_name, False, session, triggered_by=run.triggered_by)

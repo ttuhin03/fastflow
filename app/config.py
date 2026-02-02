@@ -497,6 +497,14 @@ class Config:
     Standard: false. In Produktion oft true für ELK/Datadog etc.
     """
 
+    SLOW_REQUEST_THRESHOLD_SECONDS: float = float(
+        os.getenv("SLOW_REQUEST_THRESHOLD_SECONDS", "5.0")
+    )
+    """
+    Schwellwert in Sekunden ab dem ein Request als langsam geloggt wird (WARNING).
+    Standard: 5.0. Requests über diesem Wert werden mit WARNING-Level geloggt.
+    """
+
     MAX_REQUEST_BODY_MB: Optional[int] = (
         int(os.getenv("MAX_REQUEST_BODY_MB"))
         if os.getenv("MAX_REQUEST_BODY_MB")
