@@ -223,10 +223,14 @@ def discover_pipelines(force_refresh: bool = False) -> List[DiscoveredPipeline]:
         PermissionError: Wenn kein Zugriff auf PIPELINES_DIR
     """
     global _pipeline_cache, _cache_timestamp
-    
-    # Cache verwenden wenn vorhanden und nicht erzwungen
-    if not force_refresh and _pipeline_cache is not None:
-        return _pipeline_cache
+
+    # Cache verwenden wenn vorhanden, nicht erzwungen und TTL nicht abgelaufen
+    if not force_refresh and _pipeline_cache is not None and _cache_timestamp is not None:
+        ttl = config.PIPELINE_CACHE_TTL_SECONDS
+        if ttl > 0:
+            elapsed = (datetime.utcnow() - _cache_timestamp).total_seconds()
+            if elapsed < ttl:
+                return _pipeline_cache
     
     pipelines_dir = config.PIPELINES_DIR
     

@@ -1,18 +1,21 @@
+import { Suspense, lazy } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
-import Login from './pages/Login'
-import Invite from './pages/Invite'
-import AuthCallback from './pages/AuthCallback'
-import RequestSent from './pages/RequestSent'
-import RequestRejected from './pages/RequestRejected'
-import AccountBlocked from './pages/AccountBlocked'
-import Dashboard from './pages/Dashboard'
-import Pipelines from './pages/Pipelines'
-import PipelineDetail from './pages/PipelineDetail'
-import RunDetail from './pages/RunDetail'
-import Settings from './pages/Settings'
 import Layout from './components/Layout'
+
+// Lazy-loaded pages (Code-Splitting für kleinere Initial-Bundles)
+const Login = lazy(() => import('./pages/Login'))
+const Invite = lazy(() => import('./pages/Invite'))
+const AuthCallback = lazy(() => import('./pages/AuthCallback'))
+const RequestSent = lazy(() => import('./pages/RequestSent'))
+const RequestRejected = lazy(() => import('./pages/RequestRejected'))
+const AccountBlocked = lazy(() => import('./pages/AccountBlocked'))
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const Pipelines = lazy(() => import('./pages/Pipelines'))
+const PipelineDetail = lazy(() => import('./pages/PipelineDetail'))
+const RunDetail = lazy(() => import('./pages/RunDetail'))
+const Settings = lazy(() => import('./pages/Settings'))
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { NotificationProvider } from './contexts/NotificationContext'
 import { useRunNotifications } from './hooks/useRunNotifications'
@@ -49,11 +52,16 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+function PageFallback() {
+  return <div className="loading-fallback">Laden...</div>
+}
+
 function AppRoutes() {
   useRunNotifications()
   useBackupFailurePolling()
 
   return (
+    <Suspense fallback={<PageFallback />}>
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/invite" element={<Invite />} />
@@ -82,6 +90,7 @@ function AppRoutes() {
         <Route path="users" element={<Navigate to="/settings?section=nutzer" replace />} />
       </Route>
     </Routes>
+    </Suspense>
   )
 }
 

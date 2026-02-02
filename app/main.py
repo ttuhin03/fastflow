@@ -593,7 +593,7 @@ async def health_check() -> JSONResponse:
 @app.get("/api/ready")
 async def readiness_check() -> JSONResponse:
     """
-    Readiness-Check: DB (und optional Docker) erreichbar.
+    Readiness-Check: DB, Docker, UV-Cache-Volume und Disk-Space.
     Gibt 503 zurück, wenn die App nicht verkehrsfähig ist.
     Für Kubernetes readinessProbe.
     """
@@ -613,16 +613,43 @@ async def readiness_check() -> JSONResponse:
         checks["database"] = str(e)
         ok = False
 
-    # Optional: Docker-Proxy-Check
+    # Docker-Proxy-Check (Orchestrator braucht Docker)
     try:
         from app.executor import _get_docker_client
         client = _get_docker_client()
         client.ping()
         checks["docker"] = "ok"
     except Exception as e:
-        # Docker nicht initialisiert oder nicht erreichbar – nur warnen, nicht als nicht-ready
         checks["docker"] = str(e)
-        # Orchestrator braucht Docker; wenn nicht erreichbar, nicht verkehrsfähig
+        ok = False
+
+    # UV-Cache-Volume beschreibbar (kritisch für Pipeline-Runs)
+    try:
+        uv_cache = config.UV_CACHE_DIR
+        uv_cache.mkdir(parents=True, exist_ok=True)
+        test_file = uv_cache / ".health_check"
+        test_file.write_text("ok")
+        test_file.unlink()
+        checks["uv_cache"] = "ok"
+    except Exception as e:
+        logger.warning("Readiness: UV-Cache-Check fehlgeschlagen: %s", e)
+        checks["uv_cache"] = str(e)
+        ok = False
+
+    # Disk-Space verfügbar (kritisch für Logs, DB, UV-Cache)
+    try:
+        import shutil
+        disk = shutil.disk_usage(str(config.DATA_DIR))
+        free_gb = disk.free / (1024 ** 3)
+        checks["disk_free_gb"] = round(free_gb, 2)
+        if free_gb < 0.5:  # < 500 MB = nicht ready
+            checks["disk"] = f"kritisch: nur {free_gb:.2f} GB frei"
+            ok = False
+        else:
+            checks["disk"] = "ok"
+    except Exception as e:
+        logger.warning("Readiness: Disk-Check fehlgeschlagen: %s", e)
+        checks["disk"] = str(e)
         ok = False
 
     if not ok:

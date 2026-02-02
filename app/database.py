@@ -61,7 +61,14 @@ if database_url.startswith("sqlite"):
         cursor.execute("PRAGMA busy_timeout=5000")
         cursor.close()
 else:
-    engine = create_engine(database_url, echo=False)
+    engine = create_engine(
+        database_url,
+        echo=False,
+        pool_size=10,
+        max_overflow=20,
+        pool_pre_ping=True,
+        pool_recycle=300,
+    )
 
 
 _T = TypeVar("_T")

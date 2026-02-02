@@ -135,6 +135,13 @@ class Config:
     Dependencies nicht bei jedem Run neu herunterladen zu müssen.
     """
     
+    PIPELINE_CACHE_TTL_SECONDS: int = int(os.getenv("PIPELINE_CACHE_TTL_SECONDS", "60"))
+    """
+    TTL für Pipeline-Discovery-Cache in Sekunden.
+    Nach Ablauf wird beim nächsten Aufruf neu gescannt. Git-Sync invalidiert sofort.
+    Standard: 60.
+    """
+
     UV_PRE_HEAT: bool = os.getenv("UV_PRE_HEAT", "true").lower() == "true"
     """
     Automatisches Pre-Heating von Dependencies beim Git-Sync.
