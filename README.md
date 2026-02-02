@@ -1,6 +1,6 @@
 # Fast-Flow Orchestrator
 
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/) [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker)](docker-compose.yaml)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE) [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/) [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker)](docker-compose.yaml)
 
 **The lightweight, Docker-native, Python-centric task orchestrator for 2026.**
 
