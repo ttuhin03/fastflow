@@ -355,10 +355,45 @@ class SystemSettings(SQLModel, table=True):
     )
 
 
+class OrchestratorSettings(SQLModel, table=True):
+    """
+    OrchestratorSettings-Model (Singleton, id=1).
+
+    Persistente Einstellungen aus der Settings-UI. Werte aus der DB
+    überschreiben beim Start die Environment-Variablen (config).
+    None = kein Override, config-Wert bleibt.
+    """
+    __tablename__ = "orchestrator_settings"
+
+    id: int = Field(primary_key=True, default=1, description="Singleton (immer 1)")
+    # Log & Cleanup
+    log_retention_runs: Optional[int] = Field(default=None)
+    log_retention_days: Optional[int] = Field(default=None)
+    log_max_size_mb: Optional[int] = Field(default=None)
+    # Concurrency & Timeouts
+    max_concurrent_runs: Optional[int] = Field(default=None)
+    container_timeout: Optional[int] = Field(default=None)
+    retry_attempts: Optional[int] = Field(default=None)
+    # Git Sync
+    auto_sync_enabled: Optional[bool] = Field(default=None)
+    auto_sync_interval: Optional[int] = Field(default=None)
+    # E-Mail
+    email_enabled: Optional[bool] = Field(default=None)
+    smtp_host: Optional[str] = Field(default=None)
+    smtp_port: Optional[int] = Field(default=None)
+    smtp_user: Optional[str] = Field(default=None)
+    smtp_password_encrypted: Optional[str] = Field(default=None)
+    smtp_from: Optional[str] = Field(default=None)
+    email_recipients: Optional[str] = Field(default=None, sa_column=Column(Text))
+    # Teams
+    teams_enabled: Optional[bool] = Field(default=None)
+    teams_webhook_url: Optional[str] = Field(default=None)
+
+
 class Session(SQLModel, table=True):
     """
     Session-Model.
-    
+
     Speichert Session-Tokens in der Datenbank für persistente
     Authentifizierung. Verhindert Session-Verlust bei App-Neustart.
     """

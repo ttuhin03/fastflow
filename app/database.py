@@ -25,6 +25,7 @@ from sqlmodel import SQLModel, Session, create_engine, text
 from app.config import config
 from app.models import (
     Invitation,
+    OrchestratorSettings,
     Pipeline,
     PipelineRun,
     ScheduledJob,

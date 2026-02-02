@@ -27,6 +27,11 @@ from app.executor import _get_docker_client
 from app.auth import require_admin, require_write, get_current_user
 from app.posthog_client import get_system_settings, shutdown_posthog, capture_exception
 from app.errors import get_500_detail
+from app.orchestrator_settings import (
+    get_orchestrator_settings_or_default,
+    apply_orchestrator_settings_to_config,
+)
+from app.secrets import encrypt
 from sqlmodel import text
 
 logger = logging.getLogger(__name__)
@@ -158,25 +163,50 @@ async def update_settings(
     session: Session = Depends(get_session)
 ) -> Dict[str, str]:
     """
-    Aktualisiert System-Einstellungen.
-    
-    Hinweis: Aktuell werden Einstellungen nur aus Environment-Variablen geladen.
-    Diese Funktion gibt eine Warnung zurück, dass Einstellungen über
-    Environment-Variablen geändert werden müssen.
-    
-    Args:
-        settings: Zu aktualisierende Einstellungen
-        session: SQLModel Session
-        
-    Returns:
-        Dictionary mit Bestätigungs-Message
+    Aktualisiert System-Einstellungen und speichert sie in der Datenbank.
+    Die laufende config wird sofort aktualisiert; ein Neustart ist nicht nötig.
     """
-    # TODO: In Zukunft könnte hier eine Datenbank-Tabelle für persistente Einstellungen verwendet werden
-    # Aktuell werden Einstellungen nur aus Environment-Variablen geladen
+    row = get_orchestrator_settings_or_default(session)
+    if settings.log_retention_runs is not None:
+        row.log_retention_runs = settings.log_retention_runs
+    if settings.log_retention_days is not None:
+        row.log_retention_days = settings.log_retention_days
+    if settings.log_max_size_mb is not None:
+        row.log_max_size_mb = settings.log_max_size_mb
+    if settings.max_concurrent_runs is not None:
+        row.max_concurrent_runs = settings.max_concurrent_runs
+    if settings.container_timeout is not None:
+        row.container_timeout = settings.container_timeout
+    if settings.retry_attempts is not None:
+        row.retry_attempts = settings.retry_attempts
+    if settings.auto_sync_enabled is not None:
+        row.auto_sync_enabled = settings.auto_sync_enabled
+    if settings.auto_sync_interval is not None:
+        row.auto_sync_interval = settings.auto_sync_interval
+    if settings.email_enabled is not None:
+        row.email_enabled = settings.email_enabled
+    if settings.smtp_host is not None:
+        row.smtp_host = settings.smtp_host
+    if settings.smtp_port is not None:
+        row.smtp_port = settings.smtp_port
+    if settings.smtp_user is not None:
+        row.smtp_user = settings.smtp_user
+    if settings.smtp_password is not None:
+        row.smtp_password_encrypted = encrypt(settings.smtp_password)
+    if settings.smtp_from is not None:
+        row.smtp_from = settings.smtp_from
+    if settings.email_recipients is not None:
+        row.email_recipients = settings.email_recipients
+    if settings.teams_enabled is not None:
+        row.teams_enabled = settings.teams_enabled
+    if settings.teams_webhook_url is not None:
+        row.teams_webhook_url = settings.teams_webhook_url
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    apply_orchestrator_settings_to_config(row)
     return {
-        "message": "Einstellungen werden aktuell nur aus Environment-Variablen geladen. "
-                   "Bitte ändern Sie die Werte in der .env-Datei oder als Environment-Variablen. "
-                   "Ein Neustart der Anwendung ist erforderlich."
+        "message": "Einstellungen wurden gespeichert und sind sofort aktiv."
     }
 
 

@@ -259,6 +259,17 @@ async def run_startup_tasks() -> None:
         "Datenbank initialisiert",
     )
 
+    def load_orchestrator_settings():
+        from app.database import engine
+        from app.orchestrator_settings import get_orchestrator_settings, apply_orchestrator_settings_to_config
+        from sqlmodel import Session
+        with Session(engine) as session:
+            settings = get_orchestrator_settings(session)
+            if settings is not None:
+                apply_orchestrator_settings_to_config(settings)
+                logger.info("Orchestrator-Einstellungen aus DB geladen")
+    await _run_step("Orchestrator-Einstellungen", False, load_orchestrator_settings, None)
+
     def init_docker():
         from app.executor import init_docker_client
         init_docker_client()

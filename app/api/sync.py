@@ -160,41 +160,35 @@ async def get_sync_settings(
 @router.put("/settings", response_model=Dict[str, Any])
 async def update_sync_settings(
     request: SyncSettingsRequest,
-    current_user = Depends(require_write)
+    current_user = Depends(require_write),
+    session: Session = Depends(get_session),
 ) -> Dict[str, Any]:
     """
-    Aktualisiert Sync-Einstellungen.
-    
-    Hinweis: Einstellungen werden in Environment-Variablen gespeichert.
-    Für persistente Änderungen muss die .env-Datei aktualisiert werden.
-    Diese Funktion aktualisiert nur die laufende Instanz.
-    
-    Args:
-        request: Request-Body mit neuen Einstellungen
-    
-    Returns:
-        Dictionary mit aktualisierten Einstellungen
+    Aktualisiert Sync-Einstellungen und speichert sie in der Datenbank.
+    Die laufende config wird sofort aktualisiert.
     """
-    import os
-    
-    # Einstellungen aktualisieren (nur für laufende Instanz)
+    if request.auto_sync_interval is not None and request.auto_sync_interval < 60:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Auto-Sync-Intervall muss mindestens 60 Sekunden betragen"
+        )
+    from app.orchestrator_settings import (
+        get_orchestrator_settings_or_default,
+        apply_orchestrator_settings_to_config,
+    )
+    row = get_orchestrator_settings_or_default(session)
     if request.auto_sync_enabled is not None:
-        os.environ["AUTO_SYNC_ENABLED"] = str(request.auto_sync_enabled).lower()
-        config.AUTO_SYNC_ENABLED = request.auto_sync_enabled
-    
+        row.auto_sync_enabled = request.auto_sync_enabled
     if request.auto_sync_interval is not None:
-        if request.auto_sync_interval < 60:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Auto-Sync-Intervall muss mindestens 60 Sekunden betragen"
-            )
-        os.environ["AUTO_SYNC_INTERVAL"] = str(request.auto_sync_interval)
-        config.AUTO_SYNC_INTERVAL = request.auto_sync_interval
-    
+        row.auto_sync_interval = request.auto_sync_interval
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    apply_orchestrator_settings_to_config(row)
     return {
         "auto_sync_enabled": config.AUTO_SYNC_ENABLED,
         "auto_sync_interval": config.AUTO_SYNC_INTERVAL,
-        "message": "Einstellungen aktualisiert (nur für laufende Instanz. Für persistente Änderungen .env-Datei bearbeiten)"
+        "message": "Einstellungen wurden gespeichert und sind sofort aktiv."
     }
 
 
