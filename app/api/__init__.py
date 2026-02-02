@@ -4,3 +4,34 @@ FastAPI API Endpoints Package.
 Dieses Paket enthält alle REST-API-Endpoints für Pipeline-Management,
 Run-Management, Log-Streaming, Git-Sync, Scheduler und Authentication.
 """
+
+from app.api import (
+    auth,
+    logs,
+    metrics,
+    pipelines,
+    runs,
+    scheduler,
+    secrets,
+    settings,
+    sync,
+    users,
+    version,
+    webhooks,
+)
+
+# Alle API-Router für zentrale Registrierung in main.py (prefix="/api")
+ROUTERS = [
+    pipelines.router,
+    runs.router,
+    logs.router,
+    metrics.router,
+    sync.router,
+    secrets.router,
+    settings.router,
+    scheduler.router,
+    auth.router,
+    users.router,
+    webhooks.router,
+    version.router,
+]

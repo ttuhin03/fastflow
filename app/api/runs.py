@@ -22,6 +22,20 @@ from app.auth import get_current_user, require_write
 router = APIRouter(prefix="/runs", tags=["runs"])
 
 
+def _parse_iso_datetime(value: str, param_name: str) -> datetime:
+    """
+    Parst ISO-Datum-String; wirft HTTPException bei ungültigem Format.
+    Unterstützt YYYY-MM-DD und YYYY-MM-DDTHH:MM:SS (inkl. Z → +00:00).
+    """
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Ungültiges {param_name}-Format: {value}. Erwartet: ISO-Format (YYYY-MM-DD oder YYYY-MM-DDTHH:MM:SS)",
+        )
+
+
 class RunsResponse(BaseModel):
     runs: List[Dict[str, Any]]
     total: int
@@ -65,26 +79,13 @@ async def get_runs(
     if status_filter:
         base_stmt = base_stmt.where(PipelineRun.status == status_filter)
     
-    # Zeitraum-Filterung
-    if start_date:
-        try:
-            start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
-            base_stmt = base_stmt.where(PipelineRun.started_at >= start_dt)
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Ungültiges Startdatum-Format: {start_date}. Erwartet: ISO-Format (YYYY-MM-DD oder YYYY-MM-DDTHH:MM:SS)"
-            )
-    
-    if end_date:
-        try:
-            end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
-            base_stmt = base_stmt.where(PipelineRun.started_at <= end_dt)
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Ungültiges Enddatum-Format: {end_date}. Erwartet: ISO-Format (YYYY-MM-DD oder YYYY-MM-DDTHH:MM:SS)"
-            )
+    # Zeitraum-Filterung (einmal parsen, für base_stmt und count_stmt nutzen)
+    start_dt = _parse_iso_datetime(start_date, "Startdatum") if start_date else None
+    end_dt = _parse_iso_datetime(end_date, "Enddatum") if end_date else None
+    if start_dt is not None:
+        base_stmt = base_stmt.where(PipelineRun.started_at >= start_dt)
+    if end_dt is not None:
+        base_stmt = base_stmt.where(PipelineRun.started_at <= end_dt)
     
     # Total count abrufen (mit gleichen Filtern)
     count_stmt = select(func.count(PipelineRun.id))
@@ -92,18 +93,10 @@ async def get_runs(
         count_stmt = count_stmt.where(PipelineRun.pipeline_name == pipeline_name)
     if status_filter:
         count_stmt = count_stmt.where(PipelineRun.status == status_filter)
-    if start_date:
-        try:
-            start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
-            count_stmt = count_stmt.where(PipelineRun.started_at >= start_dt)
-        except ValueError:
-            pass  # Already validated above
-    if end_date:
-        try:
-            end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
-            count_stmt = count_stmt.where(PipelineRun.started_at <= end_dt)
-        except ValueError:
-            pass  # Already validated above
+    if start_dt is not None:
+        count_stmt = count_stmt.where(PipelineRun.started_at >= start_dt)
+    if end_dt is not None:
+        count_stmt = count_stmt.where(PipelineRun.started_at <= end_dt)
     total = session.exec(count_stmt).one()
     
     # Query für Runs mit Pagination

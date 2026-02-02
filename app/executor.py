@@ -1548,28 +1548,6 @@ async def _send_soft_limit_notification_async(
         logger.error(f"Fehler beim Senden der Soft-Limit-Notification für Run {run.id}: {e}")
 
 
-async def _send_soft_limit_notification_async(
-    run: PipelineRun,
-    resource_type: str,
-    current_value: float,
-    limit_value: float
-) -> None:
-    """
-    Interne Funktion zum asynchronen Senden von Soft-Limit-Benachrichtigungen.
-    
-    Args:
-        run: PipelineRun-Objekt
-        resource_type: Art der Ressource ("CPU" oder "RAM")
-        current_value: Aktueller Wert
-        limit_value: Soft-Limit-Wert
-    """
-    try:
-        from app.notifications import send_soft_limit_notification
-        await send_soft_limit_notification(run, resource_type, current_value, limit_value)
-    except Exception as e:
-        logger.error(f"Fehler beim Senden der Soft-Limit-Notification für Run {run.id}: {e}")
-
-
 def _classify_exit_code(exit_code: int, oom_killed: bool = False) -> Optional[str]:
     """
     Klassifiziert Exit-Code in Fehler-Typ.

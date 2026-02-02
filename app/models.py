@@ -11,7 +11,7 @@ Dieses Modul definiert alle SQLModel-Models für die Datenbank:
 """
 
 from datetime import datetime
-from typing import Optional, Dict, Any, Literal
+from typing import Optional, Dict, Any
 from uuid import uuid4, UUID
 from enum import Enum
 from sqlalchemy import Text
@@ -39,6 +39,13 @@ class UserRole(str, Enum):
     READONLY = "READONLY"
     WRITE = "WRITE"
     ADMIN = "ADMIN"
+
+
+class UserStatus(str, Enum):
+    """Status eines Benutzers (Zugriff/Beitrittsanfrage)."""
+    ACTIVE = "active"
+    PENDING = "pending"
+    REJECTED = "rejected"
 
 
 class Pipeline(SQLModel, table=True):
@@ -263,8 +270,8 @@ class User(SQLModel, table=True):
         default=False,
         description="Ist der Benutzer blockiert?"
     )
-    status: Literal["active", "pending", "rejected"] = Field(
-        default="active",
+    status: UserStatus = Field(
+        default=UserStatus.ACTIVE,
         description="active=Zugriff, pending=Beitrittsanfrage, rejected=abgelehnt"
     )
     microsoft_id: Optional[str] = Field(
@@ -292,10 +299,6 @@ class User(SQLModel, table=True):
     avatar_url: Optional[str] = Field(
         default=None,
         description="Profilbild-URL (von OAuth-Provider)"
-    )
-    status: str = Field(
-        default="active",
-        description="active (voller Zugriff) | pending (Beitrittsanfrage, wartet) | rejected (abgelehnt)"
     )
     created_at: datetime = Field(
         default_factory=datetime.utcnow,
