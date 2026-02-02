@@ -102,6 +102,17 @@ def get_required_python_versions() -> Set[str]:
     return {p.get_python_version() for p in discovered}
 
 
+def ensure_python_version(version: str) -> None:
+    """
+    Stellt sicher, dass die angegebene Python-Version in UV_PYTHON_INSTALL_DIR
+    installiert ist (idempotent). Wird z. B. vor einem Run aufgerufen, damit
+    Pipelines mit nicht-Standard-Python auch ohne vorherigen Sync funktionieren.
+    """
+    if not version or not str(version).strip():
+        return
+    _ensure_python_versions({str(version).strip()})
+
+
 def _ensure_python_versions(versions: Set[str]) -> None:
     """Installiert die angegebenen Python-Versionen via uv python install."""
     if not versions:

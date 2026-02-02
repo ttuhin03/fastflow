@@ -415,6 +415,17 @@ async def _run_container_task(
                 # Pre-Heating läuft oder ist abgeschlossen
                 pass
         
+        # Benötigte Python-Version sicherstellen (auch bei nicht-Standard-Version),
+        # damit Runs nicht fehlschlagen wenn z. B. nach Pipeline-Änderung kein Sync lief
+        py_version = pipeline.get_python_version()
+        try:
+            from app.git_sync.sync import ensure_python_version
+            await asyncio.get_event_loop().run_in_executor(
+                _executor, lambda: ensure_python_version(py_version)
+            )
+        except Exception as e:
+            logger.warning("Sicherstellen der Python-Version %s fehlgeschlagen: %s", py_version, e)
+        
         # Log-Datei-Pfad aus Run-Objekt verwenden
         log_file_path = Path(run.log_file)
         log_file_path.parent.mkdir(parents=True, exist_ok=True)
