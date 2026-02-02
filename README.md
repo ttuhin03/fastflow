@@ -1,6 +1,8 @@
 # Fast-Flow Orchestrator
 
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE) [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/) [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker)](docker-compose.yaml)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE) [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/) [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker)](docker-compose.yaml) [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat&logo=FastAPI&logoColor=white)](https://fastapi.tiangolo.com/) [![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react&logoColor=61DAFB)](https://reactjs.org/) [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+
+[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/ttuhin03/fastflow)](https://github.com/ttuhin03/fastflow/releases)
 
 **The lightweight, Docker-native, Python-centric task orchestrator for 2026.**
 
