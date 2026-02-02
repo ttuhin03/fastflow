@@ -484,7 +484,29 @@ class Config:
     - In Produktion werden Standardwerte für JWT_SECRET_KEY blockiert
     - In Development werden nur Warnungen ausgegeben
     """
-    
+
+    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO").upper()
+    """
+    Log-Level für Root-Logger (DEBUG, INFO, WARNING, ERROR, CRITICAL).
+    Standard: INFO.
+    """
+
+    LOG_JSON: bool = os.getenv("LOG_JSON", "false").lower() == "true"
+    """
+    Strukturiertes Logging als JSON (für zentrale Log-Aggregation in Produktion).
+    Standard: false. In Produktion oft true für ELK/Datadog etc.
+    """
+
+    MAX_REQUEST_BODY_MB: Optional[int] = (
+        int(os.getenv("MAX_REQUEST_BODY_MB"))
+        if os.getenv("MAX_REQUEST_BODY_MB")
+        else None
+    )
+    """
+    Maximale Request-Body-Größe in MB. Überschreitende Requests erhalten 413.
+    None = unbegrenzt. Empfohlen in Produktion z.B. 10.
+    """
+
     CORS_ORIGINS: List[str] = (
         [origin.strip() for origin in os.getenv("CORS_ORIGINS", "").split(",") if origin.strip()]
         if os.getenv("CORS_ORIGINS")

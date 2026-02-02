@@ -22,12 +22,39 @@ from app.database import init_db
 from app.github_oauth_user import GITHUB_ACCESS_TOKEN_URL
 from app.google_oauth_user import GOOGLE_TOKEN_URL
 
-# Logger konfigurieren
+# Logger konfigurieren (Level/Format werden in lifespan aus config gesetzt)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+
+def _setup_logging() -> None:
+    """Setzt Log-Level und optional JSON-Format aus config (wird in lifespan aufgerufen)."""
+    root = logging.getLogger()
+    level = getattr(logging, config.LOG_LEVEL, logging.INFO)
+    root.setLevel(level)
+    if config.LOG_JSON:
+        try:
+            import json as _json
+            from datetime import datetime, timezone
+
+            class JsonFormatter(logging.Formatter):
+                def format(self, record: logging.LogRecord) -> str:
+                    log_obj = {
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "level": record.levelname,
+                        "logger": record.name,
+                        "message": record.getMessage(),
+                    }
+                    if record.exc_info:
+                        log_obj["exception"] = self.formatException(record.exc_info)
+                    return _json.dumps(log_obj, default=str)
+            for h in root.handlers:
+                h.setFormatter(JsonFormatter())
+        except Exception as e:
+            logger.warning("LOG_JSON aktiviert, Formatter-Setup fehlgeschlagen: %s", e)
 
 # Globale Variablen für Graceful Shutdown
 shutdown_event = asyncio.Event()
@@ -66,9 +93,10 @@ async def lifespan(app: FastAPI):
         None: App läuft während des Context-Managers
     """
     # Startup
+    _setup_logging()
     print(STARTUP_BANNER_TEMPLATE.format(version=config.VERSION))
     logger.info("Fast-Flow Orchestrator startet...")
-    
+
     # Sicherheits-Validierungen beim Start
     _validate_security_config()
     
@@ -456,11 +484,19 @@ def setup_signal_handlers() -> None:
 
 
 # FastAPI-App erstellen
+# In Produktion: OpenAPI-Docs deaktivieren (Angriffsfläche / Informationspreisgabe reduzieren)
+_docs_url = None if config.ENVIRONMENT == "production" else "/docs"
+_redoc_url = None if config.ENVIRONMENT == "production" else "/redoc"
+_openapi_url = None if config.ENVIRONMENT == "production" else "/openapi.json"
+
 app = FastAPI(
     title="Fast-Flow Orchestrator",
     description="Workflow-Orchestrierungstool für schnelle, isolierte Pipeline-Ausführungen",
     version=config.VERSION,
-    lifespan=lifespan
+    lifespan=lifespan,
+    docs_url=_docs_url,
+    redoc_url=_redoc_url,
+    openapi_url=_openapi_url,
 )
 
 # Rate Limiter initialisieren und an App binden
@@ -473,7 +509,8 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 async def _posthog_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    """FastAPI-Exception-Handler: PostHog capture_exception wenn enable_error_reporting."""
+    """FastAPI-Exception-Handler: PostHog capture_exception wenn enable_error_reporting; einheitliche 500-Antwort via get_500_detail."""
+    logger.exception("Unhandled exception: %s", exc)
     try:
         from sqlmodel import Session
         from app.database import engine
@@ -494,7 +531,13 @@ async def _posthog_exception_handler(request: Request, exc: Exception) -> JSONRe
                 )
     except Exception as e:
         logger.warning("PostHog in exception_handler: %s", e)
-    return JSONResponse(status_code=500, content={"detail": str(exc)})
+    from app.errors import get_500_detail
+    detail = get_500_detail(exc)
+    content = {"detail": detail}
+    request_id = getattr(request.state, "request_id", None)
+    if request_id:
+        content["request_id"] = request_id
+    return JSONResponse(status_code=500, content=content)
 
 
 app.add_exception_handler(Exception, _posthog_exception_handler)
@@ -513,6 +556,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Request-Body-Limit (optional, MAX_REQUEST_BODY_MB in config)
+from app.middleware.body_limit import BodyLimitMiddleware
+app.add_middleware(BodyLimitMiddleware)
+
+# Request-ID: zuletzt hinzufügen = läuft zuerst (outermost)
+from app.middleware.request_id import RequestIDMiddleware
+app.add_middleware(RequestIDMiddleware)
+
 # Signal-Handler einrichten
 setup_signal_handlers()
 
@@ -521,16 +572,68 @@ setup_signal_handlers()
 @app.get("/api/health")
 async def health_check() -> JSONResponse:
     """
-    Health-Check-Endpoint für Monitoring.
-    
-    Returns:
-        JSONResponse: Status-Informationen der App
+    Liveness-Check: Prozess lebt, ohne externe Abhängigkeiten.
+    Für Kubernetes livenessProbe / Docker HEALTHCHECK.
     """
     return JSONResponse(
         content={
             "status": "healthy",
             "version": config.VERSION,
             "environment": config.ENVIRONMENT,
+        }
+    )
+
+
+@app.get("/ready")
+@app.get("/api/ready")
+async def readiness_check() -> JSONResponse:
+    """
+    Readiness-Check: DB (und optional Docker) erreichbar.
+    Gibt 503 zurück, wenn die App nicht verkehrsfähig ist.
+    Für Kubernetes readinessProbe.
+    """
+    from app.database import engine
+    from sqlmodel import text
+
+    checks: dict = {}
+    ok = True
+
+    # DB-Check
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        checks["database"] = "ok"
+    except Exception as e:
+        logger.warning("Readiness: DB-Check fehlgeschlagen: %s", e)
+        checks["database"] = str(e)
+        ok = False
+
+    # Optional: Docker-Proxy-Check
+    try:
+        from app.executor import _get_docker_client
+        client = _get_docker_client()
+        client.ping()
+        checks["docker"] = "ok"
+    except Exception as e:
+        # Docker nicht initialisiert oder nicht erreichbar – nur warnen, nicht als nicht-ready
+        checks["docker"] = str(e)
+        # Orchestrator braucht Docker; wenn nicht erreichbar, nicht verkehrsfähig
+        ok = False
+
+    if not ok:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "not_ready",
+                "checks": checks,
+                "version": config.VERSION,
+            },
+        )
+    return JSONResponse(
+        content={
+            "status": "ready",
+            "checks": checks,
+            "version": config.VERSION,
         }
     )
 
@@ -586,8 +689,8 @@ if os.path.exists(static_dir):
         Sicherheit: Path Traversal wird verhindert durch Validierung dass
         der finale Pfad innerhalb von static_dir liegt.
         """
-        # Ignoriere API-Routen, health-check und static assets
-        if full_path.startswith("api") or full_path == "health" or full_path.startswith("static"):
+        # Ignoriere API-Routen, health/ready und static assets
+        if full_path.startswith("api") or full_path in ("health", "ready") or full_path.startswith("static"):
             return JSONResponse({"detail": "Not found"}, status_code=404)
         
         # Path Traversal-Schutz: Verwende pathlib für sichere Pfad-Auflösung
