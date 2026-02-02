@@ -97,6 +97,28 @@ flowchart TB
 - **Isolation**: Ein Fehler in `pipeline_a` kann die Umgebung von `pipeline_b` nicht beeinflussen.
 - **Skalierbarkeit**: Controller und Worker sind entkoppelt; das System kann mit Message-Queues (z.B. Redis) auf mehrere Server verteilt werden.
 
+## Startup & API-Struktur
+
+### App-Start (Lifecycle)
+
+Der FastAPI-Lifecycle wird in **`app/startup`** gebündelt:
+
+- **`run_startup_tasks()`**: Logging, Sicherheits- und OAuth-Validierung, Verzeichnisse, Datenbank, Docker-Client, Zombie-Reconciliation, Scheduler, Cleanup, Dependency-Audit, Version-Check, Telemetry, UV Pre-Heat. Kritische Schritte werfen bei Fehler; optionale werden geloggt und übersprungen.
+- **`run_shutdown_tasks()`**: Scheduler stoppen, Graceful Shutdown (laufende Runs beenden), PostHog Flush.
+
+Die eigentliche **`lifespan`**-Funktion in `app.main` ruft nur noch diese beiden Funktionen auf.
+
+### API-Router
+
+Alle REST-Endpoints liegen unter dem Präfix **`/api`**. Die Router werden zentral in **`app.api`** in der Liste **`ROUTERS`** geführt und in `main.py` in einer Schleife mit `prefix="/api"` registriert. Neue API-Module werden in `app.api.__init__.py` zu `ROUTERS` hinzugefügt.
+
+### Module-Überblick
+
+- **`app/executor`**: Container-Ausführung, Log- und Metrics-Streaming, Zombie-Reconciliation, Graceful Shutdown.
+- **`app/git_sync`**: Git-Sync des Pipeline-Repos, GitHub-App-Token, Sync-Log, Pre-Heat.
+- **`app/startup`**: Startup-/Shutdown-Logik, OAuth- und Sicherheits-Validierung.
+- **`app/logging_config`**: Log-Level und optionales JSON-Log-Format.
+
 ## Nächste Schritte
 
 - [**Konzepte & Glossar**](/docs/konzepte) – Runner-Cache, uv, JIT, Disposable Worker kurz erklärt

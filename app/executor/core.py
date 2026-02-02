@@ -784,7 +784,7 @@ async def _run_container_task(
                         logger.info(f"Starte Retry-Versuch {current_retry_count + 1}/{retry_attempts} für Pipeline {pipeline.name} (vorheriger Run: {run_id})")
                         
                         # Neuen Run starten
-                        from app.executor import run_pipeline
+                        from app.executor.core import run_pipeline
                         await run_pipeline(
                             pipeline.name,
                             env_vars=new_env_vars,
@@ -877,7 +877,7 @@ async def _run_container_task(
                         
                         logger.info(f"Starte Retry-Versuch {current_retry_count + 1}/{retry_attempts} für Pipeline {run.pipeline_name} nach Exception")
                         
-                        from app.executor import run_pipeline
+                        from app.executor.core import run_pipeline
                         await run_pipeline(
                             run.pipeline_name,
                             env_vars=new_env_vars,

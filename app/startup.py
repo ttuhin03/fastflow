@@ -31,29 +31,8 @@ ________                 __     ___________.__
 
 def _setup_logging() -> None:
     """Setzt Log-Level und optional JSON-Format aus config."""
-    root = logging.getLogger()
-    level = getattr(logging, config.LOG_LEVEL, logging.INFO)
-    root.setLevel(level)
-    if config.LOG_JSON:
-        try:
-            import json as _json
-            from datetime import datetime, timezone
-
-            class JsonFormatter(logging.Formatter):
-                def format(self, record: logging.LogRecord) -> str:
-                    log_obj = {
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
-                        "level": record.levelname,
-                        "logger": record.name,
-                        "message": record.getMessage(),
-                    }
-                    if record.exc_info:
-                        log_obj["exception"] = self.formatException(record.exc_info)
-                    return _json.dumps(log_obj, default=str)
-            for h in root.handlers:
-                h.setFormatter(JsonFormatter())
-        except Exception as e:
-            logger.warning("LOG_JSON aktiviert, Formatter-Setup fehlgeschlagen: %s", e)
+    from app.logging_config import setup_logging as do_setup_logging
+    do_setup_logging(log_level=config.LOG_LEVEL, log_json=config.LOG_JSON)
 
 
 def _validate_security_config() -> None:

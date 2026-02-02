@@ -12,12 +12,12 @@ from uuid import UUID
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlmodel import Session, select, func
-from pydantic import BaseModel
 
 from app.database import get_session
 from app.models import PipelineRun, RunStatus, User, RunCellLog
 from app.executor import cancel_run, check_container_health
 from app.auth import get_current_user, require_write
+from app.schemas.runs import RunsResponse
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
@@ -34,13 +34,6 @@ def _parse_iso_datetime(value: str, param_name: str) -> datetime:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Ungültiges {param_name}-Format: {value}. Erwartet: ISO-Format (YYYY-MM-DD oder YYYY-MM-DDTHH:MM:SS)",
         )
-
-
-class RunsResponse(BaseModel):
-    runs: List[Dict[str, Any]]
-    total: int
-    page: int
-    page_size: int
 
 
 @router.get("", response_model=RunsResponse)

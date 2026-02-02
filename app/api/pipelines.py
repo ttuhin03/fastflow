@@ -15,7 +15,6 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import JSONResponse
 from sqlmodel import Session, select, func, text
-from pydantic import BaseModel
 
 from app.database import get_session
 from app.models import Pipeline, PipelineRun, RunStatus, User
@@ -24,6 +23,14 @@ from app.pipeline_discovery import discover_pipelines, get_pipeline as get_disco
 from app.auth import require_write, get_current_user
 from app.config import config
 from app import dependencies as deps_module
+from app.schemas.pipelines import (
+    PipelineResponse,
+    RunPipelineRequest,
+    PipelineStatsResponse,
+    DailyStat,
+    DailyStatsResponse,
+    PipelineSourceFilesResponse,
+)
 
 router = APIRouter(prefix="/pipelines", tags=["pipelines"])
 
@@ -35,49 +42,6 @@ def _path_within_pipelines_dir(path: Path) -> bool:
         return True
     except ValueError:
         return False
-
-
-class PipelineResponse(BaseModel):
-    """Response-Model für Pipeline-Informationen."""
-    name: str
-    has_requirements: bool
-    last_cache_warmup: Optional[str]
-    total_runs: int
-    successful_runs: int
-    failed_runs: int
-    enabled: bool
-    metadata: Dict[str, Any]
-
-
-class RunPipelineRequest(BaseModel):
-    """Request-Model für Pipeline-Start."""
-    env_vars: Optional[Dict[str, str]] = None
-    parameters: Optional[Dict[str, str]] = None
-
-
-class PipelineStatsResponse(BaseModel):
-    """Response-Model für Pipeline-Statistiken."""
-    pipeline_name: str
-    total_runs: int
-    successful_runs: int
-    failed_runs: int
-    success_rate: float
-    webhook_runs: int
-
-
-class DailyStat(BaseModel):
-    """Response-Model für tägliche Pipeline-Statistiken."""
-    date: str  # ISO format: YYYY-MM-DD
-    total_runs: int
-    successful_runs: int
-    failed_runs: int
-    success_rate: float
-    run_ids: Optional[List[str]] = None  # Run-IDs für diesen Tag (optional, für Tooltips)
-
-
-class DailyStatsResponse(BaseModel):
-    """Response-Model für tägliche Pipeline-Statistiken."""
-    daily_stats: List[DailyStat]
 
 
 def _parse_date_range(
@@ -536,13 +500,6 @@ async def get_pipeline_daily_stats(
     runs = session.exec(stmt).all()
     daily_stats = _aggregate_runs_to_daily_stats(runs, include_run_ids=True)
     return DailyStatsResponse(daily_stats=daily_stats)
-
-
-class PipelineSourceFilesResponse(BaseModel):
-    """Response-Model für Pipeline-Quelldateien."""
-    main_py: Optional[str] = None
-    requirements_txt: Optional[str] = None
-    pipeline_json: Optional[str] = None
 
 
 @router.get("/{name}/source", response_model=PipelineSourceFilesResponse)
