@@ -19,6 +19,7 @@ from botocore.exceptions import ClientError
 
 from app.config import config
 from app.models import PipelineRun
+from app.resilience import circuit_s3, CircuitBreakerOpenError, with_retry_async
 
 logger = logging.getLogger(__name__)
 
@@ -161,9 +162,20 @@ class S3BackupService:
             path = self._resolve_path(run.log_file)
             key = f"{base_key}/run.log"
             try:
-                await asyncio.to_thread(
-                    self._upload_file_streaming, path, bucket, key, metadata
+                def _do_upload_log():
+                    circuit_s3.call(
+                        lambda: self._upload_file_streaming(path, bucket, key, metadata)
+                    )
+                await with_retry_async(
+                    lambda: asyncio.to_thread(_do_upload_log),
+                    stop_attempts=3,
+                    min_wait=2.0,
+                    max_wait=30.0,
                 )
+            except CircuitBreakerOpenError as e:
+                err = str(e)
+                logger.error("S3 Circuit Breaker offen: %s", err)
+                return (False, err)
             except (ClientError, OSError) as e:
                 err = str(e)
                 logger.error(
@@ -178,9 +190,20 @@ class S3BackupService:
             path = self._resolve_path(run.metrics_file)
             key = f"{base_key}/metrics.jsonl"
             try:
-                await asyncio.to_thread(
-                    self._upload_file_streaming, path, bucket, key, metadata
+                def _do_upload_metrics():
+                    circuit_s3.call(
+                        lambda: self._upload_file_streaming(path, bucket, key, metadata)
+                    )
+                await with_retry_async(
+                    lambda: asyncio.to_thread(_do_upload_metrics),
+                    stop_attempts=3,
+                    min_wait=2.0,
+                    max_wait=30.0,
                 )
+            except CircuitBreakerOpenError as e:
+                err = str(e)
+                logger.error("S3 Circuit Breaker offen: %s", err)
+                return (False, err)
             except (ClientError, OSError) as e:
                 err = str(e)
                 logger.error(

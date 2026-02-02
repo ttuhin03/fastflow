@@ -28,3 +28,4 @@ pytest-cov>=6,<7
 slowapi>=0.1,<1
 posthog>=3,<4
 pip-audit>=2,<3
+tenacity>=9,<10

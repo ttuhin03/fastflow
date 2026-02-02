@@ -18,8 +18,14 @@ import httpx
 
 from app.config import config
 from app.models import PipelineRun, RunStatus, User
+from app.resilience import with_retry_async
 
 logger = logging.getLogger(__name__)
+
+# Retry-Konfiguration für Benachrichtigungen
+_NOTIFY_RETRY_ATTEMPTS = 3
+_NOTIFY_RETRY_MIN_WAIT = 2.0
+_NOTIFY_RETRY_MAX_WAIT = 15.0
 
 
 async def notify_s3_backup_failed(run: PipelineRun, error_message: str) -> None:
@@ -244,21 +250,25 @@ async def send_email_notification(run: PipelineRun, status: RunStatus) -> None:
         message.attach(MIMEText(text_body, "plain"))
         message.attach(MIMEText(html_body, "html"))
         
-        # E-Mail senden
-        smtp = aiosmtplib.SMTP(
-            hostname=config.SMTP_HOST,
-            port=config.SMTP_PORT,
-            use_tls=config.SMTP_PORT == 587
+        # E-Mail senden (mit Retry bei Netzwerkfehlern)
+        async def _send_smtp():
+            smtp = aiosmtplib.SMTP(
+                hostname=config.SMTP_HOST,
+                port=config.SMTP_PORT,
+                use_tls=config.SMTP_PORT == 587
+            )
+            await smtp.connect()
+            if config.SMTP_USER and config.SMTP_PASSWORD:
+                await smtp.login(config.SMTP_USER, config.SMTP_PASSWORD)
+            await smtp.send_message(message)
+            await smtp.quit()
+
+        await with_retry_async(
+            _send_smtp,
+            stop_attempts=_NOTIFY_RETRY_ATTEMPTS,
+            min_wait=_NOTIFY_RETRY_MIN_WAIT,
+            max_wait=_NOTIFY_RETRY_MAX_WAIT,
         )
-        
-        await smtp.connect()
-        
-        if config.SMTP_USER and config.SMTP_PASSWORD:
-            await smtp.login(config.SMTP_USER, config.SMTP_PASSWORD)
-        
-        await smtp.send_message(message)
-        await smtp.quit()
-        
         logger.info(f"E-Mail-Benachrichtigung für Run {run.id} erfolgreich gesendet")
         
     except Exception as e:
@@ -288,15 +298,22 @@ async def send_teams_notification(run: PipelineRun, status: RunStatus) -> None:
         # Teams Adaptive Card erstellen
         card = _create_teams_card(run, status)
         
-        # HTTP-Request an Teams-Webhook senden
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(
-                config.TEAMS_WEBHOOK_URL,
-                json=card,
-                headers={"Content-Type": "application/json"}
-            )
-            response.raise_for_status()
-        
+        # HTTP-Request an Teams-Webhook senden (mit Retry bei Netzwerkfehlern)
+        async def _post_teams():
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(
+                    config.TEAMS_WEBHOOK_URL,
+                    json=card,
+                    headers={"Content-Type": "application/json"}
+                )
+                response.raise_for_status()
+
+        await with_retry_async(
+            _post_teams,
+            stop_attempts=_NOTIFY_RETRY_ATTEMPTS,
+            min_wait=_NOTIFY_RETRY_MIN_WAIT,
+            max_wait=_NOTIFY_RETRY_MAX_WAIT,
+        )
         logger.info(f"Teams-Benachrichtigung für Run {run.id} erfolgreich gesendet")
         
     except httpx.HTTPError as e:

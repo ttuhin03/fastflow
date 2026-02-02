@@ -243,6 +243,7 @@ def _run_git_command(cmd: list, cwd: Path, env: Optional[Dict[str, str]] = None)
 async def _git_pull(branch: str, pipelines_dir: Path) -> Tuple[bool, str]:
     """
     Führt Git Pull aus (mit GitHub Apps Authentifizierung falls konfiguriert).
+    Retry bei Netzwerk-/Git-Fehlern (bis zu 3 Versuche).
     
     Args:
         branch: Git-Branch (z.B. "main")
@@ -251,65 +252,66 @@ async def _git_pull(branch: str, pipelines_dir: Path) -> Tuple[bool, str]:
     Returns:
         Tuple (success, message)
     """
-    # Prüfe ob Verzeichnis ein Git-Repository ist
     git_dir = pipelines_dir / ".git"
     if not git_dir.exists():
         return (False, "Pipelines-Verzeichnis ist kein Git-Repository")
-    
-    # GitHub Token abrufen (falls konfiguriert)
+
+    last_msg = ""
+    for attempt in range(1, 4):
+        success, msg = await _git_pull_once(branch, pipelines_dir)
+        if success:
+            return (True, msg)
+        last_msg = msg
+        if attempt < 3:
+            wait = min(30, 2 ** attempt)
+            logger.warning(
+                "Git Pull Versuch %d/3 fehlgeschlagen: %s. Retry in %ds.",
+                attempt, msg, wait,
+            )
+            await asyncio.sleep(wait)
+    return (False, last_msg)
+
+
+async def _git_pull_once(branch: str, pipelines_dir: Path) -> Tuple[bool, str]:
+    """Einzelner Git-Pull-Versuch (Fetch, Reset, Pull)."""
     github_token = get_github_app_token()
-    
-    # Environment-Variablen für Git-Befehle
     env = None
     if github_token:
-        # Remote-URL mit Token aktualisieren
         remote_url_cmd = ["git", "config", "remote.origin.url"]
         exit_code, stdout, stderr = _run_git_command(remote_url_cmd, pipelines_dir)
-        
         if exit_code == 0:
             remote_url = stdout.strip()
-            # Prüfe ob URL bereits Token enthält
-            if "x-access-token" not in remote_url:
-                # URL mit Token aktualisieren
-                if remote_url.startswith("https://"):
-                    # GitHub URL: https://github.com/owner/repo.git
-                    # Konvertiere zu: https://x-access-token:TOKEN@github.com/owner/repo.git
-                    parts = remote_url.split("://")
-                    if len(parts) == 2:
-                        new_url = f"https://x-access-token:{github_token}@{parts[1]}"
-                        set_url_cmd = ["git", "config", "remote.origin.url", new_url]
-                        _run_git_command(set_url_cmd, pipelines_dir)
-    
-    # Git Fetch
+            if "x-access-token" not in remote_url and remote_url.startswith("https://"):
+                parts = remote_url.split("://")
+                if len(parts) == 2:
+                    new_url = f"https://x-access-token:{github_token}@{parts[1]}"
+                    set_url_cmd = ["git", "config", "remote.origin.url", new_url]
+                    _run_git_command(set_url_cmd, pipelines_dir)
+
     fetch_cmd = ["git", "fetch", "origin", branch]
     exit_code, stdout, stderr = await asyncio.get_event_loop().run_in_executor(
         _executor,
-        lambda: _run_git_command(fetch_cmd, pipelines_dir, env)
+        lambda: _run_git_command(fetch_cmd, pipelines_dir, env),
     )
-    
     if exit_code != 0:
         return (False, f"Git Fetch fehlgeschlagen: {stderr}")
-    
-    # Git Reset --hard (Remote-Version übernehmen, Konflikte lösen)
+
     reset_cmd = ["git", "reset", "--hard", f"origin/{branch}"]
     exit_code, stdout, stderr = await asyncio.get_event_loop().run_in_executor(
         _executor,
-        lambda: _run_git_command(reset_cmd, pipelines_dir, env)
+        lambda: _run_git_command(reset_cmd, pipelines_dir, env),
     )
-    
     if exit_code != 0:
         return (False, f"Git Reset fehlgeschlagen: {stderr}")
-    
-    # Git Pull (zusätzlich, um sicherzustellen dass alles aktuell ist)
+
     pull_cmd = ["git", "pull", "origin", branch]
     exit_code, stdout, stderr = await asyncio.get_event_loop().run_in_executor(
         _executor,
-        lambda: _run_git_command(pull_cmd, pipelines_dir, env)
+        lambda: _run_git_command(pull_cmd, pipelines_dir, env),
     )
-    
     if exit_code != 0:
         return (False, f"Git Pull fehlgeschlagen: {stderr}")
-    
+
     return (True, f"Git Pull erfolgreich: {stdout.strip()}")
 
 

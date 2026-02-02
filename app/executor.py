@@ -40,6 +40,7 @@ from sqlmodel import Session, select, update
 from app.analytics import track_pipeline_run_finished, track_pipeline_run_started
 from app.config import config
 from app.metrics_prometheus import track_run_started, track_run_finished
+from app.resilience import circuit_docker, CircuitBreakerOpenError
 from app.models import Pipeline, PipelineRun, RunStatus, RunCellLog
 from app.pipeline_discovery import DiscoveredPipeline, get_pipeline
 from app.retry_strategy import wait_for_retry
@@ -508,18 +509,23 @@ async def _run_container_task(
             # CPU-Limit in nano_cpus (1 Kern = 1e9 nano_cpus)
             container_config["nano_cpus"] = int(cpu_hard_limit * 1e9)
         
-        # Container starten
+        # Container starten (mit Circuit Breaker gegen Docker-Proxy-Ausfälle)
         logger.info(
             f"Starte Container für Run {run_id} (Pipeline: {pipeline.name}, "
             f"CPU-Limit: {cpu_hard_limit or 'unbegrenzt'}, RAM-Limit: {mem_hard_limit or 'unbegrenzt'})"
         )
         try:
+            def _run_with_circuit_breaker():
+                return circuit_docker.call(lambda: client.containers.run(**container_config))
+
             container = await asyncio.get_event_loop().run_in_executor(
                 _executor,
-                lambda: client.containers.run(**container_config)
+                _run_with_circuit_breaker,
             )
             setup_start = time.time()  # Ende: wenn SETUP_READY_MARKER im Log erscheint
-            logger.info(f"Container {container.id[:12]} erfolgreich gestartet für Run {run_id}")
+        except CircuitBreakerOpenError as e:
+            logger.error("Docker Circuit Breaker offen: %s", e)
+            raise RuntimeError(str(e)) from e
         except APIError as e:
             # Infrastructure-Fehler: Docker-Proxy blockiert Request
             logger.error(

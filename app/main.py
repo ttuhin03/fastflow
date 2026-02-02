@@ -357,11 +357,17 @@ async def _validate_oauth_config() -> None:
         logger.info("OAuth-HTTP-Verifizierung übersprungen (SKIP_OAUTH_VERIFICATION)")
         return
 
+    from app.resilience import circuit_oauth, call_async_with_circuit_breaker
+
     async with httpx.AsyncClient(timeout=15.0) as client:
         if has_github:
-            await _verify_github_oauth(client, base)
+            await call_async_with_circuit_breaker(
+                circuit_oauth, _verify_github_oauth, client, base
+            )
         if has_google:
-            await _verify_google_oauth(client, base)
+            await call_async_with_circuit_breaker(
+                circuit_oauth, _verify_google_oauth, client, base
+            )
 
 
 async def _verify_github_oauth(client: httpx.AsyncClient, base: str) -> None:
@@ -613,12 +619,17 @@ async def readiness_check() -> JSONResponse:
         checks["database"] = str(e)
         ok = False
 
-    # Docker-Proxy-Check (Orchestrator braucht Docker)
+    # Docker-Proxy-Check (mit Circuit Breaker)
     try:
         from app.executor import _get_docker_client
+        from app.resilience import circuit_docker, CircuitBreakerOpenError
         client = _get_docker_client()
-        client.ping()
+        if client:
+            circuit_docker.call(lambda: client.ping())
         checks["docker"] = "ok"
+    except CircuitBreakerOpenError as e:
+        checks["docker"] = str(e)
+        ok = False
     except Exception as e:
         checks["docker"] = str(e)
         ok = False
