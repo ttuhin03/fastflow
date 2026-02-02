@@ -11,11 +11,11 @@ from typing import Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlmodel import Session
 
-from app.database import get_session
-from app.errors import get_500_detail
+from app.core.database import get_session
+from app.core.errors import get_500_detail
 from app.executor import run_pipeline
 from app.middleware.rate_limiting import limiter
-from app.pipeline_discovery import get_pipeline as get_discovered_pipeline
+from app.services.pipeline_discovery import get_pipeline as get_discovered_pipeline
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])

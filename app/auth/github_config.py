@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 from dotenv import load_dotenv, set_key, find_dotenv
 
-from app.config import config
+from app.core.config import config
 
 # Pfad für Private Key Datei
 GITHUB_KEY_PATH = Path("./data/github_app_key.pem")

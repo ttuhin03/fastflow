@@ -21,9 +21,9 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from sqlmodel import Session, select
 
-from app.config import config
-from app.database import get_session, retry_on_sqlite_io
-from app.models import User, Session as SessionModel, UserRole
+from app.core.config import config
+from app.core.database import get_session, retry_on_sqlite_io
+from app.models import User, Session as SessionModel, UserRole, UserStatus
 
 logger = logging.getLogger(__name__)
 
@@ -329,7 +329,7 @@ async def get_current_user(
         )
     
     # Abwehr: pending/rejected erhalten in diesem Flow keinen Token; falls doch:
-    if getattr(user, "status", "active") != "active":
+    if getattr(user, "status", UserStatus.ACTIVE) != UserStatus.ACTIVE:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Benutzer ist nicht freigegeben",

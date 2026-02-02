@@ -21,11 +21,11 @@ from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.events import EVENT_JOB_EXECUTED, EVENT_JOB_ERROR
 from sqlmodel import Session, select
 
-from app.config import config
+from app.core.config import config
 from app.models import ScheduledJob, TriggerType
 from app.executor import run_pipeline
-from app.pipeline_discovery import get_pipeline
-from app.database import get_session
+from app.services.pipeline_discovery import get_pipeline
+from app.core.database import get_session
 
 logger = logging.getLogger(__name__)
 
@@ -324,7 +324,7 @@ def _create_job_function(pipeline_name: str):
             # Notification für Scheduler-Fehler (asynchron im Hintergrund)
             try:
                 import asyncio
-                from app.notifications import send_scheduler_error_notification
+                from app.services.notifications import send_scheduler_error_notification
                 asyncio.create_task(send_scheduler_error_notification(pipeline_name, str(e)))
             except Exception as notif_error:
                 logger.error(f"Fehler beim Senden der Scheduler-Notification: {notif_error}")
@@ -347,7 +347,7 @@ def _job_executed_listener(event) -> None:
         # Notification für Scheduler-Fehler (asynchron im Hintergrund)
         try:
             import asyncio
-            from app.notifications import send_scheduler_error_notification
+            from app.services.notifications import send_scheduler_error_notification
             # Versuche Pipeline-Name aus Job-ID zu extrahieren (falls Job-ID = Pipeline-Name)
             pipeline_name = event.job_id
             asyncio.create_task(send_scheduler_error_notification(pipeline_name, str(event.exception)))

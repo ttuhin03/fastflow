@@ -17,21 +17,21 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlmodel import Session
 
-from app.database import get_session, database_url, engine
-from app.config import config
-from app.cleanup import cleanup_logs, cleanup_docker_resources
-from app.s3_backup import get_backup_failures, get_last_backup_timestamp
+from app.core.database import get_session, database_url, engine
+from app.core.config import config
+from app.services.cleanup import cleanup_logs, cleanup_docker_resources
+from app.services.s3_backup import get_backup_failures, get_last_backup_timestamp
 from app.models import PipelineRun, RunStatus, User
-from app.notifications import send_email_notification, send_teams_notification
+from app.services.notifications import send_email_notification, send_teams_notification
 from app.executor import _get_docker_client
 from app.auth import require_admin, require_write, get_current_user
-from app.posthog_client import get_system_settings, shutdown_posthog, capture_exception
-from app.errors import get_500_detail
-from app.orchestrator_settings import (
+from app.analytics.posthog_client import get_system_settings, shutdown_posthog, capture_exception
+from app.core.errors import get_500_detail
+from app.services.orchestrator_settings import (
     get_orchestrator_settings_or_default,
     apply_orchestrator_settings_to_config,
 )
-from app.secrets import encrypt
+from app.services.secrets import encrypt
 from sqlmodel import text
 
 logger = logging.getLogger(__name__)
@@ -257,7 +257,7 @@ async def update_system_settings_endpoint(
         shutdown_posthog()
     # Dependency-Audit-Job neu planen (Cron/Enabled geändert)
     try:
-        from app.dependency_audit import schedule_dependency_audit_job
+        from app.services.dependency_audit import schedule_dependency_audit_job
         schedule_dependency_audit_job()
     except Exception as e:
         logger.warning("Dependency-Audit-Job nach Einstellungs-Update nicht neu geplant: %s", e)

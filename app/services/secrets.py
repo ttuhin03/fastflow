@@ -11,9 +11,9 @@ import logging
 from typing import Dict, Optional
 from cryptography.fernet import Fernet, InvalidToken
 
-from app.config import config
+from app.core.config import config
 from app.models import Secret
-from app.database import get_session
+from app.core.database import get_session
 from sqlmodel import Session, select
 
 logger = logging.getLogger(__name__)

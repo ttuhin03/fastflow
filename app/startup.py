@@ -9,7 +9,7 @@ import asyncio
 import logging
 from typing import Callable, Awaitable, Union, Optional
 
-from app.config import config
+from app.core.config import config
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ ________                 __     ___________.__
 
 def _setup_logging() -> None:
     """Setzt Log-Level und optional JSON-Format aus config."""
-    from app.logging_config import setup_logging as do_setup_logging
+    from app.core.logging_config import setup_logging as do_setup_logging
     do_setup_logging(log_level=config.LOG_LEVEL, log_json=config.LOG_JSON)
 
 
@@ -149,8 +149,8 @@ async def _validate_oauth_config() -> None:
     Raises:
         RuntimeError: Wenn kein Provider konfiguriert oder Verifizierung fehlschlägt.
     """
-    from app.github_oauth_user import GITHUB_ACCESS_TOKEN_URL
-    from app.google_oauth_user import GOOGLE_TOKEN_URL
+    from app.auth.github_oauth_user import GITHUB_ACCESS_TOKEN_URL
+    from app.auth.google_oauth_user import GOOGLE_TOKEN_URL
     from app.resilience import circuit_oauth, call_async_with_circuit_breaker
     import httpx
 
@@ -255,13 +255,13 @@ async def run_startup_tasks() -> None:
     await _run_step(
         "Datenbank-Initialisierung",
         True,
-        lambda: __import__("app.database", fromlist=["init_db"]).init_db(),
+        lambda: __import__("app.core.database", fromlist=["init_db"]).init_db(),
         "Datenbank initialisiert",
     )
 
     def load_orchestrator_settings():
-        from app.database import engine
-        from app.orchestrator_settings import get_orchestrator_settings, apply_orchestrator_settings_to_config
+        from app.core.database import engine
+        from app.services.orchestrator_settings import get_orchestrator_settings, apply_orchestrator_settings_to_config
         from sqlmodel import Session
         with Session(engine) as session:
             settings = get_orchestrator_settings(session)
@@ -276,7 +276,7 @@ async def run_startup_tasks() -> None:
     await _run_step("Docker-Client-Initialisierung", True, init_docker, "Docker-Client initialisiert")
 
     async def zombie_reconcile():
-        from app.database import get_session
+        from app.core.database import get_session
         from app.executor import reconcile_zombie_containers
         session_gen = get_session()
         session = next(session_gen)
@@ -287,23 +287,23 @@ async def run_startup_tasks() -> None:
     await _run_step("Zombie-Reconciliation", False, zombie_reconcile, "Zombie-Reconciliation abgeschlossen")
 
     def start_sched():
-        from app.scheduler import start_scheduler
+        from app.services.scheduler import start_scheduler
         start_scheduler()
     await _run_step("Scheduler-Start", False, start_sched, "Scheduler gestartet")
 
     def init_cleanup():
-        from app.cleanup import init_docker_client_for_cleanup, schedule_cleanup_job
+        from app.services.cleanup import init_docker_client_for_cleanup, schedule_cleanup_job
         init_docker_client_for_cleanup()
         schedule_cleanup_job()
     await _run_step("Cleanup-Service", False, init_cleanup, "Cleanup-Service initialisiert")
 
     def schedule_audit():
-        from app.dependency_audit import schedule_dependency_audit_job
+        from app.services.dependency_audit import schedule_dependency_audit_job
         schedule_dependency_audit_job()
     await _run_step("Dependency-Audit-Job", False, schedule_audit, "Dependency-Audit-Job aus SystemSettings geladen")
 
     async def version_check():
-        from app.version_checker import check_version_update, schedule_version_check
+        from app.services.version_checker import check_version_update, schedule_version_check
         await check_version_update()
         schedule_version_check()
     await _run_step("Version-Check", False, version_check, "Version Check initialisiert und geplant")
@@ -321,7 +321,7 @@ async def run_startup_tasks() -> None:
 
     if config.ENVIRONMENT == "development":
         def posthog_test():
-            from app.posthog_client import capture_startup_test_exception
+            from app.analytics.posthog_client import capture_startup_test_exception
             capture_startup_test_exception()
         await _run_step("PostHog Startup-Test", False, posthog_test, None)
 
@@ -333,13 +333,13 @@ async def run_shutdown_tasks() -> None:
     logger.info("Fast-Flow Orchestrator wird heruntergefahren...")
 
     def stop_sched():
-        from app.scheduler import stop_scheduler
+        from app.services.scheduler import stop_scheduler
         stop_scheduler()
     await _run_step("Scheduler-Shutdown", False, stop_sched, None)
 
     async def graceful():
         from app.executor import graceful_shutdown
-        from app.database import get_session
+        from app.core.database import get_session
         session_gen = get_session()
         session = next(session_gen)
         try:
@@ -349,7 +349,7 @@ async def run_shutdown_tasks() -> None:
     await _run_step("Graceful Shutdown", False, graceful, "Graceful Shutdown abgeschlossen")
 
     def posthog_shutdown():
-        from app.posthog_client import shutdown_posthog
+        from app.analytics.posthog_client import shutdown_posthog
         shutdown_posthog()
     await _run_step("PostHog Shutdown", False, posthog_shutdown, None)
 

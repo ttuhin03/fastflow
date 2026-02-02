@@ -14,11 +14,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 from pydantic import BaseModel
 
-from app.database import get_session
+from app.core.database import get_session
 from app.models import Secret, User
-from app.secrets import encrypt, decrypt
+from app.services.secrets import encrypt, decrypt
 from app.auth import require_write, get_current_user
-from app.errors import get_500_detail
+from app.core.errors import get_500_detail
 
 import logging
 

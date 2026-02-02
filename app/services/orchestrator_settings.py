@@ -10,9 +10,9 @@ from typing import List, Optional
 
 from sqlmodel import Session
 
-from app.config import config
+from app.core.config import config
 from app.models import OrchestratorSettings
-from app.secrets import decrypt, encrypt
+from app.services.secrets import decrypt, encrypt
 
 logger = logging.getLogger(__name__)
 

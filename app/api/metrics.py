@@ -16,12 +16,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse, JSONResponse
 from sqlmodel import Session
 
-from app.database import get_session
+from app.core.database import get_session
 from app.models import PipelineRun, User
 from app.executor import get_metrics_queue
 from app.auth import get_current_user
-from app.config import config
-from app.errors import get_500_detail
+from app.core.config import config
+from app.core.errors import get_500_detail
 
 import logging
 

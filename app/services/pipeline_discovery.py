@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from datetime import datetime
-from app.config import config
+from app.core.config import config
 
 
 class PipelineMetadata:

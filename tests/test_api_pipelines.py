@@ -9,7 +9,7 @@ Testet die REST-API-Endpoints für Pipeline-Management:
 import pytest
 from pathlib import Path
 
-from app.pipeline_discovery import discover_pipelines
+from app.services.pipeline_discovery import discover_pipelines
 
 
 @pytest.mark.skip(reason="Benötigt Docker für vollständige Pipeline-Ausführung")

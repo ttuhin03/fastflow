@@ -17,9 +17,9 @@ import boto3
 from botocore.config import Config as BotoConfig
 from botocore.exceptions import ClientError
 
-from app.config import config
+from app.core.config import config
 from app.models import PipelineRun
-from app.resilience import circuit_s3, CircuitBreakerOpenError, with_retry_async
+from app.resilience.resilience import circuit_s3, CircuitBreakerOpenError, with_retry_async
 
 logger = logging.getLogger(__name__)
 

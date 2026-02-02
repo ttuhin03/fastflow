@@ -19,7 +19,7 @@ from pathlib import Path
 from sqlmodel import SQLModel, create_engine, Session
 from fastapi.testclient import TestClient
 
-from app.config import config
+from app.core.config import config
 from app.main import app
 
 
@@ -84,7 +84,7 @@ def client(test_session):
     def override_get_session():
         yield test_session
     
-    from app.database import get_session
+    from app.core.database import get_session
     app.dependency_overrides[get_session] = override_get_session
     
     with TestClient(app) as test_client:

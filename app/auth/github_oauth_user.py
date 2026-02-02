@@ -12,7 +12,7 @@ from urllib.parse import urlencode
 import httpx
 from fastapi import HTTPException
 
-from app.config import config
+from app.core.config import config
 
 logger = logging.getLogger(__name__)
 

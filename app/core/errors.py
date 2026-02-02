@@ -6,7 +6,7 @@ only a generic message is returned; in development the exception message
 is included. Callers must log the exception before raising.
 """
 
-from app.config import config
+from app.core.config import config
 
 
 def get_500_detail(e: Exception) -> str:

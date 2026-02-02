@@ -3,7 +3,7 @@ from pydantic import BaseModel
 import logging
 from typing import Optional
 from datetime import datetime
-from app.version_checker import get_cached_version_info, check_version_update
+from app.services.version_checker import get_cached_version_info, check_version_update
 
 router = APIRouter(prefix="/system", tags=["system"])
 logger = logging.getLogger(__name__)

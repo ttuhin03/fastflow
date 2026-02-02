@@ -10,7 +10,7 @@ import asyncio
 import httpx
 from datetime import datetime, timedelta
 from typing import Optional
-from app.config import config
+from app.core.config import config
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +134,7 @@ def schedule_version_check() -> None:
     Runs daily at 2:00 AM (together with cleanup job).
     """
     try:
-        from app.scheduler import get_scheduler
+        from app.services.scheduler import get_scheduler
         from apscheduler.triggers.cron import CronTrigger
         
         scheduler = get_scheduler()

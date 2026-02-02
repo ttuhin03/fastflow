@@ -12,9 +12,9 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from pydantic import BaseModel, Field
 from sqlmodel import Session
 
-from app.database import get_session
+from app.core.database import get_session
 from app.models import ScheduledJob, TriggerType, User
-from app.scheduler import (
+from app.services.scheduler import (
     add_job,
     update_job,
     delete_job,
@@ -23,7 +23,7 @@ from app.scheduler import (
     get_job_details,
     get_scheduler
 )
-from app.pipeline_discovery import get_pipeline
+from app.services.pipeline_discovery import get_pipeline
 from app.auth import require_write, get_current_user
 
 router = APIRouter(prefix="/scheduler", tags=["scheduler"])

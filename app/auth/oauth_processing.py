@@ -14,11 +14,11 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlmodel import Session, select
 
-from app.config import config
-from app.database import retry_on_sqlite_io
-from app.github_oauth import delete_oauth_state, get_oauth_state
-from app.models import Invitation, User, UserRole
-from app.notifications import notify_admin_join_request
+from app.core.config import config
+from app.core.database import retry_on_sqlite_io
+from app.auth.github_oauth import delete_oauth_state, get_oauth_state
+from app.models import Invitation, User, UserRole, UserStatus
+from app.services.notifications import notify_admin_join_request
 
 logger = logging.getLogger(__name__)
 Provider = Literal["github", "google"]
@@ -95,11 +95,11 @@ def create_oauth_user(
     oauth_data: dict,
     role: UserRole,
     provider: Provider,
-    status: Literal["active", "pending"] = "active",
+    status: UserStatus = UserStatus.ACTIVE,
 ) -> User:
     """
     Erstellt einen neuen User aus OAuth-Daten (Einladungs-Flow oder Anklopfen).
-    status: "active" für Einladung/Initial-Admin, "pending" für Beitrittsanfrage.
+    status: UserStatus.ACTIVE für Einladung/Initial-Admin, UserStatus.PENDING für Beitrittsanfrage.
     """
     id_attr = "github_id" if provider == "github" else "google_id"
     provider_id = str(oauth_data.get("id") or "")
@@ -186,8 +186,8 @@ async def process_oauth_login(
     stmt = select(User).where(getattr(User, id_attr) == provider_id)
     user = retry_on_sqlite_io(lambda: session.exec(stmt).first(), session=session)
     if user:
-        status = getattr(user, "status", "active")
-        if status == "pending" or user.blocked:
+        st = getattr(user, "status", UserStatus.ACTIVE)
+        if st == UserStatus.PENDING or user.blocked:
             logger.info("OAuth: match=direct anklopfen_only provider=%s user=%s (pending oder blocked)", provider, user.username)
             return _oauth_return(user, False, True)
         logger.info("OAuth: match=direct provider=%s user=%s (bereits verknüpft)", provider, user.username)
@@ -230,12 +230,12 @@ async def process_oauth_login(
             inv.is_used = True
             session.add(inv)
             session.commit()
-            user = create_oauth_user(session, oauth_data, inv.role, provider, status="active")
+            user = create_oauth_user(session, oauth_data, inv.role, provider, status=UserStatus.ACTIVE)
             logger.info("OAuth: match=invitation provider=%s user=%s role=%s recipient=%s", provider, user.username, inv.role.value, inv.recipient_email)
             return _oauth_return(user, False, False, is_new_user=True, registration_source="invitation")
 
     # 7) Anklopfen: unbekannter Nutzer → Beitrittsanfrage (pending), kein Token/Session
-    user = create_oauth_user(session, oauth_data, UserRole.READONLY, provider, status="pending")
+    user = create_oauth_user(session, oauth_data, UserRole.READONLY, provider, status=UserStatus.PENDING)
     try:
         await notify_admin_join_request(user)
     except Exception as e:

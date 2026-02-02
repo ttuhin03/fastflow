@@ -25,7 +25,7 @@ from fastapi import FastAPI
 from starlette.requests import Request
 from starlette.responses import Response
 
-from app.config import config
+from app.core.config import config
 
 logger = logging.getLogger(__name__)
 

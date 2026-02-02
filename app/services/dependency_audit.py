@@ -9,9 +9,9 @@ import asyncio
 import logging
 from typing import Any, Dict, List
 
-from app.dependencies import get_pipeline_packages, run_pip_audit
-from app.pipeline_discovery import discover_pipelines
-from app.notifications import send_dependency_vuln_notification
+from app.core.dependencies import get_pipeline_packages, run_pip_audit
+from app.services.pipeline_discovery import discover_pipelines
+from app.services.notifications import send_dependency_vuln_notification
 
 logger = logging.getLogger(__name__)
 
@@ -71,9 +71,9 @@ def schedule_dependency_audit_job() -> None:
     Wird beim App-Start und nach Änderung der System-Einstellungen aufgerufen.
     """
     try:
-        from app.scheduler import get_scheduler
-        from app.database import engine
-        from app.posthog_client import get_system_settings
+        from app.services.scheduler import get_scheduler
+        from app.core.database import engine
+        from app.analytics.posthog_client import get_system_settings
         from sqlmodel import Session
         from apscheduler.triggers.cron import CronTrigger
 

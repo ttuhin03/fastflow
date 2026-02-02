@@ -21,25 +21,23 @@ from app.auth import (
     delete_session,
     get_current_user,
     get_session_by_token,
-)
-from app.config import config
-from app.database import get_session
-from app.analytics import track_user_logged_in, track_user_registered
-from app.github_oauth import delete_oauth_state, generate_oauth_state, store_oauth_state
-from app.posthog_client import get_system_settings
-from app.github_oauth_user import (
+    delete_oauth_state,
+    generate_oauth_state,
+    store_oauth_state,
     GITHUB_AUTHORIZE_URL,
     get_github_authorize_url,
     get_github_user_data,
-)
-from app.google_oauth_user import (
     GOOGLE_AUTHORIZE_URL,
     get_google_authorize_url,
     get_google_user_data,
+    process_oauth_login,
 )
+from app.core.config import config
+from app.core.database import get_session
+from app.analytics import track_user_logged_in, track_user_registered
+from app.analytics.posthog_client import get_system_settings
 from app.middleware.rate_limiting import limiter
 from app.models import User
-from app.oauth_processing import process_oauth_login
 
 logger = logging.getLogger(__name__)
 

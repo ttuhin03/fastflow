@@ -11,7 +11,7 @@ from typing import Optional, Tuple
 import jwt
 import requests
 
-from app.config import config
+from app.core.config import config
 
 logger = logging.getLogger(__name__)
 

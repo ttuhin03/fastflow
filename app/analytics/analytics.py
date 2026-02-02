@@ -13,11 +13,11 @@ from typing import Any, Dict, Optional
 
 from sqlmodel import Session, select, func
 
-from app.config import config
-from app.database import database_url
+from app.core.config import config
+from app.core.database import database_url
 from app.models import ScheduledJob, User
-from app.pipeline_discovery import discover_pipelines
-from app.posthog_client import (
+from app.services.pipeline_discovery import discover_pipelines
+from app.analytics.posthog_client import (
     _scrub_properties,
     get_distinct_id,
     get_posthog_client_for_telemetry,
@@ -296,7 +296,7 @@ def run_instance_heartbeat_sync() -> None:
     try:
         from sqlmodel import Session
 
-        from app.database import engine
+        from app.core.database import engine
 
         with Session(engine) as session:
             if get_posthog_client_for_telemetry(session) is None:
@@ -311,7 +311,7 @@ def schedule_telemetry_heartbeat() -> None:
     try:
         from apscheduler.triggers.cron import CronTrigger
 
-        from app.scheduler import get_scheduler
+        from app.services.scheduler import get_scheduler
 
         s = get_scheduler()
         if s is None or not s.running:

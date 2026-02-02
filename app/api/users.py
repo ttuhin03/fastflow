@@ -21,13 +21,19 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlmodel import Session, select
 
 from app.auth import get_current_user, require_admin, delete_all_user_sessions
-from app.config import config
-from app.database import get_session
-from app.models import User, UserRole, Invitation
+from app.core.config import config
+from app.core.database import get_session
+from app.models import User, UserRole, UserStatus, Invitation
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+
+def _user_status_value(user: User) -> str:
+    """Status für API-Response: Enum-Wert (z. B. 'active') als String."""
+    s = getattr(user, "status", UserStatus.ACTIVE)
+    return s.value if isinstance(s, UserStatus) else str(s)
 
 
 # Request/Response Models
@@ -62,7 +68,7 @@ class UserResponse(BaseModel):
             github_id=user.github_id,
             github_login=getattr(user, "github_login", None),
             google_id=user.google_id,
-            status=getattr(user, "status", "active"),
+            status=_user_status_value(user),
         )
 
 
@@ -124,7 +130,7 @@ async def list_users(
             github_id=user.github_id,
             github_login=getattr(user, "github_login", None),
             google_id=getattr(user, "google_id", None),
-            status=getattr(user, "status", "active"),
+            status=_user_status_value(user),
         )
         for user in users
     ]
@@ -240,7 +246,7 @@ async def get_user(
         github_id=user.github_id,
         github_login=getattr(user, "github_login", None),
         google_id=getattr(user, "google_id", None),
-        status=getattr(user, "status", "active"),
+        status=_user_status_value(user),
     )
 
 
@@ -258,11 +264,11 @@ async def approve_user(
     user = session.exec(statement).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Benutzer nicht gefunden")
-    st = getattr(user, "status", "active")
-    if st != "pending":
+    st = getattr(user, "status", UserStatus.ACTIVE)
+    if st != UserStatus.PENDING:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nur Beitrittsanfragen (pending) können freigegeben werden")
     role = (request.role if request else None) or UserRole.READONLY
-    user.status = "active"  # type: ignore[assignment]
+    user.status = UserStatus.ACTIVE
     user.blocked = False
     user.role = role
     session.add(user)
@@ -271,7 +277,7 @@ async def approve_user(
     logger.info("Admin %s hat Beitrittsanfrage von %s freigegeben (role=%s)", current_user.username, user.username, role.value)
     # Optional: E-Mail an Nutzer bei Freigabe
     try:
-        from app.notifications import notify_user_approved
+        from app.services.notifications import notify_user_approved
         await notify_user_approved(user)
     except Exception as e:
         logger.warning("E-Mail an Nutzer bei Freigabe fehlgeschlagen: %s", e)
@@ -286,7 +292,7 @@ async def approve_user(
         github_id=user.github_id,
         github_login=getattr(user, "github_login", None),
         google_id=getattr(user, "google_id", None),
-        status=getattr(user, "status", "active"),
+        status=_user_status_value(user),
     )
 
 
@@ -303,10 +309,10 @@ async def reject_user(
     user = session.exec(statement).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Benutzer nicht gefunden")
-    st = getattr(user, "status", "active")
-    if st != "pending":
+    st = getattr(user, "status", UserStatus.ACTIVE)
+    if st != UserStatus.PENDING:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nur Beitrittsanfragen (pending) können abgelehnt werden")
-    user.status = "rejected"  # type: ignore[assignment]
+    user.status = UserStatus.REJECTED
     user.blocked = True
     session.add(user)
     session.commit()
@@ -323,7 +329,7 @@ async def reject_user(
         github_id=user.github_id,
         github_login=getattr(user, "github_login", None),
         google_id=getattr(user, "google_id", None),
-        status=getattr(user, "status", "active"),
+        status=_user_status_value(user),
     )
 
 
@@ -382,7 +388,7 @@ async def update_user(
         github_id=user.github_id,
         github_login=getattr(user, "github_login", None),
         google_id=getattr(user, "google_id", None),
-        status=getattr(user, "status", "active"),
+        status=_user_status_value(user),
     )
 
 
@@ -445,7 +451,7 @@ async def block_user(
         github_id=user.github_id,
         github_login=getattr(user, "github_login", None),
         google_id=getattr(user, "google_id", None),
-        status=getattr(user, "status", "active"),
+        status=_user_status_value(user),
     )
 
 
@@ -496,7 +502,7 @@ async def unblock_user(
         github_id=user.github_id,
         github_login=getattr(user, "github_login", None),
         google_id=getattr(user, "google_id", None),
-        status=getattr(user, "status", "active"),
+        status=_user_status_value(user),
     )
 
 

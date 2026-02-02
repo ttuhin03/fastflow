@@ -15,8 +15,8 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from app.config import config
-from app.pipeline_discovery import discover_pipelines, get_pipeline as get_discovered_pipeline
+from app.core.config import config
+from app.services.pipeline_discovery import discover_pipelines, get_pipeline as get_discovered_pipeline
 
 logger = logging.getLogger(__name__)
 

@@ -14,7 +14,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 from uuid import uuid4, UUID
 from enum import Enum
-from sqlalchemy import Text
+from sqlalchemy import Enum as SAEnum, Text
 from sqlmodel import SQLModel, Field, JSON, Column
 
 
@@ -272,7 +272,12 @@ class User(SQLModel, table=True):
     )
     status: UserStatus = Field(
         default=UserStatus.ACTIVE,
-        description="active=Zugriff, pending=Beitrittsanfrage, rejected=abgelehnt"
+        description="active=Zugriff, pending=Beitrittsanfrage, rejected=abgelehnt",
+        sa_column=Column(
+            SAEnum(UserStatus, values_callable=lambda x: [e.value for e in x], native_enum=False),
+            nullable=False,
+            server_default="active",
+        ),
     )
     microsoft_id: Optional[str] = Field(
         default=None,

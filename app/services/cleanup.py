@@ -20,11 +20,11 @@ import docker
 from docker.errors import DockerException, APIError
 from sqlmodel import Session, select, update, func
 
-from app.config import config
-from app.database import get_session
+from app.core.config import config
+from app.core.database import get_session
 from app.models import PipelineRun, Pipeline
-from app.s3_backup import _s3_backup, append_backup_failure
-from app.notifications import notify_s3_backup_failed
+from app.services.s3_backup import _s3_backup, append_backup_failure
+from app.services.notifications import notify_s3_backup_failed
 
 logger = logging.getLogger(__name__)
 
@@ -626,7 +626,7 @@ def schedule_cleanup_job() -> None:
     zu registrieren. Standard: Täglich um 2 Uhr morgens.
     """
     try:
-        from app.scheduler import get_scheduler
+        from app.services.scheduler import get_scheduler
         from apscheduler.triggers.cron import CronTrigger
         
         scheduler = get_scheduler()

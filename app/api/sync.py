@@ -17,19 +17,19 @@ import logging
 import urllib.parse
 import requests
 
-from app.database import get_session
-from app.errors import get_500_detail
+from app.core.database import get_session
+from app.core.errors import get_500_detail
 from app.git_sync import sync_pipelines, get_sync_status, get_sync_logs, test_github_app_token
-from app.config import config
+from app.core.config import config
 from app.auth import require_write, get_current_user
 from app.models import User
-from app.github_config import (
+from app.auth.github_config import (
     save_github_config,
     load_github_config,
     delete_github_config,
     validate_github_private_key
 )
-from app.github_oauth import (
+from app.auth.github_oauth import (
     generate_oauth_state,
     store_oauth_state,
     get_oauth_state,
@@ -172,7 +172,7 @@ async def update_sync_settings(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Auto-Sync-Intervall muss mindestens 60 Sekunden betragen"
         )
-    from app.orchestrator_settings import (
+    from app.services.orchestrator_settings import (
         get_orchestrator_settings_or_default,
         apply_orchestrator_settings_to_config,
     )
@@ -385,7 +385,7 @@ async def github_installation_callback(
         
         # Aktualisiere Konfiguration mit Installation ID
         # Lade Private Key (muss bereits vorhanden sein)
-        from app.github_config import GITHUB_KEY_PATH
+        from app.auth.github_config import GITHUB_KEY_PATH
         if not GITHUB_KEY_PATH.exists():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

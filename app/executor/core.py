@@ -38,13 +38,13 @@ from docker.errors import DockerException, APIError, ImageNotFound
 from sqlmodel import Session, select, update
 
 from app.analytics import track_pipeline_run_finished, track_pipeline_run_started
-from app.config import config
+from app.core.config import config
 from app.metrics_prometheus import track_run_started, track_run_finished
 from app.resilience import circuit_docker, CircuitBreakerOpenError
 from app.models import Pipeline, PipelineRun, RunStatus, RunCellLog
-from app.pipeline_discovery import DiscoveredPipeline, get_pipeline
-from app.retry_strategy import wait_for_retry
-from app.database import get_session
+from app.services.pipeline_discovery import DiscoveredPipeline, get_pipeline
+from app.resilience.retry_strategy import wait_for_retry
+from app.core.database import get_session
 
 logger = logging.getLogger(__name__)
 
@@ -318,7 +318,7 @@ async def run_pipeline(
     
     # Datenbank-Session verwenden oder neue erstellen
     if session is None:
-        from app.database import get_session
+        from app.core.database import get_session
         session_gen = get_session()
         session = next(session_gen)
         close_session = True
@@ -327,7 +327,7 @@ async def run_pipeline(
     
     try:
         # Secrets aus Datenbank abrufen
-        from app.secrets import get_all_secrets
+        from app.services.secrets import get_all_secrets
         all_secrets = get_all_secrets(session)
         
         # Environment-Variablen zusammenführen
@@ -392,7 +392,7 @@ async def _run_container_task(
         env_vars: Zusammenfgeführte Environment-Variablen
         pre_heating_lock: Lock für Pre-Heating-Operationen
     """
-    from app.database import get_session
+    from app.core.database import get_session
     
     container = None
     log_file_path = None
@@ -807,7 +807,7 @@ async def _run_container_task(
             
             # Benachrichtigungen senden (nur bei finalen Fehlern)
             if run:
-                from app.notifications import send_notifications
+                from app.services.notifications import send_notifications
                 await send_notifications(run, RunStatus.FAILED)
         
     except (docker.errors.APIError, docker.errors.DockerException, ConnectionError, OSError) as e:
@@ -900,7 +900,7 @@ async def _run_container_task(
             
             # Benachrichtigungen senden (nur bei finalen Fehlern)
             if run:
-                from app.notifications import send_notifications
+                from app.services.notifications import send_notifications
                 await send_notifications(run, RunStatus.FAILED)
         
     finally:
@@ -1553,7 +1553,7 @@ async def _send_soft_limit_notification_async(
         limit_value: Soft-Limit-Wert
     """
     try:
-        from app.notifications import send_soft_limit_notification
+        from app.services.notifications import send_soft_limit_notification
         await send_soft_limit_notification(run, resource_type, current_value, limit_value)
     except Exception as e:
         logger.error(f"Fehler beim Senden der Soft-Limit-Notification für Run {run.id}: {e}")
@@ -1720,7 +1720,7 @@ async def cancel_run(run_id: UUID, session: Session) -> bool:
             session.commit()
             
             # Benachrichtigungen senden
-            from app.notifications import send_notifications
+            from app.services.notifications import send_notifications
             await send_notifications(run, RunStatus.INTERRUPTED)
         
         return True
@@ -1889,7 +1889,7 @@ async def _re_attach_container(
         container: Docker-Container-Objekt
         session: SQLModel Session (wird intern verwaltet)
     """
-    from app.database import get_session
+    from app.core.database import get_session
     
     # Neue Session für diese Task erstellen (falls nicht vorhanden)
     if session is None:

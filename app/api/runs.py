@@ -13,7 +13,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlmodel import Session, select, func
 
-from app.database import get_session
+from app.core.database import get_session
 from app.models import PipelineRun, RunStatus, User, RunCellLog
 from app.executor import cancel_run, check_container_health
 from app.auth import get_current_user, require_write

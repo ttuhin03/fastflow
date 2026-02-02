@@ -10,7 +10,7 @@ Testet die Pipeline-Erkennung und Validierung:
 import pytest
 from pathlib import Path
 
-from app.pipeline_discovery import discover_pipelines, get_pipeline
+from app.services.pipeline_discovery import discover_pipelines, get_pipeline
 
 
 def test_pipeline_discovery_simple_pipeline(temp_pipelines_dir):

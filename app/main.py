@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import os
 
-from app.config import config
+from app.core.config import config
 from app.metrics_prometheus import setup_prometheus_metrics
 from app.startup import run_startup_tasks, run_shutdown_tasks
 
@@ -95,8 +95,8 @@ async def _posthog_exception_handler(request: Request, exc: Exception) -> JSONRe
     logger.exception("Unhandled exception: %s", exc)
     try:
         from sqlmodel import Session
-        from app.database import engine
-        from app.posthog_client import capture_exception, get_system_settings
+        from app.core.database import engine
+        from app.analytics.posthog_client import capture_exception, get_system_settings
         with Session(engine) as session:
             ss = get_system_settings(session)
             if ss.enable_error_reporting:
@@ -113,7 +113,7 @@ async def _posthog_exception_handler(request: Request, exc: Exception) -> JSONRe
                 )
     except Exception as e:
         logger.warning("PostHog in exception_handler: %s", e)
-    from app.errors import get_500_detail
+    from app.core.errors import get_500_detail
     detail = get_500_detail(exc)
     content = {"detail": detail}
     request_id = getattr(request.state, "request_id", None)
@@ -178,7 +178,7 @@ async def readiness_check() -> JSONResponse:
     Gibt 503 zurück, wenn die App nicht verkehrsfähig ist.
     Für Kubernetes readinessProbe.
     """
-    from app.database import engine
+    from app.core.database import engine
     from sqlmodel import text
 
     checks: dict = {}

@@ -10,7 +10,7 @@ from typing import Any, Dict, List
 
 import aiofiles
 
-from app.config import config
+from app.core.config import config
 
 logger = logging.getLogger(__name__)
 

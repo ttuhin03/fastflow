@@ -22,7 +22,7 @@ import sqlalchemy.exc
 from sqlalchemy import event
 from sqlmodel import SQLModel, Session, create_engine, text
 
-from app.config import config
+from app.core.config import config
 from app.models import (
     Invitation,
     OrchestratorSettings,

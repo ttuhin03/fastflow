@@ -19,10 +19,10 @@ from fastapi.responses import StreamingResponse, PlainTextResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlmodel import Session, select
 
-from app.database import get_session, retry_on_sqlite_io
+from app.core.database import get_session, retry_on_sqlite_io
 from app.models import PipelineRun, User
 from app.executor import get_log_queue
-from app.config import config
+from app.core.config import config
 from app.auth import (
     get_current_user,
     create_log_download_token,
@@ -30,7 +30,7 @@ from app.auth import (
     verify_token,
     get_session_by_token,
 )
-from app.errors import get_500_detail
+from app.core.errors import get_500_detail
 import logging
 
 logger = logging.getLogger(__name__)

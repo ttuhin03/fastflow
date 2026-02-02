@@ -16,7 +16,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 
 from app.models import PipelineRun, RunStatus
-from app.pipeline_discovery import discover_pipelines
+from app.services.pipeline_discovery import discover_pipelines
 
 
 @pytest.mark.skip(reason="Benötigt Docker für vollständige Pipeline-Ausführung")

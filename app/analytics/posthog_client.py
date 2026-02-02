@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from sqlmodel import Session
 
-from app.config import config
+from app.core.config import config
 from app.models import SystemSettings
 
 logger = logging.getLogger(__name__)

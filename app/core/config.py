@@ -79,7 +79,7 @@ class Config:
     wenn der Code in einem Docker-Container läuft, um den Host-Pfad zu verwenden.
     """
     
-    RUNNERS_DIR: Path = (Path(__file__).resolve().parent / "runners").resolve()
+    RUNNERS_DIR: Path = (Path(__file__).resolve().parent.parent / "runners").resolve()
     """Pfad zum Runner-Verzeichnis (app/runners, z. B. nb_runner.py für Notebook-Pipelines)."""
     
     RUNNERS_HOST_DIR: Optional[str] = os.getenv("RUNNERS_HOST_DIR")

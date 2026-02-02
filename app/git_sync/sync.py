@@ -14,9 +14,9 @@ from concurrent.futures import ThreadPoolExecutor
 from sqlmodel import Session
 
 from app.analytics import track_sync_completed, track_sync_failed
-from app.config import config
+from app.core.config import config
 from app.models import Pipeline
-from app.pipeline_discovery import discover_pipelines, invalidate_cache
+from app.services.pipeline_discovery import discover_pipelines, invalidate_cache
 
 from app.git_sync.sync_log import _write_sync_log
 from app.git_sync.github_token import get_github_app_token
@@ -256,7 +256,7 @@ async def run_pre_heat_at_startup() -> None:
     if not config.UV_PRE_HEAT:
         return
     try:
-        from app.database import get_session
+        from app.core.database import get_session
         session_gen = get_session()
         session = next(session_gen)
         try:
@@ -283,7 +283,7 @@ async def sync_pipelines(
     if branch is None:
         branch = config.GIT_BRANCH
     if session is None:
-        from app.database import get_session
+        from app.core.database import get_session
         session_gen = get_session()
         session = next(session_gen)
         close_session = True
@@ -389,7 +389,7 @@ async def get_sync_status() -> Dict[str, Any]:
                 last_commit = {"hash": parts[0], "message": parts[1], "date": parts[2]}
         discovered_pipelines = discover_pipelines()
         pipelines_with_requirements = sum(1 for p in discovered_pipelines if p.has_requirements)
-        from app.database import get_session
+        from app.core.database import get_session
         session_gen = get_session()
         session = next(session_gen)
         try:

@@ -16,13 +16,13 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import JSONResponse
 from sqlmodel import Session, select, func, text
 
-from app.database import get_session
+from app.core.database import get_session
 from app.models import Pipeline, PipelineRun, RunStatus, User
 from app.executor import run_pipeline
-from app.pipeline_discovery import discover_pipelines, get_pipeline as get_discovered_pipeline
+from app.services.pipeline_discovery import discover_pipelines, get_pipeline as get_discovered_pipeline
 from app.auth import require_write, get_current_user
-from app.config import config
-from app import dependencies as deps_module
+from app.core.config import config
+from app.core import dependencies as deps_module
 from app.schemas.pipelines import (
     PipelineResponse,
     RunPipelineRequest,

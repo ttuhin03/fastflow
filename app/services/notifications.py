@@ -16,9 +16,9 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import httpx
 
-from app.config import config
+from app.core.config import config
 from app.models import PipelineRun, RunStatus, User
-from app.resilience import with_retry_async
+from app.resilience.resilience import with_retry_async
 
 logger = logging.getLogger(__name__)
 
