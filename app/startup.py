@@ -302,6 +302,11 @@ async def run_startup_tasks() -> None:
         schedule_cleanup_job()
     await _run_step("Cleanup-Service", False, init_cleanup, "Cleanup-Service initialisiert")
 
+    def schedule_wal_checkpoint():
+        from app.core.database import schedule_wal_checkpoint_job
+        schedule_wal_checkpoint_job()
+    await _run_step("WAL-Checkpoint-Job", False, schedule_wal_checkpoint, None)
+
     def schedule_audit():
         from app.services.dependency_audit import schedule_dependency_audit_job
         schedule_dependency_audit_job()

@@ -138,6 +138,54 @@ def wal_checkpoint() -> None:
         logger.warning(f"Fehler beim WAL-Checkpoint: {e}")
 
 
+def run_wal_checkpoint_job() -> None:
+    """
+    Job-Funktion für periodischen WAL-Checkpoint.
+    Wird vom APScheduler aufgerufen (synchrone Funktion).
+    Nur für SQLite relevant; bei PostgreSQL wird nichts ausgeführt.
+    """
+    if not database_url.startswith("sqlite"):
+        return
+    try:
+        wal_checkpoint()
+    except RuntimeError:
+        pass  # Nicht SQLite
+    except Exception as e:
+        logger.warning(f"WAL-Checkpoint-Job fehlgeschlagen: {e}")
+
+
+def schedule_wal_checkpoint_job() -> None:
+    """
+    Plant periodischen WAL-Checkpoint-Job im Scheduler.
+    
+    Nur für SQLite: Führt alle 10 Minuten einen WAL-Checkpoint durch,
+    um zu verhindern, dass die WAL-Datei unbegrenzt wächst.
+    Bei PostgreSQL wird kein Job angelegt.
+    """
+    if not database_url.startswith("sqlite"):
+        logger.debug("WAL-Checkpoint-Job übersprungen (PostgreSQL)")
+        return
+    try:
+        from app.services.scheduler import get_scheduler
+        from apscheduler.triggers.interval import IntervalTrigger
+
+        scheduler = get_scheduler()
+        if scheduler is None or not scheduler.running:
+            logger.warning("Scheduler nicht verfügbar, WAL-Checkpoint-Job nicht geplant")
+            return
+
+        scheduler.add_job(
+            func="app.core.database:run_wal_checkpoint_job",
+            trigger=IntervalTrigger(minutes=10),
+            id="wal_checkpoint_job",
+            name="SQLite WAL Checkpoint",
+            replace_existing=True,
+        )
+        logger.info("WAL-Checkpoint-Job geplant: alle 10 Minuten")
+    except Exception as e:
+        logger.error(f"Fehler beim Planen des WAL-Checkpoint-Jobs: {e}", exc_info=True)
+
+
 def _ensure_secret_is_parameter_column() -> None:
     """
     Stellt sicher, dass die is_parameter Spalte in der secrets Tabelle existiert.
