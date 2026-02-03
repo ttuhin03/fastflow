@@ -29,6 +29,10 @@ services:
     restart: unless-stopped
     # Port 2375 nicht auf Host exponieren; Orchestrator erreicht Proxy nur im internen Netz (Sicherheit)
     ports: []
+    #deploy:
+    #  resources:
+    #    limits:
+    #      memory: x
 
   orchestrator:
     build:
@@ -86,6 +90,11 @@ services:
         max-size: "10m"
         max-file: "3"
 
+    #deploy:
+    #  resources:
+    #    limits:
+    #      memory: x
+
     # Health-Check (optional)
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -108,6 +117,10 @@ services:
     ports:
       - "3001:3001"
     restart: unless-stopped
+   # deploy:
+   #   resources:
+   #     limits:
+   #       memory: x
     networks:
       - fastflow-network
 
