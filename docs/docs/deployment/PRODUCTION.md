@@ -57,29 +57,14 @@ server {
 
 ## Docker Compose für Produktion
 
-Für Produktion empfiehlt es sich, eine `docker-compose.prod.yaml` zu nutzen, um Restart-Policies und Logging zu konfigurieren.
+Die Standard-`docker-compose.yaml` ist bereits produktionsorientiert:
 
-```yaml
-version: '3.8'
-
-services:
-  orchestrator:
-    restart: always
-    environment:
-      - ENVIRONMENT=production
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  docker-proxy:
-    restart: always
-```
+- **Docker-Proxy**: Port 2375 wird nicht auf den Host gemappt (nur intern erreichbar, geringere Angriffsfläche).
+- **Orchestrator**: `ENVIRONMENT=production`, Logging (json-file, max-size/max-file), Restart-Policy.
 
 Starten mit:
 ```bash
-docker-compose -f docker-compose.yaml -f docker-compose.prod.yaml up -d
+docker-compose up -d
 ```
 
 ## Backup Strategie

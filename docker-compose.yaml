@@ -27,9 +27,8 @@ services:
     networks:
       - fastflow-network
     restart: unless-stopped
-    # Expose proxy on port 2375 (Docker API port)
-    ports:
-      - "2375:2375"
+    # Port 2375 nicht auf Host exponieren; Orchestrator erreicht Proxy nur im internen Netz (Sicherheit)
+    ports: []
 
   orchestrator:
     build:
@@ -80,7 +79,13 @@ services:
     
     # Restart-Policy
     restart: unless-stopped
-    
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
     # Health-Check (optional)
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]

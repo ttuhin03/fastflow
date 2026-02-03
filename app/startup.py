@@ -72,6 +72,11 @@ def _validate_security_config() -> None:
                 "JWT_SECRET_KEY verwendet den Standardwert 'change-me-in-production'. "
                 "Dies sollte in Produktion geändert werden."
             )
+    elif is_production and len(config.JWT_SECRET_KEY) < 32:
+        errors.append(
+            "JWT_SECRET_KEY muss in Produktion mindestens 32 Zeichen lang sein. "
+            "Aktuell: {} Zeichen. Siehe .env.example.".format(len(config.JWT_SECRET_KEY))
+        )
 
     if config.CORS_ORIGINS:
         for origin in config.CORS_ORIGINS:
