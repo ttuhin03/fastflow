@@ -169,6 +169,10 @@ app.add_middleware(RequestIDMiddleware)
 from app.middleware.performance import PerformanceTrackingMiddleware
 app.add_middleware(PerformanceTrackingMiddleware)
 
+# GZip-Kompression für API-Responses (große JSON-Listen)
+from starlette.middleware.gzip import GZipMiddleware
+app.add_middleware(GZipMiddleware, minimum_size=500)
+
 
 @app.middleware("http")
 async def static_cache_middleware(request: Request, call_next):
