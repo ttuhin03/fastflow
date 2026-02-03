@@ -292,7 +292,7 @@ async def stream_run_logs(
             # Sende alle vorhandenen Logs (mit Rate-Limiting)
             for log_line in pending_logs:
                 # Rate-Limiting
-                current_time = asyncio.get_event_loop().time()
+                current_time = asyncio.get_running_loop().time()
                 time_since_last_send = current_time - last_send_time
                 
                 if time_since_last_send < min_interval:
@@ -300,7 +300,7 @@ async def stream_run_logs(
                 
                 event_data = json.dumps({"line": log_line})
                 yield f"data: {event_data}\n\n"
-                last_send_time = asyncio.get_event_loop().time()
+                last_send_time = asyncio.get_running_loop().time()
             
             # SCHRITT 2: Warte auf neue Logs (Streaming)
             while True:
@@ -309,7 +309,7 @@ async def stream_run_logs(
                     log_line = await asyncio.wait_for(log_queue.get(), timeout=1.0)
                     
                     # Rate-Limiting: Warte bis nächster Send-Zeitpunkt
-                    current_time = asyncio.get_event_loop().time()
+                    current_time = asyncio.get_running_loop().time()
                     time_since_last_send = current_time - last_send_time
                     
                     if time_since_last_send < min_interval:
@@ -320,7 +320,7 @@ async def stream_run_logs(
                     event_data = json.dumps({"line": log_line})
                     yield f"data: {event_data}\n\n"
                     
-                    last_send_time = asyncio.get_event_loop().time()
+                    last_send_time = asyncio.get_running_loop().time()
                     
                 except asyncio.TimeoutError:
                     # Timeout: Sende Keep-Alive (leeres Event)

@@ -12,7 +12,7 @@ Dieses Modul enthält alle REST-API-Endpoints für Nutzermanagement:
 
 import logging
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from uuid import UUID
 
@@ -172,7 +172,7 @@ async def invite_user(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="E-Mail-Adresse bereits vergeben")
 
     token = secrets.token_urlsafe(32)
-    expires_at = datetime.utcnow() + timedelta(hours=request.expires_hours)
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=request.expires_hours)
     inv = Invitation(
         recipient_email=request.email,
         token=token,

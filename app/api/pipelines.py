@@ -10,7 +10,7 @@ Dieses Modul enthält alle REST-API-Endpoints für Pipeline-Management:
 from collections import defaultdict
 from typing import List, Optional, Dict, Any, Tuple
 from uuid import UUID
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import JSONResponse
@@ -69,7 +69,7 @@ def _parse_date_range(
     if start_date:
         try:
             start_dt = datetime.fromisoformat(start_date)
-            return start_dt, datetime.utcnow()
+            return start_dt, datetime.now(timezone.utc)
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -85,7 +85,7 @@ def _parse_date_range(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Ungültiges Datumsformat. Erwartet: YYYY-MM-DD",
             )
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     end_dt = now.replace(hour=23, minute=59, second=59, microsecond=999999)
     start_dt = (now - timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)
     return start_dt, end_dt

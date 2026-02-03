@@ -10,8 +10,13 @@ Dieses Modul definiert alle SQLModel-Models für die Datenbank:
 - Session (Session-Tokens für persistente Authentifizierung)
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any
+
+
+def _utc_now() -> datetime:
+    """Gibt die aktuelle UTC-Zeit zurück (zeitzone-aware)."""
+    return datetime.now(timezone.utc)
 from uuid import uuid4, UUID
 from enum import Enum
 from sqlalchemy import Enum as SAEnum, Text
@@ -132,7 +137,7 @@ class PipelineRun(SQLModel, table=True):
         description="Zeit in Sekunden, die uv für das Bereitstellen der Umgebung benötigt hat"
     )
     started_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utc_now,
         description="Start-Zeitpunkt (UTC)"
     )
     finished_at: Optional[datetime] = Field(
@@ -199,7 +204,7 @@ class ScheduledJob(SQLModel, table=True):
         description="Job aktiviert/deaktiviert"
     )
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utc_now,
         description="Erstellungs-Zeitpunkt (UTC)"
     )
 
@@ -232,11 +237,11 @@ class Secret(SQLModel, table=True):
         description="True wenn Parameter (nicht verschlüsselt), False wenn Secret (verschlüsselt)"
     )
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utc_now,
         description="Erstellungs-Zeitpunkt (UTC)"
     )
     updated_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utc_now,
         description="Letzte Aktualisierung (UTC)"
     )
 
@@ -306,7 +311,7 @@ class User(SQLModel, table=True):
         description="Profilbild-URL (von OAuth-Provider)"
     )
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utc_now,
         description="Erstellungs-Zeitpunkt (UTC)"
     )
 
@@ -324,7 +329,7 @@ class Invitation(SQLModel, table=True):
     is_used: bool = Field(default=False)
     expires_at: datetime = Field(...)  # Pflicht, Token läuft ab
     role: UserRole = Field(default=UserRole.READONLY)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utc_now)
 
 
 class SystemSettings(SQLModel, table=True):
@@ -423,6 +428,6 @@ class Session(SQLModel, table=True):
         description="Ablauf-Zeitpunkt (UTC)"
     )
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=_utc_now,
         description="Erstellungs-Zeitpunkt (UTC)"
     )

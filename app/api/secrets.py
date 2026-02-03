@@ -214,7 +214,7 @@ async def update_secret(
     Raises:
         HTTPException: Wenn Secret nicht existiert oder Fehler bei Verschlüsselung auftritt
     """
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     _validate_secret_key(key)
     try:
@@ -236,7 +236,7 @@ async def update_secret(
         else:
             secret.value = encrypt(request.value)  # Secrets werden verschlüsselt
         
-        secret.updated_at = datetime.utcnow()
+        secret.updated_at = datetime.now(timezone.utc)
         
         session.add(secret)
         session.commit()

@@ -477,7 +477,7 @@ async def test_email(
     
     try:
         # Erstelle einen Mock-Run für Test-E-Mail
-        from datetime import datetime
+        from datetime import datetime, timezone
         from uuid import uuid4
         
         test_run = PipelineRun(
@@ -485,8 +485,8 @@ async def test_email(
             pipeline_name="test-pipeline",
             status=RunStatus.FAILED,
             log_file="test.log",
-            started_at=datetime.utcnow(),
-            finished_at=datetime.utcnow(),
+            started_at=datetime.now(timezone.utc),
+            finished_at=datetime.now(timezone.utc),
             exit_code=1
         )
         
@@ -527,7 +527,7 @@ async def test_teams(
     
     try:
         # Erstelle einen Mock-Run für Test-Teams-Nachricht
-        from datetime import datetime
+        from datetime import datetime, timezone
         from uuid import uuid4
         
         test_run = PipelineRun(
@@ -535,8 +535,8 @@ async def test_teams(
             pipeline_name="test-pipeline",
             status=RunStatus.FAILED,
             log_file="test.log",
-            started_at=datetime.utcnow(),
-            finished_at=datetime.utcnow(),
+            started_at=datetime.now(timezone.utc),
+            finished_at=datetime.now(timezone.utc),
             exit_code=1
         )
         

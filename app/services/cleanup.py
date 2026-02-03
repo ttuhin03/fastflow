@@ -11,7 +11,7 @@ Metrics-Dateien und Docker-Ressourcen:
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 from uuid import UUID
@@ -190,7 +190,7 @@ async def _cleanup_by_retention_days(session: Session, max_days: int) -> int:
     
     try:
         # Cutoff-Datum berechnen
-        cutoff_date = datetime.utcnow() - timedelta(days=max_days)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=max_days)
         
         # Alle Runs finden, die älter als cutoff_date sind
         old_runs = session.exec(
@@ -422,7 +422,7 @@ async def _cleanup_orphaned_containers() -> int:
     
     try:
         # Alle Container mit fastflow-run-id Label finden
-        containers = await asyncio.get_event_loop().run_in_executor(
+        containers = await asyncio.get_running_loop().run_in_executor(
             None,
             lambda: _docker_client.containers.list(
                 filters={"label": "fastflow-run-id"},
@@ -446,7 +446,7 @@ async def _cleanup_orphaned_containers() -> int:
                     logger.warning(f"Ungültige Run-ID in Container-Label: {run_id_str}")
                     # Container ohne gültige Run-ID löschen
                     try:
-                        await asyncio.get_event_loop().run_in_executor(
+                        await asyncio.get_running_loop().run_in_executor(
                             None,
                             lambda: container.remove(force=True)
                         )
@@ -462,7 +462,7 @@ async def _cleanup_orphaned_containers() -> int:
                     # Run existiert nicht in DB (orphaned Container)
                     logger.debug(f"Orphaned Container gefunden: {run_id}")
                     try:
-                        await asyncio.get_event_loop().run_in_executor(
+                        await asyncio.get_running_loop().run_in_executor(
                             None,
                             lambda: container.remove(force=True)
                         )
@@ -474,7 +474,7 @@ async def _cleanup_orphaned_containers() -> int:
                     # (sollte normalerweise von executor.py entfernt werden, aber sicherheitshalber hier auch)
                     logger.debug(f"Beendeter Container gefunden: {run_id}")
                     try:
-                        await asyncio.get_event_loop().run_in_executor(
+                        await asyncio.get_running_loop().run_in_executor(
                             None,
                             lambda: container.remove(force=True)
                         )
@@ -509,7 +509,7 @@ async def _cleanup_orphaned_volumes() -> int:
     
     try:
         # Alle Volumes mit fastflow-run-id Label finden
-        volumes = await asyncio.get_event_loop().run_in_executor(
+        volumes = await asyncio.get_running_loop().run_in_executor(
             None,
             lambda: _docker_client.volumes.list(
                 filters={"label": "fastflow-run-id"}
@@ -532,7 +532,7 @@ async def _cleanup_orphaned_volumes() -> int:
                     logger.warning(f"Ungültige Run-ID in Volume-Label: {run_id_str}")
                     # Volume ohne gültige Run-ID löschen
                     try:
-                        await asyncio.get_event_loop().run_in_executor(
+                        await asyncio.get_running_loop().run_in_executor(
                             None,
                             lambda: volume.remove()
                         )
@@ -548,7 +548,7 @@ async def _cleanup_orphaned_volumes() -> int:
                     # Run existiert nicht in DB (orphaned Volume)
                     logger.debug(f"Orphaned Volume gefunden: {run_id}")
                     try:
-                        await asyncio.get_event_loop().run_in_executor(
+                        await asyncio.get_running_loop().run_in_executor(
                             None,
                             lambda: volume.remove()
                         )

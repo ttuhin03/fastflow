@@ -7,7 +7,7 @@ Zentrale OAuth-Logik für GitHub und Google.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal, Optional, Tuple
 from uuid import UUID
 
@@ -222,7 +222,7 @@ async def process_oauth_login(
             .where(
                 Invitation.token == state,
                 Invitation.is_used == False,
-                Invitation.expires_at > datetime.utcnow(),
+                Invitation.expires_at > datetime.now(timezone.utc),
             )
         )
         inv = retry_on_sqlite_io(lambda: session.exec(stmt).first(), session=session)

@@ -12,7 +12,7 @@ UI darf NIEMALS ohne Login erreichbar sein.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import uuid4, UUID
 
@@ -49,7 +49,7 @@ def create_access_token(username: str, expires_delta: Optional[timedelta] = None
         # Verwende kürzere Standard-Laufzeit für Access Tokens (15 Minuten)
         expires_delta = timedelta(minutes=config.JWT_ACCESS_TOKEN_MINUTES)
     
-    expire = datetime.utcnow() + expires_delta
+    expire = datetime.now(timezone.utc) + expires_delta
     
     to_encode = {
         "sub": username,
@@ -71,7 +71,7 @@ def create_log_download_token(run_id: UUID) -> str:
     Erstellt ein kurzlebiges JWT für Log-Download (60 Sekunden).
     Wird für Direktlinks verwendet, damit der Browser den Download nativ ausführt.
     """
-    expire = datetime.utcnow() + timedelta(seconds=60)
+    expire = datetime.now(timezone.utc) + timedelta(seconds=60)
     to_encode = {"sub": str(run_id), "exp": expire, "type": "log_download"}
     return jwt.encode(to_encode, config.JWT_SECRET_KEY, algorithm=config.JWT_ALGORITHM)
 
@@ -124,7 +124,7 @@ def create_session(session: Session, user: User, token: str) -> SessionModel:
     Returns:
         SessionModel: Erstellte Session
     """
-    expires_at = datetime.utcnow() + timedelta(hours=config.JWT_EXPIRATION_HOURS)
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=config.JWT_EXPIRATION_HOURS)
     
     db_session = SessionModel(
         token=token,
@@ -152,7 +152,7 @@ def get_session_by_token(session: Session, token: str) -> Optional[SessionModel]
     """
     statement = select(SessionModel).where(
         SessionModel.token == token,
-        SessionModel.expires_at > datetime.utcnow()
+        SessionModel.expires_at > datetime.now(timezone.utc)
     )
     return retry_on_sqlite_io(
         lambda: session.exec(statement).first(), session=session
@@ -216,7 +216,7 @@ def cleanup_expired_sessions(session: Session) -> None:
         session: Datenbank-Session
     """
     statement = select(SessionModel).where(
-        SessionModel.expires_at <= datetime.utcnow()
+        SessionModel.expires_at <= datetime.now(timezone.utc)
     )
     expired_sessions = session.exec(statement).all()
     

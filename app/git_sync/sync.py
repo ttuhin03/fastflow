@@ -8,7 +8,7 @@ import subprocess
 import logging
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, List, Set
-from datetime import datetime
+from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
 
 from sqlmodel import Session
@@ -76,19 +76,19 @@ async def _git_pull_once(branch: str, pipelines_dir: Path) -> Tuple[bool, str]:
                     set_url_cmd = ["git", "config", "remote.origin.url", new_url]
                     _run_git_command(set_url_cmd, pipelines_dir)
     fetch_cmd = ["git", "fetch", "origin", branch]
-    exit_code, stdout, stderr = await asyncio.get_event_loop().run_in_executor(
+    exit_code, stdout, stderr = await asyncio.get_running_loop().run_in_executor(
         _executor, lambda: _run_git_command(fetch_cmd, pipelines_dir, env)
     )
     if exit_code != 0:
         return (False, f"Git Fetch fehlgeschlagen: {stderr}")
     reset_cmd = ["git", "reset", "--hard", f"origin/{branch}"]
-    exit_code, stdout, stderr = await asyncio.get_event_loop().run_in_executor(
+    exit_code, stdout, stderr = await asyncio.get_running_loop().run_in_executor(
         _executor, lambda: _run_git_command(reset_cmd, pipelines_dir, env)
     )
     if exit_code != 0:
         return (False, f"Git Reset fehlgeschlagen: {stderr}")
     pull_cmd = ["git", "pull", "origin", branch]
-    exit_code, stdout, stderr = await asyncio.get_event_loop().run_in_executor(
+    exit_code, stdout, stderr = await asyncio.get_running_loop().run_in_executor(
         _executor, lambda: _run_git_command(pull_cmd, pipelines_dir, env)
     )
     if exit_code != 0:
@@ -143,7 +143,7 @@ async def _run_python_preheat(session: Session) -> Dict[str, Dict[str, Any]]:
     pre_heat_results: Dict[str, Dict[str, Any]] = {}
     versions = get_required_python_versions()
     if versions:
-        await asyncio.get_event_loop().run_in_executor(
+        await asyncio.get_running_loop().run_in_executor(
             _executor, lambda: _ensure_python_versions(versions)
         )
     discovered = discover_pipelines(force_refresh=True)
@@ -176,7 +176,7 @@ async def _pre_heat_pipeline(
             "uv", "pip", "compile", "--python", python_version,
             str(requirements_path), "-o", str(lock_file_path),
         ]
-        compile_result = await asyncio.get_event_loop().run_in_executor(
+        compile_result = await asyncio.get_running_loop().run_in_executor(
             _executor,
             lambda: subprocess.run(
                 compile_cmd, cwd=requirements_path.parent,
@@ -212,7 +212,7 @@ async def _pre_heat_pipeline(
                 "python", "-c", "pass",
             ]
             cwd_for_run = app_path if app_path.exists() or temp_app_created else pipeline_dir
-            install_result = await asyncio.get_event_loop().run_in_executor(
+            install_result = await asyncio.get_running_loop().run_in_executor(
                 _executor,
                 lambda: subprocess.run(
                     run_cmd, cwd=str(cwd_for_run),
@@ -232,14 +232,14 @@ async def _pre_heat_pipeline(
             return (False, error_msg)
         pipeline = session.get(Pipeline, pipeline_name)
         if pipeline:
-            pipeline.last_cache_warmup = datetime.utcnow()
+            pipeline.last_cache_warmup = datetime.now(timezone.utc)
             session.add(pipeline)
             session.commit()
         else:
             pipeline = Pipeline(
                 pipeline_name=pipeline_name,
                 has_requirements=True,
-                last_cache_warmup=datetime.utcnow(),
+                last_cache_warmup=datetime.now(timezone.utc),
             )
             session.add(pipeline)
             session.commit()
@@ -292,7 +292,7 @@ async def sync_pipelines(
     try:
         async with _sync_lock:
             pipelines_dir = config.PIPELINES_DIR
-            sync_start_time = datetime.utcnow()
+            sync_start_time = datetime.now(timezone.utc)
             logger.info("Starte Git Pull für Branch: %s", branch)
             await _write_sync_log({"event": "sync_started", "branch": branch, "status": "started"})
             success, message = await _git_pull(branch, pipelines_dir)
@@ -311,7 +311,7 @@ async def sync_pipelines(
                         logger.info("Pre-Heating erfolgreich für %s", name)
                     else:
                         logger.warning("Pre-Heating fehlgeschlagen für %s: %s", name, res.get("message", ""))
-            sync_end_time = datetime.utcnow()
+            sync_end_time = datetime.now(timezone.utc)
             sync_duration = (sync_end_time - sync_start_time).total_seconds()
             await _write_sync_log({
                 "event": "sync_completed", "branch": branch, "status": "success",
@@ -329,7 +329,7 @@ async def sync_pipelines(
                 pass
             return {
                 "success": True, "message": "Git-Sync erfolgreich abgeschlossen",
-                "branch": branch, "timestamp": datetime.utcnow().isoformat(),
+                "branch": branch, "timestamp": datetime.now(timezone.utc).isoformat(),
                 "pipelines_discovered": len(discovered_pipelines), "pre_heat_results": pre_heat_results,
             }
     except RuntimeError:
@@ -354,7 +354,7 @@ async def sync_pipelines(
             pass
         return {
             "success": False, "message": error_msg,
-            "branch": branch, "timestamp": datetime.utcnow().isoformat(),
+            "branch": branch, "timestamp": datetime.now(timezone.utc).isoformat(),
         }
     finally:
         if close_session:
@@ -369,17 +369,17 @@ async def get_sync_status() -> Dict[str, Any]:
         return {"is_git_repo": False, "message": "Pipelines-Verzeichnis ist kein Git-Repository"}
     try:
         branch_cmd = ["git", "rev-parse", "--abbrev-ref", "HEAD"]
-        exit_code, stdout, stderr = await asyncio.get_event_loop().run_in_executor(
+        exit_code, stdout, stderr = await asyncio.get_running_loop().run_in_executor(
             _executor, lambda: _run_git_command(branch_cmd, pipelines_dir)
         )
         current_branch = stdout.strip() if exit_code == 0 else "unknown"
         remote_url_cmd = ["git", "config", "remote.origin.url"]
-        exit_code, stdout, stderr = await asyncio.get_event_loop().run_in_executor(
+        exit_code, stdout, stderr = await asyncio.get_running_loop().run_in_executor(
             _executor, lambda: _run_git_command(remote_url_cmd, pipelines_dir)
         )
         remote_url = stdout.strip() if exit_code == 0 else None
         last_commit_cmd = ["git", "log", "-1", "--format=%H|%s|%ai", "HEAD"]
-        exit_code, stdout, stderr = await asyncio.get_event_loop().run_in_executor(
+        exit_code, stdout, stderr = await asyncio.get_running_loop().run_in_executor(
             _executor, lambda: _run_git_command(last_commit_cmd, pipelines_dir)
         )
         last_commit = None

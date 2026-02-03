@@ -116,7 +116,7 @@ def get_pipeline_packages(pipeline_name: str) -> List[Dict[str, str]]:
         if name in resolved:
             row["version"] = resolved[name]
         else:
-            row["version"] = p["specifier"] if p["specifier"] != "any" else "—"
+            row["version"] = p["specifier"] if p["specifier"] != "any" else "n/a"
         out.append(row)
     return out
 
@@ -163,9 +163,7 @@ def _run_pip_audit_sync(requirements_path: Path) -> Tuple[List[Dict[str, Any]], 
                                     v["name"] = pkg.strip()
                                     v["version"] = ver.strip()
                                 vulns.append(v)
-        if isinstance(vulns, list):
-            return vulns, None
-        return [], None
+        return vulns, None
     except subprocess.TimeoutExpired:
         return [], "pip-audit timeout"
     except json.JSONDecodeError as e:
@@ -180,7 +178,7 @@ def _run_pip_audit_sync(requirements_path: Path) -> Tuple[List[Dict[str, Any]], 
 
 async def run_pip_audit(requirements_path: Path) -> Tuple[List[Dict[str, Any]], Optional[str]]:
     """Async wrapper for pip-audit (runs in executor)."""
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, _run_pip_audit_sync, requirements_path)
 
 

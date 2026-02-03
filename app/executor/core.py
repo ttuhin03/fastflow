@@ -27,7 +27,7 @@ import json
 import logging
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Optional, List, Any, AsyncGenerator
 from uuid import UUID
@@ -345,7 +345,7 @@ async def run_pipeline(
         run = PipelineRun(
             pipeline_name=name,
             status=RunStatus.PENDING,
-            log_file=str(config.LOGS_DIR / f"{name}_{datetime.utcnow().isoformat()}.log"),
+            log_file=str(config.LOGS_DIR / f"{name}_{datetime.now(timezone.utc).isoformat()}.log"),
             env_vars=merged_env_vars,
             parameters=parameters,
             triggered_by=triggered_by
@@ -389,7 +389,7 @@ async def _run_container_task(
     Args:
         run_id: Run-ID
         pipeline: DiscoveredPipeline-Objekt
-        env_vars: Zusammenfgeführte Environment-Variablen
+        env_vars: Zusammengeführte Environment-Variablen
         pre_heating_lock: Lock für Pre-Heating-Operationen
     """
     from app.core.database import get_session
@@ -420,7 +420,7 @@ async def _run_container_task(
         py_version = pipeline.get_python_version()
         try:
             from app.git_sync.sync import ensure_python_version
-            await asyncio.get_event_loop().run_in_executor(
+            await asyncio.get_running_loop().run_in_executor(
                 _executor, lambda: ensure_python_version(py_version)
             )
         except Exception as e:
@@ -529,7 +529,7 @@ async def _run_container_task(
             def _run_with_circuit_breaker():
                 return circuit_docker.call(lambda: client.containers.run(**container_config))
 
-            container = await asyncio.get_event_loop().run_in_executor(
+            container = await asyncio.get_running_loop().run_in_executor(
                 _executor,
                 _run_with_circuit_breaker,
             )
@@ -604,7 +604,7 @@ async def _run_container_task(
         if timeout:
             try:
                 exit_code = await asyncio.wait_for(
-                    asyncio.get_event_loop().run_in_executor(
+                    asyncio.get_running_loop().run_in_executor(
                         _executor,
                         lambda: container.wait(timeout=timeout)
                     ),
@@ -617,7 +617,7 @@ async def _run_container_task(
                 exit_code = {"StatusCode": -1}  # Timeout-Exit-Code
         else:
             # Kein Timeout, warte auf natürliches Ende
-            exit_code = await asyncio.get_event_loop().run_in_executor(
+            exit_code = await asyncio.get_running_loop().run_in_executor(
                 _executor,
                 container.wait
             )
@@ -635,7 +635,7 @@ async def _run_container_task(
         # Versuche, verbleibende Logs aus Container zu lesen (falls Stream nicht alle geliefert hat)
         try:
             import aiofiles
-            remaining_logs_bytes = await asyncio.get_event_loop().run_in_executor(
+            remaining_logs_bytes = await asyncio.get_running_loop().run_in_executor(
                 _executor,
                 lambda: container.logs(stdout=True, stderr=True, tail=1000)
             )
@@ -714,7 +714,7 @@ async def _run_container_task(
         
         # Status basierend auf Exit-Code setzen
         run.exit_code = exit_code_value
-        run.finished_at = datetime.utcnow()
+        run.finished_at = datetime.now(timezone.utc)
         
         if exit_code_value == 0:
             run.status = RunStatus.SUCCESS
@@ -818,7 +818,7 @@ async def _run_container_task(
         run = session.get(PipelineRun, run_id)
         if run:
             run.status = RunStatus.FAILED
-            run.finished_at = datetime.utcnow()
+            run.finished_at = datetime.now(timezone.utc)
             run.exit_code = -1
             # Error-Type als Infrastructure Error markieren (in env_vars für Frontend)
             if run.env_vars is None:
@@ -842,7 +842,7 @@ async def _run_container_task(
         run = session.get(PipelineRun, run_id)
         if run:
             run.status = RunStatus.FAILED
-            run.finished_at = datetime.utcnow()
+            run.finished_at = datetime.now(timezone.utc)
             run.exit_code = -1
             # Prüfe ob es ein Connection-Error ist (Infrastructure)
             if "connection" in str(e).lower() or "proxy" in str(e).lower() or "unreachable" in str(e).lower():
@@ -907,7 +907,7 @@ async def _run_container_task(
         # Container-Cleanup
         if container:
             try:
-                await asyncio.get_event_loop().run_in_executor(
+                await asyncio.get_running_loop().run_in_executor(
                     _executor,
                     lambda: container.remove(force=True)
                 )
@@ -986,7 +986,7 @@ async def _get_uv_version(container: docker.models.containers.Container) -> Opti
         UV-Version-String oder None
     """
     try:
-        result = await asyncio.get_event_loop().run_in_executor(
+        result = await asyncio.get_running_loop().run_in_executor(
             _executor,
             lambda: container.exec_run("uv --version")
         )
@@ -1148,7 +1148,7 @@ async def _stream_logs(
         logger.info(f"Starte Log-Streaming für Run {run_id}, Container: {container.id}")
         
         # Log-Stream aus Container abrufen
-        log_stream = await asyncio.get_event_loop().run_in_executor(
+        log_stream = await asyncio.get_running_loop().run_in_executor(
             _executor,
             lambda: container.logs(stream=True, follow=True, stdout=True, stderr=True)
         )
@@ -1210,7 +1210,7 @@ async def _stream_logs(
                             or log_line.startswith(PREFIX_CELL_OUTPUT)
                         )
                         if is_cell_protocol:
-                            await asyncio.get_event_loop().run_in_executor(
+                            await asyncio.get_running_loop().run_in_executor(
                                 _executor,
                                 lambda l=log_line: _parse_and_persist_cell_line(run_id, l),
                             )
@@ -1225,7 +1225,7 @@ async def _stream_logs(
                             first_log_received = True
                         
                         # Zeitstempel hinzufügen (Format: YYYY-MM-DD HH:MM:SS.mmm)
-                        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+                        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
                         log_line_with_timestamp = f"[{timestamp}] {line_to_write}"
                         
                         # In Datei schreiben (asynchron)
@@ -1271,7 +1271,7 @@ async def _stream_logs(
                         if first_log_event is not None:
                             first_log_event.set()
                     else:
-                        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+                        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
                         log_line_with_timestamp = f"[{timestamp}] {log_line}"
                         await log_file.write(log_line_with_timestamp + "\n")
                         await log_file.flush()
@@ -1313,7 +1313,7 @@ async def _iter_log_stream(stream):
     Yields:
         Bytes: Log-Chunk
     """
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     
     while True:
         try:
@@ -1383,7 +1383,7 @@ async def _monitor_metrics(
     try:
         logger.debug(f"Starte Stats-Stream für Container {container.id[:12]} (Run {run_id})")
         # Stats-Stream aus Container abrufen
-        stats_stream = await asyncio.get_event_loop().run_in_executor(
+        stats_stream = await asyncio.get_running_loop().run_in_executor(
             _executor,
             lambda: container.stats(stream=True, decode=True)
         )
@@ -1435,7 +1435,7 @@ async def _monitor_metrics(
                     # Metrics-Objekt erstellen
                     # WICHTIG: Frontend erwartet 'ram_mb', nicht 'mem_usage_mb'
                     metric = {
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
                         "cpu_percent": cpu_percent if cpu_percent is not None else 0.0,
                         "ram_mb": ram_usage_mb,  # Frontend erwartet 'ram_mb'
                         "ram_limit_mb": ram_limit_mb,
@@ -1523,7 +1523,7 @@ async def _iter_stats_stream(stream):
     """
     while True:
         try:
-            stats = await asyncio.get_event_loop().run_in_executor(
+            stats = await asyncio.get_running_loop().run_in_executor(
                 _executor,
                 lambda: next(stream, None)
             )
@@ -1706,7 +1706,7 @@ async def cancel_run(run_id: UUID, session: Session) -> bool:
             return False
         
         # Container stoppen
-        await asyncio.get_event_loop().run_in_executor(
+        await asyncio.get_running_loop().run_in_executor(
             _executor,
             lambda: container.stop(timeout=10)
         )
@@ -1715,7 +1715,7 @@ async def cancel_run(run_id: UUID, session: Session) -> bool:
         run = session.get(PipelineRun, run_id)
         if run:
             run.status = RunStatus.INTERRUPTED
-            run.finished_at = datetime.utcnow()
+            run.finished_at = datetime.now(timezone.utc)
             session.add(run)
             session.commit()
             
@@ -1771,7 +1771,7 @@ async def reconcile_zombie_containers(session: Session) -> None:
         client = _get_docker_client()
         
         # Alle Container mit fastflow-run-id Label finden
-        containers = await asyncio.get_event_loop().run_in_executor(
+        containers = await asyncio.get_running_loop().run_in_executor(
             _executor,
             lambda: client.containers.list(
                 filters={"label": "fastflow-run-id"},
@@ -1798,7 +1798,7 @@ async def reconcile_zombie_containers(session: Session) -> None:
                 logger.warning(f"Orphaned Container gefunden (Run-ID nicht in DB): {run_id}")
                 # Container entfernen
                 try:
-                    await asyncio.get_event_loop().run_in_executor(
+                    await asyncio.get_running_loop().run_in_executor(
                         _executor,
                         lambda: container.remove(force=True)
                     )
@@ -1845,7 +1845,7 @@ async def reconcile_zombie_containers(session: Session) -> None:
                     error_type = _classify_exit_code(exit_code, oom_killed)
                     
                     run.exit_code = exit_code
-                    run.finished_at = datetime.utcnow()
+                    run.finished_at = datetime.now(timezone.utc)
                     
                     if exit_code == 0:
                         run.status = RunStatus.SUCCESS
@@ -1863,7 +1863,7 @@ async def reconcile_zombie_containers(session: Session) -> None:
                     
                     # Container entfernen
                     try:
-                        await asyncio.get_event_loop().run_in_executor(
+                        await asyncio.get_running_loop().run_in_executor(
                             _executor,
                             lambda: container.remove(force=True)
                         )
@@ -1923,26 +1923,27 @@ async def _re_attach_container(
             return
         
         # Log-Streaming und Metrics-Monitoring wieder aufnehmen
+        env_vars = run.env_vars or {}
         log_task = asyncio.create_task(
             _stream_logs(container, log_file_path, log_queue, run_id)
         )
         
         if metrics_file_path:
             metrics_task = asyncio.create_task(
-                _monitor_metrics(container, metrics_file_path, metrics_queue, pipeline, run_id)
+                _monitor_metrics(container, metrics_file_path, metrics_queue, pipeline, run_id, session, env_vars)
             )
         else:
             # Metrics-Datei-Pfad erstellen
             metrics_file_path = Path(config.LOGS_DIR / f"{run_id}_metrics.jsonl")
             metrics_task = asyncio.create_task(
-                _monitor_metrics(container, metrics_file_path, metrics_queue, pipeline, run_id)
+                _monitor_metrics(container, metrics_file_path, metrics_queue, pipeline, run_id, session, env_vars)
             )
             run.metrics_file = str(metrics_file_path)
             session.add(run)
             session.commit()
         
         # Container-Wait
-        exit_code = await asyncio.get_event_loop().run_in_executor(
+        exit_code = await asyncio.get_running_loop().run_in_executor(
             _executor,
             container.wait
         )
@@ -1962,7 +1963,7 @@ async def _re_attach_container(
         run = session.get(PipelineRun, run_id)
         if run:
             run.exit_code = exit_code_value
-            run.finished_at = datetime.utcnow()
+            run.finished_at = datetime.now(timezone.utc)
             
             if exit_code_value == 0:
                 run.status = RunStatus.SUCCESS
@@ -1980,7 +1981,7 @@ async def _re_attach_container(
         
         # Container entfernen
         try:
-            await asyncio.get_event_loop().run_in_executor(
+            await asyncio.get_running_loop().run_in_executor(
                 _executor,
                 lambda: container.remove(force=True)
             )
@@ -2084,7 +2085,7 @@ async def graceful_shutdown(session: Session) -> None:
             
             if container:
                 try:
-                    await asyncio.get_event_loop().run_in_executor(
+                    await asyncio.get_running_loop().run_in_executor(
                         _executor,
                         lambda: container.stop(timeout=30)  # Graceful Stop mit 30s Timeout
                     )
@@ -2095,7 +2096,7 @@ async def graceful_shutdown(session: Session) -> None:
             else:
                 run.status = RunStatus.WARNING
             
-            run.finished_at = datetime.utcnow()
+            run.finished_at = datetime.now(timezone.utc)
             session.add(run)
             session.commit()
             

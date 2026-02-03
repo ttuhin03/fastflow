@@ -4,7 +4,7 @@ Sync-Log: Lesen und Schreiben von Sync-Log-Einträgen (JSONL).
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -24,7 +24,7 @@ async def _write_sync_log(entry: Dict[str, Any]) -> None:
     """Schreibt einen Sync-Log-Eintrag in die Log-Datei (JSONL-Format)."""
     log_file = _get_sync_log_file()
     log_file.parent.mkdir(parents=True, exist_ok=True)
-    entry["timestamp"] = datetime.utcnow().isoformat()
+    entry["timestamp"] = datetime.now(timezone.utc).isoformat()
     try:
         async with aiofiles.open(log_file, "a", encoding="utf-8") as f:
             await f.write(json.dumps(entry) + "\n")

@@ -8,7 +8,7 @@ beim GitHub App Manifest Flow.
 import secrets
 import time
 from typing import Dict, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # In-Memory State Storage (für Production sollte Redis verwendet werden)
 _oauth_states: Dict[str, Dict] = {}
@@ -35,8 +35,8 @@ def store_oauth_state(state: str, data: Dict) -> None:
     """
     _oauth_states[state] = {
         **data,
-        "expires_at": datetime.utcnow() + timedelta(seconds=_STATE_TTL),
-        "created_at": datetime.utcnow()
+        "expires_at": datetime.now(timezone.utc) + timedelta(seconds=_STATE_TTL),
+        "created_at": datetime.now(timezone.utc)
     }
 
 
@@ -56,7 +56,7 @@ def get_oauth_state(state: str) -> Optional[Dict]:
     state_data = _oauth_states[state]
     
     # Prüfe Ablaufzeit
-    if datetime.utcnow() > state_data["expires_at"]:
+    if datetime.now(timezone.utc) > state_data["expires_at"]:
         del _oauth_states[state]
         return None
     
@@ -79,7 +79,7 @@ def cleanup_expired_states() -> None:
     
     Sollte periodisch aufgerufen werden, um Memory-Leaks zu vermeiden.
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     expired_states = [
         state for state, data in _oauth_states.items()
         if now > data["expires_at"]

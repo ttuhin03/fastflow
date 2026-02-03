@@ -55,7 +55,10 @@ def setup_signal_handlers() -> None:
         
         Setzt das Shutdown-Event, damit die App sauber beendet werden kann.
         """
-        signal_name = signal.Signals(signum).name
+        try:
+            signal_name = signal.Signals(signum).name
+        except (ValueError, AttributeError):
+            signal_name = str(signum)
         logger.info(f"Signal {signal_name} empfangen, starte Graceful Shutdown...")
         shutdown_event.set()
     

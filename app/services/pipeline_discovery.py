@@ -11,7 +11,7 @@ Dieses Modul scannt das Pipelines-Verzeichnis und erkennt verfügbare Pipelines:
 import json
 from pathlib import Path
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from app.core.config import config
 
 
@@ -228,7 +228,7 @@ def discover_pipelines(force_refresh: bool = False) -> List[DiscoveredPipeline]:
     if not force_refresh and _pipeline_cache is not None and _cache_timestamp is not None:
         ttl = config.PIPELINE_CACHE_TTL_SECONDS
         if ttl > 0:
-            elapsed = (datetime.utcnow() - _cache_timestamp).total_seconds()
+            elapsed = (datetime.now(timezone.utc) - _cache_timestamp).total_seconds()
             if elapsed < ttl:
                 return _pipeline_cache
     
@@ -289,7 +289,7 @@ def discover_pipelines(force_refresh: bool = False) -> List[DiscoveredPipeline]:
     
     # Cache aktualisieren
     _pipeline_cache = discovered
-    _cache_timestamp = datetime.utcnow()
+    _cache_timestamp = datetime.now(timezone.utc)
     
     return discovered
 

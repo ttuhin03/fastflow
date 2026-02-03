@@ -4,7 +4,7 @@ GitHub Apps: Installation Access Token (JWT, Cache).
 
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -34,7 +34,7 @@ def get_github_app_token() -> Optional[str]:
         return None
     if _github_token_cache is not None:
         token, expires_at = _github_token_cache
-        if datetime.utcnow() < expires_at - timedelta(minutes=5):
+        if datetime.now(timezone.utc) < expires_at - timedelta(minutes=5):
             return token
     try:
         private_key_path = Path(config.GITHUB_PRIVATE_KEY_PATH)
@@ -62,7 +62,7 @@ def get_github_app_token() -> Optional[str]:
         if expires_at_str:
             expires_at = datetime.fromisoformat(expires_at_str.replace("Z", "+00:00"))
         else:
-            expires_at = datetime.utcnow() + timedelta(hours=1)
+            expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
         _github_token_cache = (installation_token, expires_at)
         logger.info("GitHub Installation Access Token erfolgreich generiert")
         return installation_token
