@@ -17,7 +17,33 @@ Fast-Flow ist die Antwort auf die Komplexität von Airflow und die Schwerfällig
 > [!TIP]
 > Verwenden Sie unser **[fastflow-pipeline-template](https://github.com/ttuhin03/fastflow-pipeline-template)** für einen schnellen Start und eine optimale Struktur Ihrer Pipelines.
 
+### App-Überblick
+
+| [Dashboard](docs/static/img/dashboard.png) | [Pipelines](docs/static/img/pipelines-pipelines.png) | [Abhängigkeiten](docs/static/img/pipelines-abhängigkeiten.png) | [Einstellungen](docs/static/img/einstellungen-pipelines.png) | [Benachrichtigungen](docs/static/img/einstellungen-benachrichtigungen.png) |
+|:---:|:---:|:---:|:---:|:---:|
+| **Dashboard** – Übersicht, Metriken, Heatmap | **Pipelines** – Liste, Run, Filter | **Abhängigkeiten** – Pakete & CVE-Check | **Einstellungen** – Pipelines, Log-Retention | **Benachrichtigungen** – E-Mail, Teams |
+
+<details>
+<summary>📸 Screenshots anzeigen</summary>
+
+**Dashboard**
+
+![Dashboard](docs/static/img/dashboard.png)
+
+**Pipelines & Abhängigkeiten**
+
+![Pipelines](docs/static/img/pipelines-pipelines.png)  
+![Abhängigkeiten](docs/static/img/pipelines-abhängigkeiten.png)
+
+**Einstellungen**
+
+![Einstellungen Pipelines](docs/static/img/einstellungen-pipelines.png)  
+![Einstellungen Benachrichtigungen](docs/static/img/einstellungen-benachrichtigungen.png)
+
+</details>
+
 ## 📖 Inhaltsverzeichnis
+- [App-Überblick (Screenshots)](#app-überblick)
 - [🚀 Schnellstart](#-schnellstart)
 - [🏗 Architektur: Das "Runner-Cache"-Prinzip](#-architektur-das-runner-cache-prinzip)
 - [🛠 Der Container-Prozess & Lifecycle](#-der-container-prozess--lifecycle)

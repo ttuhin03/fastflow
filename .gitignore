@@ -1,5 +1,7 @@
-# Frontend
+# Frontend (nur Root-/Frontend-Build; docs/static/ für Docusaurus-Bilder versionieren)
 static/
+!docs/static/
+!docs/static/**
 frontend/node_modules/
 frontend/dist/
 

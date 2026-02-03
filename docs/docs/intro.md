@@ -8,6 +8,10 @@ sidebar_position: 1
 
 ![Fast-Flow Banner](/img/fastflow_banner.png)
 
+**Dashboard-Überblick:**
+
+![Dashboard](/img/dashboard.png)
+
 Fast-Flow ist die Antwort auf die Komplexität von Airflow und die Schwerfälligkeit traditioneller CI/CD-Tools. Er wurde für Entwickler gebaut, die echte Isolation wollen, ohne auf die Geschwindigkeit lokaler Skripte zu verzichten.
 
 :::tip In 30 Sekunden
