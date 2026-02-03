@@ -1,9 +1,12 @@
 """
-Pipeline Dependencies & Vulnerability Scanning.
+Pipeline-Paket-Abhängigkeiten und Vulnerability-Scanning.
 
-- Parses requirements.txt (and optional requirements.txt.lock) per pipeline.
-- Runs pip-audit for vulnerability scanning.
-- Used by the Dependencies API and frontend.
+Dieses Modul behandelt requirements.txt und pip-audit pro Pipeline –
+nicht FastAPI Depends() / Dependency Injection. Verwendet von der
+Dependencies-API und dem Frontend.
+
+- Parst requirements.txt (und optional requirements.txt.lock) pro Pipeline.
+- Führt pip-audit für Schwachstellenscans aus.
 """
 
 import asyncio

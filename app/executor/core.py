@@ -1887,18 +1887,8 @@ async def _re_attach_container(
     Args:
         run_id: Run-ID
         container: Docker-Container-Objekt
-        session: SQLModel Session (wird intern verwaltet)
+        session: SQLModel Session (vom Aufrufer übergeben)
     """
-    from app.core.database import get_session
-    
-    # Neue Session für diese Task erstellen (falls nicht vorhanden)
-    if session is None:
-        session_gen = get_session()
-        session = next(session_gen)
-        close_session = True
-    else:
-        close_session = False
-    
     try:
         run = session.get(PipelineRun, run_id)
         if not run:
@@ -1998,9 +1988,6 @@ async def _re_attach_container(
         
     except Exception as e:
         logger.error(f"Fehler beim Re-attach für Run {run_id}: {e}", exc_info=True)
-    finally:
-        if close_session:
-            session.close()
 
 
 async def check_container_health(run_id: UUID, session: Session) -> Dict[str, Any]:

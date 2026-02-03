@@ -11,16 +11,17 @@ Dieses Modul definiert alle SQLModel-Models für die Datenbank:
 """
 
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Optional, Dict, Any
+from uuid import UUID, uuid4
+
+from sqlalchemy import Enum as SAEnum, Text
+from sqlmodel import SQLModel, Field, JSON, Column
 
 
 def _utc_now() -> datetime:
     """Gibt die aktuelle UTC-Zeit zurück (zeitzone-aware)."""
     return datetime.now(timezone.utc)
-from uuid import uuid4, UUID
-from enum import Enum
-from sqlalchemy import Enum as SAEnum, Text
-from sqlmodel import SQLModel, Field, JSON, Column
 
 
 class RunStatus(str, Enum):

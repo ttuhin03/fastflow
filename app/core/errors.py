@@ -1,9 +1,10 @@
 """
-HTTP error helpers.
+HTTP-Fehler-Hilfen.
 
-Provides get_500_detail() for consistent 500 responses: in production
-only a generic message is returned; in development the exception message
-is included. Callers must log the exception before raising.
+Liefert get_500_detail() für einheitliche 500-Antworten: In Produktion
+wird nur eine generische Meldung zurückgegeben; in Development wird
+die Exception-Meldung mit ausgegeben. Aufrufer sollten die Exception
+(z. B. per logger.exception) vor dem Auslösen loggen.
 """
 
 from app.core.config import config
@@ -11,9 +12,9 @@ from app.core.config import config
 
 def get_500_detail(e: Exception) -> str:
     """
-    Returns the detail string for HTTP 500 responses.
-    In production returns a generic message; in development includes str(e).
-    Callers must log the exception (e.g. logger.exception) before raising.
+    Liefert den Detail-Text für HTTP-500-Antworten.
+    In Produktion: generische Meldung; in Development: str(e).
+    Aufrufer sollten die Exception (z. B. logger.exception) loggen.
     """
     if config.ENVIRONMENT == "production":
         return "Ein interner Fehler ist aufgetreten."
