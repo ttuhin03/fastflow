@@ -167,7 +167,7 @@ The version check job is scheduled via APScheduler:
 - **Job ID**: `version_check_job`
 - **Name**: "Version Update Check"  
 - **Trigger**: CronTrigger (hour=2, minute=0)
-- **Function**: `app.version_checker:check_version_update_sync`
+- **Function**: `app.services.version_checker:check_version_update_sync`
 
 This runs at the same time as the cleanup job for efficiency.
 

@@ -110,7 +110,7 @@ def schedule_dependency_audit_job() -> None:
             day_of_week=parts[4],
         )
         scheduler.add_job(
-            func="app.dependency_audit:run_dependency_audit_job_sync",
+            func="app.services.dependency_audit:run_dependency_audit_job_sync",
             trigger=trigger,
             id=DEPENDENCY_AUDIT_JOB_ID,
             name="Dependency Audit (pip-audit)",

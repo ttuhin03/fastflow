@@ -148,7 +148,7 @@ def schedule_version_check() -> None:
         
         # Schedule version check (daily at 2:00 AM)
         scheduler.add_job(
-            func="app.version_checker:check_version_update_sync",
+            func="app.services.version_checker:check_version_update_sync",
             trigger=CronTrigger(hour=2, minute=0),
             id="version_check_job",
             name="Version Update Check",

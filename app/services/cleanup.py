@@ -641,7 +641,7 @@ def schedule_cleanup_job() -> None:
         # Cleanup-Job planen (täglich um 2 Uhr morgens)
         # Verwende String-Referenz statt Lambda, damit Job serialisiert werden kann
         scheduler.add_job(
-            func="app.cleanup:run_cleanup_job_sync",
+            func="app.services.cleanup:run_cleanup_job_sync",
             trigger=CronTrigger(hour=2, minute=0),
             id="cleanup_job",
             name="Log & Docker Cleanup Job",

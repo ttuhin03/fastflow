@@ -27,8 +27,8 @@ RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 COPY frontend/ ./
 RUN npm run build
 
-# Stage 2: Python-Backend
-FROM python:3.11-slim
+# Stage 2: Python-Backend (Bookworm = stable Debian, zuverlässigere Mirrors als trixie)
+FROM python:3.11-slim-bookworm
 
 # Metadaten
 LABEL maintainer="Fast-Flow Orchestrator"
@@ -37,12 +37,13 @@ LABEL description="Workflow-Orchestrierungstool für schnelle, isolierte Pipelin
 # Arbeitsverzeichnis setzen
 WORKDIR /app
 
-# System-Dependencies installieren (für Docker-Client, Git, etc.)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    git \
-    curl \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+# System-Dependencies installieren (mit Retry bei transienten Netzwerkfehlern)
+RUN for i in 1 2 3; do \
+    (apt-get update && apt-get install -y --no-install-recommends \
+        git curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*) && break; \
+    sleep 10; \
+    done
 
 # Python-Dependencies installieren (inkl. uv für Pre-Heating: uv pip compile)
 COPY requirements.txt .
