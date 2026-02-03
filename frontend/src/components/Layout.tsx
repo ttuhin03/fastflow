@@ -34,6 +34,8 @@ const navItems: NavItem[] = [
   { path: '/settings', label: 'Einstellungen', icon: <MdSettings /> },
 ]
 
+const BASE_TITLE = 'Fast-Flow'
+
 export default function Layout() {
   const { logout } = useAuth()
   const navigate = useNavigate()
@@ -119,19 +121,20 @@ export default function Layout() {
     }
   }, [health, isError, error, isFetching])
 
+  const isActive = (path: string) => {
+    if (path === '/') return location.pathname === '/'
+    if (path === '/pipelines') return location.pathname.startsWith('/pipelines') || location.pathname.startsWith('/runs')
+    return location.pathname.startsWith(path)
+  }
+
+  useEffect(() => {
+    const activeItem = navItems.find((item) => isActive(item.path))
+    document.title = activeItem ? `${activeItem.label} · ${BASE_TITLE}` : BASE_TITLE
+  }, [location.pathname])
+
   const handleLogout = async () => {
     await logout()
     navigate('/login')
-  }
-
-  const isActive = (path: string) => {
-    if (path === '/') {
-      return location.pathname === '/'
-    }
-    if (path === '/pipelines') {
-      return location.pathname.startsWith('/pipelines') || location.pathname.startsWith('/runs')
-    }
-    return location.pathname.startsWith(path)
   }
 
   const handleNavClick = (path: string) => {
