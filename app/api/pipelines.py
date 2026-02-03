@@ -214,8 +214,8 @@ async def get_pipelines(
         HTTPException: Wenn Pipeline-Discovery fehlschlägt
     """
     try:
-        # Pipelines via Discovery abrufen
-        discovered_pipelines = discover_pipelines()
+        # Pipelines via Discovery abrufen (im Thread-Pool, blockiert nicht den Event-Loop)
+        discovered_pipelines = await asyncio.to_thread(discover_pipelines)
         if not discovered_pipelines:
             return []
 
@@ -274,7 +274,8 @@ async def get_pipelines_dependencies(
     Returns dependencies (packages + versions) for all pipelines that have requirements.txt.
     If audit=true, runs pip-audit per pipeline in parallel and includes vulnerabilities (CVE).
     """
-    pipelines = [p for p in discover_pipelines() if p.has_requirements]
+    all_pipelines = await asyncio.to_thread(discover_pipelines)
+    pipelines = [p for p in all_pipelines if p.has_requirements]
     if not pipelines:
         return []
 

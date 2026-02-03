@@ -93,27 +93,43 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
+def _sync_posthog_capture(
+    exc: Exception,
+    method: str,
+    url_no_query: str,
+    path: str,
+) -> None:
+    """Sync: DB-Session + PostHog capture (wird in to_thread ausgeführt)."""
+    from sqlmodel import Session
+    from app.core.database import engine
+    from app.analytics.posthog_client import capture_exception, get_system_settings
+    with Session(engine) as session:
+        ss = get_system_settings(session)
+        if ss.enable_error_reporting:
+            capture_exception(
+                exc,
+                session,
+                properties={
+                    "$request_method": method,
+                    "$current_url": url_no_query,
+                    "$request_path": path,
+                },
+            )
+
+
 async def _posthog_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """FastAPI-Exception-Handler: PostHog capture_exception wenn enable_error_reporting; einheitliche 500-Antwort via get_500_detail."""
     logger.exception("Unhandled exception: %s", exc)
     try:
-        from sqlmodel import Session
-        from app.core.database import engine
-        from app.analytics.posthog_client import capture_exception, get_system_settings
-        with Session(engine) as session:
-            ss = get_system_settings(session)
-            if ss.enable_error_reporting:
-                u = str(request.url)
-                url_no_query = u.split("?")[0] if "?" in u else u
-                capture_exception(
-                    exc,
-                    session,
-                    properties={
-                        "$request_method": request.method,
-                        "$current_url": url_no_query,
-                        "$request_path": request.url.path,
-                    },
-                )
+        u = str(request.url)
+        url_no_query = u.split("?")[0] if "?" in u else u
+        await asyncio.to_thread(
+            _sync_posthog_capture,
+            exc,
+            request.method,
+            url_no_query,
+            request.url.path,
+        )
     except Exception as e:
         logger.warning("PostHog in exception_handler: %s", e)
     from app.core.errors import get_500_detail
