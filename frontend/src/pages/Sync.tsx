@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import { showError, showSuccess, showConfirm } from '../utils/toast'
@@ -46,13 +47,14 @@ export default function Sync() {
     private_key_file: null as File | null,
   })
 
+  const syncInterval = useRefetchInterval(10000)
   const { data: syncStatus, isLoading } = useQuery<SyncStatus>({
     queryKey: ['sync-status'],
     queryFn: async () => {
       const response = await apiClient.get('/sync/status')
       return response.data
     },
-    refetchInterval: 10000, // Auto-refresh alle 10 Sekunden
+    refetchInterval: syncInterval,
   })
 
   const { data: settings, isLoading: settingsLoading } = useQuery<SyncSettings>({
@@ -69,6 +71,7 @@ export default function Sync() {
     }
   }, [settings])
 
+  const syncLogsInterval = useRefetchInterval(activeTab === 'logs' ? 5000 : false)
   const { data: syncLogs } = useQuery({
     queryKey: ['sync-logs'],
     queryFn: async () => {
@@ -76,7 +79,7 @@ export default function Sync() {
       return response.data
     },
     enabled: activeTab === 'logs',
-    refetchInterval: activeTab === 'logs' ? 5000 : false,
+    refetchInterval: syncLogsInterval,
   })
 
   // GitHub Config Query - immer laden, nicht nur wenn Tab aktiv

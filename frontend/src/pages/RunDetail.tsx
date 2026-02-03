@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useLayoutEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
 import { showError, showSuccess } from '../utils/toast'
 import { LineChart } from '../components/LineChart'
@@ -71,6 +72,8 @@ export default function RunDetail() {
   const [cellExpanded, setCellExpanded] = useState<Record<number, boolean>>({})
   const tabsRef = useRef<HTMLDivElement>(null)
   const [tabIndicator, setTabIndicator] = useState({ left: 0, width: 0 })
+  const runPollInterval = useRefetchInterval(2000)
+  const healthPollInterval = useRefetchInterval(5000)
 
   useLayoutEffect(() => {
     const container = tabsRef.current
@@ -89,9 +92,8 @@ export default function RunDetail() {
       return response.data
     },
     refetchInterval: (query) => {
-      // Auto-refresh nur wenn Run noch läuft
-      const run = query.state.data
-      return run?.status === 'RUNNING' || run?.status === 'PENDING' ? 2000 : false
+      const r = query.state.data
+      return r?.status === 'RUNNING' || r?.status === 'PENDING' ? runPollInterval : false
     },
   })
 
@@ -103,7 +105,7 @@ export default function RunDetail() {
     },
     enabled: !!runId && (run?.status === 'RUNNING' || run?.status === 'PENDING'),
     refetchInterval: () => {
-      return run?.status === 'RUNNING' || run?.status === 'PENDING' ? 5000 : false
+      return run?.status === 'RUNNING' || run?.status === 'PENDING' ? healthPollInterval : false
     },
   })
 

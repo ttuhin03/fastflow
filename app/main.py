@@ -153,6 +153,16 @@ app.add_middleware(RequestIDMiddleware)
 from app.middleware.performance import PerformanceTrackingMiddleware
 app.add_middleware(PerformanceTrackingMiddleware)
 
+
+@app.middleware("http")
+async def static_cache_middleware(request: Request, call_next):
+    """Cache-Control für hashed static assets (JS/CSS): 1 Jahr immutable."""
+    response = await call_next(request)
+    path = request.url.path
+    if path.startswith("/static/assets/") and response.status_code == 200:
+        response.headers["Cache-Control"] = "max-age=31536000, immutable"
+    return response
+
 # Signal-Handler einrichten
 setup_signal_handlers()
 

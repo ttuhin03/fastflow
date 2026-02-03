@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
 import { MdStorage, MdDescription, MdDataUsage, MdArchive } from 'react-icons/md'
 import './StorageStats.css'
@@ -17,13 +18,14 @@ interface StorageStats {
 }
 
 export default function StorageStats() {
+  const storageInterval = useRefetchInterval(30000)
   const { data: stats, isLoading } = useQuery<StorageStats>({
     queryKey: ['storage-stats'],
     queryFn: async () => {
       const response = await apiClient.get('/settings/storage')
       return response.data
     },
-    refetchInterval: 30000, // Alle 30 Sekunden aktualisieren
+    refetchInterval: storageInterval,
   })
 
   if (isLoading) {

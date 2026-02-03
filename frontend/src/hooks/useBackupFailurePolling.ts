@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNotifications } from '../contexts/NotificationContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useRefetchInterval } from './useRefetchInterval'
 import apiClient from '../api/client'
 
 const SEEN_KEY = 'fastflow-backup-failure-seen'
@@ -31,6 +32,7 @@ function markSeen(key: string) {
 export function useBackupFailurePolling() {
   const { addNotification } = useNotifications()
   const { isAuthenticated } = useAuth()
+  const backupInterval = useRefetchInterval(90 * 1000, 120 * 1000)
 
   const { data } = useQuery({
     queryKey: ['settings', 'backup-failures'],
@@ -38,7 +40,7 @@ export function useBackupFailurePolling() {
       const r = await apiClient.get<{ failures: { run_id: string; pipeline_name: string; error_message: string; created_at: string }[] }>('/settings/backup-failures')
       return r.data
     },
-    refetchInterval: 90 * 1000, // 90s
+    refetchInterval: backupInterval,
     enabled: isAuthenticated,
   })
 

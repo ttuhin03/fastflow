@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useLayoutEffect } from 'react'
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import {
@@ -57,13 +58,14 @@ export default function Layout() {
     setNavIndicator({ top: er.top - nr.top, height: er.height })
   }, [location.pathname])
 
+  const healthInterval = useRefetchInterval(5000)
   const { data: health, isError, error, isFetching } = useQuery({
     queryKey: ['health'],
     queryFn: async () => {
       const response = await apiClient.get('/health')
       return response.data
     },
-    refetchInterval: 5000,
+    refetchInterval: healthInterval,
     retry: false, // Keine Retries, damit Fehler sofort erkannt werden
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,

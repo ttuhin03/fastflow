@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
 import { showError, showSuccess, showConfirm } from '../utils/toast'
 import { 
@@ -48,6 +49,9 @@ export default function Dashboard() {
   const queryClient = useQueryClient()
   const { isReadonly } = useAuth()
   const [startingPipeline, setStartingPipeline] = useState<string | null>(null)
+  const pipelinesInterval = useRefetchInterval(5000)
+  const syncInterval = useRefetchInterval(10000)
+  const dailyStatsInterval = useRefetchInterval(30000, 60000)
 
   const { data: pipelines, isLoading } = useQuery<Pipeline[]>({
     queryKey: ['pipelines'],
@@ -55,7 +59,7 @@ export default function Dashboard() {
       const response = await apiClient.get('/pipelines')
       return response.data
     },
-    refetchInterval: 5000,
+    refetchInterval: pipelinesInterval,
   })
 
   const { data: syncStatus } = useQuery<SyncStatus>({
@@ -64,7 +68,7 @@ export default function Dashboard() {
       const response = await apiClient.get('/sync/status')
       return response.data
     },
-    refetchInterval: 10000,
+    refetchInterval: syncInterval,
   })
 
   const { data: allPipelinesDailyStats } = useQuery({
@@ -81,9 +85,8 @@ export default function Dashboard() {
         }> 
       }
     },
-    refetchInterval: 10000, // Refresh every 10 seconds to show new runs faster
-    staleTime: 0, // Always consider data stale to ensure fresh data
-    gcTime: 0, // Don't cache to always get fresh data (was cacheTime in v4)
+    refetchInterval: dailyStatsInterval,
+    staleTime: 60_000,
   })
 
   const startPipelineMutation = useMutation({

@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
 import { MdMemory, MdSpeed, MdStorage, MdDataUsage } from 'react-icons/md'
 import './SystemMetrics.css'
@@ -25,13 +26,14 @@ interface SystemMetrics {
 }
 
 export default function SystemMetrics() {
+  const metricsInterval = useRefetchInterval(5000)
   const { data: metrics, isLoading } = useQuery<SystemMetrics>({
     queryKey: ['system-metrics'],
     queryFn: async () => {
       const response = await apiClient.get('/settings/system-metrics')
       return response.data
     },
-    refetchInterval: 5000, // Alle 5 Sekunden aktualisieren
+    refetchInterval: metricsInterval,
   })
 
   if (isLoading) {

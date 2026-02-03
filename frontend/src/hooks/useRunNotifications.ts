@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNotifications } from '../contexts/NotificationContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useRefetchInterval } from './useRefetchInterval'
 import apiClient from '../api/client'
 
 interface Run {
@@ -21,6 +22,8 @@ export function useRunNotifications() {
   const { addNotification } = useNotifications()
   const { isAuthenticated } = useAuth()
   const previousRunsRef = useRef<Map<string, string>>(new Map())
+  const runsInterval = useRefetchInterval(5000)
+  const recentInterval = useRefetchInterval(10000)
 
   // Überwache laufende Runs
   const { data: runsData } = useQuery({
@@ -29,8 +32,8 @@ export function useRunNotifications() {
       const response = await apiClient.get('/runs?limit=100&status_filter=RUNNING')
       return response.data as { runs: Run[] }
     },
-    refetchInterval: 5000, // Alle 5 Sekunden prüfen
-    enabled: isAuthenticated, // Nur wenn authentifiziert
+    refetchInterval: runsInterval,
+    enabled: isAuthenticated,
   })
 
   // Überwache kürzlich abgeschlossene Runs (für Fehler-Notifications)
@@ -40,8 +43,8 @@ export function useRunNotifications() {
       const response = await apiClient.get('/runs?limit=50')
       return response.data as { runs: Run[] }
     },
-    refetchInterval: 10000, // Alle 10 Sekunden
-    enabled: isAuthenticated, // Nur wenn authentifiziert
+    refetchInterval: recentInterval,
+    enabled: isAuthenticated,
   })
 
   useEffect(() => {

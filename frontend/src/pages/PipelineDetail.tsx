@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
+import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import { showError, showSuccess, showConfirm } from '../utils/toast'
@@ -54,6 +55,7 @@ export default function PipelineDetail() {
   const queryClient = useQueryClient()
   const { isReadonly } = useAuth()
   const [activeTab, setActiveTab] = useState<'python' | 'requirements' | 'json'>('python')
+  const dailyStatsInterval = useRefetchInterval(30000, 60000)
 
   const { data: pipeline, isLoading: pipelineLoading } = useQuery<Pipeline>({
     queryKey: ['pipeline', name],
@@ -98,9 +100,8 @@ export default function PipelineDetail() {
       }
     },
     enabled: !!name,
-    refetchInterval: 10000, // Refresh every 10 seconds to show new runs faster
-    staleTime: 0, // Always consider data stale to ensure fresh data
-    gcTime: 0, // Don't cache to always get fresh data (was cacheTime in v4)
+    refetchInterval: dailyStatsInterval,
+    staleTime: 60_000,
   })
 
   const { data: sourceFiles, isLoading: sourceFilesLoading } = useQuery<PipelineSourceFiles>({

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
+import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
 import { MdInfo, MdCheckCircle, MdCancel, MdHourglassEmpty, MdPlayArrow, MdWarning, MdStop } from 'react-icons/md'
 import Tooltip from '../components/Tooltip'
@@ -43,6 +44,7 @@ export default function Runs() {
   })
 
   const queryClient = useQueryClient()
+  const runsInterval = useRefetchInterval(5000)
   const { data: runsData, isLoading } = useQuery<RunsResponse>({
     queryKey: ['runs', pipelineFilter, statusFilter, startDate, endDate, page, pageSize],
     queryFn: async () => {
@@ -57,7 +59,7 @@ export default function Runs() {
       const response = await apiClient.get(`/runs?${params.toString()}`)
       return response.data
     },
-    refetchInterval: 5000,
+    refetchInterval: runsInterval,
   })
 
   const runs = runsData?.runs || []

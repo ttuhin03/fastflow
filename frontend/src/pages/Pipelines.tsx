@@ -1,6 +1,7 @@
 import { useRef, useState, useLayoutEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import { showError, showSuccess, showConfirm } from '../utils/toast'
@@ -67,13 +68,14 @@ export default function Pipelines() {
     setIndicator({ left: pr.left - tr.left, width: pr.width })
   }, [section])
 
+  const pipelinesInterval = useRefetchInterval(5000)
   const { data: pipelines, isLoading } = useQuery<Pipeline[]>({
     queryKey: ['pipelines'],
     queryFn: async () => {
       const response = await apiClient.get('/pipelines')
       return response.data
     },
-    refetchInterval: 5000,
+    refetchInterval: pipelinesInterval,
   })
 
   const resetStatsMutation = useMutation({

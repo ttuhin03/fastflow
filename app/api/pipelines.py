@@ -7,14 +7,17 @@ Dieses Modul enthält alle REST-API-Endpoints für Pipeline-Management:
 - Pipeline-Statistiken abrufen/zurücksetzen
 """
 
+import asyncio
 from collections import defaultdict
 from typing import List, Optional, Dict, Any, Tuple
 from uuid import UUID
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import JSONResponse
 from sqlmodel import Session, select, func, text
+from sqlalchemy import case
 
 from app.core.database import get_session
 from app.models import Pipeline, PipelineRun, RunStatus, User
@@ -95,7 +98,7 @@ def _aggregate_runs_to_daily_stats(
     runs: List[PipelineRun],
     include_run_ids: bool = False,
 ) -> List[DailyStat]:
-    """Gruppiert Runs nach Datum und gibt DailyStat-Liste zurück."""
+    """Gruppiert Runs nach Datum und gibt DailyStat-Liste zurück (Legacy, für kleine Mengen)."""
     daily_data: Dict[str, Dict] = defaultdict(lambda: {"total": 0, "successful": 0, "failed": 0, "run_ids": []})
     for run in runs:
         date_str = run.started_at.date().isoformat()
@@ -125,6 +128,77 @@ def _aggregate_runs_to_daily_stats(
     return result
 
 
+def _get_daily_stats_from_db(
+    session: Session,
+    start_dt: datetime,
+    end_dt: datetime,
+    pipeline_name: Optional[str] = None,
+    include_run_ids: bool = False,
+) -> List[DailyStat]:
+    """
+    Tägliche Statistiken per SQL-Aggregation (DB-Ebene statt In-Memory).
+    Vermeidet das Laden aller Run-Objekte bei vielen Runs.
+    """
+    date_expr = func.date(PipelineRun.started_at)
+    success_case = case((PipelineRun.status == RunStatus.SUCCESS, 1), else_=0)
+    failed_case = case((PipelineRun.status == RunStatus.FAILED, 1), else_=0)
+
+    stmt = (
+        select(
+            date_expr.label("date"),
+            func.count(PipelineRun.id).label("total"),
+            func.sum(success_case).label("successful"),
+            func.sum(failed_case).label("failed"),
+        )
+        .where(PipelineRun.started_at >= start_dt)
+        .where(PipelineRun.started_at <= end_dt)
+    )
+    if pipeline_name is not None:
+        stmt = stmt.where(PipelineRun.pipeline_name == pipeline_name)
+    stmt = stmt.group_by(date_expr).order_by(date_expr)
+
+    rows = session.exec(stmt).all()
+    result: List[DailyStat] = []
+    run_ids_by_date: Dict[str, List[str]] = {}
+
+    if include_run_ids:
+        ids_stmt = (
+            select(date_expr.label("date"), PipelineRun.id)
+            .where(PipelineRun.started_at >= start_dt)
+            .where(PipelineRun.started_at <= end_dt)
+        )
+        if pipeline_name is not None:
+            ids_stmt = ids_stmt.where(PipelineRun.pipeline_name == pipeline_name)
+        ids_stmt = ids_stmt.order_by(PipelineRun.started_at.desc())
+        for row in session.exec(ids_stmt).all():
+            d = row.date
+            date_str = d.isoformat()[:10] if hasattr(d, "isoformat") else str(d)[:10]
+            if date_str not in run_ids_by_date:
+                run_ids_by_date[date_str] = []
+            if len(run_ids_by_date[date_str]) < 10:
+                run_ids_by_date[date_str].append(str(row.id))
+
+    for row in rows:
+        d = row.date
+        date_str = d.isoformat()[:10] if hasattr(d, "isoformat") else str(d)[:10]
+        total = row.total or 0
+        successful = row.successful or 0
+        failed = row.failed or 0
+        success_rate = (successful / total * 100.0) if total > 0 else 0.0
+        run_ids = (run_ids_by_date.get(date_str, [])[:10] or None) if include_run_ids else None
+        result.append(
+            DailyStat(
+                date=date_str,
+                total_runs=total,
+                successful_runs=int(successful),
+                failed_runs=int(failed),
+                success_rate=success_rate,
+                run_ids=run_ids,
+            )
+        )
+    return result
+
+
 @router.get("", response_model=List[PipelineResponse])
 async def get_pipelines(
     session: Session = Depends(get_session),
@@ -142,16 +216,17 @@ async def get_pipelines(
     try:
         # Pipelines via Discovery abrufen
         discovered_pipelines = discover_pipelines()
-        
-        # Pipeline-Statistiken aus DB abrufen
-        pipelines_response: List[PipelineResponse] = []
-        
+        if not discovered_pipelines:
+            return []
+
+        # Batch-Query: Alle Pipeline-Metadaten in einem DB-Roundtrip abrufen
+        names = [d.name for d in discovered_pipelines]
+        stmt = select(Pipeline).where(Pipeline.pipeline_name.in_(names))
+        db_pipelines = {p.pipeline_name: p for p in session.exec(stmt).all()}
+
+        # Fehlende Pipelines anlegen und Map aktualisieren
         for discovered in discovered_pipelines:
-            # Pipeline-Metadaten aus DB abrufen (oder erstellen wenn nicht vorhanden)
-            pipeline = session.get(Pipeline, discovered.name)
-            
-            if pipeline is None:
-                # Pipeline existiert noch nicht in DB, erstelle Eintrag
+            if discovered.name not in db_pipelines:
                 pipeline = Pipeline(
                     pipeline_name=discovered.name,
                     has_requirements=discovered.has_requirements
@@ -159,9 +234,12 @@ async def get_pipelines(
                 session.add(pipeline)
                 session.commit()
                 session.refresh(pipeline)
-            
-            # Response-Objekt erstellen
-            # Metadata dict enthält bereits webhook_key (wenn gesetzt)
+                db_pipelines[discovered.name] = pipeline
+
+        # Response-Objekte erstellen (keine weiteren DB-Zugriffe)
+        pipelines_response: List[PipelineResponse] = []
+        for discovered in discovered_pipelines:
+            pipeline = db_pipelines[discovered.name]
             response = PipelineResponse(
                 name=discovered.name,
                 has_requirements=pipeline.has_requirements,
@@ -170,12 +248,12 @@ async def get_pipelines(
                 successful_runs=pipeline.successful_runs,
                 failed_runs=pipeline.failed_runs,
                 enabled=discovered.is_enabled(),
-                metadata=discovered.metadata.to_dict()  # Enthält webhook_key wenn gesetzt
+                metadata=discovered.metadata.to_dict()
             )
             pipelines_response.append(response)
-        
+
         return pipelines_response
-        
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -190,22 +268,35 @@ async def get_pipelines_dependencies(
 ) -> List[Dict[str, Any]]:
     """
     Returns dependencies (packages + versions) for all pipelines that have requirements.txt.
-    If audit=true, runs pip-audit per pipeline and includes vulnerabilities (CVE).
+    If audit=true, runs pip-audit per pipeline in parallel and includes vulnerabilities (CVE).
     """
-    pipelines = discover_pipelines()
+    pipelines = [p for p in discover_pipelines() if p.has_requirements]
+    if not pipelines:
+        return []
+
+    packages_list = [deps_module.get_pipeline_packages(p.name) for p in pipelines]
     result: List[Dict[str, Any]] = []
-    for p in pipelines:
-        if not p.has_requirements:
-            continue
-        packages = deps_module.get_pipeline_packages(p.name)
-        entry: Dict[str, Any] = {"pipeline": p.name, "packages": packages}
-        if audit:
-            req_path = p.path / "requirements.txt"
-            vulns, err = await deps_module.run_pip_audit(req_path)
+
+    if audit:
+        sem = asyncio.Semaphore(3)  # Max 3 parallele pip-audit-Aufrufe
+
+        async def audit_one(p: Any, packages: List[Dict]) -> Dict[str, Any]:
+            async with sem:
+                req_path = p.path / "requirements.txt"
+                vulns, err = await deps_module.run_pip_audit(req_path)
+            entry: Dict[str, Any] = {"pipeline": p.name, "packages": packages}
             entry["vulnerabilities"] = vulns
             if err:
                 entry["audit_error"] = err
-        result.append(entry)
+            return entry
+
+        tasks = [audit_one(p, pkgs) for p, pkgs in zip(pipelines, packages_list)]
+        result = list(await asyncio.gather(*tasks))
+    else:
+        result = [
+            {"pipeline": p.name, "packages": pkgs}
+            for p, pkgs in zip(pipelines, packages_list)
+        ]
     return result
 
 
@@ -491,14 +582,9 @@ async def get_pipeline_daily_stats(
         )
     
     start_dt, end_dt = _parse_date_range(start_date, end_date, days)
-    stmt = (
-        select(PipelineRun)
-        .where(PipelineRun.pipeline_name == name)
-        .where(PipelineRun.started_at >= start_dt)
-        .where(PipelineRun.started_at <= end_dt)
+    daily_stats = _get_daily_stats_from_db(
+        session, start_dt, end_dt, pipeline_name=name, include_run_ids=True
     )
-    runs = session.exec(stmt).all()
-    daily_stats = _aggregate_runs_to_daily_stats(runs, include_run_ids=True)
     return DailyStatsResponse(daily_stats=daily_stats)
 
 
@@ -539,34 +625,28 @@ async def get_pipeline_source_files(
     # Verwende discovered.name statt user-provided name für Pfadkonstruktion
     pipeline_name = discovered.name
 
+    async def _read_file_safe(path: Path) -> Optional[str]:
+        if path.exists() and path.is_file() and _path_within_pipelines_dir(path):
+            try:
+                async with aiofiles.open(path, "r", encoding="utf-8") as f:
+                    return await f.read()
+            except Exception:
+                pass
+        return None
+
     # main.py lesen
     main_py_path = pipeline_dir / "main.py"
-    if main_py_path.exists() and main_py_path.is_file() and _path_within_pipelines_dir(main_py_path):
-        try:
-            with open(main_py_path, "r", encoding="utf-8") as f:
-                result.main_py = f.read()
-        except Exception:
-            pass
+    result.main_py = await _read_file_safe(main_py_path)
 
     # requirements.txt lesen
     requirements_path = pipeline_dir / "requirements.txt"
-    if requirements_path.exists() and requirements_path.is_file() and _path_within_pipelines_dir(requirements_path):
-        try:
-            with open(requirements_path, "r", encoding="utf-8") as f:
-                result.requirements_txt = f.read()
-        except Exception:
-            pass
+    result.requirements_txt = await _read_file_safe(requirements_path)
 
     # pipeline.json lesen (oder {pipeline_name}.json) - pipeline_name aus Discovery, nicht aus Request
     metadata_path = pipeline_dir / "pipeline.json"
     if not metadata_path.exists():
         metadata_path = pipeline_dir / f"{pipeline_name}.json"
-    if metadata_path.exists() and metadata_path.is_file() and _path_within_pipelines_dir(metadata_path):
-        try:
-            with open(metadata_path, "r", encoding="utf-8") as f:
-                result.pipeline_json = f.read()
-        except Exception:
-            pass
+    result.pipeline_json = await _read_file_safe(metadata_path)
 
     return result
 
@@ -594,11 +674,7 @@ async def get_all_pipelines_daily_stats(
         Tägliche Statistiken mit Erfolgsraten für alle Pipelines kombiniert
     """
     start_dt, end_dt = _parse_date_range(start_date, end_date, days)
-    stmt = (
-        select(PipelineRun)
-        .where(PipelineRun.started_at >= start_dt)
-        .where(PipelineRun.started_at <= end_dt)
+    daily_stats = _get_daily_stats_from_db(
+        session, start_dt, end_dt, pipeline_name=None, include_run_ids=False
     )
-    runs = session.exec(stmt).all()
-    daily_stats = _aggregate_runs_to_daily_stats(runs, include_run_ids=False)
     return DailyStatsResponse(daily_stats=daily_stats)

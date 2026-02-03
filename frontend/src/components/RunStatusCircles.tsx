@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
 import {
   MdCheckCircle,
@@ -22,13 +23,14 @@ interface RunStatusCirclesProps {
 }
 
 export default function RunStatusCircles({ pipelineName }: RunStatusCirclesProps) {
+  const runsInterval = useRefetchInterval(5000)
   const { data: runs, isLoading } = useQuery<Run[]>({
     queryKey: ['pipeline-runs', pipelineName],
     queryFn: async () => {
       const response = await apiClient.get(`/pipelines/${pipelineName}/runs?limit=5`)
       return response.data
     },
-    refetchInterval: 5000,
+    refetchInterval: runsInterval,
   })
 
   const getStatusIcon = (status: string) => {
