@@ -23,7 +23,7 @@ Nach Sync bzw. Neustart erscheint die Pipeline in der UI. Kein `docker build`, k
 
 **So sieht die Pipeline-Liste in der UI aus:**
 
-![Pipelines-Übersicht](/img/pipelines-pipelines.png)
+![Pipelines-Übersicht](../img/pipelines-pipelines.png)
 
 **Abhängigkeiten & Sicherheit:** Welche Libraries welche Pipelines nutzen und ob bekannte Schwachstellen (CVE) vorliegen, siehst du unter **Abhängigkeiten** in der UI. Optional: [automatische tägliche Prüfung und E-Mail/Teams-Benachrichtigung bei Fund](/docs/pipelines/abhaengigkeiten-sicherheit).
 

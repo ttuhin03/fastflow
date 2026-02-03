@@ -31,7 +31,7 @@ docker-compose logs -f orchestrator
 
 **UI:** [http://localhost:8000](http://localhost:8000)
 
-![Dashboard nach dem Start](/img/dashboard.png)
+![Dashboard nach dem Start](./img/dashboard.png)
 
 ## Option 2: Lokal (für Entwicklung)
 

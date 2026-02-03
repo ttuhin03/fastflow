@@ -8,7 +8,7 @@ Fast-Flow zeigt alle **Libraries und Versionen** pro Pipeline (aus `requirements
 
 ## Abhängigkeiten-Seite im Frontend
 
-![Abhängigkeiten – Pipelines, Pakete, Sicherheitsprüfung](/img/pipelines-abhängigkeiten.png)
+![Abhängigkeiten – Pipelines, Pakete, Sicherheitsprüfung](../img/pipelines-abhaengigkeiten.png)
 
 Unter **Abhängigkeiten** in der Navigation siehst du:
 

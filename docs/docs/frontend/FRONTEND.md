@@ -243,7 +243,7 @@ interface TooltipProps {
 
 Haupt-Dashboard mit Übersicht über alle Pipelines und System-Status.
 
-![Dashboard](/img/dashboard.png)
+![Dashboard](../img/dashboard.png)
 
 **Features:**
 - Pipeline-Übersicht mit Statistiken
@@ -395,11 +395,11 @@ System-Einstellungen und Konfiguration.
 
 **Einstellungen – Pipelines & Log-Retention:**
 
-![Einstellungen Pipelines](/img/einstellungen-pipelines.png)
+![Einstellungen Pipelines](../img/einstellungen-pipelines.png)
 
 **Einstellungen – Benachrichtigungen (E-Mail, Teams):**
 
-![Einstellungen Benachrichtigungen](/img/einstellungen-benachrichtigungen.png)
+![Einstellungen Benachrichtigungen](../img/einstellungen-benachrichtigungen.png)
 
 **Features:**
 - Einstellungen anzeigen (Log-Retention, Timeouts, etc.)
