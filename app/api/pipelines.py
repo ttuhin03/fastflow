@@ -224,7 +224,8 @@ async def get_pipelines(
         stmt = select(Pipeline).where(Pipeline.pipeline_name.in_(names))
         db_pipelines = {p.pipeline_name: p for p in session.exec(stmt).all()}
 
-        # Fehlende Pipelines anlegen und Map aktualisieren
+        # Fehlende Pipelines sammeln, einmal anlegen und committen (Batch)
+        new_pipelines: List[Tuple[str, Pipeline]] = []
         for discovered in discovered_pipelines:
             if discovered.name not in db_pipelines:
                 pipeline = Pipeline(
@@ -232,9 +233,12 @@ async def get_pipelines(
                     has_requirements=discovered.has_requirements
                 )
                 session.add(pipeline)
-                session.commit()
+                new_pipelines.append((discovered.name, pipeline))
+        if new_pipelines:
+            session.commit()
+            for name, pipeline in new_pipelines:
                 session.refresh(pipeline)
-                db_pipelines[discovered.name] = pipeline
+                db_pipelines[name] = pipeline
 
         # Response-Objekte erstellen (keine weiteren DB-Zugriffe)
         pipelines_response: List[PipelineResponse] = []
