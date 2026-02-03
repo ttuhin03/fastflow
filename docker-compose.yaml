@@ -33,6 +33,7 @@ services:
     #  resources:
     #    limits:
     #      memory: x
+    #      cpus: 'x'
 
   orchestrator:
     build:
@@ -94,6 +95,7 @@ services:
     #  resources:
     #    limits:
     #      memory: x
+    #      cpus: 'x'
 
     # Health-Check (optional)
     healthcheck:
@@ -121,6 +123,7 @@ services:
    #   resources:
    #     limits:
    #       memory: x
+   #       cpus: 'x'
     networks:
       - fastflow-network
 
