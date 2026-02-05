@@ -38,6 +38,7 @@ interface Pipeline {
     tags?: string[]
     timeout?: number
     retry_attempts?: number
+    max_instances?: number
     webhook_key?: string
     python_version?: string
   }
@@ -292,6 +293,15 @@ export default function PipelineDetail() {
                       <InfoIcon content="Anzahl der Wiederholungsversuche bei Fehlschlag" />
                     </span>
                     <span className="limit-value">{pipeline.metadata.retry_attempts}</span>
+                  </div>
+                )}
+                {pipeline.metadata.max_instances !== undefined && pipeline.metadata.max_instances > 0 && (
+                  <div className="limit-item">
+                    <span className="limit-label">
+                      Max. Instanzen:
+                      <InfoIcon content="Maximale Anzahl gleichzeitiger Runs dieser Pipeline" />
+                    </span>
+                    <span className="limit-value">{pipeline.metadata.max_instances}</span>
                   </div>
                 )}
               </div>

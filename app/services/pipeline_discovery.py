@@ -47,6 +47,7 @@ class PipelineMetadata:
         restart_on_crash: bool = False,
         restart_cooldown: int = 60,
         restart_interval: Optional[str] = None,
+        max_instances: Optional[int] = None,
     ):
         """
         Initialisiert Pipeline-Metadaten.
@@ -78,6 +79,7 @@ class PipelineMetadata:
             restart_on_crash: Bei Crash (FAILED) Pipeline automatisch neu starten (Dauerläufer).
             restart_cooldown: Sekunden zwischen Stop und Restart (Dauerläufer).
             restart_interval: Regelmäßiger Neustart – Cron (z.B. "0 3 * * *") oder Intervall in Sekunden.
+            max_instances: Maximale Anzahl gleichzeitiger Runs dieser Pipeline (None = nur globales Limit).
         """
         self.cpu_hard_limit = cpu_hard_limit
         self.mem_hard_limit = mem_hard_limit
@@ -107,6 +109,9 @@ class PipelineMetadata:
             self.restart_interval = restart_interval.strip()
         else:
             self.restart_interval = None
+        self.max_instances = (
+            int(max_instances) if max_instances is not None and int(max_instances) > 0 else None
+        )
 
     def to_dict(self) -> Dict[str, Any]:
         """
@@ -161,6 +166,8 @@ class PipelineMetadata:
             result["restart_cooldown"] = self.restart_cooldown
         if self.restart_interval:
             result["restart_interval"] = self.restart_interval
+        if self.max_instances is not None:
+            result["max_instances"] = self.max_instances
         return result
 
 
@@ -444,6 +451,14 @@ def _load_pipeline_metadata(
             restart_interval = None
         else:
             restart_interval = str(restart_interval).strip() or None
+        max_instances = data.get("max_instances")
+        if max_instances is not None:
+            try:
+                max_instances = int(max_instances) if int(max_instances) > 0 else None
+            except (TypeError, ValueError):
+                max_instances = None
+        else:
+            max_instances = None
 
         metadata = PipelineMetadata(
             cpu_hard_limit=data.get("cpu_hard_limit"),
@@ -468,6 +483,7 @@ def _load_pipeline_metadata(
             restart_on_crash=restart_on_crash,
             restart_cooldown=restart_cooldown,
             restart_interval=restart_interval,
+            max_instances=max_instances,
         )
         
         return metadata

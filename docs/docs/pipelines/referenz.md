@@ -107,6 +107,8 @@ Wenn beide `schedule_cron` und `schedule_interval_seconds` gesetzt sind, hat Cro
 | `restart_cooldown` | Integer, optional | Sekunden zwischen Stop und Restart (Standard: 60). Verhindert Restart-Loops. |
 | `restart_interval` | String, optional | Regelmäßiger Neustart. Cron-Expression (z.B. `"0 3 * * *"` = täglich 03:00) oder Intervall in Sekunden. Beendet laufenden Run, wartet Cooldown, startet neu. |
 
+| `max_instances` | Integer, optional | Maximale Anzahl gleichzeitiger Runs dieser Pipeline. Wenn gesetzt, wird ein neuer Start abgelehnt, sobald die Anzahl PENDING/RUNNING-Runs das Limit erreicht. Ohne Limit gilt nur das globale `MAX_CONCURRENT_RUNS`. |
+
 **Beispiel (Cron/Intervall):**
 
 ```json

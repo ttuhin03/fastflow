@@ -313,10 +313,7 @@ async def run_pipeline(
                 "Bitte warte bis ein Run abgeschlossen ist."
             )
     
-    # Pre-Heating-Lock abrufen (wenn Pre-Heating aktiv ist)
-    pre_heating_lock = _get_pre_heating_lock(name)
-    
-    # Datenbank-Session verwenden oder neue erstellen
+    # Datenbank-Session verwenden oder neue erstellen (für max_instances-Check und Run-Erstellung)
     if session is None:
         from app.core.database import get_session
         session_gen = get_session()
@@ -326,6 +323,24 @@ async def run_pipeline(
         close_session = False
     
     try:
+        # Pipeline-spezifisches max_instances-Limit prüfen
+        max_instances = getattr(pipeline.metadata, "max_instances", None)
+        if max_instances is not None and max_instances > 0:
+            from sqlmodel import select, func
+            count_stmt = (
+                select(func.count(PipelineRun.id))
+                .where(PipelineRun.pipeline_name == name)
+                .where(PipelineRun.status.in_([RunStatus.PENDING, RunStatus.RUNNING]))
+            )
+            running_count = session.exec(count_stmt).one()
+            if running_count >= max_instances:
+                raise RuntimeError(
+                    f"Max-Instanzen-Limit für Pipeline '{name}' erreicht ({running_count}/{max_instances}). "
+                    "Bitte warte bis ein Run abgeschlossen ist."
+                )
+
+        # Pre-Heating-Lock abrufen (wenn Pre-Heating aktiv ist)
+        pre_heating_lock = _get_pre_heating_lock(name)
         # Secrets aus Datenbank abrufen
         from app.services.secrets import get_all_secrets
         all_secrets = get_all_secrets(session)
