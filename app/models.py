@@ -152,7 +152,7 @@ class PipelineRun(SQLModel, table=True):
     )
     triggered_by: str = Field(
         default="manual",
-        description="Trigger-Quelle: 'manual', 'webhook', 'scheduler', 'daemon_restart'"
+        description="Trigger-Quelle: 'manual', 'webhook', 'scheduler', 'daemon_restart', 'downstream'"
     )
 
 
@@ -220,6 +220,47 @@ class ScheduledJob(SQLModel, table=True):
     created_at: datetime = Field(
         default_factory=_utc_now,
         description="Erstellungs-Zeitpunkt (UTC)"
+    )
+
+
+class DownstreamTrigger(SQLModel, table=True):
+    """
+    Downstream-Trigger für Pipeline-Chaining (UI-konfiguriert).
+
+    Wenn Pipeline A (upstream) fertig ist, wird Pipeline B (downstream) gestartet,
+    abhängig von on_success/on_failure. Überschneidet sich mit pipeline.json
+    downstream_triggers – beide Quellen werden beim Trigger-Vorgang zusammengeführt.
+    """
+    __tablename__ = "downstream_triggers"
+
+    id: UUID = Field(
+        default_factory=uuid4,
+        primary_key=True,
+        description="Eindeutige Trigger-ID",
+    )
+    upstream_pipeline: str = Field(
+        index=True,
+        description="Name der Upstream-Pipeline (A)",
+    )
+    downstream_pipeline: str = Field(
+        index=True,
+        description="Name der Downstream-Pipeline (B)",
+    )
+    on_success: bool = Field(
+        default=True,
+        description="Pipeline B starten wenn A erfolgreich endet",
+    )
+    on_failure: bool = Field(
+        default=False,
+        description="Pipeline B starten wenn A fehlschlägt",
+    )
+    enabled: bool = Field(
+        default=True,
+        description="Trigger aktiviert/deaktiviert",
+    )
+    created_at: datetime = Field(
+        default_factory=_utc_now,
+        description="Erstellungs-Zeitpunkt (UTC)",
     )
 
 

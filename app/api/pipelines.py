@@ -20,7 +20,7 @@ from sqlmodel import Session, select, func, text
 from sqlalchemy import case
 
 from app.core.database import get_session
-from app.models import Pipeline, PipelineRun, RunStatus, User
+from app.models import DownstreamTrigger, Pipeline, PipelineRun, RunStatus, User
 from app.executor import run_pipeline
 from app.services.pipeline_discovery import discover_pipelines, get_pipeline as get_discovered_pipeline
 from app.auth import require_write, get_current_user
@@ -33,6 +33,8 @@ from app.schemas.pipelines import (
     DailyStat,
     DailyStatsResponse,
     PipelineSourceFilesResponse,
+    DownstreamTriggerResponse,
+    DownstreamTriggerCreate,
 )
 
 router = APIRouter(prefix="/pipelines", tags=["pipelines"])
@@ -654,6 +656,140 @@ async def get_pipeline_source_files(
     result.pipeline_json = await _read_file_safe(metadata_path)
 
     return result
+
+
+@router.get("/{name}/downstream-triggers", response_model=List[DownstreamTriggerResponse])
+async def get_downstream_triggers(
+    name: str,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> List[DownstreamTriggerResponse]:
+    """
+    Gibt alle Downstream-Triggert für eine Pipeline zurück (JSON + DB gemergt).
+    """
+    discovered = get_discovered_pipeline(name)
+    if discovered is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Pipeline nicht gefunden: {name}",
+        )
+    result: List[DownstreamTriggerResponse] = []
+
+    # Aus pipeline.json
+    triggers_from_json = getattr(discovered.metadata, "downstream_triggers", None) or []
+    for t in triggers_from_json:
+        result.append(
+            DownstreamTriggerResponse(
+                id=None,
+                downstream_pipeline=t["pipeline"],
+                on_success=t.get("on_success", True),
+                on_failure=t.get("on_failure", False),
+                source="pipeline_json",
+            )
+        )
+
+    # Aus DB (nur hinzufügen wenn noch nicht aus JSON)
+    json_downstreams = {t["pipeline"] for t in triggers_from_json}
+    stmt = (
+        select(DownstreamTrigger)
+        .where(DownstreamTrigger.upstream_pipeline == name)
+        .where(DownstreamTrigger.enabled == True)
+    )
+    for trigger in session.exec(stmt).all():
+        result.append(
+            DownstreamTriggerResponse(
+                id=str(trigger.id),
+                downstream_pipeline=trigger.downstream_pipeline,
+                on_success=trigger.on_success,
+                on_failure=trigger.on_failure,
+                source="api",
+            )
+        )
+
+    return result
+
+
+@router.post("/{name}/downstream-triggers", response_model=DownstreamTriggerResponse)
+async def create_downstream_trigger(
+    name: str,
+    body: DownstreamTriggerCreate,
+    session: Session = Depends(get_session),
+    current_user=Depends(require_write),
+) -> DownstreamTriggerResponse:
+    """
+    Legt einen Downstream-Trigger in der DB an (UI-konfiguriert).
+    """
+    discovered = get_discovered_pipeline(name)
+    if discovered is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Pipeline nicht gefunden: {name}",
+        )
+    downstream = get_discovered_pipeline(body.downstream_pipeline)
+    if downstream is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Downstream-Pipeline nicht gefunden: {body.downstream_pipeline}",
+        )
+    # Prüfen ob bereits vorhanden (DB)
+    existing = session.exec(
+        select(DownstreamTrigger)
+        .where(DownstreamTrigger.upstream_pipeline == name)
+        .where(DownstreamTrigger.downstream_pipeline == body.downstream_pipeline)
+    ).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Downstream-Trigger von '{name}' nach '{body.downstream_pipeline}' existiert bereits",
+        )
+    trigger = DownstreamTrigger(
+        upstream_pipeline=name,
+        downstream_pipeline=body.downstream_pipeline,
+        on_success=body.on_success,
+        on_failure=body.on_failure,
+    )
+    session.add(trigger)
+    session.commit()
+    session.refresh(trigger)
+    return DownstreamTriggerResponse(
+        id=str(trigger.id),
+        downstream_pipeline=trigger.downstream_pipeline,
+        on_success=trigger.on_success,
+        on_failure=trigger.on_failure,
+        source="api",
+    )
+
+
+@router.delete("/{name}/downstream-triggers/{trigger_id}")
+async def delete_downstream_trigger(
+    name: str,
+    trigger_id: str,
+    session: Session = Depends(get_session),
+    current_user=Depends(require_write),
+) -> None:
+    """
+    Entfernt einen Downstream-Trigger aus der DB (nur API-Triggert, nicht pipeline.json).
+    """
+    try:
+        trigger_uuid = UUID(trigger_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ungültige Trigger-ID",
+        )
+    trigger = session.get(DownstreamTrigger, trigger_uuid)
+    if trigger is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Downstream-Trigger nicht gefunden",
+        )
+    if trigger.upstream_pipeline != name:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Downstream-Trigger gehört nicht zu dieser Pipeline",
+        )
+    session.delete(trigger)
+    session.commit()
 
 
 @router.get("/daily-stats/all", response_model=DailyStatsResponse)

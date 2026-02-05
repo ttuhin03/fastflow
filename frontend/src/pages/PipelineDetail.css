@@ -29,6 +29,7 @@
 .stats-card,
 .runs-card,
 .webhook-card,
+.downstream-triggers-card,
 .charts-section {
   display: flex;
   flex-direction: column;
@@ -48,6 +49,7 @@
 .stats-card h3,
 .runs-card h3,
 .webhook-card h3,
+.downstream-triggers-card h3,
 .source-files-card h3 {
   margin-top: 0;
   margin-bottom: 1rem;
@@ -591,4 +593,116 @@
   text-align: center;
   color: #888;
   font-style: italic;
+}
+
+/* Downstream Triggers */
+.downstream-triggers-list {
+  margin-bottom: 1rem;
+}
+
+.downstream-triggers-table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: #1a1a1a;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.downstream-triggers-table th,
+.downstream-triggers-table td {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid #444;
+}
+
+.downstream-triggers-table th {
+  background-color: #0a0a0a;
+  font-weight: 600;
+  color: #888;
+}
+
+.source-badge {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+}
+
+.source-badge.source-pipeline_json {
+  background-color: #2d5a27;
+  color: #9fdf9f;
+}
+
+.source-badge.source-api {
+  background-color: #1e3a5f;
+  color: #90caf9;
+}
+
+.delete-trigger-button {
+  padding: 0.25rem 0.5rem;
+  background-color: #5c2a2a;
+  color: #ffb3b3;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.delete-trigger-button:hover:not(:disabled) {
+  background-color: #7a3535;
+}
+
+.add-downstream-trigger {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #444;
+}
+
+.add-downstream-trigger h4 {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.95rem;
+}
+
+.add-trigger-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+
+.trigger-select {
+  padding: 0.5rem 0.75rem;
+  background-color: #1a1a1a;
+  border: 1px solid #444;
+  border-radius: var(--radius-sm);
+  color: white;
+  min-width: 180px;
+}
+
+.trigger-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: #ccc;
+  cursor: pointer;
+}
+
+.add-trigger-button {
+  padding: 0.5rem 1rem;
+  background-color: #646cff;
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.add-trigger-button:hover:not(:disabled) {
+  background-color: #535bf2;
+}
+
+.add-trigger-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }

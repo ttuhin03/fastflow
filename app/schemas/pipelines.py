@@ -53,3 +53,19 @@ class PipelineSourceFilesResponse(BaseModel):
     main_py: Optional[str] = None
     requirements_txt: Optional[str] = None
     pipeline_json: Optional[str] = None
+
+
+class DownstreamTriggerResponse(BaseModel):
+    """Response-Model für einen Downstream-Trigger."""
+    id: Optional[str] = None  # None wenn aus pipeline.json (nur DB-Triggert haben ID)
+    downstream_pipeline: str
+    on_success: bool
+    on_failure: bool
+    source: str  # "pipeline_json" oder "api"
+
+
+class DownstreamTriggerCreate(BaseModel):
+    """Request-Model zum Anlegen eines Downstream-Triggers (DB)."""
+    downstream_pipeline: str
+    on_success: bool = True
+    on_failure: bool = False

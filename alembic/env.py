@@ -14,7 +14,7 @@ from alembic import context
 
 # Import SQLModel und Models für Metadaten-Registrierung
 from sqlmodel import SQLModel
-from app.models import Pipeline, PipelineRun, RunCellLog, ScheduledJob, Secret, SystemSettings, User, Invitation  # noqa: F401
+from app.models import DownstreamTrigger, Pipeline, PipelineRun, RunCellLog, ScheduledJob, Secret, SystemSettings, User, Invitation  # noqa: F401
 from app.core.config import config as app_config
 
 # this is the Alembic Config object, which provides

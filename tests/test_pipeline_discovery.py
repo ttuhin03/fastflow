@@ -113,3 +113,28 @@ def test_get_pipeline_nonexistent(temp_pipelines_dir):
     
     # Pipeline sollte NICHT gefunden werden
     assert pipeline is None
+
+
+def test_pipeline_discovery_downstream_triggers(temp_pipelines_dir):
+    """
+    Testet das Laden von downstream_triggers aus pipeline.json.
+    """
+    pipeline_dir = temp_pipelines_dir / "test_downstream"
+    pipeline_dir.mkdir()
+    (pipeline_dir / "main.py").write_text("print('Hello')")
+    (pipeline_dir / "pipeline.json").write_text(
+        '{"description": "Test", "downstream_triggers": ['
+        '{"pipeline": "other_a", "on_success": true, "on_failure": false},'
+        '{"pipeline": "other_b", "on_success": true, "on_failure": true}'
+        ']}'
+    )
+    pipelines = discover_pipelines(force_refresh=True)
+    assert len(pipelines) == 1
+    assert pipelines[0].name == "test_downstream"
+    triggers = pipelines[0].metadata.downstream_triggers
+    assert len(triggers) == 2
+    assert triggers[0]["pipeline"] == "other_a"
+    assert triggers[0]["on_success"] is True
+    assert triggers[0]["on_failure"] is False
+    assert triggers[1]["pipeline"] == "other_b"
+    assert triggers[1]["on_failure"] is True

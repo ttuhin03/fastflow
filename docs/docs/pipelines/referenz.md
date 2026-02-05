@@ -109,6 +109,26 @@ Wenn beide `schedule_cron` und `schedule_interval_seconds` gesetzt sind, hat Cro
 
 | `max_instances` | Integer, optional | Maximale Anzahl gleichzeitiger Runs dieser Pipeline. Wenn gesetzt, wird ein neuer Start abgelehnt, sobald die Anzahl PENDING/RUNNING-Runs das Limit erreicht. Ohne Limit gilt nur das globale `MAX_CONCURRENT_RUNS`. |
 
+### Pipeline-Chaining (Downstream-Trigger)
+
+| Feld | Typ | Beschreibung |
+|------|-----|--------------|
+| `downstream_triggers` | Array, optional | Liste von Downstream-Pipelines, die nach Abschluss dieser Pipeline automatisch gestartet werden. Jeder Eintrag: `{"pipeline": "name", "on_success": true, "on_failure": false}`. `on_success` (Standard: `true`) = bei erfolgreichem Abschluss starten; `on_failure` (Standard: `false`) = bei Fehlschlag starten. |
+
+Triggert aus `pipeline.json` und aus der UI (API) werden zusammengeführt. Runs werden mit `triggered_by="downstream"` gestartet.
+
+**Beispiel:**
+
+```json
+{
+  "description": "Pipeline A – startet B bei Erfolg, C bei Erfolg oder Fehler",
+  "downstream_triggers": [
+    { "pipeline": "pipeline_b", "on_success": true, "on_failure": false },
+    { "pipeline": "pipeline_c", "on_success": true, "on_failure": true }
+  ]
+}
+```
+
 **Beispiel (Cron/Intervall):**
 
 ```json

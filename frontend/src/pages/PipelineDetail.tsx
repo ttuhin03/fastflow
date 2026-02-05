@@ -41,7 +41,16 @@ interface Pipeline {
     max_instances?: number
     webhook_key?: string
     python_version?: string
+    downstream_triggers?: Array<{ pipeline: string; on_success: boolean; on_failure: boolean }>
   }
+}
+
+interface DownstreamTriggerItem {
+  id: string | null
+  downstream_pipeline: string
+  on_success: boolean
+  on_failure: boolean
+  source: 'pipeline_json' | 'api'
 }
 
 interface PipelineSourceFiles {
@@ -105,6 +114,15 @@ export default function PipelineDetail() {
     staleTime: 60_000,
   })
 
+  const { data: downstreamTriggers, refetch: refetchDownstreamTriggers } = useQuery<DownstreamTriggerItem[]>({
+    queryKey: ['downstream-triggers', name],
+    queryFn: async () => {
+      const response = await apiClient.get(`/pipelines/${name}/downstream-triggers`)
+      return response.data
+    },
+    enabled: !!name,
+  })
+
   const { data: sourceFiles, isLoading: sourceFilesLoading } = useQuery<PipelineSourceFiles>({
     queryKey: ['pipeline-source', name],
     queryFn: async () => {
@@ -138,6 +156,58 @@ export default function PipelineDetail() {
     }
   }
 
+
+  const { data: allPipelines } = useQuery<Pipeline[]>({
+    queryKey: ['pipelines'],
+    queryFn: async () => {
+      const response = await apiClient.get('/pipelines')
+      return response.data
+    },
+    enabled: !!name && !isReadonly,
+  })
+
+  const createDownstreamTriggerMutation = useMutation({
+    mutationFn: async (body: { downstream_pipeline: string; on_success: boolean; on_failure: boolean }) => {
+      const response = await apiClient.post(`/pipelines/${name}/downstream-triggers`, body)
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['downstream-triggers', name] })
+      showSuccess('Downstream-Trigger wurde hinzugefügt')
+    },
+    onError: (error: any) => {
+      showError(error.response?.data?.detail || error.message)
+    },
+  })
+
+  const deleteDownstreamTriggerMutation = useMutation({
+    mutationFn: async (triggerId: string) => {
+      await apiClient.delete(`/pipelines/${name}/downstream-triggers/${triggerId}`)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['downstream-triggers', name] })
+      showSuccess('Downstream-Trigger wurde entfernt')
+    },
+    onError: (error: any) => {
+      showError(error.response?.data?.detail || error.message)
+    },
+  })
+
+  const [newTriggerPipeline, setNewTriggerPipeline] = useState('')
+  const [newTriggerOnSuccess, setNewTriggerOnSuccess] = useState(true)
+  const [newTriggerOnFailure, setNewTriggerOnFailure] = useState(false)
+
+  const handleAddDownstreamTrigger = () => {
+    if (!newTriggerPipeline.trim()) return
+    createDownstreamTriggerMutation.mutate({
+      downstream_pipeline: newTriggerPipeline.trim(),
+      on_success: newTriggerOnSuccess,
+      on_failure: newTriggerOnFailure,
+    })
+    setNewTriggerPipeline('')
+    setNewTriggerOnSuccess(true)
+    setNewTriggerOnFailure(false)
+  }
 
   const handleCopyWebhookUrl = () => {
     if (pipeline?.metadata.webhook_key) {
@@ -397,6 +467,112 @@ export default function PipelineDetail() {
             <p>Webhooks sind für diese Pipeline deaktiviert.</p>
             <p style={{ fontSize: '0.85rem', color: '#888', marginTop: '0.5rem' }}>
               Um Webhooks zu aktivieren, fügen Sie <code>webhook_key</code> in die <code>pipeline.json</code> im Repository hinzu.
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div className="downstream-triggers-card">
+        <h3>
+          Pipeline-Chaining (Downstream-Trigger)
+          <InfoIcon content="Wenn diese Pipeline fertig ist, können andere Pipelines automatisch gestartet werden. Konfigurierbar in pipeline.json oder per UI." />
+        </h3>
+        {downstreamTriggers && downstreamTriggers.length > 0 ? (
+          <div className="downstream-triggers-list">
+            <table className="downstream-triggers-table">
+              <thead>
+                <tr>
+                  <th>Downstream-Pipeline</th>
+                  <th>Bei Erfolg</th>
+                  <th>Bei Fehler</th>
+                  <th>Quelle</th>
+                  {!isReadonly && <th></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {downstreamTriggers.map((t) => (
+                  <tr key={t.id || `json-${t.downstream_pipeline}`}>
+                    <td>{t.downstream_pipeline}</td>
+                    <td>{t.on_success ? '✓' : '–'}</td>
+                    <td>{t.on_failure ? '✓' : '–'}</td>
+                    <td>
+                      <span className={`source-badge source-${t.source}`}>
+                        {t.source === 'pipeline_json' ? 'pipeline.json' : 'UI'}
+                      </span>
+                    </td>
+                    {!isReadonly && (
+                      <td>
+                        {t.source === 'api' && t.id ? (
+                          <button
+                            type="button"
+                            className="delete-trigger-button"
+                            onClick={() => deleteDownstreamTriggerMutation.mutate(t.id!)}
+                            disabled={deleteDownstreamTriggerMutation.isPending}
+                          >
+                            Entfernen
+                          </button>
+                        ) : (
+                          <span className="info-hint" style={{ fontSize: '0.75rem', color: '#888' }}>
+                            In pipeline.json bearbeiten
+                          </span>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p style={{ fontSize: '0.9rem', color: '#888' }}>
+            Keine Downstream-Trigger konfiguriert. Wenn diese Pipeline fertig ist, wird keine weitere Pipeline automatisch gestartet.
+          </p>
+        )}
+        {!isReadonly && allPipelines && (
+          <div className="add-downstream-trigger">
+            <h4>Trigger hinzufügen (UI)</h4>
+            <div className="add-trigger-form">
+              <select
+                value={newTriggerPipeline}
+                onChange={(e) => setNewTriggerPipeline(e.target.value)}
+                className="trigger-select"
+              >
+                <option value="">Pipeline wählen…</option>
+                {allPipelines
+                  .filter((p) => p.name !== name)
+                  .map((p) => (
+                    <option key={p.name} value={p.name}>
+                      {p.name}
+                    </option>
+                  ))}
+              </select>
+              <label className="trigger-checkbox">
+                <input
+                  type="checkbox"
+                  checked={newTriggerOnSuccess}
+                  onChange={(e) => setNewTriggerOnSuccess(e.target.checked)}
+                />
+                Bei Erfolg starten
+              </label>
+              <label className="trigger-checkbox">
+                <input
+                  type="checkbox"
+                  checked={newTriggerOnFailure}
+                  onChange={(e) => setNewTriggerOnFailure(e.target.checked)}
+                />
+                Bei Fehler starten
+              </label>
+              <button
+                type="button"
+                className="add-trigger-button"
+                onClick={handleAddDownstreamTrigger}
+                disabled={!newTriggerPipeline.trim() || createDownstreamTriggerMutation.isPending}
+              >
+                {createDownstreamTriggerMutation.isPending ? 'Hinzufügen…' : 'Hinzufügen'}
+              </button>
+            </div>
+            <p style={{ fontSize: '0.75rem', color: '#888', marginTop: '0.5rem' }}>
+              Alternativ: <code>downstream_triggers</code> in <code>pipeline.json</code> setzen.
             </p>
           </div>
         )}

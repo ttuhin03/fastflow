@@ -43,6 +43,7 @@ from app.metrics_prometheus import track_run_started, track_run_finished
 from app.resilience import circuit_docker, CircuitBreakerOpenError
 from app.models import Pipeline, PipelineRun, RunStatus, RunCellLog
 from app.services.pipeline_discovery import DiscoveredPipeline, get_pipeline
+from app.services.downstream_triggers import get_downstream_pipelines_to_trigger
 from app.resilience.retry_strategy import wait_for_retry
 from app.core.database import get_session
 
@@ -774,6 +775,10 @@ async def _run_container_task(
         
         # Pipeline-Statistiken aktualisieren (atomar)
         await _update_pipeline_stats(pipeline.name, exit_code_value == 0, session, triggered_by=run.triggered_by)
+
+        # Downstream-Trigger bei Erfolg (Pipeline-Chaining)
+        if exit_code_value == 0:
+            await _trigger_downstream_pipelines(pipeline.name, success=True, session=session)
         
         # Retry-Logik: Prüfe ob Retry nötig ist (nur für Script-Pipelines; Notebooks haben Zellen-Retry im selben Run)
         if exit_code_value != 0:
@@ -820,6 +825,9 @@ async def _run_container_task(
                         )
                         return  # Originaler Run bleibt als FAILED, neuer Run wird gestartet
             
+            # Downstream-Trigger bei finalem Fehler (kein Retry) – Pipeline-Chaining
+            await _trigger_downstream_pipelines(pipeline.name, success=False, session=session)
+
             # Benachrichtigungen senden (nur bei finalen Fehlern)
             if run:
                 from app.services.notifications import send_notifications
@@ -1717,6 +1725,56 @@ async def _update_pipeline_stats(
             session.commit()
     except Exception as e:
         logger.error(f"Fehler beim Aktualisieren der Pipeline-Statistiken für {pipeline_name}: {e}")
+
+
+async def _trigger_downstream_pipelines(
+    upstream_pipeline_name: str,
+    success: bool,
+    session: Session,
+) -> None:
+    """
+    Triggert Downstream-Pipelines nach Abschluss einer Upstream-Pipeline.
+
+    Kombiniert Triggert aus pipeline.json und DB. Startet jeden Downstream-Run
+    mit triggered_by="downstream".
+
+    Args:
+        upstream_pipeline_name: Name der Upstream-Pipeline
+        success: True wenn Upstream erfolgreich, False bei Fehlschlag
+        session: SQLModel Session
+    """
+    try:
+        pipelines_to_trigger = get_downstream_pipelines_to_trigger(
+            upstream_pipeline_name, on_success=success, session=session
+        )
+        for downstream_name in pipelines_to_trigger:
+            try:
+                await run_pipeline(
+                    name=downstream_name,
+                    env_vars=None,
+                    parameters=None,
+                    session=session,
+                    triggered_by="downstream",
+                )
+                logger.info(
+                    "Downstream-Pipeline '%s' gestartet (Upstream '%s' %s)",
+                    downstream_name,
+                    upstream_pipeline_name,
+                    "erfolgreich" if success else "fehlgeschlagen",
+                )
+            except Exception as e:
+                logger.warning(
+                    "Downstream-Trigger fehlgeschlagen: Pipeline '%s' nach '%s': %s",
+                    downstream_name,
+                    upstream_pipeline_name,
+                    e,
+                )
+    except Exception as e:
+        logger.warning(
+            "Fehler beim Abrufen der Downstream-Triggert für '%s': %s",
+            upstream_pipeline_name,
+            e,
+        )
 
 
 async def cancel_run(run_id: UUID, session: Session) -> bool:

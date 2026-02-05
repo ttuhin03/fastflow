@@ -48,6 +48,7 @@ class PipelineMetadata:
         restart_cooldown: int = 60,
         restart_interval: Optional[str] = None,
         max_instances: Optional[int] = None,
+        downstream_triggers: Optional[List[Dict[str, Any]]] = None,
     ):
         """
         Initialisiert Pipeline-Metadaten.
@@ -80,6 +81,7 @@ class PipelineMetadata:
             restart_cooldown: Sekunden zwischen Stop und Restart (Dauerläufer).
             restart_interval: Regelmäßiger Neustart – Cron (z.B. "0 3 * * *") oder Intervall in Sekunden.
             max_instances: Maximale Anzahl gleichzeitiger Runs dieser Pipeline (None = nur globales Limit).
+            downstream_triggers: Liste von Downstream-Triggern (pipeline, on_success, on_failure).
         """
         self.cpu_hard_limit = cpu_hard_limit
         self.mem_hard_limit = mem_hard_limit
@@ -112,6 +114,26 @@ class PipelineMetadata:
         self.max_instances = (
             int(max_instances) if max_instances is not None and int(max_instances) > 0 else None
         )
+        self.downstream_triggers = self._normalize_downstream_triggers(downstream_triggers or [])
+
+    @staticmethod
+    def _normalize_downstream_triggers(raw: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Validiert und normalisiert downstream_triggers aus JSON."""
+        result: List[Dict[str, Any]] = []
+        for item in raw:
+            if not isinstance(item, dict):
+                continue
+            pipeline = item.get("pipeline")
+            if not pipeline or not str(pipeline).strip():
+                continue
+            on_success = item.get("on_success", True)
+            on_failure = item.get("on_failure", False)
+            result.append({
+                "pipeline": str(pipeline).strip(),
+                "on_success": bool(on_success),
+                "on_failure": bool(on_failure),
+            })
+        return result
 
     def to_dict(self) -> Dict[str, Any]:
         """
@@ -168,6 +190,8 @@ class PipelineMetadata:
             result["restart_interval"] = self.restart_interval
         if self.max_instances is not None:
             result["max_instances"] = self.max_instances
+        if self.downstream_triggers:
+            result["downstream_triggers"] = self.downstream_triggers
         return result
 
 
@@ -460,6 +484,12 @@ def _load_pipeline_metadata(
         else:
             max_instances = None
 
+        downstream_triggers_raw = data.get("downstream_triggers")
+        if downstream_triggers_raw is not None and isinstance(downstream_triggers_raw, list):
+            downstream_triggers = PipelineMetadata._normalize_downstream_triggers(downstream_triggers_raw)
+        else:
+            downstream_triggers = []
+
         metadata = PipelineMetadata(
             cpu_hard_limit=data.get("cpu_hard_limit"),
             mem_hard_limit=data.get("mem_hard_limit"),
@@ -484,6 +514,7 @@ def _load_pipeline_metadata(
             restart_cooldown=restart_cooldown,
             restart_interval=restart_interval,
             max_instances=max_instances,
+            downstream_triggers=downstream_triggers,
         )
         
         return metadata
