@@ -152,7 +152,7 @@ class PipelineRun(SQLModel, table=True):
     )
     triggered_by: str = Field(
         default="manual",
-        description="Trigger-Quelle: 'manual', 'webhook', oder 'scheduler'"
+        description="Trigger-Quelle: 'manual', 'webhook', 'scheduler', 'daemon_restart'"
     )
 
 

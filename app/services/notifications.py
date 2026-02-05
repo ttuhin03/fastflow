@@ -324,6 +324,21 @@ async def send_teams_notification(run: PipelineRun, status: RunStatus) -> None:
         raise
 
 
+def _is_daemon_pipeline(run: PipelineRun) -> bool:
+    """Prüft ob die Pipeline ein Dauerläufer ist (timeout: 0 oder restart_on_crash)."""
+    try:
+        from app.services.pipeline_discovery import get_pipeline
+        p = get_pipeline(run.pipeline_name)
+        if not p:
+            return False
+        return (
+            getattr(p.metadata, "timeout", None) == 0
+            or getattr(p.metadata, "restart_on_crash", False)
+        )
+    except Exception:
+        return False
+
+
 def _render_email_template(run: PipelineRun, status: RunStatus) -> tuple[str, str, str]:
     """
     Erstellt E-Mail-Template für einen fehlgeschlagenen Run.
@@ -337,6 +352,7 @@ def _render_email_template(run: PipelineRun, status: RunStatus) -> tuple[str, st
     """
     status_text = "fehlgeschlagen" if status == RunStatus.FAILED else "abgebrochen"
     status_color = "#F44336" if status == RunStatus.FAILED else "#FF9800"
+    daemon_hint = " (Dauerläufer)" if _is_daemon_pipeline(run) else ""
     
     # Dauer berechnen
     duration = "N/A"
@@ -358,7 +374,7 @@ def _render_email_template(run: PipelineRun, status: RunStatus) -> tuple[str, st
     frontend_url = getattr(config, 'FRONTEND_URL', None)
     run_url = f"{frontend_url}/runs/{run.id}" if frontend_url else None
     
-    subject = f"[FastFlow] Pipeline {run.pipeline_name} {status_text}"
+    subject = f"[FastFlow] Pipeline {run.pipeline_name} {status_text}{daemon_hint}"
     
     # Exit-Code HTML erstellen (außerhalb des f-strings wegen Backslash-Problemen)
     exit_code_html = ""
@@ -395,7 +411,7 @@ def _render_email_template(run: PipelineRun, status: RunStatus) -> tuple[str, st
             <div class="content">
                 <div class="info-row">
                     <span class="label">Pipeline:</span>
-                    <span class="value">{run.pipeline_name}</span>
+                    <span class="value">{run.pipeline_name}{daemon_hint}</span>
                 </div>
                 <div class="info-row">
                     <span class="label">Run-ID:</span>
@@ -427,7 +443,7 @@ def _render_email_template(run: PipelineRun, status: RunStatus) -> tuple[str, st
     
     # Text-Body (Fallback)
     text_body = f"""
-Pipeline {status_text.capitalize()}
+Pipeline {status_text.capitalize()}{daemon_hint}
 
 Pipeline: {run.pipeline_name}
 Run-ID: {run.id}
@@ -455,6 +471,7 @@ def _create_teams_card(run: PipelineRun, status: RunStatus) -> dict:
     """
     status_text = "Fehlgeschlagen" if status == RunStatus.FAILED else "Abgebrochen"
     status_color = "attention" if status == RunStatus.FAILED else "warning"
+    daemon_hint = " (Dauerläufer)" if _is_daemon_pipeline(run) else ""
     
     # Dauer berechnen
     duration = "N/A"
@@ -492,12 +509,12 @@ def _create_teams_card(run: PipelineRun, status: RunStatus) -> dict:
     card = {
         "@type": "MessageCard",
         "@context": "https://schema.org/extensions",
-        "summary": f"Pipeline {run.pipeline_name} {status_text}",
+        "summary": f"Pipeline {run.pipeline_name} {status_text}{daemon_hint}",
         "themeColor": "FF0000" if status == RunStatus.FAILED else "FF9800",  # Rot für FAILED, Orange für INTERRUPTED
-        "title": f"Pipeline {status_text}",
+        "title": f"Pipeline {status_text}{daemon_hint}",
         "sections": [
             {
-                "activityTitle": f"Pipeline: {run.pipeline_name}",
+                "activityTitle": f"Pipeline: {run.pipeline_name}{daemon_hint}",
                 "facts": facts,
                 "markdown": True
             }

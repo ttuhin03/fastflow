@@ -242,8 +242,11 @@ def _add_job_to_scheduler(job: ScheduledJob) -> None:
             logger.error(f"Ungültiger Trigger für Job {job.id}: {job.trigger_type} = {job.trigger_value}")
             return
         
-        # Job-Funktion: Pipeline ausführen
-        job_func = _create_job_function(job.pipeline_name)
+        # Job-Funktion: Pipeline ausführen oder Daemon-Restart
+        if getattr(job, "source", "api") == "daemon_restart":
+            job_func = _create_daemon_restart_job_function(job.pipeline_name)
+        else:
+            job_func = _create_job_function(job.pipeline_name)
         
         # Job zum Scheduler hinzufügen
         _scheduler.add_job(
@@ -337,6 +340,21 @@ def _create_trigger(
     except Exception as e:
         logger.error(f"Fehler beim Erstellen des Triggers: {e}")
         return None
+
+
+def _create_daemon_restart_job_function(pipeline_name: str):
+    """
+    Erstellt eine Job-Funktion für Dauerläufer-Restart (restart_interval).
+
+    Bricht laufenden Run ab, wartet Cooldown, startet Pipeline neu.
+    """
+    def job_function():
+        try:
+            from app.services.daemon_watcher import perform_daemon_restart
+            asyncio.run(perform_daemon_restart(pipeline_name))
+        except Exception as e:
+            logger.error("Fehler bei Daemon-Restart für %s: %s", pipeline_name, e, exc_info=True)
+    return job_function
 
 
 def _create_job_function(pipeline_name: str):
@@ -468,7 +486,7 @@ def add_job(
             enabled=enabled,
             start_date=start_date,
             end_date=end_date,
-            source=source if source in ("api", "pipeline_json") else "api"
+            source=source if source in ("api", "pipeline_json", "daemon_restart") else "api"
         )
         
         session.add(job)
@@ -783,10 +801,35 @@ def sync_scheduler_jobs_from_pipeline_json(session: Optional[Session] = None) ->
         now_utc = datetime.now(timezone.utc)
         pipelines_with_schedule: Dict[str, Any] = {}
         pipelines_with_run_once: Dict[str, str] = {}
+        pipelines_with_restart_interval: Dict[str, Dict[str, Any]] = {}
         for p in discovered:
             meta = p.metadata
             cron = getattr(meta, "schedule_cron", None)
             interval = getattr(meta, "schedule_interval_seconds", None)
+            restart_interval = getattr(meta, "restart_interval", None)
+            if restart_interval:
+                parts = str(restart_interval).strip().split()
+                if len(parts) == 5:
+                    trigger_type = TriggerType.CRON
+                    trigger_value = restart_interval
+                else:
+                    try:
+                        secs = int(restart_interval)
+                        if secs > 0:
+                            trigger_type = TriggerType.INTERVAL
+                            trigger_value = str(secs)
+                        else:
+                            trigger_type = None
+                            trigger_value = None
+                    except (TypeError, ValueError):
+                        trigger_type = None
+                        trigger_value = None
+                if trigger_type and trigger_value:
+                    pipelines_with_restart_interval[p.name] = {
+                        "trigger_type": trigger_type,
+                        "trigger_value": trigger_value,
+                        "enabled": p.is_enabled()
+                    }
             if cron or interval is not None:
                 trigger_type = TriggerType.CRON if cron else TriggerType.INTERVAL
                 trigger_value = cron if cron else str(interval)
@@ -807,7 +850,11 @@ def sync_scheduler_jobs_from_pipeline_json(session: Optional[Session] = None) ->
         existing_json_jobs = list(
             session.exec(select(ScheduledJob).where(ScheduledJob.source == "pipeline_json")).all()
         )
+        existing_daemon_restart_jobs = list(
+            session.exec(select(ScheduledJob).where(ScheduledJob.source == "daemon_restart")).all()
+        )
         seen_names = set(pipelines_with_schedule.keys()) | set(pipelines_with_run_once.keys())
+        seen_restart_names = set(pipelines_with_restart_interval.keys())
         for pname, opts in pipelines_with_schedule.items():
             existing = next(
                 (j for j in existing_json_jobs if j.pipeline_name == pname and j.trigger_type in (TriggerType.CRON, TriggerType.INTERVAL)),
@@ -867,6 +914,40 @@ def sync_scheduler_jobs_from_pipeline_json(session: Optional[Session] = None) ->
                     logger.info("Run-Once-Job aus pipeline.json angelegt: %s", pname)
             except Exception as e:
                 logger.warning("Fehler beim Sync des Run-Once-Jobs für %s: %s", pname, e)
+        for pname, opts in pipelines_with_restart_interval.items():
+            existing = next(
+                (j for j in existing_daemon_restart_jobs if j.pipeline_name == pname),
+                None
+            )
+            try:
+                if existing:
+                    update_job(
+                        existing.id,
+                        trigger_type=opts["trigger_type"],
+                        trigger_value=opts["trigger_value"],
+                        enabled=opts["enabled"],
+                        session=session
+                    )
+                    logger.info("Daemon-Restart-Job aus pipeline.json aktualisiert: %s", pname)
+                else:
+                    add_job(
+                        pipeline_name=pname,
+                        trigger_type=opts["trigger_type"],
+                        trigger_value=opts["trigger_value"],
+                        enabled=opts["enabled"],
+                        source="daemon_restart",
+                        session=session
+                    )
+                    logger.info("Daemon-Restart-Job aus pipeline.json angelegt: %s", pname)
+            except Exception as e:
+                logger.warning("Fehler beim Sync des Daemon-Restart-Jobs für %s: %s", pname, e)
+        for job in existing_daemon_restart_jobs:
+            if job.pipeline_name not in seen_restart_names:
+                try:
+                    delete_job(job.id, session=session)
+                    logger.info("Daemon-Restart-Job entfernt (restart_interval nicht mehr in JSON): %s", job.pipeline_name)
+                except Exception as e:
+                    logger.warning("Fehler beim Löschen des Daemon-Restart-Jobs %s: %s", job.id, e)
         for job in existing_json_jobs:
             if job.pipeline_name not in seen_names:
                 try:

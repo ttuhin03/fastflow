@@ -98,6 +98,15 @@ Wenn beide `schedule_cron` und `schedule_interval_seconds` gesetzt sind, hat Cro
 
 | `run_once_at` | String, optional | ISO-Datum/Zeit – Pipeline einmalig zu diesem Zeitpunkt ausführen. Beim Git-Sync/Start wird ein entsprechender Scheduler-Job (Typ DATE) angelegt. Muss in der Zukunft liegen. |
 
+### Dauerläufer (Daemon)
+
+| Feld | Typ | Beschreibung |
+|------|-----|--------------|
+| `timeout` | Integer, optional | `0` = kein Timeout (Pipeline läuft unbegrenzt). Für Dauerläufer mit `while True`-Schleife. |
+| `restart_on_crash` | Boolean, optional | Bei `true`: Pipeline wird nach FAILED automatisch neu gestartet (nach `restart_cooldown` Sekunden). |
+| `restart_cooldown` | Integer, optional | Sekunden zwischen Stop und Restart (Standard: 60). Verhindert Restart-Loops. |
+| `restart_interval` | String, optional | Regelmäßiger Neustart. Cron-Expression (z.B. `"0 3 * * *"` = täglich 03:00) oder Intervall in Sekunden. Beendet laufenden Run, wartet Cooldown, startet neu. |
+
 **Beispiel (Cron/Intervall):**
 
 ```json
@@ -115,6 +124,18 @@ Wenn beide `schedule_cron` und `schedule_interval_seconds` gesetzt sind, hat Cro
 {
   "description": "Einmalige Ausführung am 15.01.2026 um 12:00 UTC",
   "run_once_at": "2026-01-15T12:00:00"
+}
+```
+
+**Beispiel (Dauerläufer):**
+
+```json
+{
+  "description": "Dauerläufer mit Auto-Restart bei Crash",
+  "timeout": 0,
+  "restart_on_crash": true,
+  "restart_cooldown": 120,
+  "restart_interval": "0 3 * * *"
 }
 ```
 

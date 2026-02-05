@@ -44,6 +44,9 @@ class PipelineMetadata:
         schedule_start: Optional[str] = None,
         schedule_end: Optional[str] = None,
         run_once_at: Optional[str] = None,
+        restart_on_crash: bool = False,
+        restart_cooldown: int = 60,
+        restart_interval: Optional[str] = None,
     ):
         """
         Initialisiert Pipeline-Metadaten.
@@ -72,6 +75,9 @@ class PipelineMetadata:
             schedule_start: Optionales ISO-Datum/Zeit – Start des Zeitraums, in dem der Schedule läuft.
             schedule_end: Optionales ISO-Datum/Zeit – Ende des Zeitraums.
             run_once_at: Optionales ISO-Datum/Zeit – Pipeline einmalig zu diesem Zeitpunkt ausführen.
+            restart_on_crash: Bei Crash (FAILED) Pipeline automatisch neu starten (Dauerläufer).
+            restart_cooldown: Sekunden zwischen Stop und Restart (Dauerläufer).
+            restart_interval: Regelmäßiger Neustart – Cron (z.B. "0 3 * * *") oder Intervall in Sekunden.
         """
         self.cpu_hard_limit = cpu_hard_limit
         self.mem_hard_limit = mem_hard_limit
@@ -95,7 +101,13 @@ class PipelineMetadata:
         self.schedule_start = schedule_start.strip() if isinstance(schedule_start, str) and schedule_start.strip() else None
         self.schedule_end = schedule_end.strip() if isinstance(schedule_end, str) and schedule_end.strip() else None
         self.run_once_at = run_once_at.strip() if isinstance(run_once_at, str) and run_once_at.strip() else None
-    
+        self.restart_on_crash = bool(restart_on_crash)
+        self.restart_cooldown = int(restart_cooldown) if restart_cooldown is not None and int(restart_cooldown) >= 0 else 60
+        if isinstance(restart_interval, str) and restart_interval.strip():
+            self.restart_interval = restart_interval.strip()
+        else:
+            self.restart_interval = None
+
     def to_dict(self) -> Dict[str, Any]:
         """
         Konvertiert Metadaten zu Dictionary.
@@ -143,6 +155,12 @@ class PipelineMetadata:
             result["schedule_end"] = self.schedule_end
         if self.run_once_at:
             result["run_once_at"] = self.run_once_at
+        if self.restart_on_crash:
+            result["restart_on_crash"] = self.restart_on_crash
+        if self.restart_cooldown != 60:
+            result["restart_cooldown"] = self.restart_cooldown
+        if self.restart_interval:
+            result["restart_interval"] = self.restart_interval
         return result
 
 
@@ -189,9 +207,13 @@ class DiscoveredPipeline:
         Gibt pipeline-spezifisches Timeout zurück.
         
         Returns:
-            Timeout in Sekunden (None = unbegrenzt) oder None wenn nicht gesetzt
+            Timeout in Sekunden (None = unbegrenzt) oder None wenn nicht gesetzt.
+            timeout: 0 bedeutet explizit unbegrenzt (für Dauerläufer).
         """
-        return self.metadata.timeout
+        t = self.metadata.timeout
+        if t == 0:
+            return None
+        return t
     
     def get_retry_attempts(self) -> Optional[int]:
         """
@@ -411,6 +433,17 @@ def _load_pipeline_metadata(
             run_once_at = None
         else:
             run_once_at = str(run_once_at).strip() or None
+        restart_on_crash = data.get("restart_on_crash", False)
+        restart_cooldown = data.get("restart_cooldown", 60)
+        try:
+            restart_cooldown = int(restart_cooldown) if restart_cooldown is not None else 60
+        except (TypeError, ValueError):
+            restart_cooldown = 60
+        restart_interval = data.get("restart_interval")
+        if restart_interval == "" or restart_interval is None:
+            restart_interval = None
+        else:
+            restart_interval = str(restart_interval).strip() or None
 
         metadata = PipelineMetadata(
             cpu_hard_limit=data.get("cpu_hard_limit"),
@@ -432,6 +465,9 @@ def _load_pipeline_metadata(
             schedule_start=schedule_start,
             schedule_end=schedule_end,
             run_once_at=run_once_at,
+            restart_on_crash=restart_on_crash,
+            restart_cooldown=restart_cooldown,
+            restart_interval=restart_interval,
         )
         
         return metadata

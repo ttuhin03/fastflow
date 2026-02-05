@@ -809,6 +809,11 @@ async def _run_container_task(
             if run:
                 from app.services.notifications import send_notifications
                 await send_notifications(run, RunStatus.FAILED)
+                # Dauerläufer: restart_on_crash – nach Cooldown neu starten
+                if pipeline and getattr(pipeline.metadata, "restart_on_crash", False):
+                    cooldown = getattr(pipeline.metadata, "restart_cooldown", 60) or 60
+                    from app.services.daemon_watcher import schedule_restart_on_crash
+                    asyncio.create_task(schedule_restart_on_crash(run.pipeline_name, cooldown))
         
     except (docker.errors.APIError, docker.errors.DockerException, ConnectionError, OSError) as e:
         # Infrastructure Error: Docker-Proxy-Verbindungsfehler oder Docker-API-Fehler
@@ -834,6 +839,14 @@ async def _run_container_task(
                 track_run_finished(pipeline.name, "failed", duration_seconds)
             except Exception as prom_err:
                 logger.debug(f"Prometheus track_run_finished fehlgeschlagen: {prom_err}")
+            # Benachrichtigungen und Dauerläufer-Restart
+            if run:
+                from app.services.notifications import send_notifications
+                await send_notifications(run, RunStatus.FAILED)
+                if pipeline and getattr(pipeline.metadata, "restart_on_crash", False):
+                    cooldown = getattr(pipeline.metadata, "restart_cooldown", 60) or 60
+                    from app.services.daemon_watcher import schedule_restart_on_crash
+                    asyncio.create_task(schedule_restart_on_crash(run.pipeline_name, cooldown))
     except Exception as e:
         # Andere Exceptions (könnten auch Infrastructure-Fehler sein)
         logger.error(f"Unerwarteter Fehler bei Container-Ausführung für Run {run_id}: {e}", exc_info=True)
@@ -902,6 +915,12 @@ async def _run_container_task(
             if run:
                 from app.services.notifications import send_notifications
                 await send_notifications(run, RunStatus.FAILED)
+                # Dauerläufer: restart_on_crash – nach Cooldown neu starten
+                pipeline = get_pipeline(run.pipeline_name)
+                if pipeline and getattr(pipeline.metadata, "restart_on_crash", False):
+                    cooldown = getattr(pipeline.metadata, "restart_cooldown", 60) or 60
+                    from app.services.daemon_watcher import schedule_restart_on_crash
+                    asyncio.create_task(schedule_restart_on_crash(run.pipeline_name, cooldown))
         
     finally:
         # Container-Cleanup
