@@ -38,7 +38,11 @@ class PipelineMetadata:
         default_env: Optional[Dict[str, str]] = None,
         webhook_key: Optional[str] = None,
         python_version: Optional[str] = None,
-        type: Optional[str] = None
+        type: Optional[str] = None,
+        schedule_cron: Optional[str] = None,
+        schedule_interval_seconds: Optional[int] = None,
+        schedule_start: Optional[str] = None,
+        schedule_end: Optional[str] = None
     ):
         """
         Initialisiert Pipeline-Metadaten.
@@ -62,6 +66,10 @@ class PipelineMetadata:
             webhook_key: Webhook-Schlüssel für externe Trigger (optional, None oder leer = Webhooks deaktiviert)
             python_version: Python-Version (z.B. "3.11", "3.12"). Fehlt: DEFAULT_PYTHON_VERSION wird genutzt.
             type: "script" (Default) oder "notebook". Bei "notebook" muss main.ipynb existieren.
+            schedule_cron: Optionale 5-Teile-Cron-Expression (z.B. "0 9 * * *"). Entweder dies oder schedule_interval_seconds.
+            schedule_interval_seconds: Optionales Intervall in Sekunden. Entweder dies oder schedule_cron.
+            schedule_start: Optionales ISO-Datum/Zeit – Start des Zeitraums, in dem der Schedule läuft.
+            schedule_end: Optionales ISO-Datum/Zeit – Ende des Zeitraums.
         """
         self.cpu_hard_limit = cpu_hard_limit
         self.mem_hard_limit = mem_hard_limit
@@ -80,6 +88,10 @@ class PipelineMetadata:
         self.type = (type or "script").strip().lower() if type else "script"
         if self.type not in ("script", "notebook"):
             self.type = "script"
+        self.schedule_cron = schedule_cron.strip() if isinstance(schedule_cron, str) and schedule_cron.strip() else None
+        self.schedule_interval_seconds = schedule_interval_seconds if isinstance(schedule_interval_seconds, int) and schedule_interval_seconds > 0 else None
+        self.schedule_start = schedule_start.strip() if isinstance(schedule_start, str) and schedule_start.strip() else None
+        self.schedule_end = schedule_end.strip() if isinstance(schedule_end, str) and schedule_end.strip() else None
     
     def to_dict(self) -> Dict[str, Any]:
         """
@@ -118,6 +130,14 @@ class PipelineMetadata:
             result["python_version"] = self.python_version
         if self.type != "script":
             result["type"] = self.type
+        if self.schedule_cron:
+            result["schedule_cron"] = self.schedule_cron
+        if self.schedule_interval_seconds is not None:
+            result["schedule_interval_seconds"] = self.schedule_interval_seconds
+        if self.schedule_start:
+            result["schedule_start"] = self.schedule_start
+        if self.schedule_end:
+            result["schedule_end"] = self.schedule_end
         return result
 
 
@@ -357,6 +377,31 @@ def _load_pipeline_metadata(
             if pipeline_type not in ("script", "notebook"):
                 pipeline_type = "script"
         
+        # Schedule: prefer schedule_cron over schedule_interval_seconds if both set
+        schedule_cron = data.get("schedule_cron")
+        if schedule_cron == "" or schedule_cron is None:
+            schedule_cron = None
+        else:
+            schedule_cron = str(schedule_cron).strip() or None
+        schedule_interval_seconds = data.get("schedule_interval_seconds")
+        if schedule_interval_seconds is not None:
+            try:
+                schedule_interval_seconds = int(schedule_interval_seconds)
+            except (TypeError, ValueError):
+                schedule_interval_seconds = None
+        if schedule_cron and schedule_interval_seconds is not None:
+            schedule_interval_seconds = None  # prefer cron per docs
+        schedule_start = data.get("schedule_start")
+        if schedule_start == "" or schedule_start is None:
+            schedule_start = None
+        else:
+            schedule_start = str(schedule_start).strip() or None
+        schedule_end = data.get("schedule_end")
+        if schedule_end == "" or schedule_end is None:
+            schedule_end = None
+        else:
+            schedule_end = str(schedule_end).strip() or None
+        
         metadata = PipelineMetadata(
             cpu_hard_limit=data.get("cpu_hard_limit"),
             mem_hard_limit=data.get("mem_hard_limit"),
@@ -371,7 +416,11 @@ def _load_pipeline_metadata(
             default_env=data.get("default_env", {}),
             webhook_key=webhook_key,
             python_version=python_version,
-            type=pipeline_type
+            type=pipeline_type,
+            schedule_cron=schedule_cron,
+            schedule_interval_seconds=schedule_interval_seconds,
+            schedule_start=schedule_start,
+            schedule_end=schedule_end
         )
         
         return metadata

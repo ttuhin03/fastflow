@@ -11,7 +11,7 @@ Dieses Modul verwaltet geplante Pipeline-Ausführungen mit APScheduler:
 import asyncio
 import logging
 from typing import Optional, Dict, Any, List
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -24,10 +24,29 @@ from sqlmodel import Session, select
 from app.core.config import config
 from app.models import ScheduledJob, TriggerType
 from app.executor import run_pipeline
-from app.services.pipeline_discovery import get_pipeline
+from app.services.pipeline_discovery import get_pipeline, discover_pipelines
 from app.core.database import get_session
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_schedule_datetime(value: Optional[str], end_of_day: bool = False) -> Optional[datetime]:
+    """Parse ISO date/datetime string to UTC datetime. Date-only => start or end of day UTC."""
+    if not value or not str(value).strip():
+        return None
+    s = str(value).strip()
+    try:
+        if "T" in s or " " in s:
+            dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+        else:
+            # date only: start or end of day UTC
+            dt = datetime.fromisoformat(s + "T00:00:00+00:00") if not end_of_day else datetime.fromisoformat(s + "T23:59:59.999999+00:00")
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except (ValueError, TypeError):
+        logger.warning("Ungültiges Datumsformat für Schedule: %s", value)
+        return None
 
 # Globale Scheduler-Instanz
 _scheduler: Optional[BackgroundScheduler] = None
@@ -210,8 +229,13 @@ def _add_job_to_scheduler(job: ScheduledJob) -> None:
         return
     
     try:
-        # Trigger erstellen
-        trigger = _create_trigger(job.trigger_type, job.trigger_value)
+        # Trigger erstellen (mit optionalem Zeitraum)
+        trigger = _create_trigger(
+            job.trigger_type,
+            job.trigger_value,
+            start_date=job.start_date,
+            end_date=job.end_date
+        )
         
         if trigger is None:
             logger.error(f"Ungültiger Trigger für Job {job.id}: {job.trigger_type} = {job.trigger_value}")
@@ -235,18 +259,33 @@ def _add_job_to_scheduler(job: ScheduledJob) -> None:
         logger.error(f"Fehler beim Hinzufügen von Job {job.id} zum Scheduler: {e}")
 
 
-def _create_trigger(trigger_type: TriggerType, trigger_value: str):
+def _create_trigger(
+    trigger_type: TriggerType,
+    trigger_value: str,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None
+):
     """
     Erstellt einen APScheduler-Trigger aus TriggerType und TriggerValue.
     
     Args:
         trigger_type: CRON oder INTERVAL
         trigger_value: Cron-Expression (z.B. "0 0 * * *") oder Interval-String (z.B. "3600" für Sekunden)
+        start_date: Optionaler Start des Zeitraums (UTC)
+        end_date: Optionales Ende des Zeitraums (UTC)
     
     Returns:
         Trigger-Objekt (CronTrigger oder IntervalTrigger) oder None bei Fehler
     """
     try:
+        kwargs = {}
+        if start_date is not None:
+            kwargs["start_date"] = start_date
+        if end_date is not None:
+            kwargs["end_date"] = end_date
+        if kwargs:
+            kwargs["timezone"] = timezone.utc
+
         if trigger_type == TriggerType.CRON:
             # Cron-Expression parsen (Format: "minute hour day month day_of_week")
             # Beispiel: "0 0 * * *" = täglich um Mitternacht
@@ -260,7 +299,8 @@ def _create_trigger(trigger_type: TriggerType, trigger_value: str):
                 hour=parts[1],
                 day=parts[2],
                 month=parts[3],
-                day_of_week=parts[4]
+                day_of_week=parts[4],
+                **kwargs
             )
         
         elif trigger_type == TriggerType.INTERVAL:
@@ -271,7 +311,7 @@ def _create_trigger(trigger_type: TriggerType, trigger_value: str):
                     logger.error(f"Ungültiges Interval: {trigger_value} (muss > 0)")
                     return None
                 
-                return IntervalTrigger(seconds=seconds)
+                return IntervalTrigger(seconds=seconds, **kwargs)
             except ValueError:
                 logger.error(f"Ungültiges Interval-Format: {trigger_value} (erwartet Integer)")
                 return None
@@ -362,6 +402,9 @@ def add_job(
     trigger_type: TriggerType,
     trigger_value: str,
     enabled: bool = True,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    source: str = "api",
     session: Optional[Session] = None
 ) -> ScheduledJob:
     """
@@ -372,6 +415,9 @@ def add_job(
         trigger_type: CRON oder INTERVAL
         trigger_value: Cron-Expression oder Interval-String
         enabled: Job aktiviert/deaktiviert (Standard: True)
+        start_date: Optionaler Start des Zeitraums (UTC)
+        end_date: Optionales Ende des Zeitraums (UTC)
+        source: "api" oder "pipeline_json"
         session: SQLModel Session (optional)
     
     Returns:
@@ -386,8 +432,8 @@ def add_job(
     if pipeline is None:
         raise ValueError(f"Pipeline nicht gefunden: {pipeline_name}")
     
-    # Trigger-Validierung
-    trigger = _create_trigger(trigger_type, trigger_value)
+    # Trigger-Validierung (mit Zeitraum)
+    trigger = _create_trigger(trigger_type, trigger_value, start_date=start_date, end_date=end_date)
     if trigger is None:
         raise ValueError(f"Ungültiger Trigger: {trigger_type} = {trigger_value}")
     
@@ -405,7 +451,10 @@ def add_job(
             pipeline_name=pipeline_name,
             trigger_type=trigger_type,
             trigger_value=trigger_value,
-            enabled=enabled
+            enabled=enabled,
+            start_date=start_date,
+            end_date=end_date,
+            source=source if source in ("api", "pipeline_json") else "api"
         )
         
         session.add(job)
@@ -430,6 +479,8 @@ def update_job(
     trigger_type: Optional[TriggerType] = None,
     trigger_value: Optional[str] = None,
     enabled: Optional[bool] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
     session: Optional[Session] = None
 ) -> ScheduledJob:
     """
@@ -441,6 +492,8 @@ def update_job(
         trigger_type: Neuer Trigger-Typ (optional)
         trigger_value: Neuer Trigger-Wert (optional)
         enabled: Neuer Enabled-Status (optional)
+        start_date: Neuer Start des Zeitraums (optional)
+        end_date: Neues Ende des Zeitraums (optional)
         session: SQLModel Session (optional)
     
     Returns:
@@ -477,8 +530,19 @@ def update_job(
         if trigger_value is not None:
             job.trigger_value = trigger_value
         
-        # Trigger-Validierung
-        trigger = _create_trigger(job.trigger_type, job.trigger_value)
+        # Zeitraum aktualisieren
+        if start_date is not None:
+            job.start_date = start_date
+        if end_date is not None:
+            job.end_date = end_date
+        
+        # Trigger-Validierung (mit Zeitraum)
+        trigger = _create_trigger(
+            job.trigger_type,
+            job.trigger_value,
+            start_date=job.start_date,
+            end_date=job.end_date
+        )
         if trigger is None:
             raise ValueError(f"Ungültiger Trigger: {job.trigger_type} = {job.trigger_value}")
         
@@ -633,8 +697,13 @@ def get_job_details(job_id: UUID, session: Optional[Session] = None) -> Dict[str
         "created_at": job.created_at.isoformat(),
         "next_run_time": None,
         "last_run_time": None,
-        "run_count": 0
+        "run_count": 0,
+        "source": getattr(job, "source", "api")
     }
+    if getattr(job, "start_date", None) is not None:
+        details["start_date"] = job.start_date.isoformat()
+    if getattr(job, "end_date", None) is not None:
+        details["end_date"] = job.end_date.isoformat()
     
     # APScheduler-Job-Details abrufen
     if _scheduler is not None and _scheduler.running:
@@ -679,6 +748,84 @@ def get_job_details(job_id: UUID, session: Optional[Session] = None) -> Dict[str
             session.close()
     
     return details
+
+
+def sync_scheduler_jobs_from_pipeline_json(session: Optional[Session] = None) -> None:
+    """
+    Synchronisiert Scheduler-Jobs aus pipeline.json: Pipelines mit schedule_cron oder
+    schedule_interval_seconds bekommen einen Job (source=pipeline_json); bestehende
+    JSON-Jobs werden aktualisiert oder entfernt, wenn der Schedule aus der JSON
+    entfernt wurde oder die Pipeline nicht mehr existiert.
+    """
+    if session is None:
+        session_gen = get_session()
+        session = next(session_gen)
+        close_session = True
+    else:
+        close_session = False
+    try:
+        discovered = discover_pipelines(force_refresh=True)
+        pipelines_with_schedule: Dict[str, Any] = {}
+        for p in discovered:
+            meta = p.metadata
+            cron = getattr(meta, "schedule_cron", None)
+            interval = getattr(meta, "schedule_interval_seconds", None)
+            if not cron and interval is None:
+                continue
+            trigger_type = TriggerType.CRON if cron else TriggerType.INTERVAL
+            trigger_value = cron if cron else str(interval)
+            start_dt = _parse_schedule_datetime(getattr(meta, "schedule_start", None), end_of_day=False)
+            end_dt = _parse_schedule_datetime(getattr(meta, "schedule_end", None), end_of_day=True)
+            pipelines_with_schedule[p.name] = {
+                "trigger_type": trigger_type,
+                "trigger_value": trigger_value,
+                "start_date": start_dt,
+                "end_date": end_dt,
+                "enabled": p.is_enabled()
+            }
+        existing_json_jobs = list(
+            session.exec(select(ScheduledJob).where(ScheduledJob.source == "pipeline_json")).all()
+        )
+        seen_names = set()
+        for pname, opts in pipelines_with_schedule.items():
+            seen_names.add(pname)
+            existing = next((j for j in existing_json_jobs if j.pipeline_name == pname), None)
+            try:
+                if existing:
+                    update_job(
+                        existing.id,
+                        trigger_type=opts["trigger_type"],
+                        trigger_value=opts["trigger_value"],
+                        enabled=opts["enabled"],
+                        start_date=opts["start_date"],
+                        end_date=opts["end_date"],
+                        session=session
+                    )
+                    logger.info("Scheduler-Job aus pipeline.json aktualisiert: %s", pname)
+                else:
+                    add_job(
+                        pipeline_name=pname,
+                        trigger_type=opts["trigger_type"],
+                        trigger_value=opts["trigger_value"],
+                        enabled=opts["enabled"],
+                        start_date=opts["start_date"],
+                        end_date=opts["end_date"],
+                        source="pipeline_json",
+                        session=session
+                    )
+                    logger.info("Scheduler-Job aus pipeline.json angelegt: %s", pname)
+            except Exception as e:
+                logger.warning("Fehler beim Sync des Scheduler-Jobs für %s: %s", pname, e)
+        for job in existing_json_jobs:
+            if job.pipeline_name not in seen_names:
+                try:
+                    delete_job(job.id, session=session)
+                    logger.info("Scheduler-Job aus pipeline.json entfernt (nicht mehr in JSON): %s", job.pipeline_name)
+                except Exception as e:
+                    logger.warning("Fehler beim Löschen des Scheduler-Jobs %s: %s", job.id, e)
+    finally:
+        if close_session:
+            session.close()
 
 
 def get_scheduler() -> Optional[BackgroundScheduler]:

@@ -138,12 +138,17 @@ Für **nicht sensible** Defaults (z.B. `LOG_LEVEL`, `API_BASE`, `DRY_RUN=false`)
 
 Statt nur manuell oder per Webhook zu starten, kannst du Pipelines **nach Zeitplan** laufen lassen (Cron oder Intervall).
 
+### In der pipeline.json (Schedule aus Code)
+
+Du kannst den Zeitplan **direkt in der pipeline.json** definieren: `schedule_cron` (z.B. `"0 9 * * *"`) oder `schedule_interval_seconds` (z.B. `3600`). Optional begrenzen `schedule_start` und `schedule_end` (ISO-Datum/Zeit) den Zeitraum, in dem der Schedule aktiv ist. Beim Start des Orchestrators und nach Git-Sync werden daraus automatisch Scheduler-Jobs angelegt. Siehe [pipeline.json Referenz – Schedule](/docs/pipelines/referenz#schedule-cron--intervall-in-pipelinejson).
+
 ### In der UI
 
 Unter der jeweiligen Pipeline (oder im Scheduler-Bereich) lassen sich **Cron-Ausdrücke** oder **Intervall** (z.B. alle 6 Stunden) einrichten. Die konkreten Felder hängen von der Fast-Flow-Version ab; typisch:
 
 - **Cron:** z.B. `0 2 * * *` = täglich um 2:00 Uhr
 - **Intervall:** z.B. alle 3600 Sekunden
+- **Start/Ende:** optionaler Zeitraum (ISO-Datum/Zeit)
 
 ### Wofür?
 

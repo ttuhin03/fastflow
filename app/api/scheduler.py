@@ -21,7 +21,8 @@ from app.services.scheduler import (
     get_all_jobs,
     get_job,
     get_job_details,
-    get_scheduler
+    get_scheduler,
+    _parse_schedule_datetime,
 )
 from app.services.pipeline_discovery import get_pipeline
 from app.auth import require_write, get_current_user
@@ -38,6 +39,8 @@ class JobCreate(BaseModel):
         description="Cron-Expression (z.B. '0 0 * * *') oder Interval in Sekunden (z.B. '3600')"
     )
     enabled: bool = Field(default=True, description="Job aktiviert/deaktiviert")
+    start_date: Optional[str] = Field(None, description="Optionaler Start des Zeitraums (ISO-Datum/Zeit)")
+    end_date: Optional[str] = Field(None, description="Optionales Ende des Zeitraums (ISO-Datum/Zeit)")
 
 
 class JobUpdate(BaseModel):
@@ -46,6 +49,8 @@ class JobUpdate(BaseModel):
     trigger_type: Optional[TriggerType] = Field(None, description="Neuer Trigger-Typ")
     trigger_value: Optional[str] = Field(None, description="Neuer Trigger-Wert")
     enabled: Optional[bool] = Field(None, description="Neuer Enabled-Status")
+    start_date: Optional[str] = Field(None, description="Neuer Start des Zeitraums (ISO-Datum/Zeit)")
+    end_date: Optional[str] = Field(None, description="Neues Ende des Zeitraums (ISO-Datum/Zeit)")
 
 
 class JobResponse(BaseModel):
@@ -59,6 +64,9 @@ class JobResponse(BaseModel):
     next_run_time: Optional[str] = None
     last_run_time: Optional[str] = None
     run_count: int = 0
+    source: str = "api"
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -90,7 +98,10 @@ async def list_jobs(
                     trigger_type=job.trigger_type,
                     trigger_value=job.trigger_value,
                     enabled=job.enabled,
-                    created_at=job.created_at.isoformat()
+                    created_at=job.created_at.isoformat(),
+                    source=getattr(job, "source", "api"),
+                    start_date=job.start_date.isoformat() if getattr(job, "start_date", None) else None,
+                    end_date=job.end_date.isoformat() if getattr(job, "end_date", None) else None,
                 ))
         return result
     except Exception as e:
@@ -163,12 +174,17 @@ async def create_job(
             detail=f"Pipeline nicht gefunden: {job_data.pipeline_name}"
         )
     
+    start_dt = _parse_schedule_datetime(job_data.start_date, end_of_day=False) if job_data.start_date else None
+    end_dt = _parse_schedule_datetime(job_data.end_date, end_of_day=True) if job_data.end_date else None
     try:
         job = add_job(
             pipeline_name=job_data.pipeline_name,
             trigger_type=job_data.trigger_type,
             trigger_value=job_data.trigger_value,
             enabled=job_data.enabled,
+            start_date=start_dt,
+            end_date=end_dt,
+            source="api",
             session=session
         )
         
@@ -184,7 +200,10 @@ async def create_job(
                 trigger_type=job.trigger_type,
                 trigger_value=job.trigger_value,
                 enabled=job.enabled,
-                created_at=job.created_at.isoformat()
+                created_at=job.created_at.isoformat(),
+                source=getattr(job, "source", "api"),
+                start_date=job.start_date.isoformat() if getattr(job, "start_date", None) else None,
+                end_date=job.end_date.isoformat() if getattr(job, "end_date", None) else None,
             )
     except ValueError as e:
         raise HTTPException(
@@ -236,6 +255,8 @@ async def update_job_by_id(
                 detail=f"Pipeline nicht gefunden: {job_data.pipeline_name}"
             )
     
+    start_dt = _parse_schedule_datetime(job_data.start_date, end_of_day=False) if job_data.start_date else None
+    end_dt = _parse_schedule_datetime(job_data.end_date, end_of_day=True) if job_data.end_date else None
     try:
         job = update_job(
             job_id=job_id,
@@ -243,6 +264,8 @@ async def update_job_by_id(
             trigger_type=job_data.trigger_type,
             trigger_value=job_data.trigger_value,
             enabled=job_data.enabled,
+            start_date=start_dt,
+            end_date=end_dt,
             session=session
         )
         
@@ -258,7 +281,10 @@ async def update_job_by_id(
                 trigger_type=job.trigger_type,
                 trigger_value=job.trigger_value,
                 enabled=job.enabled,
-                created_at=job.created_at.isoformat()
+                created_at=job.created_at.isoformat(),
+                source=getattr(job, "source", "api"),
+                start_date=job.start_date.isoformat() if getattr(job, "start_date", None) else None,
+                end_date=job.end_date.isoformat() if getattr(job, "end_date", None) else None,
             )
     except ValueError as e:
         raise HTTPException(

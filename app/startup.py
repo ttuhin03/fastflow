@@ -296,6 +296,11 @@ async def run_startup_tasks() -> None:
         start_scheduler()
     await _run_step("Scheduler-Start", False, start_sched, "Scheduler gestartet")
 
+    def sync_json_schedules():
+        from app.services.scheduler import sync_scheduler_jobs_from_pipeline_json
+        sync_scheduler_jobs_from_pipeline_json()
+    await _run_step("Scheduler-Jobs aus pipeline.json", False, sync_json_schedules, "Scheduler-Jobs aus pipeline.json synchronisiert")
+
     def init_cleanup():
         from app.services.cleanup import init_docker_client_for_cleanup, schedule_cleanup_job
         init_docker_client_for_cleanup()

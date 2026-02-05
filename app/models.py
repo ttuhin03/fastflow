@@ -204,6 +204,18 @@ class ScheduledJob(SQLModel, table=True):
         default=True,
         description="Job aktiviert/deaktiviert"
     )
+    start_date: Optional[datetime] = Field(
+        default=None,
+        description="Optionaler Start des Zeitraums, in dem der Schedule läuft (UTC)"
+    )
+    end_date: Optional[datetime] = Field(
+        default=None,
+        description="Optionales Ende des Zeitraums (UTC)"
+    )
+    source: str = Field(
+        default="api",
+        description="Herkunft: 'api' (UI/API) oder 'pipeline_json'"
+    )
     created_at: datetime = Field(
         default_factory=_utc_now,
         description="Erstellungs-Zeitpunkt (UTC)"

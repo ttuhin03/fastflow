@@ -83,6 +83,30 @@ Nur relevant, wenn **`type`** = **`"notebook"`**. Siehe ausführlich [Notebook-P
 |------|-----|--------------|
 | `cells` | Array, optional | Pro **Code-Zelle** ein Eintrag (Index 0 = erste Code-Zelle, 1 = zweite, …). Jeder Eintrag kann **`retries`** (Integer) und **`delay_seconds`** (Number) enthalten. Fehlt ein Eintrag oder das Array: 0 Retries, 1 s Pause. Zellen-Metadaten im Notebook (`metadata.fastflow`) überschreiben die Werte für die jeweilige Zelle. |
 
+### Schedule (Cron / Intervall in pipeline.json)
+
+Du kannst den Zeitplan **direkt in der pipeline.json** definieren. Beim Start des Orchestrators und nach Git-Sync werden daraus automatisch Scheduler-Jobs angelegt (Quelle: `pipeline_json`). Entweder **Cron** oder **Intervall** angeben, nicht beide. Optionale Start-/Endzeit begrenzen den aktiven Zeitraum.
+
+| Feld | Typ | Beschreibung |
+|------|-----|--------------|
+| `schedule_cron` | String, optional | 5-Teile-Cron (z. B. `"0 9 * * *"` = täglich 09:00). Format: Minute Stunde Tag Monat Wochentag. |
+| `schedule_interval_seconds` | Integer, optional | Intervall in Sekunden (z. B. `3600` = stündlich). Entweder dies oder `schedule_cron`. |
+| `schedule_start` | String, optional | ISO-Datum/Zeit – Start des Zeitraums, in dem der Schedule läuft (inklusiv). |
+| `schedule_end` | String, optional | ISO-Datum/Zeit – Ende des Zeitraums (inklusiv). |
+
+Wenn beide `schedule_cron` und `schedule_interval_seconds` gesetzt sind, hat Cron Vorrang. Ohne `schedule_start`/`schedule_end` läuft der Schedule unbefristet.
+
+**Beispiel:**
+
+```json
+{
+  "description": "Täglicher Report um 09:00",
+  "schedule_cron": "0 9 * * *",
+  "schedule_start": "2025-01-01",
+  "schedule_end": "2025-12-31T23:59:59"
+}
+```
+
 ### Webhooks
 
 | Feld | Beschreibung |
