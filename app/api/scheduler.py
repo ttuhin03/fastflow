@@ -33,10 +33,13 @@ router = APIRouter(prefix="/scheduler", tags=["scheduler"])
 class JobCreate(BaseModel):
     """Request-Model für Job-Erstellung."""
     pipeline_name: str = Field(..., description="Name der Pipeline")
-    trigger_type: TriggerType = Field(..., description="Typ des Triggers (CRON oder INTERVAL)")
+    trigger_type: TriggerType = Field(
+        ...,
+        description="Typ des Triggers: CRON, INTERVAL oder DATE (einmalige Ausführung)"
+    )
     trigger_value: str = Field(
         ...,
-        description="Cron-Expression (z.B. '0 0 * * *') oder Interval in Sekunden (z.B. '3600')"
+        description="Cron-Expression (z.B. '0 0 * * *'), Interval in Sekunden (z.B. '3600') oder ISO-Datetime für DATE (z.B. '2025-02-06T14:00:00')"
     )
     enabled: bool = Field(default=True, description="Job aktiviert/deaktiviert")
     start_date: Optional[str] = Field(None, description="Optionaler Start des Zeitraums (ISO-Datum/Zeit)")

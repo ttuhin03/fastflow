@@ -38,6 +38,7 @@ class TriggerType(str, Enum):
     """Typ des Scheduler-Triggers."""
     CRON = "CRON"
     INTERVAL = "INTERVAL"
+    DATE = "DATE"
 
 
 class UserRole(str, Enum):

@@ -11,7 +11,7 @@ import './Scheduler.css'
 interface Job {
   id: string
   pipeline_name: string
-  trigger_type: 'CRON' | 'INTERVAL'
+  trigger_type: 'CRON' | 'INTERVAL' | 'DATE'
   trigger_value: string
   enabled: boolean
   created_at: string
@@ -27,7 +27,7 @@ export default function Scheduler() {
   const [editingJob, setEditingJob] = useState<Job | null>(null)
   const [expandedJob, setExpandedJob] = useState<string | null>(null)
   const [formPipeline, setFormPipeline] = useState('')
-  const [formTriggerType, setFormTriggerType] = useState<'CRON' | 'INTERVAL'>('CRON')
+  const [formTriggerType, setFormTriggerType] = useState<'CRON' | 'INTERVAL' | 'DATE'>('CRON')
   const [formTriggerValue, setFormTriggerValue] = useState('')
   const [formEnabled, setFormEnabled] = useState(true)
 
@@ -50,7 +50,7 @@ export default function Scheduler() {
   const createMutation = useMutation({
     mutationFn: async (data: {
       pipeline_name: string
-      trigger_type: 'CRON' | 'INTERVAL'
+      trigger_type: 'CRON' | 'INTERVAL' | 'DATE'
       trigger_value: string
       enabled: boolean
     }) => {
@@ -76,7 +76,7 @@ export default function Scheduler() {
       jobId: string
       data: {
         pipeline_name?: string
-        trigger_type?: 'CRON' | 'INTERVAL'
+        trigger_type?: 'CRON' | 'INTERVAL' | 'DATE'
         trigger_value?: string
         enabled?: boolean
       }
@@ -134,6 +134,15 @@ export default function Scheduler() {
       showError('Bitte füllen Sie alle Felder aus')
       return
     }
+    let triggerValue = formTriggerValue
+    if (formTriggerType === 'DATE') {
+      const d = new Date(formTriggerValue.includes(':00') ? formTriggerValue : formTriggerValue + ':00')
+      if (isNaN(d.getTime())) {
+        showError('Ungültiges Datum/Zeit-Format')
+        return
+      }
+      triggerValue = d.toISOString().slice(0, 19)
+    }
 
     if (editingJob) {
       updateMutation.mutate({
@@ -141,7 +150,7 @@ export default function Scheduler() {
         data: {
           pipeline_name: formPipeline,
           trigger_type: formTriggerType,
-          trigger_value: formTriggerValue,
+          trigger_value: triggerValue,
           enabled: formEnabled,
         },
       })
@@ -149,7 +158,7 @@ export default function Scheduler() {
       createMutation.mutate({
         pipeline_name: formPipeline,
         trigger_type: formTriggerType,
-        trigger_value: formTriggerValue,
+        trigger_value: triggerValue,
         enabled: formEnabled,
       })
     }
@@ -159,7 +168,15 @@ export default function Scheduler() {
     setEditingJob(job)
     setFormPipeline(job.pipeline_name)
     setFormTriggerType(job.trigger_type)
-    setFormTriggerValue(job.trigger_value)
+    let val = job.trigger_value
+    if (job.trigger_type === 'DATE' && val) {
+      const d = new Date(val)
+      if (!isNaN(d.getTime())) {
+        const pad = (n: number) => String(n).padStart(2, '0')
+        val = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+      }
+    }
+    setFormTriggerValue(val)
     setFormEnabled(job.enabled)
     setIsAdding(true)
   }
@@ -220,35 +237,64 @@ export default function Scheduler() {
             <div className="form-group">
               <label htmlFor="job-trigger-type">
                 Trigger-Typ:
-                <InfoIcon content="CRON: Zeitplan-basiert (z.B. '0 0 * * *' = täglich um Mitternacht). INTERVAL: Sekunden-basiert (z.B. '3600' = alle Stunde)." />
+                <InfoIcon content="CRON: Zeitplan-basiert (z.B. '0 0 * * *' = täglich um Mitternacht). INTERVAL: Sekunden-basiert (z.B. '3600' = alle Stunde). DATE: Einmalige Ausführung zu einem bestimmten Zeitpunkt." />
               </label>
               <select
                 id="job-trigger-type"
                 value={formTriggerType}
-                onChange={(e) => setFormTriggerType(e.target.value as 'CRON' | 'INTERVAL')}
+                onChange={(e) => {
+                  const t = e.target.value as 'CRON' | 'INTERVAL' | 'DATE'
+                  setFormTriggerType(t)
+                  if (t === 'DATE' && !formTriggerValue.match(/^\d{4}-\d{2}-\d{2}T/)) {
+                    const now = new Date()
+                    const pad = (n: number) => String(n).padStart(2, '0')
+                    setFormTriggerValue(`${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`)
+                  } else if (t !== 'DATE' && formTriggerValue.match(/^\d{4}-\d{2}-\d{2}T/)) {
+                    setFormTriggerValue('')
+                  }
+                }}
                 required
               >
                 <option value="CRON">CRON</option>
                 <option value="INTERVAL">INTERVAL</option>
+                <option value="DATE">DATE (einmalig)</option>
               </select>
             </div>
             <div className="form-group">
               <label htmlFor="job-trigger-value">
                 {formTriggerType === 'CRON'
                   ? 'Cron-Expression (z.B. "0 0 * * *"):'
-                  : 'Interval in Sekunden (z.B. "3600"):'}
-                <InfoIcon content={formTriggerType === 'CRON' 
+                  : formTriggerType === 'INTERVAL'
+                  ? 'Interval in Sekunden (z.B. "3600"):'
+                  : 'Datum und Uhrzeit (einmalige Ausführung):'}
+                <InfoIcon content={formTriggerType === 'CRON'
                   ? "Format: min hour day month weekday (z.B. '0 0 * * *' = täglich um Mitternacht)"
-                  : "Wert in Sekunden (z.B. '3600' für 1 Stunde)"} />
+                  : formTriggerType === 'INTERVAL'
+                  ? "Wert in Sekunden (z.B. '3600' für 1 Stunde)"
+                  : "Pipeline wird einmalig zu diesem Zeitpunkt ausgeführt (lokale Zeit)"} />
               </label>
-              <input
-                id="job-trigger-value"
-                type="text"
-                value={formTriggerValue}
-                onChange={(e) => setFormTriggerValue(e.target.value)}
-                placeholder={formTriggerType === 'CRON' ? '0 0 * * *' : '3600'}
-                required
-              />
+              {formTriggerType === 'DATE' ? (
+                <input
+                  id="job-trigger-value"
+                  type="datetime-local"
+                  value={formTriggerValue.slice(0, 16)}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    setFormTriggerValue(v ? `${v}:00` : '')
+                  }}
+                  min={new Date().toISOString().slice(0, 16)}
+                  required
+                />
+              ) : (
+                <input
+                  id="job-trigger-value"
+                  type="text"
+                  value={formTriggerValue}
+                  onChange={(e) => setFormTriggerValue(e.target.value)}
+                  placeholder={formTriggerType === 'CRON' ? '0 0 * * *' : '3600'}
+                  required
+                />
+              )}
             </div>
             <div className="form-group">
               <label className="checkbox-label">
@@ -303,10 +349,16 @@ export default function Scheduler() {
                   <td>{job.pipeline_name}</td>
                   <td>{job.trigger_type}</td>
                   <td>
-                    <Tooltip content={job.trigger_type === 'CRON' 
+                    <Tooltip content={job.trigger_type === 'CRON'
                       ? "Format: min hour day month weekday (z.B. '0 0 * * *' = täglich um Mitternacht)"
+                      : job.trigger_type === 'DATE'
+                      ? 'Einmalige Ausführung zu diesem Zeitpunkt'
                       : `Intervall: alle ${job.trigger_value} Sekunden`}>
-                      <code className="trigger-value">{job.trigger_value}</code>
+                      <code className="trigger-value">
+                        {job.trigger_type === 'DATE' && job.trigger_value
+                          ? new Date(job.trigger_value).toLocaleString('de-DE')
+                          : job.trigger_value}
+                      </code>
                     </Tooltip>
                   </td>
                   <td>

@@ -42,7 +42,8 @@ class PipelineMetadata:
         schedule_cron: Optional[str] = None,
         schedule_interval_seconds: Optional[int] = None,
         schedule_start: Optional[str] = None,
-        schedule_end: Optional[str] = None
+        schedule_end: Optional[str] = None,
+        run_once_at: Optional[str] = None,
     ):
         """
         Initialisiert Pipeline-Metadaten.
@@ -70,6 +71,7 @@ class PipelineMetadata:
             schedule_interval_seconds: Optionales Intervall in Sekunden. Entweder dies oder schedule_cron.
             schedule_start: Optionales ISO-Datum/Zeit – Start des Zeitraums, in dem der Schedule läuft.
             schedule_end: Optionales ISO-Datum/Zeit – Ende des Zeitraums.
+            run_once_at: Optionales ISO-Datum/Zeit – Pipeline einmalig zu diesem Zeitpunkt ausführen.
         """
         self.cpu_hard_limit = cpu_hard_limit
         self.mem_hard_limit = mem_hard_limit
@@ -92,6 +94,7 @@ class PipelineMetadata:
         self.schedule_interval_seconds = schedule_interval_seconds if isinstance(schedule_interval_seconds, int) and schedule_interval_seconds > 0 else None
         self.schedule_start = schedule_start.strip() if isinstance(schedule_start, str) and schedule_start.strip() else None
         self.schedule_end = schedule_end.strip() if isinstance(schedule_end, str) and schedule_end.strip() else None
+        self.run_once_at = run_once_at.strip() if isinstance(run_once_at, str) and run_once_at.strip() else None
     
     def to_dict(self) -> Dict[str, Any]:
         """
@@ -138,6 +141,8 @@ class PipelineMetadata:
             result["schedule_start"] = self.schedule_start
         if self.schedule_end:
             result["schedule_end"] = self.schedule_end
+        if self.run_once_at:
+            result["run_once_at"] = self.run_once_at
         return result
 
 
@@ -401,7 +406,12 @@ def _load_pipeline_metadata(
             schedule_end = None
         else:
             schedule_end = str(schedule_end).strip() or None
-        
+        run_once_at = data.get("run_once_at")
+        if run_once_at == "" or run_once_at is None:
+            run_once_at = None
+        else:
+            run_once_at = str(run_once_at).strip() or None
+
         metadata = PipelineMetadata(
             cpu_hard_limit=data.get("cpu_hard_limit"),
             mem_hard_limit=data.get("mem_hard_limit"),
@@ -420,7 +430,8 @@ def _load_pipeline_metadata(
             schedule_cron=schedule_cron,
             schedule_interval_seconds=schedule_interval_seconds,
             schedule_start=schedule_start,
-            schedule_end=schedule_end
+            schedule_end=schedule_end,
+            run_once_at=run_once_at,
         )
         
         return metadata

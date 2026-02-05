@@ -96,7 +96,9 @@ Du kannst den Zeitplan **direkt in der pipeline.json** definieren. Beim Start de
 
 Wenn beide `schedule_cron` und `schedule_interval_seconds` gesetzt sind, hat Cron Vorrang. Ohne `schedule_start`/`schedule_end` läuft der Schedule unbefristet.
 
-**Beispiel:**
+| `run_once_at` | String, optional | ISO-Datum/Zeit – Pipeline einmalig zu diesem Zeitpunkt ausführen. Beim Git-Sync/Start wird ein entsprechender Scheduler-Job (Typ DATE) angelegt. Muss in der Zukunft liegen. |
+
+**Beispiel (Cron/Intervall):**
 
 ```json
 {
@@ -104,6 +106,15 @@ Wenn beide `schedule_cron` und `schedule_interval_seconds` gesetzt sind, hat Cro
   "schedule_cron": "0 9 * * *",
   "schedule_start": "2025-01-01",
   "schedule_end": "2025-12-31T23:59:59"
+}
+```
+
+**Beispiel (einmalige Ausführung):**
+
+```json
+{
+  "description": "Einmalige Ausführung am 15.01.2026 um 12:00 UTC",
+  "run_once_at": "2026-01-15T12:00:00"
 }
 ```
 

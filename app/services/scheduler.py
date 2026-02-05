@@ -18,6 +18,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.triggers.date import DateTrigger
 from apscheduler.events import EVENT_JOB_EXECUTED, EVENT_JOB_ERROR
 from sqlmodel import Session, select
 
@@ -314,6 +315,19 @@ def _create_trigger(
                 return IntervalTrigger(seconds=seconds, **kwargs)
             except ValueError:
                 logger.error(f"Ungültiges Interval-Format: {trigger_value} (erwartet Integer)")
+                return None
+
+        elif trigger_type == TriggerType.DATE:
+            # ISO-Datetime-String parsen für einmalige Ausführung
+            try:
+                run_date = datetime.fromisoformat(trigger_value.strip().replace("Z", "+00:00"))
+                if run_date.tzinfo is None:
+                    run_date = run_date.replace(tzinfo=timezone.utc)
+                else:
+                    run_date = run_date.astimezone(timezone.utc)
+                return DateTrigger(run_date=run_date)
+            except (ValueError, TypeError) as e:
+                logger.error(f"Ungültiges Datum für DATE-Trigger: {trigger_value} – {e}")
                 return None
         
         else:
@@ -753,7 +767,8 @@ def get_job_details(job_id: UUID, session: Optional[Session] = None) -> Dict[str
 def sync_scheduler_jobs_from_pipeline_json(session: Optional[Session] = None) -> None:
     """
     Synchronisiert Scheduler-Jobs aus pipeline.json: Pipelines mit schedule_cron oder
-    schedule_interval_seconds bekommen einen Job (source=pipeline_json); bestehende
+    schedule_interval_seconds bekommen einen Job (source=pipeline_json); Pipelines mit
+    run_once_at (in der Zukunft) bekommen einen einmaligen DATE-Job. Bestehende
     JSON-Jobs werden aktualisiert oder entfernt, wenn der Schedule aus der JSON
     entfernt wurde oder die Pipeline nicht mehr existiert.
     """
@@ -765,31 +780,39 @@ def sync_scheduler_jobs_from_pipeline_json(session: Optional[Session] = None) ->
         close_session = False
     try:
         discovered = discover_pipelines(force_refresh=True)
+        now_utc = datetime.now(timezone.utc)
         pipelines_with_schedule: Dict[str, Any] = {}
+        pipelines_with_run_once: Dict[str, str] = {}
         for p in discovered:
             meta = p.metadata
             cron = getattr(meta, "schedule_cron", None)
             interval = getattr(meta, "schedule_interval_seconds", None)
-            if not cron and interval is None:
-                continue
-            trigger_type = TriggerType.CRON if cron else TriggerType.INTERVAL
-            trigger_value = cron if cron else str(interval)
-            start_dt = _parse_schedule_datetime(getattr(meta, "schedule_start", None), end_of_day=False)
-            end_dt = _parse_schedule_datetime(getattr(meta, "schedule_end", None), end_of_day=True)
-            pipelines_with_schedule[p.name] = {
-                "trigger_type": trigger_type,
-                "trigger_value": trigger_value,
-                "start_date": start_dt,
-                "end_date": end_dt,
-                "enabled": p.is_enabled()
-            }
+            if cron or interval is not None:
+                trigger_type = TriggerType.CRON if cron else TriggerType.INTERVAL
+                trigger_value = cron if cron else str(interval)
+                start_dt = _parse_schedule_datetime(getattr(meta, "schedule_start", None), end_of_day=False)
+                end_dt = _parse_schedule_datetime(getattr(meta, "schedule_end", None), end_of_day=True)
+                pipelines_with_schedule[p.name] = {
+                    "trigger_type": trigger_type,
+                    "trigger_value": trigger_value,
+                    "start_date": start_dt,
+                    "end_date": end_dt,
+                    "enabled": p.is_enabled()
+                }
+            run_once_at = getattr(meta, "run_once_at", None)
+            if run_once_at:
+                run_dt = _parse_schedule_datetime(run_once_at, end_of_day=False)
+                if run_dt and run_dt > now_utc:
+                    pipelines_with_run_once[p.name] = run_once_at
         existing_json_jobs = list(
             session.exec(select(ScheduledJob).where(ScheduledJob.source == "pipeline_json")).all()
         )
-        seen_names = set()
+        seen_names = set(pipelines_with_schedule.keys()) | set(pipelines_with_run_once.keys())
         for pname, opts in pipelines_with_schedule.items():
-            seen_names.add(pname)
-            existing = next((j for j in existing_json_jobs if j.pipeline_name == pname), None)
+            existing = next(
+                (j for j in existing_json_jobs if j.pipeline_name == pname and j.trigger_type in (TriggerType.CRON, TriggerType.INTERVAL)),
+                None
+            )
             try:
                 if existing:
                     update_job(
@@ -816,6 +839,34 @@ def sync_scheduler_jobs_from_pipeline_json(session: Optional[Session] = None) ->
                     logger.info("Scheduler-Job aus pipeline.json angelegt: %s", pname)
             except Exception as e:
                 logger.warning("Fehler beim Sync des Scheduler-Jobs für %s: %s", pname, e)
+        for pname, run_once_at_str in pipelines_with_run_once.items():
+            existing = next(
+                (j for j in existing_json_jobs if j.pipeline_name == pname and j.trigger_type == TriggerType.DATE),
+                None
+            )
+            try:
+                if existing:
+                    if existing.trigger_value != run_once_at_str:
+                        update_job(
+                            existing.id,
+                            trigger_type=TriggerType.DATE,
+                            trigger_value=run_once_at_str,
+                            enabled=True,
+                            session=session
+                        )
+                        logger.info("Run-Once-Job aus pipeline.json aktualisiert: %s", pname)
+                else:
+                    add_job(
+                        pipeline_name=pname,
+                        trigger_type=TriggerType.DATE,
+                        trigger_value=run_once_at_str,
+                        enabled=True,
+                        source="pipeline_json",
+                        session=session
+                    )
+                    logger.info("Run-Once-Job aus pipeline.json angelegt: %s", pname)
+            except Exception as e:
+                logger.warning("Fehler beim Sync des Run-Once-Jobs für %s: %s", pname, e)
         for job in existing_json_jobs:
             if job.pipeline_name not in seen_names:
                 try:
