@@ -5,7 +5,6 @@ import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import { showError, showSuccess, showConfirm } from '../utils/toast'
 import Tooltip from '../components/Tooltip'
-import InfoIcon from '../components/InfoIcon'
 import './Scheduler.css'
 
 interface Job {
@@ -18,80 +17,19 @@ interface Job {
   next_run_time?: string | null
   last_run_time?: string | null
   run_count?: number
+  pipeline_json_edit_url?: string | null
 }
 
 export default function Scheduler() {
   const queryClient = useQueryClient()
   const { isReadonly } = useAuth()
-  const [isAdding, setIsAdding] = useState(false)
-  const [editingJob, setEditingJob] = useState<Job | null>(null)
   const [expandedJob, setExpandedJob] = useState<string | null>(null)
-  const [formPipeline, setFormPipeline] = useState('')
-  const [formTriggerType, setFormTriggerType] = useState<'CRON' | 'INTERVAL' | 'DATE'>('CRON')
-  const [formTriggerValue, setFormTriggerValue] = useState('')
-  const [formEnabled, setFormEnabled] = useState(true)
 
   const { data: jobs, isLoading: jobsLoading } = useQuery<Job[]>({
     queryKey: ['scheduler-jobs'],
     queryFn: async () => {
       const response = await apiClient.get('/scheduler/jobs')
       return response.data
-    },
-  })
-
-  const { data: pipelines } = useQuery({
-    queryKey: ['pipelines'],
-    queryFn: async () => {
-      const response = await apiClient.get('/pipelines')
-      return response.data
-    },
-  })
-
-  const createMutation = useMutation({
-    mutationFn: async (data: {
-      pipeline_name: string
-      trigger_type: 'CRON' | 'INTERVAL' | 'DATE'
-      trigger_value: string
-      enabled: boolean
-    }) => {
-      const response = await apiClient.post('/scheduler/jobs', data)
-      return response.data
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['scheduler-jobs'] })
-      setIsAdding(false)
-      resetForm()
-      showSuccess('Job erfolgreich erstellt')
-    },
-    onError: (error: any) => {
-      showError(`Fehler beim Erstellen: ${error.response?.data?.detail || error.message}`)
-    },
-  })
-
-  const updateMutation = useMutation({
-    mutationFn: async ({
-      jobId,
-      data,
-    }: {
-      jobId: string
-      data: {
-        pipeline_name?: string
-        trigger_type?: 'CRON' | 'INTERVAL' | 'DATE'
-        trigger_value?: string
-        enabled?: boolean
-      }
-    }) => {
-      const response = await apiClient.put(`/scheduler/jobs/${jobId}`, data)
-      return response.data
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['scheduler-jobs'] })
-      setEditingJob(null)
-      resetForm()
-      showSuccess('Job erfolgreich aktualisiert')
-    },
-    onError: (error: any) => {
-      showError(`Fehler beim Aktualisieren: ${error.response?.data?.detail || error.message}`)
     },
   })
 
@@ -121,64 +59,13 @@ export default function Scheduler() {
     },
   })
 
-  const resetForm = () => {
-    setFormPipeline('')
-    setFormTriggerType('CRON')
-    setFormTriggerValue('')
-    setFormEnabled(true)
-  }
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!formPipeline || !formTriggerValue) {
-      showError('Bitte füllen Sie alle Felder aus')
-      return
-    }
-    let triggerValue = formTriggerValue
-    if (formTriggerType === 'DATE') {
-      const d = new Date(formTriggerValue.includes(':00') ? formTriggerValue : formTriggerValue + ':00')
-      if (isNaN(d.getTime())) {
-        showError('Ungültiges Datum/Zeit-Format')
-        return
-      }
-      triggerValue = d.toISOString().slice(0, 19)
-    }
-
-    if (editingJob) {
-      updateMutation.mutate({
-        jobId: editingJob.id,
-        data: {
-          pipeline_name: formPipeline,
-          trigger_type: formTriggerType,
-          trigger_value: triggerValue,
-          enabled: formEnabled,
-        },
-      })
-    } else {
-      createMutation.mutate({
-        pipeline_name: formPipeline,
-        trigger_type: formTriggerType,
-        trigger_value: triggerValue,
-        enabled: formEnabled,
-      })
-    }
-  }
-
   const handleEdit = (job: Job) => {
-    setEditingJob(job)
-    setFormPipeline(job.pipeline_name)
-    setFormTriggerType(job.trigger_type)
-    let val = job.trigger_value
-    if (job.trigger_type === 'DATE' && val) {
-      const d = new Date(val)
-      if (!isNaN(d.getTime())) {
-        const pad = (n: number) => String(n).padStart(2, '0')
-        val = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-      }
+    const url = job.pipeline_json_edit_url
+    if (url) {
+      window.open(url, '_blank', 'noopener,noreferrer')
+    } else {
+      showError('GitHub-Link für pipeline.json nicht verfügbar (kein GitHub-Repository konfiguriert)')
     }
-    setFormTriggerValue(val)
-    setFormEnabled(job.enabled)
-    setIsAdding(true)
   }
 
   const handleDelete = async (jobId: string, pipelineName: string) => {
@@ -200,132 +87,7 @@ export default function Scheduler() {
     <div className="scheduler">
       <div className="scheduler-header">
         <h2>Scheduler</h2>
-        {!isReadonly && (
-          <button
-            onClick={() => {
-              setIsAdding(true)
-              setEditingJob(null)
-              resetForm()
-            }}
-            className="add-button"
-          >
-            + Neuer Job
-          </button>
-        )}
       </div>
-
-      {isAdding && (
-        <div className="job-form">
-          <h3>{editingJob ? 'Job bearbeiten' : 'Neuer Job'}</h3>
-          <form onSubmit={handleSubmit}>
-            <div className="form-group">
-              <label htmlFor="job-pipeline">Pipeline:</label>
-              <select
-                id="job-pipeline"
-                value={formPipeline}
-                onChange={(e) => setFormPipeline(e.target.value)}
-                required
-              >
-                <option value="">-- Pipeline auswählen --</option>
-                {pipelines?.map((p: any) => (
-                  <option key={p.name} value={p.name}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="form-group">
-              <label htmlFor="job-trigger-type">
-                Trigger-Typ:
-                <InfoIcon content="CRON: Zeitplan-basiert (z.B. '0 0 * * *' = täglich um Mitternacht). INTERVAL: Sekunden-basiert (z.B. '3600' = alle Stunde). DATE: Einmalige Ausführung zu einem bestimmten Zeitpunkt." />
-              </label>
-              <select
-                id="job-trigger-type"
-                value={formTriggerType}
-                onChange={(e) => {
-                  const t = e.target.value as 'CRON' | 'INTERVAL' | 'DATE'
-                  setFormTriggerType(t)
-                  if (t === 'DATE' && !formTriggerValue.match(/^\d{4}-\d{2}-\d{2}T/)) {
-                    const now = new Date()
-                    const pad = (n: number) => String(n).padStart(2, '0')
-                    setFormTriggerValue(`${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`)
-                  } else if (t !== 'DATE' && formTriggerValue.match(/^\d{4}-\d{2}-\d{2}T/)) {
-                    setFormTriggerValue('')
-                  }
-                }}
-                required
-              >
-                <option value="CRON">CRON</option>
-                <option value="INTERVAL">INTERVAL</option>
-                <option value="DATE">DATE (einmalig)</option>
-              </select>
-            </div>
-            <div className="form-group">
-              <label htmlFor="job-trigger-value">
-                {formTriggerType === 'CRON'
-                  ? 'Cron-Expression (z.B. "0 0 * * *"):'
-                  : formTriggerType === 'INTERVAL'
-                  ? 'Interval in Sekunden (z.B. "3600"):'
-                  : 'Datum und Uhrzeit (einmalige Ausführung):'}
-                <InfoIcon content={formTriggerType === 'CRON'
-                  ? "Format: min hour day month weekday (z.B. '0 0 * * *' = täglich um Mitternacht)"
-                  : formTriggerType === 'INTERVAL'
-                  ? "Wert in Sekunden (z.B. '3600' für 1 Stunde)"
-                  : "Pipeline wird einmalig zu diesem Zeitpunkt ausgeführt (lokale Zeit)"} />
-              </label>
-              {formTriggerType === 'DATE' ? (
-                <input
-                  id="job-trigger-value"
-                  type="datetime-local"
-                  value={formTriggerValue.slice(0, 16)}
-                  onChange={(e) => {
-                    const v = e.target.value
-                    setFormTriggerValue(v ? `${v}:00` : '')
-                  }}
-                  min={new Date().toISOString().slice(0, 16)}
-                  required
-                />
-              ) : (
-                <input
-                  id="job-trigger-value"
-                  type="text"
-                  value={formTriggerValue}
-                  onChange={(e) => setFormTriggerValue(e.target.value)}
-                  placeholder={formTriggerType === 'CRON' ? '0 0 * * *' : '3600'}
-                  required
-                />
-              )}
-            </div>
-            <div className="form-group">
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={formEnabled}
-                  onChange={(e) => setFormEnabled(e.target.checked)}
-                />
-                Aktiviert
-                <InfoIcon content="Wenn aktiviert, wird der Job automatisch ausgeführt" />
-              </label>
-            </div>
-            <div className="form-actions">
-              <button type="submit" className="submit-button">
-                {editingJob ? 'Aktualisieren' : 'Erstellen'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsAdding(false)
-                  setEditingJob(null)
-                  resetForm()
-                }}
-                className="cancel-button"
-              >
-                Abbrechen
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
 
       {jobs && jobs.length > 0 ? (
         <table className="jobs-table">
@@ -415,12 +177,17 @@ export default function Scheduler() {
                       </Tooltip>
                       {!isReadonly && (
                         <>
-                          <button
-                            onClick={() => handleEdit(job)}
-                            className="edit-button"
-                          >
-                            Bearbeiten
-                          </button>
+                          <Tooltip content={job.pipeline_json_edit_url
+                            ? "pipeline.json auf GitHub bearbeiten"
+                            : "GitHub-Repository nicht konfiguriert"}>
+                            <button
+                              onClick={() => handleEdit(job)}
+                              className="edit-button"
+                              disabled={!job.pipeline_json_edit_url}
+                            >
+                              Bearbeiten
+                            </button>
+                          </Tooltip>
                           <button
                             onClick={() => handleDelete(job.id, job.pipeline_name)}
                             className="delete-button"
