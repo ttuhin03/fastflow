@@ -313,6 +313,12 @@ async def sync_pipelines(
                         logger.info("Pre-Heating erfolgreich für %s", name)
                     else:
                         logger.warning("Pre-Heating fehlgeschlagen für %s: %s", name, res.get("message", ""))
+            try:
+                from app.services.dependency_audit import run_dependency_audit_on_startup_async
+                await run_dependency_audit_on_startup_async()
+                logger.info("Dependency-Audit nach Pull abgeschlossen")
+            except Exception as audit_err:
+                logger.warning("Dependency-Audit nach Pull fehlgeschlagen (Sync gilt als erfolgreich): %s", audit_err)
             sync_end_time = datetime.now(timezone.utc)
             sync_duration = (sync_end_time - sync_start_time).total_seconds()
             await _write_sync_log({
