@@ -8,24 +8,24 @@
 # 2. Stage: Python-Backend mit statischem Frontend
 
 # Stage 1: React-Frontend Build
+# Nutzt npm workspaces (Root package-lock.json) für konsistente Dependencies
 FROM node:20-slim AS frontend-builder
 
-WORKDIR /app/frontend
-
-# Frontend-Dependencies installieren
-COPY frontend/package.json frontend/package-lock.json* ./
-COPY VERSION /app/VERSION
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY frontend/package.json ./frontend/
+COPY VERSION ./VERSION
 
 # VITE_DOCS_URL für Doku-Link (default: Doku auf Port 3001)
 ARG VITE_DOCS_URL=http://localhost:3001
 ENV VITE_DOCS_URL=$VITE_DOCS_URL
 
-# Verwende npm ci wenn package-lock.json vorhanden, sonst npm install
-RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+# Frontend-Workspace installieren (inkl. Test-Deps für Build-Toolchain)
+RUN npm ci --workspace=fastflow-frontend
 
 # Frontend-Code kopieren und bauen
-COPY frontend/ ./
-RUN npm run build
+COPY frontend/ ./frontend/
+RUN npm run build --workspace=fastflow-frontend
 
 # Stage 2: Python-Backend (Bookworm = stable Debian, zuverlässigere Mirrors als trixie)
 FROM python:3.11-slim-bookworm
