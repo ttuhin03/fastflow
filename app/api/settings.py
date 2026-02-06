@@ -32,6 +32,7 @@ from app.services.orchestrator_settings import (
     apply_orchestrator_settings_to_config,
 )
 from app.services.secrets import encrypt
+from app.services.dependency_audit import get_last_dependency_audit
 from sqlmodel import text
 
 logger = logging.getLogger(__name__)
@@ -226,6 +227,27 @@ async def get_system_settings_endpoint(
         enable_error_reporting=ss.enable_error_reporting,
         dependency_audit_enabled=getattr(ss, "dependency_audit_enabled", False),
         dependency_audit_cron=getattr(ss, "dependency_audit_cron", "0 3 * * *") or "0 3 * * *",
+    )
+
+
+class DependencyAuditLastResponse(BaseModel):
+    """Ergebnisse des letzten Dependency-Audit-Durchgangs (Startup oder Cron-Job)."""
+    last_scan_at: Optional[str] = None  # ISO 8601
+    results: List[Dict[str, Any]] = []  # [{ pipeline, packages, vulnerabilities?, audit_error? }, ...]
+
+
+@router.get("/dependency-audit-last", response_model=DependencyAuditLastResponse)
+async def get_dependency_audit_last(
+    current_user: User = Depends(get_current_user),
+) -> DependencyAuditLastResponse:
+    """
+    Gibt Zeitpunkt und Ergebnisse des letzten Dependency-Audit-Durchgangs zurück.
+    Der Scan läuft beim API-Start und optional per Cron. Erfordert Authentifizierung.
+    """
+    last_at, results = get_last_dependency_audit()
+    return DependencyAuditLastResponse(
+        last_scan_at=last_at.isoformat() if last_at else None,
+        results=results,
     )
 
 

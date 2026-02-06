@@ -14,6 +14,32 @@ from app.core.config import config
 
 logger = logging.getLogger(__name__)
 
+
+def _version_less_than(current: str, latest: str) -> bool:
+    """
+    Return True if current is strictly less than latest (semver-style).
+    Only then should we show "new version available".
+    """
+    def parse(v: str) -> list[int]:
+        v = v.lstrip("v").strip()
+        # Ignore prerelease suffix (e.g. "0.4.4-beta" -> "0.4.4")
+        if "-" in v:
+            v = v.split("-")[0]
+        parts = v.split(".")
+        return [int(x) if x.isdigit() else 0 for x in parts[:3]]
+
+    try:
+        c = parse(current)
+        l = parse(latest)
+        while len(c) < 3:
+            c.append(0)
+        while len(l) < 3:
+            l.append(0)
+        return c < l
+    except (ValueError, AttributeError):
+        return False
+
+
 # Global cache for version information
 class VersionCache:
     def __init__(self):
@@ -67,7 +93,9 @@ async def check_version_update() -> dict:
                 
                 if tag_name:
                     _version_cache.latest_version = tag_name
-                    _version_cache.update_available = tag_name != _version_cache.current_version
+                    _version_cache.update_available = _version_less_than(
+                        _version_cache.current_version, tag_name
+                    )
                     _version_cache.check_error = None
                     
                     if _version_cache.update_available:

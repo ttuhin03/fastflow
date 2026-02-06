@@ -16,6 +16,50 @@
   color: var(--color-text-secondary);
 }
 
+.dependencies-subtitle-error {
+  color: var(--color-error, #c00);
+}
+
+.dependencies-audit-last {
+  padding: var(--spacing-md);
+  background: var(--color-bg-secondary);
+}
+
+.dependencies-audit-last-title {
+  margin: 0 0 var(--spacing-sm) 0;
+  font-size: var(--font-size-md);
+  color: var(--color-text-primary);
+}
+
+.dependencies-audit-last-msg {
+  margin: 0.25rem 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+}
+
+.dependencies-audit-last-msg.muted {
+  color: var(--color-text-secondary);
+}
+
+.dependencies-audit-last-msg.error {
+  color: var(--color-error, #c00);
+}
+
+.dependencies-audit-last-list {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+  font-size: var(--font-size-sm);
+}
+
+.dependencies-audit-last-list li {
+  margin: 2px 0;
+}
+
+.dependencies-audit-last .btn-sm {
+  font-size: var(--font-size-xs);
+  padding: 0.25rem 0.5rem;
+}
+
 .dependencies-actions {
   display: flex;
   flex-wrap: wrap;

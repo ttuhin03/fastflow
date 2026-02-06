@@ -357,6 +357,13 @@ async def run_startup_tasks() -> None:
         schedule_dependency_audit_job()
     await _run_step("Dependency-Audit-Job", False, schedule_audit, "Dependency-Audit-Job aus SystemSettings geladen")
 
+    # Beim Start einmalig Dependency-Audit durchlaufen (Hintergrund), Ergebnisse für Frontend
+    async def run_audit_once():
+        from app.services.dependency_audit import run_dependency_audit_on_startup_async
+        await run_dependency_audit_on_startup_async()
+    asyncio.create_task(run_audit_once())
+    logger.info("Dependency-Audit (einmalig beim Start) im Hintergrund gestartet")
+
     async def version_check():
         from app.services.version_checker import check_version_update, schedule_version_check
         await check_version_update()
