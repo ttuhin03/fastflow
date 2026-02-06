@@ -1,5 +1,5 @@
 """
-Auth package: session auth, OAuth (GitHub/Google), OAuth processing, GitHub config.
+Auth package: session auth, OAuth (GitHub/Google/Microsoft/Custom), OAuth processing, GitHub config.
 """
 
 from app.auth.auth import (
@@ -32,6 +32,15 @@ from app.auth.google_oauth_user import (
     GOOGLE_TOKEN_URL,
     get_google_authorize_url,
     get_google_user_data,
+)
+from app.auth.microsoft_oauth_user import (
+    MICROSOFT_AUTHORIZE_URL_BASE,
+    get_microsoft_authorize_url,
+    get_microsoft_user_data,
+)
+from app.auth.custom_oauth_user import (
+    get_custom_oauth_authorize_url,
+    get_custom_oauth_user_data,
 )
 from app.auth.oauth_processing import process_oauth_login
 from app.auth.github_config import (
@@ -66,6 +75,11 @@ __all__ = [
     "GOOGLE_TOKEN_URL",
     "get_google_authorize_url",
     "get_google_user_data",
+    "MICROSOFT_AUTHORIZE_URL_BASE",
+    "get_microsoft_authorize_url",
+    "get_microsoft_user_data",
+    "get_custom_oauth_authorize_url",
+    "get_custom_oauth_user_data",
     "process_oauth_login",
     "GITHUB_KEY_PATH",
     "delete_github_config",

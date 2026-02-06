@@ -658,6 +658,25 @@ async def get_pipeline_source_files(
     return result
 
 
+@router.get("/{name}/encrypted-env", response_model=Dict[str, List[str]])
+async def get_pipeline_encrypted_env_keys(
+    name: str,
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, List[str]]:
+    """
+    Gibt die Keys der in pipeline.json unter encrypted_env eingetragenen Variablen zurück (ohne Werte).
+    Nur zur Anzeige in der UI, welche verschlüsselten Env-Vars diese Pipeline hat.
+    """
+    discovered = get_discovered_pipeline(name)
+    if discovered is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Pipeline nicht gefunden: {name}",
+        )
+    encrypted_env = getattr(discovered.metadata, "encrypted_env", None) or {}
+    return {"keys": list(encrypted_env.keys())}
+
+
 @router.get("/{name}/downstream-triggers", response_model=List[DownstreamTriggerResponse])
 async def get_downstream_triggers(
     name: str,

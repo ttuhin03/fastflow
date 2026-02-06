@@ -104,7 +104,13 @@ async def notify_admin_join_request(user: User) -> None:
     Benachrichtigt Admins über eine neue Beitrittsanfrage (Anklopfen).
     Immer: Log. Bei EMAIL_ENABLED + SMTP + EMAIL_RECIPIENTS: E-Mail.
     """
-    provider = "github" if getattr(user, "github_id", None) else ("google" if getattr(user, "google_id", None) else "?")
+    provider = (
+        "github" if getattr(user, "github_id", None)
+        else "google" if getattr(user, "google_id", None)
+        else "microsoft" if getattr(user, "microsoft_id", None)
+        else "custom" if getattr(user, "custom_oauth_id", None)
+        else "?"
+    )
     logger.warning(
         "!!! BEITRITTSANFRAGE !!! user=%s email=%s provider=%s Bitte prüfen: Users – Beitrittsanfragen",
         user.username,

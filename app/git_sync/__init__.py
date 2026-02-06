@@ -7,7 +7,7 @@ Git-Synchronisation des Pipeline-Repositories.
 - run_pre_heat_at_startup: UV Pre-Heating beim App-Start (Hintergrund)
 """
 
-from app.git_sync.sync import sync_pipelines, get_sync_status, run_pre_heat_at_startup
+from app.git_sync.sync import sync_pipelines, get_sync_status, run_pre_heat_at_startup, get_pipeline_json_github_url
 from app.git_sync.sync_log import get_sync_logs
 from app.git_sync.github_token import test_github_app_token
 
@@ -17,4 +17,5 @@ __all__ = [
     "get_sync_logs",
     "test_github_app_token",
     "run_pre_heat_at_startup",
+    "get_pipeline_json_github_url",
 ]

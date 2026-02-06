@@ -95,14 +95,29 @@ export default function Settings() {
     queryKey: ['auth/me'],
     queryFn: async () => {
       const response = await apiClient.get('/auth/me')
-      return response.data as { has_github?: boolean; has_google?: boolean; email?: string; avatar_url?: string }
+      return response.data as {
+        has_github?: boolean
+        has_google?: boolean
+        has_microsoft?: boolean
+        has_custom?: boolean
+        email?: string
+        avatar_url?: string
+      }
     },
   })
 
   useEffect(() => {
     const linked = searchParams.get('linked')
-    if (linked === 'google' || linked === 'github') {
-      showSuccess(linked === 'google' ? 'Google-Konto verknüpft.' : 'GitHub-Konto verknüpft.')
+    if (linked === 'google' || linked === 'github' || linked === 'microsoft' || linked === 'custom') {
+      const msg =
+        linked === 'google'
+          ? 'Google-Konto verknüpft.'
+          : linked === 'github'
+            ? 'GitHub-Konto verknüpft.'
+            : linked === 'microsoft'
+              ? 'Microsoft-Konto verknüpft.'
+              : 'Custom-Konto verknüpft.'
+      showSuccess(msg)
       const np = new URLSearchParams(searchParams)
       np.delete('linked')
       setSearchParams(Object.fromEntries(np.entries()), { replace: true })
@@ -428,7 +443,7 @@ export default function Settings() {
             <div className="settings-section card">
               <h3 className="section-title">Verknüpfte Konten</h3>
         <p className="setting-hint" style={{ marginBottom: '1rem' }}>
-          Verknüpfe GitHub und Google, um mit beiden Accounts einzuloggen. E-Mail kann je Provider abweichen; Verknüpfung funktioniert über „Jetzt verbinden“.
+          Verknüpfe Konten, um mit mehreren Providern einzuloggen. E-Mail kann je Provider abweichen; Verknüpfung funktioniert über „Jetzt verbinden“.
         </p>
         <div className="accounts-list" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
           <div className="account-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid var(--color-border)' }}>
@@ -454,6 +469,34 @@ export default function Settings() {
               <span style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>Verknüpft</span>
             ) : (
               <a href={`${getApiOrigin()}/api/auth/link/google`} className="btn btn-outlined" style={{ fontSize: '0.875rem', padding: '0.25rem 0.5rem' }}>
+                <MdLink style={{ marginRight: '0.25rem' }} />
+                Jetzt verbinden
+              </a>
+            )}
+          </div>
+          <div className="account-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <strong>Microsoft</strong>
+              {me?.has_microsoft ? <MdCheck style={{ color: 'var(--color-success)' }} aria-label="Verknüpft" /> : null}
+            </span>
+            {me?.has_microsoft ? (
+              <span style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>Verknüpft</span>
+            ) : (
+              <a href={`${getApiOrigin()}/api/auth/link/microsoft`} className="btn btn-outlined" style={{ fontSize: '0.875rem', padding: '0.25rem 0.5rem' }}>
+                <MdLink style={{ marginRight: '0.25rem' }} />
+                Jetzt verbinden
+              </a>
+            )}
+          </div>
+          <div className="account-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <strong>Custom</strong>
+              {me?.has_custom ? <MdCheck style={{ color: 'var(--color-success)' }} aria-label="Verknüpft" /> : null}
+            </span>
+            {me?.has_custom ? (
+              <span style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>Verknüpft</span>
+            ) : (
+              <a href={`${getApiOrigin()}/api/auth/link/custom`} className="btn btn-outlined" style={{ fontSize: '0.875rem', padding: '0.25rem 0.5rem' }}>
                 <MdLink style={{ marginRight: '0.25rem' }} />
                 Jetzt verbinden
               </a>

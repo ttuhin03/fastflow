@@ -154,6 +154,11 @@ class PipelineRun(SQLModel, table=True):
         default="manual",
         description="Trigger-Quelle: 'manual', 'webhook', 'scheduler', 'daemon_restart', 'downstream'"
     )
+    run_config_id: Optional[str] = Field(
+        default=None,
+        index=True,
+        description="Run-Konfiguration aus pipeline.json schedules (z.B. prod, staging)"
+    )
 
 
 class RunCellLog(SQLModel, table=True):
@@ -216,6 +221,11 @@ class ScheduledJob(SQLModel, table=True):
     source: str = Field(
         default="api",
         description="Herkunft: 'api' (UI/API) oder 'pipeline_json'"
+    )
+    run_config_id: Optional[str] = Field(
+        default=None,
+        index=True,
+        description="Run-Konfiguration aus pipeline.json schedules (z.B. prod, staging)"
     )
     created_at: datetime = Field(
         default_factory=_utc_now,
@@ -360,6 +370,12 @@ class User(SQLModel, table=True):
         unique=True,
         index=True,
         description="Google OAuth ID (optional, für Google-Login)"
+    )
+    custom_oauth_id: Optional[str] = Field(
+        default=None,
+        unique=True,
+        index=True,
+        description="Custom OAuth subject ID (optional, für Custom IdP)"
     )
     avatar_url: Optional[str] = Field(
         default=None,

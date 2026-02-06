@@ -362,6 +362,26 @@ class Config:
     GOOGLE_CLIENT_SECRET: Optional[str] = os.getenv("GOOGLE_CLIENT_SECRET")
     """Google OAuth 2.0 Client Secret für User-Login."""
 
+    # Microsoft OAuth (Entra ID / Azure AD)
+    MICROSOFT_CLIENT_ID: Optional[str] = os.getenv("MICROSOFT_CLIENT_ID")
+    """Microsoft Entra ID (Azure AD) Application (client) ID für User-Login."""
+    MICROSOFT_CLIENT_SECRET: Optional[str] = os.getenv("MICROSOFT_CLIENT_SECRET")
+    """Microsoft Entra ID Client Secret für User-Login."""
+    MICROSOFT_TENANT_ID: str = os.getenv("MICROSOFT_TENANT_ID", "common")
+    """Tenant ID (common = Multi-Tenant, oder eine spezifische Tenant-ID)."""
+
+    # Custom OAuth (Keycloak, Auth0, eigener IdP)
+    CUSTOM_OAUTH_CLIENT_ID: Optional[str] = os.getenv("CUSTOM_OAUTH_CLIENT_ID")
+    CUSTOM_OAUTH_CLIENT_SECRET: Optional[str] = os.getenv("CUSTOM_OAUTH_CLIENT_SECRET")
+    CUSTOM_OAUTH_AUTHORIZE_URL: Optional[str] = os.getenv("CUSTOM_OAUTH_AUTHORIZE_URL")
+    CUSTOM_OAUTH_TOKEN_URL: Optional[str] = os.getenv("CUSTOM_OAUTH_TOKEN_URL")
+    CUSTOM_OAUTH_USERINFO_URL: Optional[str] = os.getenv("CUSTOM_OAUTH_USERINFO_URL")
+    CUSTOM_OAUTH_SCOPES: str = os.getenv("CUSTOM_OAUTH_SCOPES", "openid email profile")
+    CUSTOM_OAUTH_CLAIM_ID: str = os.getenv("CUSTOM_OAUTH_CLAIM_ID", "sub")
+    CUSTOM_OAUTH_CLAIM_EMAIL: str = os.getenv("CUSTOM_OAUTH_CLAIM_EMAIL", "email")
+    CUSTOM_OAUTH_CLAIM_NAME: str = os.getenv("CUSTOM_OAUTH_CLAIM_NAME", "name")
+    CUSTOM_OAUTH_NAME: str = os.getenv("CUSTOM_OAUTH_NAME", "Custom")
+
     # Authentication-Konfiguration (Login via GitHub OAuth, Google OAuth)
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "change-me-in-production")
     """
@@ -479,6 +499,14 @@ class Config:
     Überspringt die HTTP-Verifizierung der OAuth-Credentials beim Start.
     Nützlich für Tests/CI. Die Prüfung „mind. ein OAuth-Provider vollständig“
     wird weiterhin ausgeführt.
+    """
+
+    TESTING: bool = (
+        os.getenv("TESTING", "").lower() in ("1", "true", "yes")
+    )
+    """
+    Test-Modus: Docker- und Scheduler-Initialisierung werden übersprungen,
+    damit Tests ohne laufenden Docker-Daemon laufen können.
     """
 
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development").lower()

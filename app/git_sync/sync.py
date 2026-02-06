@@ -313,6 +313,12 @@ async def sync_pipelines(
                         logger.info("Pre-Heating erfolgreich für %s", name)
                     else:
                         logger.warning("Pre-Heating fehlgeschlagen für %s: %s", name, res.get("message", ""))
+            try:
+                from app.services.dependency_audit import run_dependency_audit_on_startup_async
+                await run_dependency_audit_on_startup_async()
+                logger.info("Dependency-Audit nach Pull abgeschlossen")
+            except Exception as audit_err:
+                logger.warning("Dependency-Audit nach Pull fehlgeschlagen (Sync gilt als erfolgreich): %s", audit_err)
             sync_end_time = datetime.now(timezone.utc)
             sync_duration = (sync_end_time - sync_start_time).total_seconds()
             await _write_sync_log({
@@ -415,3 +421,53 @@ async def get_sync_status() -> Dict[str, Any]:
     except Exception as e:
         logger.error("Fehler beim Abrufen des Git-Status: %s", e)
         return {"is_git_repo": True, "error": str(e)}
+
+
+def get_pipeline_json_github_url(pipeline_name: str) -> Optional[str]:
+    """
+    Gibt die GitHub-Blob-URL für die pipeline.json einer Pipeline zurück.
+
+    Ermöglicht Bearbeitung der JSON-Datei direkt auf GitHub.
+    Gibt None zurück, wenn kein GitHub-Repository oder die URL nicht ableitbar ist.
+
+    Args:
+        pipeline_name: Name der Pipeline (z.B. "test_simple")
+
+    Returns:
+        URL wie https://github.com/owner/repo/blob/main/test_simple/pipeline.json oder None
+    """
+    pipelines_dir = config.PIPELINES_DIR
+    git_dir = pipelines_dir / ".git"
+    if not git_dir.exists():
+        return None
+    try:
+        # Branch und Remote-URL abrufen (synchron, da diese Funktion von API aufgerufen wird)
+        branch_cmd = ["git", "rev-parse", "--abbrev-ref", "HEAD"]
+        exit_code, stdout, stderr = _run_git_command(branch_cmd, pipelines_dir)
+        branch = stdout.strip() if exit_code == 0 else config.GIT_BRANCH
+        remote_url_cmd = ["git", "config", "remote.origin.url"]
+        exit_code, stdout, stderr = _run_git_command(remote_url_cmd, pipelines_dir)
+        remote_url = stdout.strip() if exit_code == 0 else None
+        if not remote_url:
+            return None
+        # Remote-URL zu GitHub-Web-URL konvertieren
+        # https://github.com/user/repo.git oder https://x-access-token:xxx@github.com/user/repo.git
+        # git@github.com:user/repo.git
+        url = remote_url
+        if "x-access-token:" in url and "@" in url:
+            url = url.split("@", 1)[1]
+        elif "://" in url and "@" in url.split("://", 1)[1]:
+            url = url.split("@", 1)[1]
+        url = url.replace(".git", "").rstrip("/")
+        if url.startswith("git@"):
+            # git@github.com:user/repo -> https://github.com/user/repo
+            url = url.replace(":", "/", 1).replace("git@", "https://")
+        elif not url.startswith("https://"):
+            url = "https://" + url
+        if "github.com" not in url:
+            return None
+        path = f"{pipeline_name}/pipeline.json"
+        return f"{url}/blob/{branch}/{path}"
+    except Exception as e:
+        logger.warning("Fehler beim Erstellen der GitHub-URL für %s: %s", pipeline_name, e)
+        return None

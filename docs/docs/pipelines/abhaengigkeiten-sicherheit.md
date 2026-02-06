@@ -66,5 +66,6 @@ Format: Minute (0–59), Stunde (0–23), Tag des Monats (1–31), Monat (1–12
 - **Parsing:** `requirements.txt` und optional `requirements.txt.lock` (uv-Format) werden gelesen; Paketnamen und aufgelöste Versionen werden angezeigt.
 - **Scan:** [pip-audit](https://github.com/pypa/pip-audit) wird pro Pipeline mit `-r requirements.txt -f json` ausgeführt; das Ergebnis wird für die API und die Benachrichtigung ausgewertet.
 - **Job:** Der geplante Job ist im APScheduler mit fester ID (`dependency_audit_job`) registriert; bei Änderung von Aktivierung oder Cron wird er neu geplant (nach Speichern der System-Einstellungen oder beim App-Start).
+- **Wann läuft der Scan?** Einmal beim API-Start, nach jedem erfolgreichen Git-Pull (Sync) und – wenn aktiviert – zur konfigurierten Cron-Zeit; die letzten Ergebnisse sind unter **Pipelines → Abhängigkeiten** sichtbar.
 
 Weitere Details zur Konfiguration von E-Mail und Teams: [Konfiguration (Deployment)](/docs/deployment/CONFIGURATION.md).

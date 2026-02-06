@@ -161,12 +161,22 @@ async def _validate_oauth_config() -> None:
 
     has_github = bool(config.GITHUB_CLIENT_ID and config.GITHUB_CLIENT_SECRET)
     has_google = bool(config.GOOGLE_CLIENT_ID and config.GOOGLE_CLIENT_SECRET)
-    if not has_github and not has_google:
+    has_microsoft = bool(config.MICROSOFT_CLIENT_ID and config.MICROSOFT_CLIENT_SECRET)
+    has_custom = bool(
+        config.CUSTOM_OAUTH_CLIENT_ID
+        and config.CUSTOM_OAUTH_CLIENT_SECRET
+        and config.CUSTOM_OAUTH_AUTHORIZE_URL
+        and config.CUSTOM_OAUTH_TOKEN_URL
+        and config.CUSTOM_OAUTH_USERINFO_URL
+    )
+    if not (has_github or has_google or has_microsoft or has_custom):
         raise RuntimeError(
             "OAuth ist nicht konfiguriert: Es muss mindestens einer der folgenden "
             "Provider vollständig gesetzt sein (jeweils CLIENT_ID und CLIENT_SECRET).\n"
-            "  - GitHub: GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET\n"
-            "  - Google:  GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET\n"
+            "  - GitHub:   GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET\n"
+            "  - Google:   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET\n"
+            "  - Microsoft: MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET\n"
+            "  - Custom:   CUSTOM_OAUTH_CLIENT_ID, CUSTOM_OAUTH_CLIENT_SECRET, *_URL\n"
             "Siehe .env.example und docs/oauth/."
         )
     base = (config.BASE_URL or "http://localhost:8000").rstrip("/")
@@ -215,11 +225,35 @@ async def _validate_oauth_config() -> None:
             "Bitte in .env und in der Google Cloud Console (APIs & Services → Anmeldedaten) prüfen.",
         )
 
+    async def verify_microsoft(client: httpx.AsyncClient, _base: str) -> None:
+        from app.auth.microsoft_oauth_user import _get_microsoft_token_url
+        redirect_uri = f"{_base}/api/auth/microsoft/callback"
+        await _verify_oauth_token_request(
+            client,
+            _get_microsoft_token_url(),
+            {
+                "client_id": config.MICROSOFT_CLIENT_ID,
+                "client_secret": config.MICROSOFT_CLIENT_SECRET,
+                "code": "__startup_verify__",
+                "redirect_uri": redirect_uri,
+                "grant_type": "authorization_code",
+            },
+            {"Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded"},
+            redirect_uri,
+            "Microsoft",
+            "invalid_grant",
+            "invalid_client",
+            "Microsoft OAuth: MICROSOFT_CLIENT_ID oder MICROSOFT_CLIENT_SECRET ist falsch. "
+            "Bitte in .env und in Azure Portal (App-Registrierung) prüfen.",
+        )
+
     async with httpx.AsyncClient(timeout=15.0) as client:
         if has_github:
             await call_async_with_circuit_breaker(circuit_oauth, verify_github, client, base)
         if has_google:
             await call_async_with_circuit_breaker(circuit_oauth, verify_google, client, base)
+        if has_microsoft:
+            await call_async_with_circuit_breaker(circuit_oauth, verify_microsoft, client, base)
 
 
 async def _run_step(
@@ -278,7 +312,9 @@ async def run_startup_tasks() -> None:
     def init_docker():
         from app.executor import init_docker_client
         init_docker_client()
-    await _run_step("Docker-Client-Initialisierung", True, init_docker, "Docker-Client initialisiert")
+    # In Test-Modus Docker-Init überspringen (kein docker-proxy nötig)
+    if not config.TESTING:
+        await _run_step("Docker-Client-Initialisierung", True, init_docker, "Docker-Client initialisiert")
 
     async def zombie_reconcile():
         from app.core.database import get_session
@@ -289,23 +325,27 @@ async def run_startup_tasks() -> None:
             await reconcile_zombie_containers(session)
         finally:
             session.close()
-    await _run_step("Zombie-Reconciliation", False, zombie_reconcile, "Zombie-Reconciliation abgeschlossen")
+    if not config.TESTING:
+        await _run_step("Zombie-Reconciliation", False, zombie_reconcile, "Zombie-Reconciliation abgeschlossen")
 
     def start_sched():
         from app.services.scheduler import start_scheduler
         start_scheduler()
-    await _run_step("Scheduler-Start", False, start_sched, "Scheduler gestartet")
+    if not config.TESTING:
+        await _run_step("Scheduler-Start", False, start_sched, "Scheduler gestartet")
 
     def sync_json_schedules():
         from app.services.scheduler import sync_scheduler_jobs_from_pipeline_json
         sync_scheduler_jobs_from_pipeline_json()
-    await _run_step("Scheduler-Jobs aus pipeline.json", False, sync_json_schedules, "Scheduler-Jobs aus pipeline.json synchronisiert")
+    if not config.TESTING:
+        await _run_step("Scheduler-Jobs aus pipeline.json", False, sync_json_schedules, "Scheduler-Jobs aus pipeline.json synchronisiert")
 
     def init_cleanup():
         from app.services.cleanup import init_docker_client_for_cleanup, schedule_cleanup_job
         init_docker_client_for_cleanup()
         schedule_cleanup_job()
-    await _run_step("Cleanup-Service", False, init_cleanup, "Cleanup-Service initialisiert")
+    if not config.TESTING:
+        await _run_step("Cleanup-Service", False, init_cleanup, "Cleanup-Service initialisiert")
 
     def schedule_wal_checkpoint():
         from app.core.database import schedule_wal_checkpoint_job
@@ -316,6 +356,13 @@ async def run_startup_tasks() -> None:
         from app.services.dependency_audit import schedule_dependency_audit_job
         schedule_dependency_audit_job()
     await _run_step("Dependency-Audit-Job", False, schedule_audit, "Dependency-Audit-Job aus SystemSettings geladen")
+
+    # Beim Start einmalig Dependency-Audit durchlaufen (Hintergrund), Ergebnisse für Frontend
+    async def run_audit_once():
+        from app.services.dependency_audit import run_dependency_audit_on_startup_async
+        await run_dependency_audit_on_startup_async()
+    asyncio.create_task(run_audit_once())
+    logger.info("Dependency-Audit (einmalig beim Start) im Hintergrund gestartet")
 
     async def version_check():
         from app.services.version_checker import check_version_update, schedule_version_check

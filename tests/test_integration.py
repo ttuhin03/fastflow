@@ -2,81 +2,101 @@
 Integration Tests für Fast-Flow Orchestrator.
 
 Testet die wichtigsten Funktionen des Orchestrators:
-- Pipeline-Start (benötigt Docker)
-- Log-Streaming (benötigt Docker)
-- Git-Sync (benötigt Git-Repository)
-- Scheduler
-- Container-Cancellation (benötigt Docker)
-- Concurrency-Limits (benötigt Docker)
+- Pipeline-Start (API mit Mock)
+- Log-Streaming (Endpoint-Verfügbarkeit)
+- Git-Sync (Sync-Status mit Mock)
+- Scheduler (Jobs-API)
+- Container-Cancellation (API mit Mock)
+- Concurrency-Limits (Config-Prüfung)
 - Log-Cleanup
 """
 
 import pytest
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from uuid import uuid4
+from unittest.mock import AsyncMock, patch
 
 from app.models import PipelineRun, RunStatus
 from app.services.pipeline_discovery import discover_pipelines
+from app.core.config import config
 
 
-@pytest.mark.skip(reason="Benötigt Docker für vollständige Pipeline-Ausführung")
-def test_pipeline_start():
-    """
-    Testet das Starten einer Pipeline.
-    
-    Hinweis: Dieser Test benötigt Docker und wird daher übersprungen.
-    """
-    pass
+def test_pipeline_start(authenticated_client, temp_pipelines_dir):
+    """Testet dass Pipeline-Start über API funktioniert (run_pipeline gemockt)."""
+    pipeline_dir = temp_pipelines_dir / "demo_pipeline"
+    pipeline_dir.mkdir()
+    (pipeline_dir / "main.py").write_text("print('ok')")
+    discover_pipelines(force_refresh=True)
+
+    mock_run = PipelineRun(
+        id=uuid4(),
+        pipeline_name="demo_pipeline",
+        status=RunStatus.PENDING,
+        started_at=datetime.now(timezone.utc),
+        log_file="logs/demo.log",
+    )
+
+    with patch("app.api.pipelines.run_pipeline", new_callable=AsyncMock) as m:
+        m.return_value = mock_run
+        r = authenticated_client.post("/api/pipelines/demo_pipeline/run", json={})
+    assert r.status_code == 200
+    assert r.json()["pipeline_name"] == "demo_pipeline"
 
 
-@pytest.mark.skip(reason="Benötigt Docker für Log-Streaming")
-def test_log_streaming():
-    """
-    Testet das Log-Streaming aus laufenden Containern.
-    
-    Hinweis: Dieser Test benötigt Docker und wird daher übersprungen.
-    """
-    pass
+def test_log_streaming_requires_auth(client):
+    """Log-Stream-Endpoint erfordert Authentifizierung (401 ohne Token)."""
+    r = client.get(f"/api/runs/{uuid4()}/logs/stream")
+    assert r.status_code == 401
 
 
-@pytest.mark.skip(reason="Benötigt Git-Repository für vollständigen Test")
-def test_git_sync():
-    """
-    Testet die Git-Synchronisation.
-    
-    Hinweis: Dieser Test benötigt ein Git-Repository und wird daher übersprungen.
-    """
-    pass
+def test_git_sync(authenticated_client):
+    """Sync-Status-Endpoint liefert Status (mit Mock falls kein Git-Repo)."""
+    with patch("app.api.sync.get_sync_status", new_callable=AsyncMock) as m:
+        m.return_value = {
+            "branch": "main",
+            "remote_url": "https://example.com/repo.git",
+            "last_commit": None,
+            "pipelines": [],
+        }
+        r = authenticated_client.get("/api/sync/status")
+    assert r.status_code == 200
+    data = r.json()
+    assert "branch" in data or "pipelines" in data
 
 
-@pytest.mark.skip(reason="Benötigt Scheduler-Initialisierung")
-def test_scheduler():
-    """
-    Testet den Scheduler.
-    
-    Hinweis: Dieser Test benötigt Scheduler-Initialisierung und wird daher übersprungen.
-    """
-    pass
+def test_scheduler(authenticated_client):
+    """Scheduler Jobs-API liefert leere Liste ohne Jobs."""
+    r = authenticated_client.get("/api/scheduler/jobs")
+    assert r.status_code == 200
+    assert r.json() == []
 
 
-@pytest.mark.skip(reason="Benötigt Docker für Container-Cancellation")
-def test_container_cancellation():
-    """
-    Testet das Abbrechen laufender Container.
-    
-    Hinweis: Dieser Test benötigt Docker und wird daher übersprungen.
-    """
-    pass
+def test_container_cancellation(authenticated_client, test_session):
+    """Cancel-Run-Endpoint bricht Run ab (cancel_run gemockt)."""
+    run = PipelineRun(
+        id=uuid4(),
+        pipeline_name="test",
+        status=RunStatus.RUNNING,
+        started_at=datetime.now(timezone.utc),
+        log_file="logs/test.log",
+    )
+    test_session.add(run)
+    test_session.commit()
+
+    with patch("app.api.runs.cancel_run", new_callable=AsyncMock) as m:
+        m.return_value = True
+        r = authenticated_client.post(f"/api/runs/{run.id}/cancel")
+    assert r.status_code == 200
+    assert "abgebrochen" in r.json().get("message", "").lower()
 
 
-@pytest.mark.skip(reason="Benötigt Docker für Concurrency-Limits")
 def test_concurrency_limits():
-    """
-    Testet die Concurrency-Limits.
-    
-    Hinweis: Dieser Test benötigt Docker und wird daher übersprungen.
-    """
-    pass
+    """MAX_CONCURRENT_RUNS ist eine gültige Konfiguration."""
+    assert hasattr(config, "MAX_CONCURRENT_RUNS")
+    assert isinstance(config.MAX_CONCURRENT_RUNS, (int, type(None)))
+    if config.MAX_CONCURRENT_RUNS is not None:
+        assert config.MAX_CONCURRENT_RUNS >= 0
 
 
 def test_log_cleanup(temp_logs_dir, test_session):

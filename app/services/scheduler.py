@@ -10,7 +10,7 @@ Dieses Modul verwaltet geplante Pipeline-Ausführungen mit APScheduler:
 
 import asyncio
 import logging
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple, Union
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -29,6 +29,9 @@ from app.services.pipeline_discovery import get_pipeline, discover_pipelines
 from app.core.database import get_session
 
 logger = logging.getLogger(__name__)
+
+# Sentinel: run_config_id in update_job nicht aendern
+_UPDATE_RUN_CONFIG_ID_OMIT = object()
 
 
 def _parse_schedule_datetime(value: Optional[str], end_of_day: bool = False) -> Optional[datetime]:
@@ -246,7 +249,7 @@ def _add_job_to_scheduler(job: ScheduledJob) -> None:
         if getattr(job, "source", "api") == "daemon_restart":
             job_func = _create_daemon_restart_job_function(job.pipeline_name)
         else:
-            job_func = _create_job_function(job.pipeline_name)
+            job_func = _create_job_function(job.pipeline_name, getattr(job, "run_config_id", None))
         
         # Job zum Scheduler hinzufügen
         _scheduler.add_job(
@@ -357,12 +360,13 @@ def _create_daemon_restart_job_function(pipeline_name: str):
     return job_function
 
 
-def _create_job_function(pipeline_name: str):
+def _create_job_function(pipeline_name: str, run_config_id: Optional[str] = None):
     """
     Erstellt eine Job-Funktion für Pipeline-Ausführung.
     
     Args:
         pipeline_name: Name der Pipeline
+        run_config_id: Optionale Run-Konfiguration aus pipeline.json schedules
     
     Returns:
         Callable: Job-Funktion
@@ -389,8 +393,8 @@ def _create_job_function(pipeline_name: str):
         # asyncio.run() verwenden, um die async run_pipeline-Funktion aufzurufen
         # run_pipeline erstellt intern eine Session wenn keine übergeben wird
         try:
-            asyncio.run(run_pipeline(pipeline_name, triggered_by="scheduler"))
-            logger.info(f"Geplante Pipeline ausgeführt: {pipeline_name}")
+            asyncio.run(run_pipeline(pipeline_name, triggered_by="scheduler", run_config_id=run_config_id))
+            logger.info(f"Geplante Pipeline ausgeführt: {pipeline_name}" + (f" (run_config_id={run_config_id})" if run_config_id else ""))
         except Exception as e:
             logger.error(f"Fehler bei geplanter Pipeline-Ausführung {pipeline_name}: {e}")
             # Notification für Scheduler-Fehler (asynchron im Hintergrund)
@@ -437,6 +441,7 @@ def add_job(
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
     source: str = "api",
+    run_config_id: Optional[str] = None,
     session: Optional[Session] = None
 ) -> ScheduledJob:
     """
@@ -450,6 +455,7 @@ def add_job(
         start_date: Optionaler Start des Zeitraums (UTC)
         end_date: Optionales Ende des Zeitraums (UTC)
         source: "api" oder "pipeline_json"
+        run_config_id: Optionale Run-Konfiguration aus pipeline.json schedules
         session: SQLModel Session (optional)
     
     Returns:
@@ -486,7 +492,8 @@ def add_job(
             enabled=enabled,
             start_date=start_date,
             end_date=end_date,
-            source=source if source in ("api", "pipeline_json", "daemon_restart") else "api"
+            source=source if source in ("api", "pipeline_json", "daemon_restart") else "api",
+            run_config_id=run_config_id
         )
         
         session.add(job)
@@ -513,6 +520,7 @@ def update_job(
     enabled: Optional[bool] = None,
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
+    run_config_id: Union[Optional[str], object] = _UPDATE_RUN_CONFIG_ID_OMIT,
     session: Optional[Session] = None
 ) -> ScheduledJob:
     """
@@ -526,6 +534,7 @@ def update_job(
         enabled: Neuer Enabled-Status (optional)
         start_date: Neuer Start des Zeitraums (optional)
         end_date: Neues Ende des Zeitraums (optional)
+        run_config_id: Optionale Run-Konfiguration (None = leeren; nicht uebergeben = nicht aendern)
         session: SQLModel Session (optional)
     
     Returns:
@@ -567,6 +576,8 @@ def update_job(
             job.start_date = start_date
         if end_date is not None:
             job.end_date = end_date
+        if run_config_id is not _UPDATE_RUN_CONFIG_ID_OMIT:
+            job.run_config_id = run_config_id
         
         # Trigger-Validierung (mit Zeitraum)
         trigger = _create_trigger(
@@ -730,7 +741,8 @@ def get_job_details(job_id: UUID, session: Optional[Session] = None) -> Dict[str
         "next_run_time": None,
         "last_run_time": None,
         "run_count": 0,
-        "source": getattr(job, "source", "api")
+        "source": getattr(job, "source", "api"),
+        "run_config_id": getattr(job, "run_config_id", None)
     }
     if getattr(job, "start_date", None) is not None:
         details["start_date"] = job.start_date.isoformat()
@@ -758,20 +770,24 @@ def get_job_details(job_id: UUID, session: Optional[Session] = None) -> Dict[str
     try:
         from app.models import PipelineRun
         from sqlmodel import select, func
+        job_rcid = getattr(job, "run_config_id", None)
         run_count_stmt = (
             select(func.count(PipelineRun.id))
             .where(PipelineRun.pipeline_name == job.pipeline_name)
         )
+        if job_rcid is not None:
+            run_count_stmt = run_count_stmt.where(PipelineRun.run_config_id == job_rcid)
         run_count = session.exec(run_count_stmt).one()
         details["run_count"] = run_count
-        
-        # Letzte Ausführung finden
+
         last_run_stmt = (
             select(PipelineRun)
             .where(PipelineRun.pipeline_name == job.pipeline_name)
             .order_by(PipelineRun.started_at.desc())
             .limit(1)
         )
+        if job_rcid is not None:
+            last_run_stmt = last_run_stmt.where(PipelineRun.run_config_id == job_rcid)
         last_run = session.exec(last_run_stmt).first()
         if last_run:
             details["last_run_time"] = last_run.started_at.isoformat()
@@ -799,13 +815,13 @@ def sync_scheduler_jobs_from_pipeline_json(session: Optional[Session] = None) ->
     try:
         discovered = discover_pipelines(force_refresh=True)
         now_utc = datetime.now(timezone.utc)
-        pipelines_with_schedule: Dict[str, Any] = {}
+        # (pipeline_name, run_config_id) -> opts; run_config_id None = Top-Level-Schedule
+        pipelines_with_schedule: Dict[Tuple[str, Optional[str]], Dict[str, Any]] = {}
         pipelines_with_run_once: Dict[str, str] = {}
         pipelines_with_restart_interval: Dict[str, Dict[str, Any]] = {}
         for p in discovered:
             meta = p.metadata
-            cron = getattr(meta, "schedule_cron", None)
-            interval = getattr(meta, "schedule_interval_seconds", None)
+            schedules = getattr(meta, "schedules", None) or []
             restart_interval = getattr(meta, "restart_interval", None)
             if restart_interval:
                 parts = str(restart_interval).strip().split()
@@ -830,18 +846,43 @@ def sync_scheduler_jobs_from_pipeline_json(session: Optional[Session] = None) ->
                         "trigger_value": trigger_value,
                         "enabled": p.is_enabled()
                     }
-            if cron or interval is not None:
-                trigger_type = TriggerType.CRON if cron else TriggerType.INTERVAL
-                trigger_value = cron if cron else str(interval)
-                start_dt = _parse_schedule_datetime(getattr(meta, "schedule_start", None), end_of_day=False)
-                end_dt = _parse_schedule_datetime(getattr(meta, "schedule_end", None), end_of_day=True)
-                pipelines_with_schedule[p.name] = {
-                    "trigger_type": trigger_type,
-                    "trigger_value": trigger_value,
-                    "start_date": start_dt,
-                    "end_date": end_dt,
-                    "enabled": p.is_enabled()
-                }
+            # Variante A: Wenn schedules gesetzt, nur Einträge aus schedules; sonst Top-Level
+            if schedules:
+                for s in schedules:
+                    sid = s.get("id")
+                    cron = s.get("schedule_cron")
+                    interval = s.get("schedule_interval_seconds")
+                    if not cron and interval is None:
+                        continue
+                    trigger_type = TriggerType.CRON if cron else TriggerType.INTERVAL
+                    trigger_value = cron if cron else str(interval)
+                    start_dt = _parse_schedule_datetime(s.get("schedule_start"), end_of_day=False)
+                    end_dt = _parse_schedule_datetime(s.get("schedule_end"), end_of_day=True)
+                    key = (p.name, sid)
+                    schedule_enabled = s.get("enabled", True)
+                    pipelines_with_schedule[key] = {
+                        "trigger_type": trigger_type,
+                        "trigger_value": trigger_value,
+                        "start_date": start_dt,
+                        "end_date": end_dt,
+                        "enabled": p.is_enabled() and schedule_enabled
+                    }
+            else:
+                cron = getattr(meta, "schedule_cron", None)
+                interval = getattr(meta, "schedule_interval_seconds", None)
+                if cron or interval is not None:
+                    trigger_type = TriggerType.CRON if cron else TriggerType.INTERVAL
+                    trigger_value = cron if cron else str(interval)
+                    start_dt = _parse_schedule_datetime(getattr(meta, "schedule_start", None), end_of_day=False)
+                    end_dt = _parse_schedule_datetime(getattr(meta, "schedule_end", None), end_of_day=True)
+                    key = (p.name, None)
+                    pipelines_with_schedule[key] = {
+                        "trigger_type": trigger_type,
+                        "trigger_value": trigger_value,
+                        "start_date": start_dt,
+                        "end_date": end_dt,
+                        "enabled": p.is_enabled()
+                    }
             run_once_at = getattr(meta, "run_once_at", None)
             if run_once_at:
                 run_dt = _parse_schedule_datetime(run_once_at, end_of_day=False)
@@ -853,11 +894,12 @@ def sync_scheduler_jobs_from_pipeline_json(session: Optional[Session] = None) ->
         existing_daemon_restart_jobs = list(
             session.exec(select(ScheduledJob).where(ScheduledJob.source == "daemon_restart")).all()
         )
-        seen_names = set(pipelines_with_schedule.keys()) | set(pipelines_with_run_once.keys())
+        seen_schedule_keys = set(pipelines_with_schedule.keys())
+        seen_names = set(pipelines_with_run_once.keys())
         seen_restart_names = set(pipelines_with_restart_interval.keys())
-        for pname, opts in pipelines_with_schedule.items():
+        for (pname, run_config_id), opts in pipelines_with_schedule.items():
             existing = next(
-                (j for j in existing_json_jobs if j.pipeline_name == pname and j.trigger_type in (TriggerType.CRON, TriggerType.INTERVAL)),
+                (j for j in existing_json_jobs if j.pipeline_name == pname and getattr(j, "run_config_id", None) == run_config_id and j.trigger_type in (TriggerType.CRON, TriggerType.INTERVAL)),
                 None
             )
             try:
@@ -869,9 +911,10 @@ def sync_scheduler_jobs_from_pipeline_json(session: Optional[Session] = None) ->
                         enabled=opts["enabled"],
                         start_date=opts["start_date"],
                         end_date=opts["end_date"],
+                        run_config_id=run_config_id,
                         session=session
                     )
-                    logger.info("Scheduler-Job aus pipeline.json aktualisiert: %s", pname)
+                    logger.info("Scheduler-Job aus pipeline.json aktualisiert: %s%s", pname, f" (run_config_id={run_config_id})" if run_config_id else "")
                 else:
                     add_job(
                         pipeline_name=pname,
@@ -881,9 +924,10 @@ def sync_scheduler_jobs_from_pipeline_json(session: Optional[Session] = None) ->
                         start_date=opts["start_date"],
                         end_date=opts["end_date"],
                         source="pipeline_json",
+                        run_config_id=run_config_id,
                         session=session
                     )
-                    logger.info("Scheduler-Job aus pipeline.json angelegt: %s", pname)
+                    logger.info("Scheduler-Job aus pipeline.json angelegt: %s%s", pname, f" (run_config_id={run_config_id})" if run_config_id else "")
             except Exception as e:
                 logger.warning("Fehler beim Sync des Scheduler-Jobs für %s: %s", pname, e)
         for pname, run_once_at_str in pipelines_with_run_once.items():
@@ -949,10 +993,18 @@ def sync_scheduler_jobs_from_pipeline_json(session: Optional[Session] = None) ->
                 except Exception as e:
                     logger.warning("Fehler beim Löschen des Daemon-Restart-Jobs %s: %s", job.id, e)
         for job in existing_json_jobs:
-            if job.pipeline_name not in seen_names:
+            job_rcid = getattr(job, "run_config_id", None)
+            if job.trigger_type == TriggerType.DATE:
+                if job.pipeline_name not in seen_names:
+                    try:
+                        delete_job(job.id, session=session)
+                        logger.info("Scheduler-Job aus pipeline.json entfernt (nicht mehr in JSON): %s", job.pipeline_name)
+                    except Exception as e:
+                        logger.warning("Fehler beim Löschen des Scheduler-Jobs %s: %s", job.id, e)
+            elif (job.pipeline_name, job_rcid) not in seen_schedule_keys:
                 try:
                     delete_job(job.id, session=session)
-                    logger.info("Scheduler-Job aus pipeline.json entfernt (nicht mehr in JSON): %s", job.pipeline_name)
+                    logger.info("Scheduler-Job aus pipeline.json entfernt (nicht mehr in JSON): %s%s", job.pipeline_name, f" run_config_id={job_rcid}" if job_rcid else "")
                 except Exception as e:
                     logger.warning("Fehler beim Löschen des Scheduler-Jobs %s: %s", job.id, e)
     finally:

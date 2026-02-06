@@ -30,6 +30,11 @@ from app.auth import (
     GOOGLE_AUTHORIZE_URL,
     get_google_authorize_url,
     get_google_user_data,
+    MICROSOFT_AUTHORIZE_URL_BASE,
+    get_microsoft_authorize_url,
+    get_microsoft_user_data,
+    get_custom_oauth_authorize_url,
+    get_custom_oauth_user_data,
     process_oauth_login,
 )
 from app.core.config import config
@@ -83,6 +88,31 @@ def _redirect_anklopfen_screen(user: User) -> RedirectResponse:
     else:
         path = "/request-sent"
     return RedirectResponse(url=f"{frontend}{path}", status_code=302)
+
+
+def _providers_configured() -> dict[str, bool]:
+    """Welche OAuth-Provider sind konfiguriert (für Login-Seite)."""
+    return {
+        "github": bool(config.GITHUB_CLIENT_ID and config.GITHUB_CLIENT_SECRET),
+        "google": bool(config.GOOGLE_CLIENT_ID and config.GOOGLE_CLIENT_SECRET),
+        "microsoft": bool(config.MICROSOFT_CLIENT_ID and config.MICROSOFT_CLIENT_SECRET),
+        "custom": bool(
+            config.CUSTOM_OAUTH_CLIENT_ID
+            and config.CUSTOM_OAUTH_CLIENT_SECRET
+            and config.CUSTOM_OAUTH_AUTHORIZE_URL
+            and config.CUSTOM_OAUTH_TOKEN_URL
+            and config.CUSTOM_OAUTH_USERINFO_URL
+        ),
+    }
+
+
+@router.get("/providers", response_model=dict)
+async def get_auth_providers() -> dict[str, bool]:
+    """
+    Gibt zurück, welche OAuth-Provider konfiguriert sind.
+    Öffentlich (kein Login), damit die Login-Seite Buttons ein-/ausblenden kann.
+    """
+    return _providers_configured()
 
 
 @router.get("/github/authorize")
@@ -227,6 +257,77 @@ async def google_callback(
     return _redirect_with_token(token)
 
 
+@router.get("/microsoft/authorize")
+@limiter.limit("20/minute")
+async def microsoft_authorize(
+    request: Request,
+    state: Optional[str] = None,
+) -> RedirectResponse:
+    """
+    Leitet zur Microsoft Entra ID OAuth Authorize-URL weiter.
+    state: optional (Invitation-Token oder leer für Login mit CSRF).
+    """
+    if not config.MICROSOFT_CLIENT_ID:
+        raise HTTPException(status_code=503, detail="Microsoft OAuth ist nicht konfiguriert (MICROSOFT_CLIENT_ID fehlt)")
+    s = state if state else generate_oauth_state()
+    if not state:
+        store_oauth_state(s, {"purpose": "login"})
+    url = get_microsoft_authorize_url(s)
+    if not url.startswith(MICROSOFT_AUTHORIZE_URL_BASE):
+        raise HTTPException(status_code=400, detail="Invalid redirect target")
+    return RedirectResponse(url=url, status_code=302)
+
+
+@router.get("/microsoft/callback")
+async def microsoft_callback(
+    code: Optional[str] = None,
+    state: Optional[str] = None,
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    """
+    Microsoft OAuth Callback. Nutzt process_oauth_login (Direkt, Auto-Match, Link, INITIAL_ADMIN, Einladung, Anklopfen).
+    """
+    if not code:
+        raise HTTPException(status_code=400, detail="Microsoft OAuth: code fehlt")
+    try:
+        microsoft_user = await get_microsoft_user_data(code)
+    except HTTPException:
+        raise
+    try:
+        user, link_only, anklopfen_only, is_new_user, registration_source = await process_oauth_login(
+            provider="microsoft",
+            provider_id=str(microsoft_user["id"]),
+            email=microsoft_user.get("email"),
+            session=session,
+            oauth_data=microsoft_user,
+            state=state,
+        )
+    except HTTPException:
+        raise
+    if anklopfen_only:
+        if is_new_user:
+            track_user_registered(session, "microsoft", invitation=False, initial_admin=False, anklopfen=True)
+        return _redirect_anklopfen_screen(user)
+    if link_only:
+        logger.info("Microsoft-Konto für '%s' verknüpft", user.username)
+        return _redirect_to_settings_linked("microsoft")
+    if is_new_user and registration_source:
+        track_user_registered(
+            session,
+            "microsoft",
+            invitation=(registration_source == "invitation"),
+            initial_admin=(registration_source == "initial_admin"),
+            anklopfen=(registration_source == "anklopfen"),
+        )
+    track_user_logged_in(session, "microsoft", is_new_user)
+    if state:
+        delete_oauth_state(state)
+    token = create_access_token(username=user.username)
+    create_session(session, user, token)
+    logger.info("User '%s' per Microsoft angemeldet", user.username)
+    return _redirect_with_token(token)
+
+
 @router.get("/link/google")
 @limiter.limit("20/minute")
 async def link_google(
@@ -269,6 +370,113 @@ async def link_github(
     return RedirectResponse(url=url, status_code=302)
 
 
+@router.get("/link/microsoft")
+@limiter.limit("20/minute")
+async def link_microsoft(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+) -> RedirectResponse:
+    """
+    Startet den Microsoft-OAuth-Flow zum Verknüpfen des Microsoft-Kontos mit dem eingeloggten User.
+    """
+    if not config.MICROSOFT_CLIENT_ID:
+        raise HTTPException(status_code=503, detail="Microsoft OAuth ist nicht konfiguriert (MICROSOFT_CLIENT_ID fehlt)")
+    s = generate_oauth_state()
+    store_oauth_state(s, {"purpose": "link_microsoft", "user_id": str(current_user.id)})
+    url = get_microsoft_authorize_url(s)
+    if not url.startswith(MICROSOFT_AUTHORIZE_URL_BASE):
+        raise HTTPException(status_code=400, detail="Invalid redirect target")
+    logger.info("OAuth: Link-Flow gestartet provider=microsoft user=%s", current_user.username)
+    return RedirectResponse(url=url, status_code=302)
+
+
+@router.get("/custom/authorize")
+@limiter.limit("20/minute")
+async def custom_authorize(
+    request: Request,
+    state: Optional[str] = None,
+) -> RedirectResponse:
+    """
+    Leitet zur Custom OAuth Authorize-URL weiter (Keycloak, Auth0, etc.).
+    Nur aktiv, wenn Custom OAuth konfiguriert ist.
+    """
+    s = state if state else generate_oauth_state()
+    if not state:
+        store_oauth_state(s, {"purpose": "login"})
+    url = get_custom_oauth_authorize_url(s)
+    if config.CUSTOM_OAUTH_AUTHORIZE_URL and not url.startswith(config.CUSTOM_OAUTH_AUTHORIZE_URL.split("?")[0]):
+        raise HTTPException(status_code=400, detail="Invalid redirect target")
+    return RedirectResponse(url=url, status_code=302)
+
+
+@router.get("/custom/callback")
+async def custom_callback(
+    code: Optional[str] = None,
+    state: Optional[str] = None,
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    """
+    Custom OAuth Callback. Nutzt process_oauth_login (Direkt, Auto-Match, Link, INITIAL_ADMIN, Einladung, Anklopfen).
+    """
+    if not code:
+        raise HTTPException(status_code=400, detail="Custom OAuth: code fehlt")
+    try:
+        custom_user = await get_custom_oauth_user_data(code)
+    except HTTPException:
+        raise
+    try:
+        user, link_only, anklopfen_only, is_new_user, registration_source = await process_oauth_login(
+            provider="custom",
+            provider_id=str(custom_user["id"]),
+            email=custom_user.get("email"),
+            session=session,
+            oauth_data=custom_user,
+            state=state,
+        )
+    except HTTPException:
+        raise
+    if anklopfen_only:
+        if is_new_user:
+            track_user_registered(session, "custom", invitation=False, initial_admin=False, anklopfen=True)
+        return _redirect_anklopfen_screen(user)
+    if link_only:
+        logger.info("Custom-Konto für '%s' verknüpft", user.username)
+        return _redirect_to_settings_linked("custom")
+    if is_new_user and registration_source:
+        track_user_registered(
+            session,
+            "custom",
+            invitation=(registration_source == "invitation"),
+            initial_admin=(registration_source == "initial_admin"),
+            anklopfen=(registration_source == "anklopfen"),
+        )
+    track_user_logged_in(session, "custom", is_new_user)
+    if state:
+        delete_oauth_state(state)
+    token = create_access_token(username=user.username)
+    create_session(session, user, token)
+    logger.info("User '%s' per Custom OAuth angemeldet", user.username)
+    return _redirect_with_token(token)
+
+
+@router.get("/link/custom")
+@limiter.limit("20/minute")
+async def link_custom(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+) -> RedirectResponse:
+    """
+    Startet den Custom-OAuth-Flow zum Verknüpfen des Custom-Kontos mit dem eingeloggten User.
+    """
+    s = generate_oauth_state()
+    store_oauth_state(s, {"purpose": "link_custom", "user_id": str(current_user.id)})
+    url = get_custom_oauth_authorize_url(s)
+    if config.CUSTOM_OAUTH_AUTHORIZE_URL and not url.startswith(config.CUSTOM_OAUTH_AUTHORIZE_URL.split("?")[0]):
+        raise HTTPException(status_code=400, detail="Invalid redirect target")
+    logger.info("OAuth: Link-Flow gestartet provider=custom user=%s", current_user.username)
+    return RedirectResponse(url=url, status_code=302)
+
+
 @router.get("/me", response_model=dict, status_code=status.HTTP_200_OK)
 async def get_current_user_info(
     current_user: User = Depends(get_current_user),
@@ -291,6 +499,8 @@ async def get_current_user_info(
         "email": getattr(current_user, "email", None),
         "has_github": bool(getattr(current_user, "github_id", None)),
         "has_google": bool(getattr(current_user, "google_id", None)),
+        "has_microsoft": bool(getattr(current_user, "microsoft_id", None)),
+        "has_custom": bool(getattr(current_user, "custom_oauth_id", None)),
         "avatar_url": getattr(current_user, "avatar_url", None),
         "created_at": current_user.created_at.isoformat(),
         "role": role_val,

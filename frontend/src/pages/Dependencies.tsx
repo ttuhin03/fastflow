@@ -6,6 +6,11 @@ import { MdRefresh, MdSecurity, MdSearch, MdExpandMore, MdExpandLess } from 'rea
 import Skeleton from '../components/Skeleton'
 import './Dependencies.css'
 
+interface DependencyAuditLast {
+  last_scan_at: string | null
+  results: PipelineDeps[]
+}
+
 interface PackageRow {
   name: string
   specifier: string
@@ -45,11 +50,35 @@ export default function Dependencies() {
     },
   })
 
-  const pipelineNames = useMemo(() => (deps ?? []).map((d) => d.pipeline), [deps])
+  const {
+    data: auditLast,
+    isLoading: auditLastLoading,
+    isError: auditLastError,
+    refetch: refetchAuditLast,
+  } = useQuery<DependencyAuditLast>({
+    queryKey: ['settings', 'dependency-audit-last'],
+    queryFn: async () => {
+      const r = await apiClient.get('/settings/dependency-audit-last')
+      return r.data
+    },
+    staleTime: 60 * 1000,
+  })
+
+  const displayData = useMemo((): PipelineDeps[] | undefined => {
+    if (auditRequested && deps && deps.length > 0) return deps
+    if (auditLast?.last_scan_at && auditLast.results?.length) return auditLast.results
+    return deps ?? undefined
+  }, [auditRequested, deps, auditLast?.last_scan_at, auditLast?.results])
+
+  const showAuditColumn = Boolean(
+    (auditRequested && deps) || (auditLast?.last_scan_at && auditLast?.results?.length)
+  )
+
+  const pipelineNames = useMemo(() => (displayData ?? []).map((d) => d.pipeline), [displayData])
 
   const filtered = useMemo(() => {
-    if (!deps) return []
-    let list = deps
+    if (!displayData) return []
+    let list = displayData
     if (filterPipeline) {
       list = list.filter((d) => d.pipeline === filterPipeline)
     }
@@ -64,7 +93,7 @@ export default function Dependencies() {
       })).filter((d) => d.packages.length > 0)
     }
     return list
-  }, [deps, filterPipeline, filterVulnsOnly, searchPackage])
+  }, [displayData, filterPipeline, filterVulnsOnly, searchPackage])
 
   const toggleExpanded = (name: string) => {
     setExpandedPipelines((prev) => {
@@ -92,13 +121,22 @@ export default function Dependencies() {
     )
   }
 
+  const subtitleText = auditRequested
+    ? 'Sicherheitsprüfung (pip-audit) wurde ausgeführt.'
+    : auditLast?.last_scan_at && auditLast?.results?.length
+      ? `Letzter Scan: ${new Date(auditLast.last_scan_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}. Ergebnisse unten.`
+      : 'Klicke auf „Sicherheitsprüfung ausführen“, um einen neuen CVE-Scan zu starten, oder sieh dir die letzten gespeicherten Ergebnisse unten an.'
+
   return (
     <div className="dependencies-page">
       <div className="dependencies-header">
         <h1>Abhängigkeiten</h1>
         <p className="dependencies-subtitle">
-          Libraries und Versionen aller Pipelines mit requirements.txt.
-          {auditRequested ? ' Sicherheitsprüfung (pip-audit) wurde ausgeführt.' : ' Klicke auf „Sicherheitsprüfung“, um CVE-Scans zu laden.'}
+          Libraries und Versionen aller Pipelines mit requirements.txt.{' '}
+          {auditLastError && (
+            <span className="dependencies-subtitle-error">Letzte Scan-Ergebnisse konnten nicht geladen werden.</span>
+          )}
+          {!auditLastError && subtitleText}
         </p>
       </div>
 
@@ -140,11 +178,11 @@ export default function Dependencies() {
           <button
             type="button"
             className="btn btn-secondary"
-            onClick={() => refetch()}
-            disabled={isFetching}
+            onClick={() => { refetch(); refetchAuditLast() }}
+            disabled={isFetching || auditLastLoading}
           >
             <MdRefresh size={18} />
-            {isFetching ? 'Laden…' : 'Aktualisieren'}
+            {isFetching || auditLastLoading ? 'Laden…' : 'Aktualisieren'}
           </button>
           <button
             type="button"
@@ -161,8 +199,8 @@ export default function Dependencies() {
       <div className="dependencies-table-wrap card">
         {filtered.length === 0 ? (
           <div className="dependencies-empty">
-            {deps?.length === 0
-              ? 'Keine Pipelines mit requirements.txt gefunden.'
+            {!displayData?.length
+              ? (auditLast?.results?.length ? 'Keine Einträge passen zu den Filtern.' : 'Keine Pipelines mit requirements.txt gefunden.')
               : 'Keine Einträge passen zu den Filtern.'}
           </div>
         ) : (
@@ -170,6 +208,7 @@ export default function Dependencies() {
             {filtered.map((d) => {
               const expanded = expandedPipelines.has(d.pipeline)
               const vulns = d.vulnerabilities ?? []
+              const packages = d.packages ?? []
               return (
                 <div key={d.pipeline} className="pipeline-deps-block">
                   <button
@@ -180,8 +219,8 @@ export default function Dependencies() {
                     {expanded ? <MdExpandLess size={20} /> : <MdExpandMore size={20} />}
                     <span className="pipeline-deps-name">{d.pipeline}</span>
                     <span className="pipeline-deps-meta">
-                      {d.packages.length} Paket{d.packages.length !== 1 ? 'e' : ''}
-                      {auditRequested && (
+                      {packages.length} Paket{packages.length !== 1 ? 'e' : ''}
+                      {showAuditColumn && (
                         <>
                           {' · '}
                           {vulns.length > 0 ? (
@@ -203,19 +242,19 @@ export default function Dependencies() {
                           <tr>
                             <th>Paket</th>
                             <th>Version</th>
-                            {auditRequested && <th>Schwachstellen</th>}
+                            {showAuditColumn && <th>Schwachstellen</th>}
                           </tr>
                         </thead>
                         <tbody>
-                          {d.packages.map((p) => {
+                          {packages.map((p) => {
                             const pkgVulns = vulns.filter(
-                              (v) => (v.name && v.name.toLowerCase() === p.name.toLowerCase()) || (v as { package?: string }).package === p.name
+                              (v) => (v.name && v.name.toLowerCase() === (p as PackageRow).name.toLowerCase()) || (v as { package?: string }).package === (p as PackageRow).name
                             )
                             return (
-                              <tr key={p.name}>
-                                <td><code>{p.name}</code></td>
-                                <td>{p.version}</td>
-                                {auditRequested && (
+                              <tr key={(p as PackageRow).name}>
+                                <td><code>{(p as PackageRow).name}</code></td>
+                                <td>{(p as PackageRow).version ?? (p as PackageRow).specifier ?? '—'}</td>
+                                {showAuditColumn && (
                                   <td>
                                     {pkgVulns.length > 0 ? (
                                       <ul className="vuln-list">
@@ -241,7 +280,7 @@ export default function Dependencies() {
                           })}
                         </tbody>
                       </table>
-                      {auditRequested && vulns.length > 0 && (
+                      {showAuditColumn && vulns.length > 0 && (
                         <div className="vuln-summary">
                           <strong>Gefundene Schwachstellen:</strong>
                           <ul>

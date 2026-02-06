@@ -142,6 +142,10 @@ Statt nur manuell oder per Webhook zu starten, kannst du Pipelines **nach Zeitpl
 
 Du kannst den Zeitplan **direkt in der pipeline.json** definieren: `schedule_cron` (z.B. `"0 9 * * *"`) oder `schedule_interval_seconds` (z.B. `3600`). Optional begrenzen `schedule_start` und `schedule_end` (ISO-Datum/Zeit) den Zeitraum, in dem der Schedule aktiv ist. Beim Start des Orchestrators und nach Git-Sync werden daraus automatisch Scheduler-Jobs angelegt. Siehe [pipeline.json Referenz – Schedule](/docs/pipelines/referenz#schedule-cron--intervall-in-pipelinejson).
 
+### Mehrere Run-Konfigurationen (`schedules`)
+
+Pro Pipeline kannst du **mehrere** geplante Runs mit unterschiedlichen Cron/Intervall, Env-Variablen, Zeiträumen und Ressourcen definieren. Dafür dient das optionale Array **`schedules`** in der pipeline.json. Jeder Eintrag hat eine eindeutige **`id`** (z. B. `"prod"`, `"staging"`) und kann eigene Werte für `schedule_cron`/`schedule_interval_seconds`, `schedule_start`/`schedule_end`, `default_env`, optional `encrypted_env`, sowie **pro Schedule Overrides** für `cpu_hard_limit`, `mem_hard_limit`, `cpu_soft_limit`, `mem_soft_limit`, `timeout`, `retry_attempts` und `retry_strategy` haben. Die Env-Variablen werden zusammengeführt: zuerst Pipeline-`default_env`, dann der Eintrag-`default_env`; danach Pipeline-`encrypted_env`, dann Eintrag-`encrypted_env`. So kannst du dieselbe Pipeline z. B. täglich für Production mit höheren Limits und mehr Retries und stündlich für Staging mit geringeren Ressourcen laufen lassen. Details und Beispiel: [pipeline.json Referenz – schedules](/docs/pipelines/referenz#mehrere-run-konfigurationen-schedules).
+
 ### In der UI
 
 Unter der jeweiligen Pipeline (oder im Scheduler-Bereich) lassen sich **Cron-Ausdrücke** oder **Intervall** (z.B. alle 6 Stunden) einrichten. Die konkreten Felder hängen von der Fast-Flow-Version ab; typisch:

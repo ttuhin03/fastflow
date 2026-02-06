@@ -114,7 +114,7 @@ export default function PipelineDetail() {
     staleTime: 60_000,
   })
 
-  const { data: downstreamTriggers, refetch: refetchDownstreamTriggers } = useQuery<DownstreamTriggerItem[]>({
+  const { data: downstreamTriggers } = useQuery<DownstreamTriggerItem[]>({
     queryKey: ['downstream-triggers', name],
     queryFn: async () => {
       const response = await apiClient.get(`/pipelines/${name}/downstream-triggers`)
