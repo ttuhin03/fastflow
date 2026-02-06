@@ -361,6 +361,12 @@ class User(SQLModel, table=True):
         index=True,
         description="Google OAuth ID (optional, für Google-Login)"
     )
+    custom_oauth_id: Optional[str] = Field(
+        default=None,
+        unique=True,
+        index=True,
+        description="Custom OAuth subject ID (optional, für Custom IdP)"
+    )
     avatar_url: Optional[str] = Field(
         default=None,
         description="Profilbild-URL (von OAuth-Provider)"

@@ -1,8 +1,8 @@
 """
-Zentrale OAuth-Logik für GitHub und Google.
+Zentrale OAuth-Logik für GitHub, Google, Microsoft und Custom OAuth.
 
 - process_oauth_login: einheitliche Auswertung (Direkt-Login, Auto-Match, Link, INITIAL_ADMIN, Einladung)
-- get_or_create_initial_admin: erster Admin über INITIAL_ADMIN_EMAIL (beide Provider)
+- get_or_create_initial_admin: erster Admin über INITIAL_ADMIN_EMAIL (alle Provider)
 - create_oauth_user: neuer User aus OAuth-Daten (Einladungs-Flow)
 """
 
@@ -21,7 +21,18 @@ from app.models import Invitation, User, UserRole, UserStatus
 from app.services.notifications import notify_admin_join_request
 
 logger = logging.getLogger(__name__)
-Provider = Literal["github", "google"]
+Provider = Literal["github", "google", "microsoft", "custom"]
+
+
+def _provider_id_attr(provider: Provider) -> str:
+    """Name des User-Felds für die Provider-Subject-ID."""
+    if provider == "github":
+        return "github_id"
+    if provider == "google":
+        return "google_id"
+    if provider == "microsoft":
+        return "microsoft_id"
+    return "custom_oauth_id"
 
 
 def _unique_username(session: Session, login: str, provider_id: str) -> str:
@@ -43,7 +54,7 @@ def get_or_create_initial_admin(
     Returns:
         (user, is_newly_created): is_newly_created=True nur wenn ein neuer User angelegt wurde.
     """
-    id_attr = "github_id" if provider == "github" else "google_id"
+    id_attr = _provider_id_attr(provider)
     provider_id = str(oauth_data.get("id") or "")
     email = oauth_data.get("email")
     login = oauth_data.get("login") or oauth_data.get("name") or "user"
@@ -73,13 +84,15 @@ def get_or_create_initial_admin(
             logger.info("OAuth initial_admin: bestehender User user=%s mit %s verknüpft, role=ADMIN", user.username, provider)
             return (user, False)
         username = _unique_username(session, login, provider_id)
+        kwargs: dict = {id_attr: provider_id}
+        if provider == "github":
+            kwargs["github_login"] = oauth_data.get("login")
         user = User(
             username=username,
             email=email,
             role=UserRole.ADMIN,
             avatar_url=avatar,
-            github_login=oauth_data.get("login") if provider == "github" else None,
-            **{id_attr: provider_id},
+            **kwargs,
         )
         session.add(user)
         session.commit()
@@ -101,20 +114,22 @@ def create_oauth_user(
     Erstellt einen neuen User aus OAuth-Daten (Einladungs-Flow oder Anklopfen).
     status: UserStatus.ACTIVE für Einladung/Initial-Admin, UserStatus.PENDING für Beitrittsanfrage.
     """
-    id_attr = "github_id" if provider == "github" else "google_id"
+    id_attr = _provider_id_attr(provider)
     provider_id = str(oauth_data.get("id") or "")
     email = oauth_data.get("email") or ""
     login = oauth_data.get("login") or oauth_data.get("name") or "user"
     avatar = oauth_data.get("avatar_url") or oauth_data.get("picture")
     username = _unique_username(session, login, provider_id)
+    kwargs: dict = {id_attr: provider_id}
+    if provider == "github":
+        kwargs["github_login"] = oauth_data.get("login")
     user = User(
         username=username,
         email=email or None,
         role=role,
         avatar_url=avatar,
         status=status,
-        github_login=oauth_data.get("login") if provider == "github" else None,
-        **{id_attr: provider_id},
+        **kwargs,
     )
     session.add(user)
     session.commit()
@@ -147,16 +162,19 @@ async def process_oauth_login(
         - is_new_user=True: User wurde in diesem Flow neu angelegt
         - registration_source: "invitation" | "initial_admin" | "anklopfen" | None
     """
-    id_attr = "github_id" if provider == "github" else "google_id"
+    id_attr = _provider_id_attr(provider)
     avatar = oauth_data.get("avatar_url") or oauth_data.get("picture")
 
-    # 3) Link-Flow: state mit purpose link_google / link_github
+    # 3) Link-Flow: state mit purpose link_google / link_github / link_microsoft / link_custom
+    link_purposes = ("link_google", "link_github", "link_microsoft", "link_custom")
     if state:
         stored = get_oauth_state(state)
-        if stored and stored.get("purpose") in ("link_google", "link_github"):
+        if stored and stored.get("purpose") in link_purposes:
             purpose = stored.get("purpose")
             if (purpose == "link_google" and provider == "google") or (
                 purpose == "link_github" and provider == "github"
+            ) or (purpose == "link_microsoft" and provider == "microsoft") or (
+                purpose == "link_custom" and provider == "custom"
             ):
                 try:
                     uid = UUID(stored["user_id"])
@@ -179,7 +197,12 @@ async def process_oauth_login(
                 session.commit()
                 session.refresh(user)
                 delete_oauth_state(state)
-                logger.info("OAuth: match=link provider=%s user=%s (%s-Konto verknüpft)", provider, user.username, provider)
+                logger.info(
+                    "OAuth: match=link provider=%s user=%s (%s-Konto verknüpft)",
+                    provider,
+                    user.username,
+                    provider,
+                )
                 return _oauth_return(user, True, False)
 
     # 1) Direkt-Login: User mit dieser Provider-ID
@@ -206,7 +229,12 @@ async def process_oauth_login(
             session.add(user)
             session.commit()
             session.refresh(user)
-            logger.info("OAuth: match=email provider=%s user=%s (E-Mail-Match, %s-Konto verknüpft)", provider, user.username, provider)
+            logger.info(
+                "OAuth: match=email provider=%s user=%s (E-Mail-Match, %s-Konto verknüpft)",
+                provider,
+                user.username,
+                provider,
+            )
             return _oauth_return(user, False, False)
 
     # 4) INITIAL_ADMIN_EMAIL

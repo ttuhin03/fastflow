@@ -49,6 +49,7 @@ class UserResponse(BaseModel):
     github_id: Optional[str] = None
     github_login: Optional[str] = None
     google_id: Optional[str] = None
+    custom_oauth_id: Optional[str] = None
     status: Optional[str] = None
 
     class Config:
@@ -68,6 +69,7 @@ class UserResponse(BaseModel):
             github_id=user.github_id,
             github_login=getattr(user, "github_login", None),
             google_id=user.google_id,
+            custom_oauth_id=getattr(user, "custom_oauth_id", None),
             status=_user_status_value(user),
         )
 
@@ -130,6 +132,7 @@ async def list_users(
             github_id=user.github_id,
             github_login=getattr(user, "github_login", None),
             google_id=getattr(user, "google_id", None),
+            custom_oauth_id=getattr(user, "custom_oauth_id", None),
             status=_user_status_value(user),
         )
         for user in users
@@ -246,6 +249,7 @@ async def get_user(
         github_id=user.github_id,
         github_login=getattr(user, "github_login", None),
         google_id=getattr(user, "google_id", None),
+        custom_oauth_id=getattr(user, "custom_oauth_id", None),
         status=_user_status_value(user),
     )
 
@@ -292,6 +296,7 @@ async def approve_user(
         github_id=user.github_id,
         github_login=getattr(user, "github_login", None),
         google_id=getattr(user, "google_id", None),
+        custom_oauth_id=getattr(user, "custom_oauth_id", None),
         status=_user_status_value(user),
     )
 
@@ -329,6 +334,7 @@ async def reject_user(
         github_id=user.github_id,
         github_login=getattr(user, "github_login", None),
         google_id=getattr(user, "google_id", None),
+        custom_oauth_id=getattr(user, "custom_oauth_id", None),
         status=_user_status_value(user),
     )
 
@@ -388,6 +394,7 @@ async def update_user(
         github_id=user.github_id,
         github_login=getattr(user, "github_login", None),
         google_id=getattr(user, "google_id", None),
+        custom_oauth_id=getattr(user, "custom_oauth_id", None),
         status=_user_status_value(user),
     )
 
@@ -451,6 +458,7 @@ async def block_user(
         github_id=user.github_id,
         github_login=getattr(user, "github_login", None),
         google_id=getattr(user, "google_id", None),
+        custom_oauth_id=getattr(user, "custom_oauth_id", None),
         status=_user_status_value(user),
     )
 
@@ -502,6 +510,7 @@ async def unblock_user(
         github_id=user.github_id,
         github_login=getattr(user, "github_login", None),
         google_id=getattr(user, "google_id", None),
+        custom_oauth_id=getattr(user, "custom_oauth_id", None),
         status=_user_status_value(user),
     )
 

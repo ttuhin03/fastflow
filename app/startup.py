@@ -161,12 +161,22 @@ async def _validate_oauth_config() -> None:
 
     has_github = bool(config.GITHUB_CLIENT_ID and config.GITHUB_CLIENT_SECRET)
     has_google = bool(config.GOOGLE_CLIENT_ID and config.GOOGLE_CLIENT_SECRET)
-    if not has_github and not has_google:
+    has_microsoft = bool(config.MICROSOFT_CLIENT_ID and config.MICROSOFT_CLIENT_SECRET)
+    has_custom = bool(
+        config.CUSTOM_OAUTH_CLIENT_ID
+        and config.CUSTOM_OAUTH_CLIENT_SECRET
+        and config.CUSTOM_OAUTH_AUTHORIZE_URL
+        and config.CUSTOM_OAUTH_TOKEN_URL
+        and config.CUSTOM_OAUTH_USERINFO_URL
+    )
+    if not (has_github or has_google or has_microsoft or has_custom):
         raise RuntimeError(
             "OAuth ist nicht konfiguriert: Es muss mindestens einer der folgenden "
             "Provider vollständig gesetzt sein (jeweils CLIENT_ID und CLIENT_SECRET).\n"
-            "  - GitHub: GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET\n"
-            "  - Google:  GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET\n"
+            "  - GitHub:   GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET\n"
+            "  - Google:   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET\n"
+            "  - Microsoft: MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET\n"
+            "  - Custom:   CUSTOM_OAUTH_CLIENT_ID, CUSTOM_OAUTH_CLIENT_SECRET, *_URL\n"
             "Siehe .env.example und docs/oauth/."
         )
     base = (config.BASE_URL or "http://localhost:8000").rstrip("/")
@@ -215,11 +225,35 @@ async def _validate_oauth_config() -> None:
             "Bitte in .env und in der Google Cloud Console (APIs & Services → Anmeldedaten) prüfen.",
         )
 
+    async def verify_microsoft(client: httpx.AsyncClient, _base: str) -> None:
+        from app.auth.microsoft_oauth_user import _get_microsoft_token_url
+        redirect_uri = f"{_base}/api/auth/microsoft/callback"
+        await _verify_oauth_token_request(
+            client,
+            _get_microsoft_token_url(),
+            {
+                "client_id": config.MICROSOFT_CLIENT_ID,
+                "client_secret": config.MICROSOFT_CLIENT_SECRET,
+                "code": "__startup_verify__",
+                "redirect_uri": redirect_uri,
+                "grant_type": "authorization_code",
+            },
+            {"Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded"},
+            redirect_uri,
+            "Microsoft",
+            "invalid_grant",
+            "invalid_client",
+            "Microsoft OAuth: MICROSOFT_CLIENT_ID oder MICROSOFT_CLIENT_SECRET ist falsch. "
+            "Bitte in .env und in Azure Portal (App-Registrierung) prüfen.",
+        )
+
     async with httpx.AsyncClient(timeout=15.0) as client:
         if has_github:
             await call_async_with_circuit_breaker(circuit_oauth, verify_github, client, base)
         if has_google:
             await call_async_with_circuit_breaker(circuit_oauth, verify_google, client, base)
+        if has_microsoft:
+            await call_async_with_circuit_breaker(circuit_oauth, verify_microsoft, client, base)
 
 
 async def _run_step(

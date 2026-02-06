@@ -255,6 +255,12 @@
   animation: formFadeIn 0.8s ease-out 0.6s both;
 }
 
+/* Tooltip-Wrapper für ausgegraute Buttons: volle Breite wie die anderen Buttons */
+.login-form .tooltip-trigger {
+  display: block;
+  width: 100%;
+}
+
 @keyframes formFadeIn {
   from {
     opacity: 0;
@@ -409,7 +415,9 @@
 
 /* OAuth buttons – elevated, aligned with app design */
 .login-btn-github,
-.login-btn-google {
+.login-btn-google,
+.login-btn-microsoft,
+.login-btn-custom {
   background: color-mix(in srgb, var(--color-surface-variant) 60%, transparent);
   border: 1px solid color-mix(in srgb, var(--color-border) 50%, rgba(255, 255, 255, 0.06));
   border-radius: var(--radius-lg);
@@ -421,12 +429,15 @@
   transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.login-btn-google {
+.login-btn-google,
+.login-btn-microsoft,
+.login-btn-custom {
   margin-top: var(--spacing-sm);
 }
 
 .login-btn-github .login-btn-github-icon,
-.login-btn-google .login-btn-google-icon {
+.login-btn-google .login-btn-google-icon,
+.login-btn-microsoft .login-btn-microsoft-icon {
   width: 22px;
   height: 22px;
   flex-shrink: 0;
@@ -435,7 +446,9 @@
 }
 
 .login-btn-github:hover:not(:disabled),
-.login-btn-google:hover:not(:disabled) {
+.login-btn-google:hover:not(:disabled),
+.login-btn-microsoft:hover:not(:disabled),
+.login-btn-custom:hover:not(:disabled) {
   background: color-mix(in srgb, var(--color-surface-variant) 90%, transparent);
   border-color: color-mix(in srgb, var(--color-border) 80%, rgba(255, 255, 255, 0.1));
   transform: translateY(-2px);
@@ -443,9 +456,24 @@
 }
 
 .login-btn-github:hover:not(:disabled)::before,
-.login-btn-google:hover:not(:disabled)::before {
+.login-btn-google:hover:not(:disabled)::before,
+.login-btn-microsoft:hover:not(:disabled)::before,
+.login-btn-custom:hover:not(:disabled)::before {
   width: 0;
   height: 0;
+}
+
+/* Nicht konfigurierte Provider: ausgeblendet, mit Tooltip-Info beim Hover */
+.login-btn-unconfigured {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: auto;
+}
+
+.login-btn-unconfigured:hover {
+  transform: none;
+  box-shadow: none;
+  background: color-mix(in srgb, var(--color-surface-variant) 60%, transparent);
 }
 
 .login-btn::before {
@@ -466,7 +494,7 @@
   height: 300px;
 }
 
-.login-btn:not(.login-btn-github):not(.login-btn-google):hover:not(:disabled) {
+.login-btn:not(.login-btn-github):not(.login-btn-google):not(.login-btn-microsoft):not(.login-btn-custom):hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 
     0 6px 20px rgba(33, 150, 243, 0.4),
