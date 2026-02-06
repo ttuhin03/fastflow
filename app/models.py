@@ -154,6 +154,11 @@ class PipelineRun(SQLModel, table=True):
         default="manual",
         description="Trigger-Quelle: 'manual', 'webhook', 'scheduler', 'daemon_restart', 'downstream'"
     )
+    run_config_id: Optional[str] = Field(
+        default=None,
+        index=True,
+        description="Run-Konfiguration aus pipeline.json schedules (z.B. prod, staging)"
+    )
 
 
 class RunCellLog(SQLModel, table=True):
@@ -216,6 +221,11 @@ class ScheduledJob(SQLModel, table=True):
     source: str = Field(
         default="api",
         description="Herkunft: 'api' (UI/API) oder 'pipeline_json'"
+    )
+    run_config_id: Optional[str] = Field(
+        default=None,
+        index=True,
+        description="Run-Konfiguration aus pipeline.json schedules (z.B. prod, staging)"
     )
     created_at: datetime = Field(
         default_factory=_utc_now,

@@ -17,6 +17,7 @@ interface Job {
   next_run_time?: string | null
   last_run_time?: string | null
   run_count?: number
+  run_config_id?: string | null
   pipeline_json_edit_url?: string | null
 }
 
@@ -68,8 +69,9 @@ export default function Scheduler() {
     }
   }
 
-  const handleDelete = async (jobId: string, pipelineName: string) => {
-    const confirmed = await showConfirm(`Möchten Sie den Job für '${pipelineName}' wirklich löschen?`)
+  const handleDelete = async (jobId: string, job: Job) => {
+    const label = job.run_config_id ? `${job.pipeline_name} (${job.run_config_id})` : job.pipeline_name
+    const confirmed = await showConfirm(`Möchten Sie den Job für '${label}' wirklich löschen?`)
     if (confirmed) {
       deleteMutation.mutate(jobId)
     }
@@ -108,7 +110,14 @@ export default function Scheduler() {
             {jobs.map((job) => (
               <>
                 <tr key={job.id}>
-                  <td>{job.pipeline_name}</td>
+                  <td>
+                    {job.pipeline_name}
+                    {job.run_config_id && (
+                      <span className="run-config-badge" title="Run-Konfiguration aus pipeline.json schedules">
+                        {job.run_config_id}
+                      </span>
+                    )}
+                  </td>
                   <td>{job.trigger_type}</td>
                   <td>
                     <Tooltip content={job.trigger_type === 'CRON'
@@ -189,7 +198,7 @@ export default function Scheduler() {
                             </button>
                           </Tooltip>
                           <button
-                            onClick={() => handleDelete(job.id, job.pipeline_name)}
+                            onClick={() => handleDelete(job.id, job)}
                             className="delete-button"
                           >
                             Löschen

@@ -317,6 +317,17 @@
   color: #888;
 }
 
+.run-config-badge {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background-color: var(--color-surface-variant, #333);
+  color: var(--color-text-secondary, #aaa);
+  border-radius: var(--radius-sm, 4px);
+}
+
 .details-button {
   padding: 0.25rem 0.75rem;
   background-color: #646cff;

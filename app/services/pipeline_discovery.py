@@ -50,6 +50,7 @@ class PipelineMetadata:
         max_instances: Optional[int] = None,
         downstream_triggers: Optional[List[Dict[str, Any]]] = None,
         encrypted_env: Optional[Dict[str, str]] = None,
+        schedules: Optional[List[Dict[str, Any]]] = None,
     ):
         """
         Initialisiert Pipeline-Metadaten.
@@ -84,6 +85,7 @@ class PipelineMetadata:
             max_instances: Maximale Anzahl gleichzeitiger Runs dieser Pipeline (None = nur globales Limit).
             downstream_triggers: Liste von Downstream-Triggern (pipeline, on_success, on_failure).
             encrypted_env: Verschluesselte Env-Vars (Key -> Ciphertext); Nutzer traegt Ciphertext manuell in pipeline.json ein.
+            schedules: Optionale Liste von Run-Konfigurationen (id, schedule_cron/schedule_interval_seconds, default_env, encrypted_env pro Eintrag). Wenn gesetzt, nur diese Runs; Top-Level-Schedule wird ignoriert.
         """
         self.cpu_hard_limit = cpu_hard_limit
         self.mem_hard_limit = mem_hard_limit
@@ -118,6 +120,100 @@ class PipelineMetadata:
         )
         self.downstream_triggers = self._normalize_downstream_triggers(downstream_triggers or [])
         self.encrypted_env = self._normalize_encrypted_env(encrypted_env)
+        self.schedules = self._normalize_schedules(schedules) if schedules else []
+
+    @staticmethod
+    def _normalize_schedules(raw: Optional[List[Any]]) -> List[Dict[str, Any]]:
+        """Normalisiert schedules-Array aus JSON: Liste von Dicts mit id, schedule_cron oder schedule_interval_seconds, optional default_env/encrypted_env."""
+        if not raw or not isinstance(raw, list):
+            return []
+        result: List[Dict[str, Any]] = []
+        for item in raw:
+            if not isinstance(item, dict):
+                continue
+            sid = item.get("id")
+            if not sid or not str(sid).strip():
+                continue
+            cron = item.get("schedule_cron")
+            if cron == "" or cron is None:
+                cron = None
+            else:
+                cron = str(cron).strip() or None
+            interval = item.get("schedule_interval_seconds")
+            if interval is not None:
+                try:
+                    interval = int(interval)
+                except (TypeError, ValueError):
+                    interval = None
+            if cron and interval is not None:
+                interval = None
+            if not cron and interval is None:
+                continue
+            start_s = item.get("schedule_start")
+            if start_s == "" or start_s is None:
+                start_s = None
+            else:
+                start_s = str(start_s).strip() or None
+            end_s = item.get("schedule_end")
+            if end_s == "" or end_s is None:
+                end_s = None
+            else:
+                end_s = str(end_s).strip() or None
+            default_env = item.get("default_env")
+            if default_env is not None and isinstance(default_env, dict):
+                default_env = {str(k): str(v) for k, v in default_env.items() if isinstance(k, str) and k.strip() and isinstance(v, str)}
+            else:
+                default_env = {}
+            enc_raw = item.get("encrypted_env")
+            enc_env = PipelineMetadata._normalize_encrypted_env(enc_raw if isinstance(enc_raw, dict) else None)
+            enabled = item.get("enabled", True)
+            if not isinstance(enabled, bool):
+                enabled = bool(enabled)
+            # Optionale pro-Schedule-Overrides: CPU, Memory, Timeout, Retry
+            cpu_hard = item.get("cpu_hard_limit")
+            cpu_hard_limit = float(cpu_hard) if cpu_hard is not None and isinstance(cpu_hard, (int, float)) else None
+            mem_hard = item.get("mem_hard_limit")
+            mem_hard_limit = str(mem_hard).strip() if mem_hard is not None and str(mem_hard).strip() else None
+            cpu_soft = item.get("cpu_soft_limit")
+            cpu_soft_limit = float(cpu_soft) if cpu_soft is not None and isinstance(cpu_soft, (int, float)) else None
+            mem_soft = item.get("mem_soft_limit")
+            mem_soft_limit = str(mem_soft).strip() if mem_soft is not None and str(mem_soft).strip() else None
+            timeout_val = item.get("timeout")
+            if timeout_val is not None:
+                try:
+                    timeout_schedule = int(timeout_val)
+                except (TypeError, ValueError):
+                    timeout_schedule = None
+            else:
+                timeout_schedule = None
+            retry_val = item.get("retry_attempts")
+            if retry_val is not None:
+                try:
+                    retry_attempts_schedule = int(retry_val)
+                except (TypeError, ValueError):
+                    retry_attempts_schedule = None
+            else:
+                retry_attempts_schedule = None
+            retry_strategy_raw = item.get("retry_strategy")
+            retry_strategy_schedule = retry_strategy_raw if isinstance(retry_strategy_raw, dict) else None
+            result.append({
+                "id": str(sid).strip(),
+                "schedule_cron": cron,
+                "schedule_interval_seconds": interval,
+                "schedule_start": start_s,
+                "schedule_end": end_s,
+                "default_env": default_env,
+                "encrypted_env": enc_env,
+                "enabled": enabled,
+                "cpu_hard_limit": cpu_hard_limit,
+                "mem_hard_limit": mem_hard_limit,
+                "cpu_soft_limit": cpu_soft_limit,
+                "mem_soft_limit": mem_soft_limit,
+                "timeout": timeout_schedule,
+                "retry_attempts": retry_attempts_schedule,
+                "retry_strategy": retry_strategy_schedule,
+            })
+        return result
 
     @staticmethod
     def _normalize_downstream_triggers(raw: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -208,6 +304,8 @@ class PipelineMetadata:
             result["downstream_triggers"] = self.downstream_triggers
         if self.encrypted_env:
             result["encrypted_env"] = self.encrypted_env
+        if self.schedules:
+            result["schedules"] = self.schedules
         return result
 
 
@@ -510,6 +608,10 @@ def _load_pipeline_metadata(
         encrypted_env = PipelineMetadata._normalize_encrypted_env(
             encrypted_env_raw if isinstance(encrypted_env_raw, dict) else None
         )
+        schedules_raw = data.get("schedules")
+        schedules = PipelineMetadata._normalize_schedules(
+            schedules_raw if isinstance(schedules_raw, list) else None
+        )
 
         metadata = PipelineMetadata(
             cpu_hard_limit=data.get("cpu_hard_limit"),
@@ -537,6 +639,7 @@ def _load_pipeline_metadata(
             max_instances=max_instances,
             downstream_triggers=downstream_triggers,
             encrypted_env=encrypted_env if encrypted_env else None,
+            schedules=schedules if schedules else None,
         )
         
         return metadata

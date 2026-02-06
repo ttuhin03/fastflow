@@ -41,6 +41,7 @@ class JobUpdate(BaseModel):
     enabled: Optional[bool] = Field(None, description="Neuer Enabled-Status")
     start_date: Optional[str] = Field(None, description="Neuer Start des Zeitraums (ISO-Datum/Zeit)")
     end_date: Optional[str] = Field(None, description="Neues Ende des Zeitraums (ISO-Datum/Zeit)")
+    run_config_id: Optional[str] = Field(None, description="Run-Konfiguration aus pipeline.json schedules")
 
 
 class JobResponse(BaseModel):
@@ -57,6 +58,7 @@ class JobResponse(BaseModel):
     source: str = "api"
     start_date: Optional[str] = None
     end_date: Optional[str] = None
+    run_config_id: Optional[str] = None
     pipeline_json_edit_url: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -94,6 +96,7 @@ async def list_jobs(
                     source=getattr(job, "source", "api"),
                     start_date=job.start_date.isoformat() if getattr(job, "start_date", None) else None,
                     end_date=job.end_date.isoformat() if getattr(job, "end_date", None) else None,
+                    run_config_id=getattr(job, "run_config_id", None),
                     pipeline_json_edit_url=edit_url,
                 ))
         return result
@@ -178,17 +181,21 @@ async def update_job_by_id(
     
     start_dt = _parse_schedule_datetime(job_data.start_date, end_of_day=False) if job_data.start_date else None
     end_dt = _parse_schedule_datetime(job_data.end_date, end_of_day=True) if job_data.end_date else None
+    set_fields = job_data.model_dump(exclude_unset=True)
+    update_kwargs = dict(
+        job_id=job_id,
+        pipeline_name=job_data.pipeline_name,
+        trigger_type=job_data.trigger_type,
+        trigger_value=job_data.trigger_value,
+        enabled=job_data.enabled,
+        start_date=start_dt,
+        end_date=end_dt,
+        session=session,
+    )
+    if "run_config_id" in set_fields:
+        update_kwargs["run_config_id"] = job_data.run_config_id
     try:
-        job = update_job(
-            job_id=job_id,
-            pipeline_name=job_data.pipeline_name,
-            trigger_type=job_data.trigger_type,
-            trigger_value=job_data.trigger_value,
-            enabled=job_data.enabled,
-            start_date=start_dt,
-            end_date=end_dt,
-            session=session
-        )
+        job = update_job(**update_kwargs)
         
         # Job-Details abrufen für vollständige Response
         details = get_job_details(job.id, session)
@@ -206,6 +213,7 @@ async def update_job_by_id(
                 source=getattr(job, "source", "api"),
                 start_date=job.start_date.isoformat() if getattr(job, "start_date", None) else None,
                 end_date=job.end_date.isoformat() if getattr(job, "end_date", None) else None,
+                run_config_id=getattr(job, "run_config_id", None),
             )
     except ValueError as e:
         raise HTTPException(
@@ -247,16 +255,19 @@ async def get_job_runs(
             detail=f"Job nicht gefunden: {job_id}"
         )
     
-    # Runs für diese Pipeline abrufen
+    # Runs für diese Pipeline (und ggf. run_config_id) abrufen
     from app.models import PipelineRun
     from sqlmodel import select
-    
+
     stmt = (
         select(PipelineRun)
         .where(PipelineRun.pipeline_name == job.pipeline_name)
         .order_by(PipelineRun.started_at.desc())
         .limit(limit)
     )
+    job_rcid = getattr(job, "run_config_id", None)
+    if job_rcid is not None:
+        stmt = stmt.where(PipelineRun.run_config_id == job_rcid)
     runs = session.exec(stmt).all()
     
     # Response-Objekte erstellen

@@ -273,7 +273,8 @@ async def run_pipeline(
     env_vars: Optional[Dict[str, str]] = None,
     parameters: Optional[Dict[str, str]] = None,
     session: Optional[Session] = None,
-    triggered_by: str = "manual"
+    triggered_by: str = "manual",
+    run_config_id: Optional[str] = None
 ) -> PipelineRun:
     """
     Startet eine Pipeline mit optionalen Environment-Variablen und Parametern.
@@ -284,6 +285,7 @@ async def run_pipeline(
         parameters: Dictionary mit Pipeline-Parametern (werden als Env-Vars injiziert)
         session: SQLModel Session (optional, wird intern erstellt wenn nicht vorhanden)
         triggered_by: Trigger-Quelle ("manual", "webhook", oder "scheduler", Standard: "manual")
+        run_config_id: Optionale Run-Konfiguration aus pipeline.json schedules (z.B. prod, staging)
     
     Returns:
         PipelineRun: Der erstellte PipelineRun-Datensatz mit Status PENDING
@@ -346,11 +348,21 @@ async def run_pipeline(
         from app.services.secrets import get_all_secrets, decrypt
         all_secrets = get_all_secrets(session)
         
-        # Environment-Variablen zusammenführen
-        # 1. Default-Env-Vars aus Metadaten
-        merged_env_vars = pipeline.metadata.default_env.copy()
+        # Run-Konfiguration aus schedules (falls run_config_id gesetzt)
+        schedule_config: Optional[Dict[str, Any]] = None
+        if run_config_id and getattr(pipeline.metadata, "schedules", None):
+            for s in pipeline.metadata.schedules:
+                if s.get("id") == run_config_id:
+                    schedule_config = s
+                    break
         
-        # 2. Verschluesselte Env-Vars aus pipeline.json (encrypted_env)
+        # Environment-Variablen zusammenführen
+        # 1. Default-Env-Vars aus Pipeline-Metadaten
+        merged_env_vars = pipeline.metadata.default_env.copy()
+        # 2. Schedule-spezifische default_env (überschreibt/ergänzt)
+        if schedule_config and schedule_config.get("default_env"):
+            merged_env_vars.update(schedule_config["default_env"])
+        # 3. Verschluesselte Env-Vars aus pipeline.json (Pipeline-Level)
         if getattr(pipeline.metadata, "encrypted_env", None):
             for env_key, ciphertext in pipeline.metadata.encrypted_env.items():
                 try:
@@ -360,11 +372,19 @@ async def run_pipeline(
                         "encrypted_env: Eintrag '%s' fuer Pipeline '%s' konnte nicht entschluesselt werden: %s",
                         env_key, name, e,
                     )
-        
-        # 3. Secrets aus Datenbank (haben Vorrang vor Default-Env-Vars und encrypted_env)
+        # 4. Schedule-spezifische encrypted_env (überschreibt bei gleichem Key)
+        if schedule_config and schedule_config.get("encrypted_env"):
+            for env_key, ciphertext in schedule_config["encrypted_env"].items():
+                try:
+                    merged_env_vars[env_key] = decrypt(ciphertext)
+                except ValueError as e:
+                    logger.warning(
+                        "schedules[].encrypted_env: Eintrag '%s' fuer Pipeline '%s' (run_config_id=%s) konnte nicht entschluesselt werden: %s",
+                        env_key, name, run_config_id, e,
+                    )
+        # 5. Secrets aus Datenbank (haben Vorrang)
         merged_env_vars.update(all_secrets)
-        
-        # 4. UI-spezifische Env-Vars und Parameter (haben Vorrang bei Duplikaten)
+        # 6. UI-spezifische Env-Vars und Parameter (haben Vorrang bei Duplikaten)
         merged_env_vars.update(env_vars)
         merged_env_vars.update(parameters)
         
@@ -375,7 +395,8 @@ async def run_pipeline(
             log_file=str(config.LOGS_DIR / f"{name}_{datetime.now(timezone.utc).isoformat()}.log"),
             env_vars=merged_env_vars,
             parameters=parameters,
-            triggered_by=triggered_by
+            triggered_by=triggered_by,
+            run_config_id=run_config_id
         )
         
         session.add(run)
@@ -435,6 +456,32 @@ async def _run_container_task(
         if not run:
             logger.error(f"Run {run_id} nicht in Datenbank gefunden")
             return
+
+        # Pro-Schedule-Overrides: aus run_config_id die Schedule-Config holen und effektive Limits/Timeout/Retry ermitteln
+        schedule_config: Optional[Dict[str, Any]] = None
+        if getattr(run, "run_config_id", None) and getattr(pipeline.metadata, "schedules", None):
+            for s in pipeline.metadata.schedules:
+                if s.get("id") == run.run_config_id:
+                    schedule_config = s
+                    break
+        _cpu_hard = schedule_config.get("cpu_hard_limit") if schedule_config else None
+        effective_cpu_hard_limit = _cpu_hard if _cpu_hard is not None else getattr(pipeline.metadata, "cpu_hard_limit", None)
+        _mem_hard = schedule_config.get("mem_hard_limit") if schedule_config else None
+        effective_mem_hard_limit = _mem_hard if _mem_hard is not None else getattr(pipeline.metadata, "mem_hard_limit", None)
+        _cpu_soft = schedule_config.get("cpu_soft_limit") if schedule_config else None
+        effective_cpu_soft_limit = _cpu_soft if _cpu_soft is not None else getattr(pipeline.metadata, "cpu_soft_limit", None)
+        _mem_soft = schedule_config.get("mem_soft_limit") if schedule_config else None
+        effective_mem_soft_limit = _mem_soft if _mem_soft is not None else getattr(pipeline.metadata, "mem_soft_limit", None)
+        _timeout = schedule_config.get("timeout") if schedule_config else None
+        if _timeout is not None:
+            effective_timeout = None if _timeout == 0 else _timeout
+        else:
+            t = pipeline.get_timeout()
+            effective_timeout = None if t == 0 else t
+        _retry = schedule_config.get("retry_attempts") if schedule_config else None
+        effective_retry_attempts = _retry if _retry is not None else getattr(pipeline.metadata, "retry_attempts", None)
+        _retry_strat = schedule_config.get("retry_strategy") if schedule_config else None
+        effective_retry_strategy = _retry_strat if _retry_strat is not None else getattr(pipeline.metadata, "retry_strategy", None)
         
         # Warte auf Pre-Heating-Lock (falls Pre-Heating aktiv ist)
         if config.UV_PRE_HEAT:
@@ -474,9 +521,9 @@ async def _run_container_task(
         # Container-Start vorbereiten
         client = _get_docker_client()
         
-        # Resource-Limits aus Metadaten
-        cpu_hard_limit = pipeline.metadata.cpu_hard_limit
-        mem_hard_limit = pipeline.metadata.mem_hard_limit
+        # Resource-Limits (Pipeline oder pro-Schedule-Override)
+        cpu_hard_limit = effective_cpu_hard_limit
+        mem_hard_limit = effective_mem_hard_limit
         
         # Container-Konfiguration
         # Host-Pfade für Volume-Mounts verwenden (falls in Docker-Container)
@@ -624,8 +671,8 @@ async def _run_container_task(
         session.add(run)
         session.commit()
         
-        # Pipeline-spezifisches Timeout bestimmen
-        timeout = pipeline.get_timeout() or config.CONTAINER_TIMEOUT
+        # Pipeline- oder Schedule-spezifisches Timeout
+        timeout = effective_timeout or config.CONTAINER_TIMEOUT
         
         # Container-Wait mit Timeout
         if timeout:
@@ -799,7 +846,7 @@ async def _run_container_task(
                 pass
             else:
                 # Script-Pipeline: ggf. neuen Run als Retry starten
-                retry_attempts = pipeline.get_retry_attempts()
+                retry_attempts = effective_retry_attempts
                 if retry_attempts is None:
                     retry_attempts = config.RETRY_ATTEMPTS
 
@@ -813,12 +860,12 @@ async def _run_container_task(
                     
                     if current_retry_count < retry_attempts:
                         # Retry nötig
-                        retry_strategy = pipeline.metadata.retry_strategy
+                        retry_strategy = effective_retry_strategy
                         
                         # Warte basierend auf Retry-Strategie
                         await wait_for_retry(current_retry_count + 1, retry_strategy)
                         
-                        # Starte neuen Run mit erhöhtem retry_count
+                        # Starte neuen Run mit erhöhtem retry_count (run_config_id beibehalten)
                         new_env_vars = env_vars.copy()
                         new_env_vars["_fastflow_retry_count"] = str(current_retry_count + 1)
                         new_env_vars["_fastflow_previous_run_id"] = str(run_id)
@@ -832,7 +879,8 @@ async def _run_container_task(
                             env_vars=new_env_vars,
                             parameters=None,  # Parameter werden nicht retry'd
                             session=session,
-                            triggered_by=f"{run.triggered_by}_retry"
+                            triggered_by=f"{run.triggered_by}_retry",
+                            run_config_id=run.run_config_id
                         )
                         return  # Originaler Run bleibt als FAILED, neuer Run wird gestartet
             
@@ -914,9 +962,20 @@ async def _run_container_task(
             if run:
                 pipeline = get_pipeline(run.pipeline_name)
                 if pipeline and pipeline.get_entry_type() != "notebook":
-                    retry_attempts = pipeline.get_retry_attempts()
+                    sched = None
+                    if getattr(run, "run_config_id", None) and getattr(pipeline.metadata, "schedules", None):
+                        for s in pipeline.metadata.schedules:
+                            if s.get("id") == run.run_config_id:
+                                sched = s
+                                break
+                    retry_attempts = sched.get("retry_attempts") if sched else None
+                    if retry_attempts is None:
+                        retry_attempts = pipeline.get_retry_attempts()
                     if retry_attempts is None:
                         retry_attempts = config.RETRY_ATTEMPTS
+                    retry_strategy = sched.get("retry_strategy") if sched else None
+                    if retry_strategy is None:
+                        retry_strategy = getattr(pipeline.metadata, "retry_strategy", None)
                     
                     current_retry_count = run.env_vars.get("_fastflow_retry_count", "0")
                     try:
@@ -925,8 +984,6 @@ async def _run_container_task(
                         current_retry_count = 0
                     
                     if retry_attempts > 0 and current_retry_count < retry_attempts:
-                        retry_strategy = pipeline.metadata.retry_strategy
-                        
                         await wait_for_retry(current_retry_count + 1, retry_strategy)
                         
                         new_env_vars = run.env_vars.copy()
@@ -941,7 +998,8 @@ async def _run_container_task(
                             env_vars=new_env_vars,
                             parameters=None,
                             session=session,
-                            triggered_by=f"{run.triggered_by}_retry"
+                            triggered_by=f"{run.triggered_by}_retry",
+                            run_config_id=run.run_config_id
                         )
                         return
             
@@ -1466,8 +1524,8 @@ async def _monitor_metrics(
                     exceeded_value = None
                     exceeded_limit = None
                     
-                    if pipeline.metadata.cpu_soft_limit and cpu_percent:
-                        cpu_soft_limit_percent = pipeline.metadata.cpu_soft_limit * 100
+                    if effective_cpu_soft_limit and cpu_percent:
+                        cpu_soft_limit_percent = effective_cpu_soft_limit * 100
                         if cpu_percent > cpu_soft_limit_percent:
                             soft_limit_exceeded = True
                             if not exceeded_resource:  # Nur erste Überschreitung melden
@@ -1475,8 +1533,8 @@ async def _monitor_metrics(
                                 exceeded_value = cpu_percent
                                 exceeded_limit = cpu_soft_limit_percent
                     
-                    if pipeline.metadata.mem_soft_limit:
-                        mem_soft_limit_bytes = _convert_memory_to_bytes(pipeline.metadata.mem_soft_limit)
+                    if effective_mem_soft_limit:
+                        mem_soft_limit_bytes = _convert_memory_to_bytes(effective_mem_soft_limit)
                         mem_soft_limit_mb = mem_soft_limit_bytes / (1024 * 1024)
                         if ram_usage_mb > mem_soft_limit_mb:
                             soft_limit_exceeded = True

@@ -98,6 +98,53 @@ Wenn beide `schedule_cron` und `schedule_interval_seconds` gesetzt sind, hat Cro
 
 | `run_once_at` | String, optional | ISO-Datum/Zeit – Pipeline einmalig zu diesem Zeitpunkt ausführen. Beim Git-Sync/Start wird ein entsprechender Scheduler-Job (Typ DATE) angelegt. Muss in der Zukunft liegen. |
 
+### Mehrere Run-Konfigurationen (`schedules`)
+
+Wenn du **pro Pipeline mehrere** geplante Runs mit unterschiedlichen Cron/Intervall, Env-Variablen oder Zeiträumen brauchst, kannst du das optionale Array **`schedules`** nutzen. Jeder Eintrag wird zu einem eigenen Scheduler-Job; jeder Run verwendet die zugehörige Run-Konfiguration (inkl. eigener `default_env` und optional `encrypted_env`).
+
+**Verhalten:** Ist `schedules` vorhanden und nicht leer, werden **nur** diese Einträge verwendet; die Top-Level-Felder `schedule_cron`/`schedule_interval_seconds`/`schedule_start`/`schedule_end` werden dann **nicht** für Scheduler-Jobs genutzt. Ist `schedules` weggelassen oder leer, gilt wie bisher ein einzelner Job aus den Top-Level-Schedule-Feldern.
+
+| Feld (pro Eintrag) | Typ | Beschreibung |
+|-------------------|-----|---------------|
+| `id` | String, erforderlich | Eindeutige Kennung der Run-Konfiguration (z. B. `"prod"`, `"staging"`). Wird in der UI und in Run-Historien als `run_config_id` angezeigt. |
+| `schedule_cron` | String, optional | 5-Teile-Cron (z. B. `"0 8 * * *"`). Entweder dies oder `schedule_interval_seconds`. |
+| `schedule_interval_seconds` | Integer, optional | Intervall in Sekunden. Entweder dies oder `schedule_cron`. |
+| `schedule_start` | String, optional | ISO-Datum/Zeit – Start des Zeitraums für diesen Schedule. |
+| `schedule_end` | String, optional | ISO-Datum/Zeit – Ende des Zeitraums. |
+| `default_env` | Object, optional | Zusätzliche/überschreibende Env-Variablen für diesen Run. Wird mit Pipeline-`default_env` zusammengeführt (Eintrag überschreibt). |
+| `encrypted_env` | Object, optional | Pro Schedule eigene verschlüsselte Env-Vars (Key → Ciphertext). Wird mit Pipeline-`encrypted_env` zusammengeführt; gleicher Key wird überschrieben. |
+| `enabled` | Boolean, optional | Schedule aktiviert/deaktiviert (Standard: `true`). Bei `false` wird der Job angelegt, aber deaktiviert (Pipeline-`enabled` bleibt weiterhin wirksam). |
+| `cpu_hard_limit` | Number, optional | CPU-Limit in Kernen für diesen Schedule (überschreibt Pipeline-Wert). |
+| `mem_hard_limit` | String, optional | RAM-Limit (z. B. `"512m"`, `"1g"`) für diesen Schedule (überschreibt Pipeline-Wert). |
+| `cpu_soft_limit` | Number, optional | CPU-Soft-Limit für Monitoring für diesen Schedule. |
+| `mem_soft_limit` | String, optional | RAM-Soft-Limit für Monitoring für diesen Schedule. |
+| `timeout` | Integer, optional | Timeout in Sekunden für diesen Schedule (`0` = unbegrenzt). Überschreibt Pipeline-`timeout`. |
+| `retry_attempts` | Integer, optional | Anzahl Retry-Versuche für diesen Schedule. Überschreibt Pipeline-`retry_attempts`. |
+| `retry_strategy` | Object, optional | Retry-Strategie für diesen Schedule (wie [Retry-Strategien](#retry-strategien)). Überschreibt Pipeline-`retry_strategy`. |
+
+**Beispiel:**
+
+```json
+{
+  "description": "ETL mit mehreren Runs",
+  "default_env": { "LOG_LEVEL": "INFO" },
+  "schedules": [
+    {
+      "id": "prod",
+      "schedule_cron": "0 8 * * *",
+      "schedule_start": "2025-01-01T00:00:00",
+      "schedule_end": "2025-12-31T23:59:59",
+      "default_env": { "ENVIRONMENT": "production", "DRY_RUN": "false" }
+    },
+    {
+      "id": "staging",
+      "schedule_interval_seconds": 3600,
+      "default_env": { "ENVIRONMENT": "staging", "DRY_RUN": "true" }
+    }
+  ]
+}
+```
+
 ### Dauerläufer (Daemon)
 
 | Feld | Typ | Beschreibung |
