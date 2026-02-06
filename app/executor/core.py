@@ -343,17 +343,28 @@ async def run_pipeline(
         # Pre-Heating-Lock abrufen (wenn Pre-Heating aktiv ist)
         pre_heating_lock = _get_pre_heating_lock(name)
         # Secrets aus Datenbank abrufen
-        from app.services.secrets import get_all_secrets
+        from app.services.secrets import get_all_secrets, decrypt
         all_secrets = get_all_secrets(session)
         
         # Environment-Variablen zusammenführen
         # 1. Default-Env-Vars aus Metadaten
         merged_env_vars = pipeline.metadata.default_env.copy()
         
-        # 2. Secrets aus Datenbank (haben Vorrang vor Default-Env-Vars)
+        # 2. Verschluesselte Env-Vars aus pipeline.json (encrypted_env)
+        if getattr(pipeline.metadata, "encrypted_env", None):
+            for env_key, ciphertext in pipeline.metadata.encrypted_env.items():
+                try:
+                    merged_env_vars[env_key] = decrypt(ciphertext)
+                except ValueError as e:
+                    logger.warning(
+                        "encrypted_env: Eintrag '%s' fuer Pipeline '%s' konnte nicht entschluesselt werden: %s",
+                        env_key, name, e,
+                    )
+        
+        # 3. Secrets aus Datenbank (haben Vorrang vor Default-Env-Vars und encrypted_env)
         merged_env_vars.update(all_secrets)
         
-        # 3. UI-spezifische Env-Vars und Parameter (haben Vorrang bei Duplikaten)
+        # 4. UI-spezifische Env-Vars und Parameter (haben Vorrang bei Duplikaten)
         merged_env_vars.update(env_vars)
         merged_env_vars.update(parameters)
         

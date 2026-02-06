@@ -179,6 +179,19 @@ Triggert aus `pipeline.json` und aus der UI (API) werden zusammengeführt. Runs 
 | Feld | Typ | Beschreibung |
 |------|-----|--------------|
 | `default_env` | Object, optional | Default-Env-Vars bei jedem Run. Werden mit UI-Env-Vars zusammengeführt (UI hat Vorrang). **Secrets nicht hier** – über [Secrets-Management](/docs/deployment/CONFIGURATION) in der UI. |
+| `encrypted_env` | Object, optional | **Verschlüsselte** Env-Vars (Key → Ciphertext). Werte werden mit dem Server-`ENCRYPTION_KEY` verschlüsselt; Klartext nie in der Datei. In der UI unter „Secrets“ → „Für pipeline.json verschlüsseln“ Klartext eingeben, Ciphertext erzeugen und **manuell** hier eintragen. Zur Laufzeit entschlüsselt der Server und stellt die Werte der Pipeline-Umgebung zur Verfügung. |
+
+**Beispiel `encrypted_env`:** Klartext in der UI verschlüsseln, dann in der pipeline.json eintragen:
+
+```json
+{
+  "default_env": { "LOG_LEVEL": "INFO" },
+  "encrypted_env": {
+    "API_KEY": "gAAAAABl...",
+    "DB_PASSWORD": "gAAAAABl..."
+  }
+}
+```
 
 ### Retry-Strategien
 

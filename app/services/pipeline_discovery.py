@@ -49,6 +49,7 @@ class PipelineMetadata:
         restart_interval: Optional[str] = None,
         max_instances: Optional[int] = None,
         downstream_triggers: Optional[List[Dict[str, Any]]] = None,
+        encrypted_env: Optional[Dict[str, str]] = None,
     ):
         """
         Initialisiert Pipeline-Metadaten.
@@ -82,6 +83,7 @@ class PipelineMetadata:
             restart_interval: Regelmäßiger Neustart – Cron (z.B. "0 3 * * *") oder Intervall in Sekunden.
             max_instances: Maximale Anzahl gleichzeitiger Runs dieser Pipeline (None = nur globales Limit).
             downstream_triggers: Liste von Downstream-Triggern (pipeline, on_success, on_failure).
+            encrypted_env: Verschluesselte Env-Vars (Key -> Ciphertext); Nutzer traegt Ciphertext manuell in pipeline.json ein.
         """
         self.cpu_hard_limit = cpu_hard_limit
         self.mem_hard_limit = mem_hard_limit
@@ -115,6 +117,7 @@ class PipelineMetadata:
             int(max_instances) if max_instances is not None and int(max_instances) > 0 else None
         )
         self.downstream_triggers = self._normalize_downstream_triggers(downstream_triggers or [])
+        self.encrypted_env = self._normalize_encrypted_env(encrypted_env)
 
     @staticmethod
     def _normalize_downstream_triggers(raw: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -133,6 +136,17 @@ class PipelineMetadata:
                 "on_success": bool(on_success),
                 "on_failure": bool(on_failure),
             })
+        return result
+
+    @staticmethod
+    def _normalize_encrypted_env(raw: Optional[Dict[str, Any]]) -> Dict[str, str]:
+        """Normalisiert encrypted_env aus JSON: nur Dict mit String-Keys und String-Values (Ciphertext)."""
+        if not raw or not isinstance(raw, dict):
+            return {}
+        result: Dict[str, str] = {}
+        for k, v in raw.items():
+            if isinstance(k, str) and isinstance(v, str) and k.strip():
+                result[k.strip()] = v
         return result
 
     def to_dict(self) -> Dict[str, Any]:
@@ -192,6 +206,8 @@ class PipelineMetadata:
             result["max_instances"] = self.max_instances
         if self.downstream_triggers:
             result["downstream_triggers"] = self.downstream_triggers
+        if self.encrypted_env:
+            result["encrypted_env"] = self.encrypted_env
         return result
 
 
@@ -490,6 +506,11 @@ def _load_pipeline_metadata(
         else:
             downstream_triggers = []
 
+        encrypted_env_raw = data.get("encrypted_env")
+        encrypted_env = PipelineMetadata._normalize_encrypted_env(
+            encrypted_env_raw if isinstance(encrypted_env_raw, dict) else None
+        )
+
         metadata = PipelineMetadata(
             cpu_hard_limit=data.get("cpu_hard_limit"),
             mem_hard_limit=data.get("mem_hard_limit"),
@@ -515,6 +536,7 @@ def _load_pipeline_metadata(
             restart_interval=restart_interval,
             max_instances=max_instances,
             downstream_triggers=downstream_triggers,
+            encrypted_env=encrypted_env if encrypted_env else None,
         )
         
         return metadata
