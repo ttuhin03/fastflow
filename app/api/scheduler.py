@@ -9,7 +9,7 @@ Dieses Modul enthält alle REST-API-Endpoints für Scheduler-Management:
 from typing import List, Optional, Dict, Any
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlmodel import Session
 
 from app.core.database import get_session
@@ -71,8 +71,7 @@ class JobResponse(BaseModel):
     start_date: Optional[str] = None
     end_date: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 @router.get("/jobs", response_model=List[JobResponse])

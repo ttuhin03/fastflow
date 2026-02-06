@@ -501,6 +501,14 @@ class Config:
     wird weiterhin ausgeführt.
     """
 
+    TESTING: bool = (
+        os.getenv("TESTING", "").lower() in ("1", "true", "yes")
+    )
+    """
+    Test-Modus: Docker- und Scheduler-Initialisierung werden übersprungen,
+    damit Tests ohne laufenden Docker-Daemon laufen können.
+    """
+
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development").lower()
     """
     Umgebungsmodus der App (development oder production).

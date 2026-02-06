@@ -17,7 +17,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlmodel import Session, select
 
 from app.auth import get_current_user, require_admin, delete_all_user_sessions
@@ -52,8 +52,7 @@ class UserResponse(BaseModel):
     custom_oauth_id: Optional[str] = None
     status: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
     @classmethod
     def from_user(cls, user: "User") -> "UserResponse":

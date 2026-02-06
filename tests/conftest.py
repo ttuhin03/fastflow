@@ -13,6 +13,8 @@ import os
 os.environ.setdefault("GITHUB_CLIENT_ID", "test-github-client-id")
 os.environ.setdefault("GITHUB_CLIENT_SECRET", "test-github-client-secret")
 os.environ["SKIP_OAUTH_VERIFICATION"] = "1"
+# Test-Modus: Docker/Scheduler-Init überspringen (kein docker-proxy nötig)
+os.environ["TESTING"] = "1"
 
 import pytest
 from pathlib import Path
@@ -92,6 +94,46 @@ def client(test_session):
     
     # Cleanup
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(scope="function")
+def test_user(test_session):
+    """Erstellt einen Test-Benutzer mit WRITE-Rechten für authentifizierte API-Tests."""
+    from app.models import User, UserRole, UserStatus
+
+    user = User(
+        username="testuser",
+        email="test@example.com",
+        role=UserRole.WRITE,
+        status=UserStatus.ACTIVE,
+    )
+    test_session.add(user)
+    test_session.commit()
+    test_session.refresh(user)
+    return user
+
+
+@pytest.fixture(scope="function")
+def authenticated_client(client, test_session, test_user):
+    """
+    Test-Client mit Auth-Override für geschützte Endpoints.
+    get_current_user und require_write liefern den Test-User.
+    """
+    from app.auth import get_current_user, require_write
+
+    def override_get_current_user():
+        return test_user
+
+    def override_require_write():
+        return test_user
+
+    app.dependency_overrides[get_current_user] = override_get_current_user
+    app.dependency_overrides[require_write] = override_require_write
+
+    yield client
+
+    app.dependency_overrides.pop(get_current_user, None)
+    app.dependency_overrides.pop(require_write, None)
 
 
 @pytest.fixture(scope="function")

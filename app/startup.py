@@ -312,7 +312,9 @@ async def run_startup_tasks() -> None:
     def init_docker():
         from app.executor import init_docker_client
         init_docker_client()
-    await _run_step("Docker-Client-Initialisierung", True, init_docker, "Docker-Client initialisiert")
+    # In Test-Modus Docker-Init überspringen (kein docker-proxy nötig)
+    if not config.TESTING:
+        await _run_step("Docker-Client-Initialisierung", True, init_docker, "Docker-Client initialisiert")
 
     async def zombie_reconcile():
         from app.core.database import get_session
@@ -323,23 +325,27 @@ async def run_startup_tasks() -> None:
             await reconcile_zombie_containers(session)
         finally:
             session.close()
-    await _run_step("Zombie-Reconciliation", False, zombie_reconcile, "Zombie-Reconciliation abgeschlossen")
+    if not config.TESTING:
+        await _run_step("Zombie-Reconciliation", False, zombie_reconcile, "Zombie-Reconciliation abgeschlossen")
 
     def start_sched():
         from app.services.scheduler import start_scheduler
         start_scheduler()
-    await _run_step("Scheduler-Start", False, start_sched, "Scheduler gestartet")
+    if not config.TESTING:
+        await _run_step("Scheduler-Start", False, start_sched, "Scheduler gestartet")
 
     def sync_json_schedules():
         from app.services.scheduler import sync_scheduler_jobs_from_pipeline_json
         sync_scheduler_jobs_from_pipeline_json()
-    await _run_step("Scheduler-Jobs aus pipeline.json", False, sync_json_schedules, "Scheduler-Jobs aus pipeline.json synchronisiert")
+    if not config.TESTING:
+        await _run_step("Scheduler-Jobs aus pipeline.json", False, sync_json_schedules, "Scheduler-Jobs aus pipeline.json synchronisiert")
 
     def init_cleanup():
         from app.services.cleanup import init_docker_client_for_cleanup, schedule_cleanup_job
         init_docker_client_for_cleanup()
         schedule_cleanup_job()
-    await _run_step("Cleanup-Service", False, init_cleanup, "Cleanup-Service initialisiert")
+    if not config.TESTING:
+        await _run_step("Cleanup-Service", False, init_cleanup, "Cleanup-Service initialisiert")
 
     def schedule_wal_checkpoint():
         from app.core.database import schedule_wal_checkpoint_job
