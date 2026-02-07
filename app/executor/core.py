@@ -1816,7 +1816,7 @@ async def _trigger_downstream_pipelines(
         pipelines_to_trigger = get_downstream_pipelines_to_trigger(
             upstream_pipeline_name, on_success=success, session=session
         )
-        for downstream_name in pipelines_to_trigger:
+        for downstream_name, run_config_id in pipelines_to_trigger:
             try:
                 await run_pipeline(
                     name=downstream_name,
@@ -1824,12 +1824,14 @@ async def _trigger_downstream_pipelines(
                     parameters=None,
                     session=session,
                     triggered_by="downstream",
+                    run_config_id=run_config_id,
                 )
                 logger.info(
-                    "Downstream-Pipeline '%s' gestartet (Upstream '%s' %s)",
+                    "Downstream-Pipeline '%s' gestartet (Upstream '%s' %s)%s",
                     downstream_name,
                     upstream_pipeline_name,
                     "erfolgreich" if success else "fehlgeschlagen",
+                    f" (run_config_id={run_config_id})" if run_config_id else "",
                 )
             except Exception as e:
                 logger.warning(

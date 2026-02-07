@@ -6,7 +6,7 @@ Triggert aus zwei Quellen: pipeline.json (downstream_triggers) und DB (Downstrea
 """
 
 import logging
-from typing import List, Set
+from typing import List, Optional, Set, Tuple
 
 from sqlmodel import Session, select
 
@@ -20,11 +20,12 @@ def get_downstream_pipelines_to_trigger(
     upstream_pipeline_name: str,
     on_success: bool,
     session: Session,
-) -> List[str]:
+) -> List[Tuple[str, Optional[str]]]:
     """
-    Gibt die Namen der Pipelines zurück, die getriggert werden sollen.
+    Gibt die Pipelines zurück, die getriggert werden sollen (Name, run_config_id).
 
-    Kombiniert Triggert aus pipeline.json und aus der DB. Dedupliziert nach Pipeline-Namen.
+    Kombiniert Triggert aus pipeline.json und aus der DB.
+    Dedupliziert nach (pipeline_name, run_config_id).
 
     Args:
         upstream_pipeline_name: Name der Upstream-Pipeline (die gerade fertig wurde)
@@ -32,9 +33,16 @@ def get_downstream_pipelines_to_trigger(
         session: SQLModel Session
 
     Returns:
-        Liste von Pipeline-Namen (ohne Duplikate)
+        Liste von (pipeline_name, run_config_id) ohne Duplikate
     """
-    pipelines_to_trigger: Set[str] = set()
+    seen: Set[Tuple[str, Optional[str]]] = set()
+    pipelines_to_trigger: List[Tuple[str, Optional[str]]] = []
+
+    def add(pipeline_name: str, run_config_id: Optional[str]) -> None:
+        key = (pipeline_name, run_config_id or None)
+        if key not in seen:
+            seen.add(key)
+            pipelines_to_trigger.append((pipeline_name, run_config_id or None))
 
     # 1. Aus pipeline.json (Upstream-Pipeline-Metadaten)
     upstream = get_pipeline(upstream_pipeline_name)
@@ -43,9 +51,9 @@ def get_downstream_pipelines_to_trigger(
             trigger_on_success = t.get("on_success", True)
             trigger_on_failure = t.get("on_failure", False)
             if on_success and trigger_on_success:
-                pipelines_to_trigger.add(t["pipeline"])
+                add(t["pipeline"], t.get("run_config_id"))
             elif not on_success and trigger_on_failure:
-                pipelines_to_trigger.add(t["pipeline"])
+                add(t["pipeline"], t.get("run_config_id"))
 
     # 2. Aus DB (DownstreamTrigger)
     stmt = (
@@ -55,8 +63,8 @@ def get_downstream_pipelines_to_trigger(
     )
     for trigger in session.exec(stmt).all():
         if on_success and trigger.on_success:
-            pipelines_to_trigger.add(trigger.downstream_pipeline)
+            add(trigger.downstream_pipeline, trigger.run_config_id)
         elif not on_success and trigger.on_failure:
-            pipelines_to_trigger.add(trigger.downstream_pipeline)
+            add(trigger.downstream_pipeline, trigger.run_config_id)
 
-    return sorted(pipelines_to_trigger)
+    return sorted(pipelines_to_trigger, key=lambda x: (x[0], x[1] or ""))

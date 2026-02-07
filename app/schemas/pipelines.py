@@ -61,6 +61,7 @@ class DownstreamTriggerResponse(BaseModel):
     downstream_pipeline: str
     on_success: bool
     on_failure: bool
+    run_config_id: Optional[str] = None  # Schedule der Downstream-Pipeline (schedules[].id)
     source: str  # "pipeline_json" oder "api"
 
 
@@ -69,3 +70,4 @@ class DownstreamTriggerCreate(BaseModel):
     downstream_pipeline: str
     on_success: bool = True
     on_failure: bool = False
+    run_config_id: Optional[str] = None

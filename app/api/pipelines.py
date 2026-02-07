@@ -696,34 +696,40 @@ async def get_downstream_triggers(
 
     # Aus pipeline.json
     triggers_from_json = getattr(discovered.metadata, "downstream_triggers", None) or []
+    json_keys: set = set()
     for t in triggers_from_json:
+        rcid = t.get("run_config_id") or None
+        json_keys.add((t["pipeline"], rcid))
         result.append(
             DownstreamTriggerResponse(
                 id=None,
                 downstream_pipeline=t["pipeline"],
                 on_success=t.get("on_success", True),
                 on_failure=t.get("on_failure", False),
+                run_config_id=rcid,
                 source="pipeline_json",
             )
         )
 
     # Aus DB (nur hinzufügen wenn noch nicht aus JSON)
-    json_downstreams = {t["pipeline"] for t in triggers_from_json}
     stmt = (
         select(DownstreamTrigger)
         .where(DownstreamTrigger.upstream_pipeline == name)
         .where(DownstreamTrigger.enabled == True)
     )
     for trigger in session.exec(stmt).all():
-        result.append(
-            DownstreamTriggerResponse(
-                id=str(trigger.id),
-                downstream_pipeline=trigger.downstream_pipeline,
-                on_success=trigger.on_success,
-                on_failure=trigger.on_failure,
-                source="api",
+        rcid = trigger.run_config_id or None
+        if (trigger.downstream_pipeline, rcid) not in json_keys:
+            result.append(
+                DownstreamTriggerResponse(
+                    id=str(trigger.id),
+                    downstream_pipeline=trigger.downstream_pipeline,
+                    on_success=trigger.on_success,
+                    on_failure=trigger.on_failure,
+                    run_config_id=rcid,
+                    source="api",
+                )
             )
-        )
 
     return result
 
@@ -750,22 +756,33 @@ async def create_downstream_trigger(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Downstream-Pipeline nicht gefunden: {body.downstream_pipeline}",
         )
-    # Prüfen ob bereits vorhanden (DB)
-    existing = session.exec(
+    run_config_id = body.run_config_id.strip() if body.run_config_id and str(body.run_config_id).strip() else None
+    if run_config_id:
+        schedules = getattr(downstream.metadata, "schedules", None) or []
+        valid_ids = {s.get("id") for s in schedules if s.get("id")}
+        if run_config_id not in valid_ids:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"run_config_id '{run_config_id}' existiert nicht in schedules der Pipeline '{body.downstream_pipeline}' (verfügbar: {sorted(valid_ids) or 'keine'})",
+            )
+    # Prüfen ob bereits vorhanden (DB): (upstream, downstream, run_config_id) eindeutig
+    stmt = (
         select(DownstreamTrigger)
         .where(DownstreamTrigger.upstream_pipeline == name)
         .where(DownstreamTrigger.downstream_pipeline == body.downstream_pipeline)
-    ).first()
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Downstream-Trigger von '{name}' nach '{body.downstream_pipeline}' existiert bereits",
-        )
+    )
+    for existing in session.exec(stmt).all():
+        if (existing.run_config_id or None) == run_config_id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Downstream-Trigger von '{name}' nach '{body.downstream_pipeline}'{f' (run_config_id={run_config_id})' if run_config_id else ''} existiert bereits",
+            )
     trigger = DownstreamTrigger(
         upstream_pipeline=name,
         downstream_pipeline=body.downstream_pipeline,
         on_success=body.on_success,
         on_failure=body.on_failure,
+        run_config_id=run_config_id,
     )
     session.add(trigger)
     session.commit()
@@ -775,6 +792,7 @@ async def create_downstream_trigger(
         downstream_pipeline=trigger.downstream_pipeline,
         on_success=trigger.on_success,
         on_failure=trigger.on_failure,
+        run_config_id=trigger.run_config_id,
         source="api",
     )
 

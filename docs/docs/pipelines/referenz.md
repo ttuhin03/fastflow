@@ -160,7 +160,7 @@ Wenn du **pro Pipeline mehrere** geplante Runs mit unterschiedlichen Cron/Interv
 
 | Feld | Typ | Beschreibung |
 |------|-----|--------------|
-| `downstream_triggers` | Array, optional | Liste von Downstream-Pipelines, die nach Abschluss dieser Pipeline automatisch gestartet werden. Jeder Eintrag: `{"pipeline": "name", "on_success": true, "on_failure": false}`. `on_success` (Standard: `true`) = bei erfolgreichem Abschluss starten; `on_failure` (Standard: `false`) = bei Fehlschlag starten. |
+| `downstream_triggers` | Array, optional | Liste von Downstream-Pipelines, die nach Abschluss dieser Pipeline automatisch gestartet werden. Jeder Eintrag: `{"pipeline": "name", "on_success": true, "on_failure": false, "run_config_id": "prod"}`. `on_success` (Standard: `true`) = bei erfolgreichem Abschluss starten; `on_failure` (Standard: `false`) = bei Fehlschlag starten. `run_config_id` (optional) = Schedule der Downstream-Pipeline (`schedules[].id`); wenn die Downstream-Pipeline mehrere Schedules hat, wird damit die gewünschte Run-Konfiguration ausgewählt. Ohne Angabe = Top-Level/default Config. |
 
 Triggert aus `pipeline.json` und aus der UI (API) werden zusammengeführt. Runs werden mit `triggered_by="downstream"` gestartet.
 
@@ -170,7 +170,7 @@ Triggert aus `pipeline.json` und aus der UI (API) werden zusammengeführt. Runs 
 {
   "description": "Pipeline A – startet B bei Erfolg, C bei Erfolg oder Fehler",
   "downstream_triggers": [
-    { "pipeline": "pipeline_b", "on_success": true, "on_failure": false },
+    { "pipeline": "pipeline_b", "on_success": true, "on_failure": false, "run_config_id": "prod" },
     { "pipeline": "pipeline_c", "on_success": true, "on_failure": true }
   ]
 }

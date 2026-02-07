@@ -86,6 +86,19 @@ class TestNormalizeDownstreamTriggers:
         assert result[0]["on_success"] is True
         assert result[0]["on_failure"] is False
 
+    def test_run_config_id_in_trigger(self):
+        """run_config_id wird aus dem Trigger übernommen."""
+        raw = [{"pipeline": "p2", "on_success": True, "on_failure": False, "run_config_id": "prod"}]
+        result = PipelineMetadata._normalize_downstream_triggers(raw)
+        assert len(result) == 1
+        assert result[0]["run_config_id"] == "prod"
+
+    def test_run_config_id_empty_ignored(self):
+        """Leeres run_config_id wird zu None."""
+        raw = [{"pipeline": "p2", "run_config_id": ""}]
+        result = PipelineMetadata._normalize_downstream_triggers(raw)
+        assert result[0]["run_config_id"] is None
+
     def test_empty_pipeline_skipped(self):
         """Trigger mit leerem pipeline wird übersprungen."""
         raw = [

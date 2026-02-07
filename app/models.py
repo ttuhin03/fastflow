@@ -264,6 +264,10 @@ class DownstreamTrigger(SQLModel, table=True):
         default=False,
         description="Pipeline B starten wenn A fehlschlägt",
     )
+    run_config_id: Optional[str] = Field(
+        default=None,
+        description="Run-Konfiguration der Downstream-Pipeline (schedules[].id)",
+    )
     enabled: bool = Field(
         default=True,
         description="Trigger aktiviert/deaktiviert",

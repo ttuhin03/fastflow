@@ -227,10 +227,13 @@ class PipelineMetadata:
                 continue
             on_success = item.get("on_success", True)
             on_failure = item.get("on_failure", False)
+            rcid = item.get("run_config_id")
+            run_config_id = str(rcid).strip() if rcid and str(rcid).strip() else None
             result.append({
                 "pipeline": str(pipeline).strip(),
                 "on_success": bool(on_success),
                 "on_failure": bool(on_failure),
+                "run_config_id": run_config_id,
             })
         return result
 

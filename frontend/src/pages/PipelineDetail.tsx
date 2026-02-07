@@ -41,7 +41,8 @@ interface Pipeline {
     max_instances?: number
     webhook_key?: string
     python_version?: string
-    downstream_triggers?: Array<{ pipeline: string; on_success: boolean; on_failure: boolean }>
+    downstream_triggers?: Array<{ pipeline: string; on_success: boolean; on_failure: boolean; run_config_id?: string }>
+    schedules?: Array<{ id?: string }>
   }
 }
 
@@ -50,6 +51,7 @@ interface DownstreamTriggerItem {
   downstream_pipeline: string
   on_success: boolean
   on_failure: boolean
+  run_config_id?: string | null
   source: 'pipeline_json' | 'api'
 }
 
@@ -167,7 +169,7 @@ export default function PipelineDetail() {
   })
 
   const createDownstreamTriggerMutation = useMutation({
-    mutationFn: async (body: { downstream_pipeline: string; on_success: boolean; on_failure: boolean }) => {
+    mutationFn: async (body: { downstream_pipeline: string; on_success: boolean; on_failure: boolean; run_config_id?: string | null }) => {
       const response = await apiClient.post(`/pipelines/${name}/downstream-triggers`, body)
       return response.data
     },
@@ -196,6 +198,7 @@ export default function PipelineDetail() {
   const [newTriggerPipeline, setNewTriggerPipeline] = useState('')
   const [newTriggerOnSuccess, setNewTriggerOnSuccess] = useState(true)
   const [newTriggerOnFailure, setNewTriggerOnFailure] = useState(false)
+  const [newTriggerRunConfigId, setNewTriggerRunConfigId] = useState<string>('')
 
   const handleAddDownstreamTrigger = () => {
     if (!newTriggerPipeline.trim()) return
@@ -203,11 +206,16 @@ export default function PipelineDetail() {
       downstream_pipeline: newTriggerPipeline.trim(),
       on_success: newTriggerOnSuccess,
       on_failure: newTriggerOnFailure,
+      run_config_id: newTriggerRunConfigId || null,
     })
     setNewTriggerPipeline('')
     setNewTriggerOnSuccess(true)
     setNewTriggerOnFailure(false)
+    setNewTriggerRunConfigId('')
   }
+
+  const selectedDownstreamPipeline = allPipelines?.find((p) => p.name === newTriggerPipeline)
+  const availableSchedules = selectedDownstreamPipeline?.metadata?.schedules?.filter((s) => s.id) ?? []
 
   const handleCopyWebhookUrl = () => {
     if (pipeline?.metadata.webhook_key) {
@@ -483,6 +491,7 @@ export default function PipelineDetail() {
               <thead>
                 <tr>
                   <th>Downstream-Pipeline</th>
+                  <th>Schedule</th>
                   <th>Bei Erfolg</th>
                   <th>Bei Fehler</th>
                   <th>Quelle</th>
@@ -491,8 +500,9 @@ export default function PipelineDetail() {
               </thead>
               <tbody>
                 {downstreamTriggers.map((t) => (
-                  <tr key={t.id || `json-${t.downstream_pipeline}`}>
+                  <tr key={t.id || `json-${t.downstream_pipeline}-${t.run_config_id ?? ''}`}>
                     <td>{t.downstream_pipeline}</td>
+                    <td>{t.run_config_id ?? '–'}</td>
                     <td>{t.on_success ? '✓' : '–'}</td>
                     <td>{t.on_failure ? '✓' : '–'}</td>
                     <td>
@@ -534,7 +544,10 @@ export default function PipelineDetail() {
             <div className="add-trigger-form">
               <select
                 value={newTriggerPipeline}
-                onChange={(e) => setNewTriggerPipeline(e.target.value)}
+                onChange={(e) => {
+                  setNewTriggerPipeline(e.target.value)
+                  setNewTriggerRunConfigId('')
+                }}
                 className="trigger-select"
               >
                 <option value="">Pipeline wählen…</option>
@@ -546,6 +559,21 @@ export default function PipelineDetail() {
                     </option>
                   ))}
               </select>
+              {availableSchedules.length > 0 && (
+                <select
+                  value={newTriggerRunConfigId}
+                  onChange={(e) => setNewTriggerRunConfigId(e.target.value)}
+                  className="trigger-select"
+                  title="Schedule der Downstream-Pipeline (optional)"
+                >
+                  <option value="">Standard</option>
+                  {availableSchedules.map((s) => (
+                    <option key={s.id!} value={s.id!}>
+                      {s.id}
+                    </option>
+                  ))}
+                </select>
+              )}
               <label className="trigger-checkbox">
                 <input
                   type="checkbox"
