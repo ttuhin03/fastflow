@@ -2,7 +2,12 @@
 
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
+
+
+# Größenlimits für RunPipelineRequest (Schutz vor Memory-DoS)
+RUN_PIPELINE_MAX_DICT_KEYS = 50
+RUN_PIPELINE_MAX_VALUE_LENGTH = 16384  # 16 KB pro Key/Value
 
 
 class PipelineResponse(BaseModel):
@@ -21,6 +26,25 @@ class RunPipelineRequest(BaseModel):
     """Request-Model für Pipeline-Start."""
     env_vars: Optional[Dict[str, str]] = None
     parameters: Optional[Dict[str, str]] = None
+
+    @model_validator(mode="after")
+    def validate_dict_sizes(self):
+        """Limitiert Anzahl und Größe von env_vars und parameters."""
+        for field_name in ("env_vars", "parameters"):
+            d = getattr(self, field_name)
+            if d is None:
+                continue
+            if len(d) > RUN_PIPELINE_MAX_DICT_KEYS:
+                raise ValueError(
+                    f"{field_name} darf maximal {RUN_PIPELINE_MAX_DICT_KEYS} Einträge haben"
+                )
+            for k, v in d.items():
+                val_str = str(v)
+                if len(val_str) > RUN_PIPELINE_MAX_VALUE_LENGTH:
+                    raise ValueError(
+                        f"{field_name}.{k}: Wert darf maximal {RUN_PIPELINE_MAX_VALUE_LENGTH} Zeichen haben"
+                    )
+        return self
 
 
 class PipelineStatsResponse(BaseModel):

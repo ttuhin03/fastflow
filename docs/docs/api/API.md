@@ -85,6 +85,8 @@ Startet eine Pipeline manuell.
 }
 ```
 
+**Limits:** Max. 50 Einträge pro `env_vars` und `parameters`, je Wert max. 16 KB.
+
 **Response:**
 ```json
 {
@@ -442,6 +444,12 @@ Gibt alle Secrets zurück.
 
 **Hinweis:** Secrets werden verschlüsselt gespeichert, aber entschlüsselt zurückgegeben. Parameter (`is_parameter: true`) werden nicht verschlüsselt.
 
+### `POST /api/secrets/encrypt-for-pipeline`
+
+Verschlüsselt einen Klartext mit dem Server-`ENCRYPTION_KEY` für manuellen Eintrag in `pipeline.json` unter `encrypted_env`. **Max. 64 KB** pro Wert.
+
+**Request Body:** `{ "value": "klartext" }`
+
 ### `POST /api/secrets`
 
 Erstellt ein neues Secret.
@@ -614,17 +622,19 @@ Löscht GitHub Apps Konfiguration.
 
 ### GitHub App Manifest Flow
 
+**Erfordert Admin-Rechte** (authorize und exchange).
+
 #### `GET /api/sync/github-manifest/authorize`
 
-Generiert HTML-Formular für GitHub App Manifest Flow.
+Generiert HTML-Formular für GitHub App Manifest Flow. Erfordert Admin-Login.
 
 #### `GET /api/sync/github-manifest/callback`
 
-Callback-Endpoint für GitHub App Manifest Flow.
+Callback-Endpoint für GitHub App Manifest Flow (von GitHub aufgerufen).
 
 #### `POST /api/sync/github-manifest/exchange`
 
-Tauscht Manifest Code gegen GitHub App Credentials.
+Tauscht Manifest Code gegen GitHub App Credentials. Erfordert Admin-Login.
 
 **Request Body:**
 ```json
@@ -781,7 +791,7 @@ Gibt System-Metriken zurück.
 
 ### `POST /api/webhooks/{pipeline_name}/{webhook_key}`
 
-Triggert eine Pipeline via Webhook.
+Triggert eine Pipeline via Webhook. **Rate Limit: 30 Requests/Minute** pro IP (Bruteforce-Schutz).
 
 **Hinweis:** Der `webhook_key` muss in der `pipeline.json` der Pipeline konfiguriert sein.
 
@@ -941,6 +951,21 @@ Gibt Informationen über den aktuellen Benutzer zurück (u.a. für Verknüpfte-K
   "role": "admin"
 }
 ```
+
+---
+
+## Rate Limits
+
+| Endpoint | Limit |
+|----------|-------|
+| OAuth Authorize (GitHub, Google, etc.) | 20/min |
+| OAuth Callbacks | 60/min |
+| Token Refresh | 30/min |
+| Logout | 60/min |
+| Webhooks | 30/min |
+| Allgemein | 100/min |
+
+Die Client-IP wird für das Rate Limiting verwendet. Hinter einem Reverse-Proxy muss `PROXY_HEADERS_TRUSTED=true` gesetzt werden, damit `X-Forwarded-For` berücksichtigt wird (siehe [Konfiguration](/docs/deployment/CONFIGURATION)).
 
 ---
 

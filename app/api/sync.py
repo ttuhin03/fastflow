@@ -21,7 +21,7 @@ from app.core.database import get_session
 from app.core.errors import get_500_detail
 from app.git_sync import sync_pipelines, get_sync_status, get_sync_logs, test_github_app_token
 from app.core.config import config
-from app.auth import require_write, get_current_user
+from app.auth import require_write, require_admin, get_current_user
 from app.models import User
 from app.auth.github_config import (
     save_github_config,
@@ -452,7 +452,9 @@ async def delete_github_config_endpoint(
 # GitHub App Manifest Flow Endpoints
 
 @router.get("/github-manifest/authorize")
-async def github_manifest_authorize():
+async def github_manifest_authorize(
+    current_user: User = Depends(require_admin),
+):
     """
     Generiert HTML-Formular für GitHub App Manifest Flow (Coolify-Methode).
     
@@ -694,7 +696,8 @@ class ManifestExchangeRequest(BaseModel):
 
 @router.post("/github-manifest/exchange", response_model=Dict[str, Any])
 async def github_manifest_exchange(
-    request: ManifestExchangeRequest
+    request: ManifestExchangeRequest,
+    current_user: User = Depends(require_admin),
 ) -> Dict[str, Any]:
     """
     Tauscht Manifest Code gegen GitHub App Credentials.

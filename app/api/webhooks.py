@@ -50,7 +50,7 @@ def _resolve_webhook_key(
 
 
 @router.post("/{pipeline_name}/{webhook_key}", response_model=Dict[str, Any])
-@limiter.limit("100/minute")
+@limiter.limit("30/minute")
 async def trigger_pipeline_via_webhook(
     request: Request,
     pipeline_name: str,

@@ -550,6 +550,16 @@ class Config:
     None = unbegrenzt. Empfohlen in Produktion z.B. 10.
     """
 
+    PROXY_HEADERS_TRUSTED: bool = (
+        os.getenv("PROXY_HEADERS_TRUSTED", "false").lower() in ("1", "true", "yes")
+    )
+    """
+    Wenn True: X-Forwarded-For und andere Proxy-Header werden für Rate Limiting
+    und Client-IP verwendet. Nur aktivieren, wenn die App hinter einem vertrauenswürdigen
+    Reverse-Proxy (z.B. Nginx, Traefik) läuft. Bei False wird request.client.host genutzt.
+    Standard: false (Schutz vor X-Forwarded-For-Spoofing).
+    """
+
     CORS_ORIGINS: List[str] = (
         [origin.strip() for origin in os.getenv("CORS_ORIGINS", "").split(",") if origin.strip()]
         if os.getenv("CORS_ORIGINS")

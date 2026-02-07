@@ -63,6 +63,7 @@ Die **konkreten Aufbewahrungsfristen** und **Löschregeln** in MinIO (Lifecycle-
 
 ### Technische Sicherheit
 
+- **Rate Limiting & Proxy:** Die API nutzt Rate Limits (OAuth, Refresh, Webhooks, etc.). Für korrekte Client-IP-Erkennung hinter einem Reverse-Proxy setzen Sie `PROXY_HEADERS_TRUSTED=true`. Nur aktivieren, wenn der Proxy vertrauenswürdig ist (Schutz vor X-Forwarded-For-Spoofing). Siehe [Konfiguration](/docs/deployment/CONFIGURATION).
 - **TLS-Übertragung:** Die Kommunikation mit MinIO sollte über **HTTPS (TLS)** erfolgen. Setzen Sie `S3_ENDPOINT_URL` z.B. auf `https://minio.ihr-unternehmen.int:443`.
 - **S3 Server-Side Encryption (SSE):** MinIO unterstützt **SSE-S3** und **SSE-KMS**. Die Aktivierung und Konfiguration von Verschlüsselung at rest liegt bei Ihrer MinIO-Instanz; Fast-Flow nutzt die standardmäßige S3-API. Prüfen Sie die [MinIO-Dokumentation zu Server-Side Encryption](https://min.io/docs/minio/linux/administration/server-side-encryption.html) (SSE-S3, SSE-KMS, SSE-C).
 - **Zugriffskontrolle:** Access Keys (`S3_ACCESS_KEY`, `S3_SECRET_ACCESS_KEY`) sollten mit **minimalen Rechten** (nur Schreibzugriff auf den vorgesehenen Bucket) und über einen sicheren Secret-Manager verwaltet werden.

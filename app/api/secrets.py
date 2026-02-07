@@ -11,7 +11,7 @@ Anlegen/Aktualisieren/Löschen von Secrets erfolgt manuell (z. B. Datenbank oder
 from typing import List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.core.database import get_session
 from app.models import Secret, User
@@ -26,9 +26,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/secrets", tags=["secrets"])
 
 
+# Maximale Länge für zu verschlüsselnde Werte (64 KB) – Schutz vor Memory-DoS
+ENCRYPT_VALUE_MAX_LENGTH = 65536
+
+
 class EncryptForPipelineRequest(BaseModel):
     """Request: Klartext, der für pipeline.json encrypted_env verschlüsselt werden soll."""
-    value: str
+    value: str = Field(..., max_length=ENCRYPT_VALUE_MAX_LENGTH)
 
 
 class EncryptForPipelineResponse(BaseModel):
@@ -97,7 +101,11 @@ async def get_secrets(
                 })
             except ValueError as e:
                 # Fehler beim Entschlüsseln eines Secrets sollte nicht alle Secrets blockieren
-                # Aber wir loggen den Fehler und überspringen das Secret
+                logger.warning(
+                    "Secret '%s' konnte nicht entschlüsselt werden (übersprungen): %s",
+                    secret.key,
+                    str(e),
+                )
                 continue
         
         return result

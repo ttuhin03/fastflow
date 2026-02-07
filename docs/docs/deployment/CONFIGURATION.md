@@ -91,6 +91,7 @@ Pipeline-Logs werden vor der lokalen Löschung (Cleanup) auf S3/MinIO gesichert.
 | `SKIP_OAUTH_VERIFICATION` | *Leer* | `1`/`true`: HTTP-Verifizierung der OAuth-Credentials beim Start überspringen (z.B. CI/Tests). Die Prüfung „mind. ein Provider vollständig“ bleibt aktiv. | Optional |
 | `INITIAL_ADMIN_EMAIL` | *Leer* | E-Mail des ersten Admins (Zutritt ohne Einladung, GitHub oder Google). | **Empfohlen** |
 | `FRONTEND_URL` / `BASE_URL` | s. [OAuth (GitHub & Google)](/docs/oauth/readme) | Für OAuth-Callback und Einladungs-Links. | Anpassen |
+| `PROXY_HEADERS_TRUSTED` | `false` | Wenn `true`: `X-Forwarded-For` wird für Rate Limiting verwendet. **Nur** aktivieren, wenn die App hinter einem vertrauenswürdigen Reverse-Proxy (Nginx, Traefik) läuft. Bei `false` wird `request.client.host` genutzt (Schutz vor Spoofing). | Bei Proxy: `true` |
 
 **OAuth beim Start:** Es muss mindestens ein OAuth-Provider (GitHub oder Google) vollständig konfiguriert sein (jeweils `CLIENT_ID` und `CLIENT_SECRET`). Ohne dies startet die App nicht. Beim Start werden die gesetzten Credentials per Request an den jeweiligen Anbieter verifiziert; bei ungültigen Werten oder Redirect-URI-Mismatch startet die App ebenfalls nicht.
 

@@ -137,7 +137,9 @@ async def github_authorize(
 
 
 @router.get("/github/callback")
+@limiter.limit("60/minute")
 async def github_callback(
+    request: Request,
     code: Optional[str] = None,
     state: Optional[str] = None,
     session: Session = Depends(get_session),
@@ -209,7 +211,9 @@ async def google_authorize(
 
 
 @router.get("/google/callback")
+@limiter.limit("60/minute")
 async def google_callback(
+    request: Request,
     code: Optional[str] = None,
     state: Optional[str] = None,
     session: Session = Depends(get_session),
@@ -279,7 +283,9 @@ async def microsoft_authorize(
 
 
 @router.get("/microsoft/callback")
+@limiter.limit("60/minute")
 async def microsoft_callback(
+    request: Request,
     code: Optional[str] = None,
     state: Optional[str] = None,
     session: Session = Depends(get_session),
@@ -410,7 +416,9 @@ async def custom_authorize(
 
 
 @router.get("/custom/callback")
+@limiter.limit("60/minute")
 async def custom_callback(
+    request: Request,
     code: Optional[str] = None,
     state: Optional[str] = None,
     session: Session = Depends(get_session),
@@ -509,6 +517,7 @@ async def get_current_user_info(
 
 
 @router.post("/refresh", response_model=LoginResponse, status_code=status.HTTP_200_OK)
+@limiter.limit("30/minute")
 async def refresh_token(
     request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
@@ -582,7 +591,9 @@ async def refresh_token(
 
 
 @router.post("/logout", response_model=LogoutResponse, status_code=status.HTTP_200_OK)
+@limiter.limit("60/minute")
 async def logout(
+    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
