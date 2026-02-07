@@ -31,6 +31,8 @@ class PipelineStatsResponse(BaseModel):
     failed_runs: int
     success_rate: float
     webhook_runs: int
+    # Webhook-Runs pro Run-Konfiguration (Key "" = Pipeline-Level, sonst schedules[].id)
+    webhook_runs_by_config: Optional[Dict[str, int]] = None
 
 
 class DailyStat(BaseModel):

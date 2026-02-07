@@ -128,6 +128,73 @@ class TestNormalizeDownstreamTriggers:
         assert result == []
 
 
+class TestNormalizeSchedulesWebhookKey:
+    """Tests für webhook_key in _normalize_schedules."""
+
+    def test_schedule_with_webhook_key(self):
+        """Schedule mit webhook_key enthält webhook_key im Ergebnis."""
+        raw = [
+            {
+                "id": "prod",
+                "schedule_cron": "0 9 * * *",
+                "webhook_key": "secret-prod",
+            },
+        ]
+        result = PipelineMetadata._normalize_schedules(raw)
+        assert len(result) == 1
+        assert result[0]["id"] == "prod"
+        assert result[0]["webhook_key"] == "secret-prod"
+
+    def test_schedule_without_webhook_key(self):
+        """Schedule ohne webhook_key hat keinen webhook_key-Eintrag."""
+        raw = [{"id": "staging", "schedule_cron": "0 8 * * *"}]
+        result = PipelineMetadata._normalize_schedules(raw)
+        assert len(result) == 1
+        assert "webhook_key" not in result[0]
+
+    def test_schedule_webhook_key_empty_omitted(self):
+        """Leerer webhook_key wird weggelassen."""
+        raw = [{"id": "x", "schedule_cron": "0 * * * *", "webhook_key": ""}]
+        result = PipelineMetadata._normalize_schedules(raw)
+        assert len(result) == 1
+        assert "webhook_key" not in result[0]
+
+
+class TestWebhookKeyDuplicateCheck:
+    """Tests für strikten Duplikat-Check von webhook_key."""
+
+    def test_pipeline_and_schedule_same_key_raises(self):
+        """Gleicher webhook_key auf Pipeline und in Schedule -> ValueError."""
+        with pytest.raises(ValueError, match="Duplicate webhook_key"):
+            PipelineMetadata(
+                webhook_key="same-key",
+                schedules=[
+                    {"id": "prod", "schedule_cron": "0 9 * * *", "webhook_key": "same-key"},
+                ],
+            )
+
+    def test_two_schedules_same_webhook_key_raises(self):
+        """Zwei Schedules mit gleichem webhook_key -> ValueError."""
+        with pytest.raises(ValueError, match="Duplicate webhook_key"):
+            PipelineMetadata(
+                schedules=[
+                    {"id": "a", "schedule_cron": "0 9 * * *", "webhook_key": "shared"},
+                    {"id": "b", "schedule_cron": "0 10 * * *", "webhook_key": "shared"},
+                ],
+            )
+
+    def test_pipeline_key_and_schedule_different_ok(self):
+        """Pipeline-Level und Schedule mit unterschiedlichen Keys sind erlaubt."""
+        meta = PipelineMetadata(
+            webhook_key="pipeline-key",
+            schedules=[
+                {"id": "prod", "schedule_cron": "0 9 * * *", "webhook_key": "schedule-key"},
+            ],
+        )
+        assert meta.webhook_key == "pipeline-key"
+        assert meta.schedules[0].get("webhook_key") == "schedule-key"
+
+
 class TestPipelineMetadataToDict:
     """Tests für to_dict()."""
 

@@ -121,6 +121,7 @@ Wenn du **pro Pipeline mehrere** geplante Runs mit unterschiedlichen Cron/Interv
 | `timeout` | Integer, optional | Timeout in Sekunden für diesen Schedule (`0` = unbegrenzt). Überschreibt Pipeline-`timeout`. |
 | `retry_attempts` | Integer, optional | Anzahl Retry-Versuche für diesen Schedule. Überschreibt Pipeline-`retry_attempts`. |
 | `retry_strategy` | Object, optional | Retry-Strategie für diesen Schedule (wie [Retry-Strategien](#retry-strategien)). Überschreibt Pipeline-`retry_strategy`. |
+| `webhook_key` | String, optional | Eigener Webhook-Schlüssel für diesen Schedule. Wenn gesetzt: `POST /api/webhooks/{pipeline_name}/{webhook_key}` startet einen Run mit **dieser** Run-Konfiguration (run_config_id = `id`). Jeder `webhook_key` darf pro Pipeline nur **einmal** vorkommen (Pipeline-Level und in allen Schedules zusammen). |
 
 **Beispiel:**
 
@@ -292,19 +293,24 @@ Triggert aus `pipeline.json` und aus der UI (API) werden zusammengeführt. Runs 
 
 ## Webhooks: Pipeline per HTTP auslösen
 
-Wenn `webhook_key` in `pipeline.json` gesetzt ist, kann die Pipeline per **HTTP POST** getriggert werden:
+Wenn in `pipeline.json` ein **`webhook_key`** (auf Pipeline-Ebene und/oder pro Eintrag in **`schedules[]`**) gesetzt ist, kann die Pipeline per **HTTP POST** getriggert werden:
 
 - **Endpoint:** `POST /api/webhooks/{pipeline_name}/{webhook_key}`
-- **Body:** optional (z.B. `{}` oder leer). Ein Body mit `{"webhook_key": "..."}` ist **nicht** nötig – der Schlüssel steht im Pfad.
-- **Antwort:** 200 mit Run-Infos; 401 bei falschem Key, 404 wenn Pipeline nicht existiert oder Webhooks deaktiviert.
+- **Body:** optional (z.B. `{}` oder leer). Der Schlüssel steht im Pfad.
+- **Auflösung:** Der verwendete `webhook_key` bestimmt die Run-Konfiguration:
+  - Stimmt der Key mit dem **Pipeline-Level-**`webhook_key` überein → Run mit Standard-Config (ohne Schedule-spezifische Env/Limits).
+  - Stimmt der Key mit einem **`schedules[].webhook_key`** überein → Run mit genau dieser Run-Konfiguration (run_config_id = `schedules[].id`).
+- **Antwort:** 200 mit Run-Infos; **401** bei falschem Key; **404** wenn Pipeline nicht existiert oder Webhooks deaktiviert.
 
-Beispiel:
+Jeder `webhook_key` darf pro Pipeline nur **einmal** vorkommen (strikter Duplikat-Check; sonst Fehler beim Laden der pipeline.json).
+
+Beispiel (Pipeline-Level):
 
 ```bash
 curl -X POST "https://deine-instanz.de/api/webhooks/data_sync/mein-geheimer-key"
 ```
 
-Die Webhook-URL (mit deinem Schlüssel) wird in der Pipeline-Detailansicht der UI angezeigt und kann dort kopiert werden. **`webhook_key` geheim halten** – jeder mit der URL kann die Pipeline starten.
+Die Webhook-URL(s) werden in der Pipeline-Detailansicht der UI angezeigt (pro Pipeline-Level und pro Schedule mit `webhook_key`). **`webhook_key` geheim halten** – jeder mit der URL kann die Pipeline starten. Die Statistik zeigt Webhook-Trigger gesamt und optional pro Run-Konfiguration.
 
 ---
 

@@ -19,6 +19,8 @@ interface PipelineStats {
   failed_runs: number
   success_rate: number
   webhook_runs: number
+  /** Webhook-Runs pro Run-Konfiguration: '' = Pipeline-Level, sonst schedules[].id */
+  webhook_runs_by_config?: Record<string, number>
 }
 
 interface Pipeline {
@@ -42,7 +44,7 @@ interface Pipeline {
     webhook_key?: string
     python_version?: string
     downstream_triggers?: Array<{ pipeline: string; on_success: boolean; on_failure: boolean; run_config_id?: string }>
-    schedules?: Array<{ id?: string }>
+    schedules?: Array<{ id?: string; webhook_key?: string }>
   }
 }
 
@@ -217,13 +219,11 @@ export default function PipelineDetail() {
   const selectedDownstreamPipeline = allPipelines?.find((p) => p.name === newTriggerPipeline)
   const availableSchedules = selectedDownstreamPipeline?.metadata?.schedules?.filter((s) => s.id) ?? []
 
-  const handleCopyWebhookUrl = () => {
-    if (pipeline?.metadata.webhook_key) {
-      const baseUrl = window.location.origin
-      const webhookUrl = `${baseUrl}/api/webhooks/${name}/${pipeline.metadata.webhook_key}`
-      navigator.clipboard.writeText(webhookUrl)
-      showSuccess('Webhook-URL wurde in die Zwischenablage kopiert')
-    }
+  const handleCopyWebhookUrl = (webhookKey: string) => {
+    const baseUrl = window.location.origin
+    const webhookUrl = `${baseUrl}/api/webhooks/${name}/${webhookKey}`
+    navigator.clipboard.writeText(webhookUrl)
+    showSuccess('Webhook-URL wurde in die Zwischenablage kopiert')
   }
 
   if (pipelineLoading || statsLoading) {
@@ -433,51 +433,97 @@ export default function PipelineDetail() {
 
       <div className="webhook-card">
         <h3>Webhooks</h3>
-        {pipeline?.metadata.webhook_key ? (
-          <div className="webhook-enabled">
-            <div className="webhook-info">
-              <div className="webhook-status">
+        {(() => {
+          const hasPipelineKey = !!pipeline?.metadata?.webhook_key
+          const scheduleWebhooks = (pipeline?.metadata?.schedules ?? []).filter(
+            (s): s is { id?: string; webhook_key: string } => !!(s.id && s.webhook_key)
+          )
+          const hasAnyWebhook = hasPipelineKey || scheduleWebhooks.length > 0
+          if (!hasAnyWebhook) {
+            return (
+              <div className="webhook-disabled">
+                <p>Webhooks sind für diese Pipeline deaktiviert.</p>
+                <p style={{ fontSize: '0.85rem', color: '#888', marginTop: '0.5rem' }}>
+                  Um Webhooks zu aktivieren, fügen Sie <code>webhook_key</code> in die <code>pipeline.json</code> (oder pro Eintrag in <code>schedules[]</code>) im Repository hinzu.
+                </p>
+              </div>
+            )
+          }
+          const byConfig = stats?.webhook_runs_by_config
+          const runCountFor = (configKey: string) => (byConfig && byConfig[configKey]) ?? 0
+          return (
+            <div className="webhook-enabled">
+              <div className="webhook-status" style={{ marginBottom: '0.75rem' }}>
                 <span className="status-badge enabled">Aktiviert</span>
                 <span className="info-hint" style={{ fontSize: '0.75rem', color: '#888', marginLeft: '0.5rem' }}>
                   (Konfiguriert in pipeline.json)
                 </span>
               </div>
-              <div className="webhook-url-section">
-                <label className="webhook-url-label">
-                  Webhook-URL:
-                  <InfoIcon content="Diese URL kann verwendet werden, um die Pipeline von außen zu triggern" />
-                </label>
-                <div className="webhook-url-container">
-                  <code className="webhook-url">
-                    {typeof window !== 'undefined' && `${window.location.origin}/api/webhooks/${name}/${pipeline.metadata.webhook_key}`}
-                  </code>
-                  <Tooltip content="Webhook-URL in Zwischenablage kopieren">
-                    <button
-                      onClick={handleCopyWebhookUrl}
-                      className="copy-button"
-                      title="URL kopieren"
-                    >
-                      📋
-                    </button>
-                  </Tooltip>
+              {hasPipelineKey && (
+                <div className="webhook-url-section" style={{ marginBottom: '1rem' }}>
+                  <label className="webhook-url-label">
+                    Pipeline (Standard):
+                    <InfoIcon content="Triggert einen Run mit der Standard-Konfiguration (ohne Schedule-spezifische Env/Limits)" />
+                  </label>
+                  <div className="webhook-url-container">
+                    <code className="webhook-url">
+                      {typeof window !== 'undefined' && `${window.location.origin}/api/webhooks/${name}/${pipeline!.metadata.webhook_key}`}
+                    </code>
+                    <Tooltip content="Webhook-URL in Zwischenablage kopieren">
+                      <button
+                        onClick={() => handleCopyWebhookUrl(pipeline!.metadata.webhook_key!)}
+                        className="copy-button"
+                        title="URL kopieren"
+                      >
+                        📋
+                      </button>
+                    </Tooltip>
+                  </div>
+                  {runCountFor('') > 0 && (
+                    <div className="webhook-stats">
+                      <span className="webhook-stat-label">Trigger:</span>
+                      <span className="webhook-stat-value">{runCountFor('')}</span>
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
+              {scheduleWebhooks.map((s) => (
+                <div key={s.id!} className="webhook-url-section" style={{ marginBottom: '1rem' }}>
+                  <label className="webhook-url-label">
+                    Schedule „{s.id}“:
+                    <InfoIcon content={`Triggert einen Run mit der Run-Konfiguration „${s.id}“ (Env/Limits aus schedules[]).`} />
+                  </label>
+                  <div className="webhook-url-container">
+                    <code className="webhook-url">
+                      {typeof window !== 'undefined' && `${window.location.origin}/api/webhooks/${name}/${s.webhook_key}`}
+                    </code>
+                    <Tooltip content="Webhook-URL in Zwischenablage kopieren">
+                      <button
+                        onClick={() => handleCopyWebhookUrl(s.webhook_key)}
+                        className="copy-button"
+                        title="URL kopieren"
+                      >
+                        📋
+                      </button>
+                    </Tooltip>
+                  </div>
+                  {runCountFor(s.id!) > 0 && (
+                    <div className="webhook-stats">
+                      <span className="webhook-stat-label">Trigger:</span>
+                      <span className="webhook-stat-value">{runCountFor(s.id!)}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
               {stats && stats.webhook_runs > 0 && (
-                <div className="webhook-stats">
-                  <span className="webhook-stat-label">Webhook-Trigger:</span>
+                <div className="webhook-stats" style={{ marginTop: '0.5rem' }}>
+                  <span className="webhook-stat-label">Webhook-Trigger gesamt:</span>
                   <span className="webhook-stat-value">{stats.webhook_runs}</span>
                 </div>
               )}
             </div>
-          </div>
-        ) : (
-          <div className="webhook-disabled">
-            <p>Webhooks sind für diese Pipeline deaktiviert.</p>
-            <p style={{ fontSize: '0.85rem', color: '#888', marginTop: '0.5rem' }}>
-              Um Webhooks zu aktivieren, fügen Sie <code>webhook_key</code> in die <code>pipeline.json</code> im Repository hinzu.
-            </p>
-          </div>
-        )}
+          )
+        })()}
       </div>
 
       <div className="downstream-triggers-card">

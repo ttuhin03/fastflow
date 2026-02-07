@@ -121,6 +121,7 @@ class PipelineMetadata:
         self.downstream_triggers = self._normalize_downstream_triggers(downstream_triggers or [])
         self.encrypted_env = self._normalize_encrypted_env(encrypted_env)
         self.schedules = self._normalize_schedules(schedules) if schedules else []
+        self._validate_webhook_keys_no_duplicates()
 
     @staticmethod
     def _normalize_schedules(raw: Optional[List[Any]]) -> List[Dict[str, Any]]:
@@ -196,7 +197,13 @@ class PipelineMetadata:
                 retry_attempts_schedule = None
             retry_strategy_raw = item.get("retry_strategy")
             retry_strategy_schedule = retry_strategy_raw if isinstance(retry_strategy_raw, dict) else None
-            result.append({
+            # Optionaler Webhook-Schlüssel pro Schedule (leer/None = nicht setzen)
+            wk = item.get("webhook_key")
+            if wk is not None and isinstance(wk, str) and str(wk).strip():
+                webhook_key_schedule = str(wk).strip()
+            else:
+                webhook_key_schedule = None
+            entry: Dict[str, Any] = {
                 "id": str(sid).strip(),
                 "schedule_cron": cron,
                 "schedule_interval_seconds": interval,
@@ -212,8 +219,29 @@ class PipelineMetadata:
                 "timeout": timeout_schedule,
                 "retry_attempts": retry_attempts_schedule,
                 "retry_strategy": retry_strategy_schedule,
-            })
+            }
+            if webhook_key_schedule is not None:
+                entry["webhook_key"] = webhook_key_schedule
+            result.append(entry)
         return result
+
+    def _validate_webhook_keys_no_duplicates(self) -> None:
+        """
+        Strikte Prüfung: webhook_key darf weder auf Pipeline-Ebene noch in Schedules
+        doppelt vorkommen. Bei Duplikat wird ValueError erhoben.
+        """
+        seen: set = set()
+        if self.webhook_key:
+            seen.add(self.webhook_key)
+        for s in self.schedules:
+            wk = s.get("webhook_key") if isinstance(s, dict) else None
+            if wk and isinstance(wk, str) and wk.strip():
+                if wk in seen:
+                    raise ValueError(
+                        f"Duplicate webhook_key: webhook_key darf pro Pipeline nur einmal "
+                        f"vorkommen (Pipeline-Level und in schedules). Duplikat: {wk!r}"
+                    )
+                seen.add(wk)
 
     @staticmethod
     def _normalize_downstream_triggers(raw: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

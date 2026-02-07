@@ -490,14 +490,29 @@ async def get_pipeline_stats(
     success_rate = 0.0
     if pipeline.total_runs > 0:
         success_rate = (pipeline.successful_runs / pipeline.total_runs) * 100.0
-    
+
+    # Webhook-Runs pro Run-Konfiguration (Key "" = Pipeline-Level / run_config_id null)
+    webhook_by_config: Dict[str, int] = {}
+    webhook_runs_stmt = (
+        select(PipelineRun.run_config_id, func.count(PipelineRun.id).label("cnt"))
+        .where(PipelineRun.pipeline_name == name)
+        .where(PipelineRun.triggered_by == "webhook")
+        .group_by(PipelineRun.run_config_id)
+    )
+    for row in session.exec(webhook_runs_stmt).all():
+        key = "" if row.run_config_id is None else (row.run_config_id or "")
+        webhook_by_config[key] = row.cnt
+    if not webhook_by_config:
+        webhook_by_config = None
+
     return PipelineStatsResponse(
         pipeline_name=pipeline.pipeline_name,
         total_runs=pipeline.total_runs,
         successful_runs=pipeline.successful_runs,
         failed_runs=pipeline.failed_runs,
         success_rate=success_rate,
-        webhook_runs=pipeline.webhook_runs
+        webhook_runs=pipeline.webhook_runs,
+        webhook_runs_by_config=webhook_by_config,
     )
 
 

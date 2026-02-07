@@ -170,7 +170,9 @@ Die Terminplanung wird in der Datenbank (z.B. über den APScheduler) gespeichert
 
 ### Aktivierung: `webhook_key` in `pipeline.json`
 
-Webhooks sind **pro Pipeline** aktiv, wenn in `pipeline.json` ein **`webhook_key`** gesetzt ist (nicht leer). Ohne `webhook_key` sind Webhooks für diese Pipeline deaktiviert.
+Webhooks sind aktiv, wenn in `pipeline.json` ein **`webhook_key`** auf Pipeline-Ebene und/oder pro Eintrag in **`schedules[]`** gesetzt ist (nicht leer). Ohne jeden `webhook_key` sind Webhooks für diese Pipeline deaktiviert.
+
+**Pipeline-Level** (ein Key für die ganze Pipeline, Run mit Standard-Config):
 
 ```json
 {
@@ -179,7 +181,18 @@ Webhooks sind **pro Pipeline** aktiv, wenn in `pipeline.json` ein **`webhook_key
 }
 ```
 
-**Wichtig:** Den Schlüssel **geheim** halten – jeder, der die Webhook-URL kennt, kann die Pipeline starten.
+**Pro Schedule** (eigener Key pro Run-Konfiguration): In jedem Eintrag von `schedules[]` kann optional **`webhook_key`** stehen. Die aufgerufene URL entscheidet dann, welche Run-Konfiguration (run_config_id) verwendet wird – z. B. getrennte Keys für „prod“ und „staging“. Jeder `webhook_key` darf pro Pipeline nur **einmal** vorkommen (Pipeline-Level und alle Schedules zusammen); Duplikate führen beim Laden der pipeline.json zu einem Fehler.
+
+```json
+{
+  "schedules": [
+    { "id": "prod", "schedule_cron": "0 9 * * *", "webhook_key": "geheim-prod" },
+    { "id": "staging", "schedule_cron": "0 10 * * *", "webhook_key": "geheim-staging" }
+  ]
+}
+```
+
+**Wichtig:** Schlüssel **geheim** halten – jeder, der die Webhook-URL kennt, kann die Pipeline (bzw. den zugehörigen Schedule) starten.
 
 ### Endpoint und Aufruf
 
