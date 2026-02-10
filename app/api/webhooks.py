@@ -7,18 +7,24 @@ Dieses Modul enthält REST-API-Endpoints für Webhook-Trigger:
 Der webhook_key kann auf Pipeline-Ebene oder pro Schedule (schedules[].webhook_key) gesetzt sein.
 Bei Übereinstimmung mit einem Schedule wird der Run mit der zugehörigen Run-Konfiguration
 (run_config_id) gestartet.
+
+Optional kann ein JSON-Body mit env_vars und parameters übergeben werden (gleiche Limits
+wie bei POST /api/pipelines/{name}/run).
 """
 
+import json
 import logging
 import secrets as secrets_module
 from typing import Dict, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import ValidationError
 from sqlmodel import Session
 
 from app.core.database import get_session
 from app.core.errors import get_500_detail
 from app.executor import run_pipeline
 from app.middleware.rate_limiting import limiter
+from app.schemas.pipelines import RunPipelineRequest
 from app.services.pipeline_discovery import get_pipeline as get_discovered_pipeline
 
 logger = logging.getLogger(__name__)
@@ -120,12 +126,36 @@ async def trigger_pipeline_via_webhook(
             detail="Ungültiger Webhook-Schlüssel"
         )
     
+    # Optionalen JSON-Body auslesen (env_vars, parameters)
+    env_vars: Optional[Dict[str, str]] = None
+    parameters: Optional[Dict[str, str]] = None
+    content_type = (request.headers.get("content-type") or "").strip().lower()
+    if content_type.startswith("application/json"):
+        body_bytes = await request.body()
+        if body_bytes and body_bytes.strip():
+            try:
+                data = json.loads(body_bytes)
+            except json.JSONDecodeError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Ungültiges JSON im Request-Body"
+                )
+            try:
+                run_request = RunPipelineRequest.model_validate(data)
+            except ValidationError as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=e.errors()
+                )
+            env_vars = run_request.env_vars
+            parameters = run_request.parameters
+    
     # Pipeline starten mit triggered_by="webhook" und optional run_config_id
     try:
         run = await run_pipeline(
             name=pipeline_name,
-            env_vars=None,
-            parameters=None,
+            env_vars=env_vars,
+            parameters=parameters,
             session=session,
             triggered_by="webhook",
             run_config_id=run_config_id

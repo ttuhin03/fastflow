@@ -795,6 +795,13 @@ Triggert eine Pipeline via Webhook. **Rate Limit: 30 Requests/Minute** pro IP (B
 
 **Hinweis:** Der `webhook_key` muss in der `pipeline.json` der Pipeline konfiguriert sein.
 
+**Request Body (optional):** Bei `Content-Type: application/json` kann ein JSON-Body mit denselben Feldern wie bei `POST /api/pipelines/{name}/run` übergeben werden:
+
+- `env_vars` (optional): Dictionary mit Environment-Variablen/Secrets für den Run
+- `parameters` (optional): Dictionary mit Pipeline-Parametern
+
+**Limits:** Max. 50 Einträge pro `env_vars` und `parameters`, je Wert max. 16 KB.
+
 **Response:**
 ```json
 {
@@ -807,13 +814,21 @@ Triggert eine Pipeline via Webhook. **Rate Limit: 30 Requests/Minute** pro IP (B
 ```
 
 **Fehler:**
+- `400`: Ungültiger Request-Body (z. B. ungültiges JSON oder Verletzung der Limits für env_vars/parameters)
 - `404`: Pipeline nicht gefunden, deaktiviert oder Webhooks deaktiviert
 - `401`: Ungültiger Webhook-Schlüssel
 - `429`: Concurrency-Limit erreicht
 
-**Beispiel:**
+**Beispiel (ohne Body):**
 ```bash
 curl -X POST http://localhost:8000/api/webhooks/pipeline_a/my-secret-key
+```
+
+**Beispiel (mit env_vars und parameters):**
+```bash
+curl -X POST http://localhost:8000/api/webhooks/pipeline_a/my-secret-key \
+  -H "Content-Type: application/json" \
+  -d '{"env_vars":{"API_KEY":"secret-value","LOG_LEVEL":"DEBUG"},"parameters":{"input_file":"data.csv"}}'
 ```
 
 ---
