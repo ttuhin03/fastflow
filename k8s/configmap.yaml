@@ -1,0 +1,91 @@
+# ConfigMap: nicht-sensible Umgebungsvariablen
+# Entspricht .env.example – optionale Variablen unten auskommentiert
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fastflow-config
+  labels:
+    app: fastflow-orchestrator
+data:
+  # Umgebungsmodus (development | production)
+  ENVIRONMENT: "development"
+  # BASE_URL / FRONTEND_URL: Port-Forward 8000 (für NodePort 30080 auf 30080 ändern)
+  BASE_URL: "http://localhost:8000"
+  FRONTEND_URL: "http://localhost:8000"
+
+  # Logging
+  LOG_LEVEL: "INFO"
+  # LOG_JSON: "false"   # In Produktion oft true für ELK/Datadog
+
+  # Pipeline-Discovery-Cache (Sekunden)
+  PIPELINE_CACHE_TTL_SECONDS: "60"
+
+  # Langsame Requests (Sekunden) – darüber wird WARNING geloggt
+  # SLOW_REQUEST_THRESHOLD_SECONDS: "5.0"
+  # MAX_REQUEST_BODY_MB: "10"
+
+  # Docker & UV
+  WORKER_BASE_IMAGE: "ghcr.io/astral-sh/uv:python3.11-bookworm-slim"
+  DEFAULT_PYTHON_VERSION: "3.11"
+  # UV_PRE_HEAT: "true"
+
+  # Concurrency & Timeouts
+  MAX_CONCURRENT_RUNS: "10"
+  # CONTAINER_TIMEOUT: ""
+  # RETRY_ATTEMPTS: "0"
+
+  # Git-Konfiguration
+  # GIT_BRANCH: "main"
+  # AUTO_SYNC_ENABLED: "false"
+  # AUTO_SYNC_INTERVAL: ""
+
+  # Log-Management
+  # LOG_RETENTION_RUNS: ""
+  # LOG_RETENTION_DAYS: ""
+  # LOG_MAX_SIZE_MB: ""
+  # LOG_STREAM_RATE_LIMIT: "100"
+
+  # Log-Backup (S3/MinIO) – nicht-sensible Teile
+  # S3_BACKUP_ENABLED: "false"
+  # S3_ENDPOINT_URL: "http://minio:9000"
+  # S3_BUCKET: "fastflow-logs"
+  # S3_REGION: "us-east-1"
+  # S3_PREFIX: "pipeline-logs"
+  # S3_USE_PATH_STYLE: "true"
+
+  # JWT (nicht-sensible Teile)
+  # JWT_ALGORITHM: "HS256"
+  # JWT_ACCESS_TOKEN_MINUTES: "15"
+  # JWT_EXPIRATION_HOURS: "24"
+
+  # Proxy & CORS
+  # PROXY_HEADERS_TRUSTED: "false"
+  # CORS_ORIGINS: "https://yourdomain.com"
+
+  # GitHub Apps (optional) – GITHUB_APP_ID, GITHUB_INSTALLATION_ID
+  # GITHUB_PRIVATE_KEY_PATH: "/path/to/key.pem"
+
+  # OAuth – CLIENT_IDs (Secrets in secrets.yaml)
+  # INITIAL_ADMIN_EMAIL: "admin@example.com"
+
+  # Custom OAuth (Keycloak, Auth0)
+  # CUSTOM_OAUTH_AUTHORIZE_URL: "https://..."
+  # CUSTOM_OAUTH_TOKEN_URL: "https://..."
+  # CUSTOM_OAUTH_USERINFO_URL: "https://..."
+  # CUSTOM_OAUTH_SCOPES: "openid email profile"
+  # CUSTOM_OAUTH_CLAIM_ID: "sub"
+  # CUSTOM_OAUTH_CLAIM_EMAIL: "email"
+  # CUSTOM_OAUTH_CLAIM_NAME: "name"
+  # CUSTOM_OAUTH_NAME: "Custom"
+
+  # E-Mail-Benachrichtigungen (nicht-sensible Teile)
+  # EMAIL_ENABLED: "false"
+  # SMTP_HOST: "smtp.example.com"
+  # SMTP_PORT: "587"
+  # SMTP_USER: "user@example.com"
+  # SMTP_FROM: "noreply@example.com"
+  # EMAIL_RECIPIENTS: "admin@example.com"
+
+  # Microsoft Teams
+  # TEAMS_ENABLED: "false"

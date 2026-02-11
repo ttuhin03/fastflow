@@ -56,6 +56,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # PostHog: script-src + connect-src für eu-assets (array.js, config), eu.i (Ingest), eu (App)
         posthog_script = "https://eu-assets.i.posthog.com"
         posthog_connect = "https://eu.i.posthog.com https://eu.posthog.com https://eu-assets.i.posthog.com"
+        # OAuth-Provider für Login (connect-src für Fetch, falls nötig)
+        oauth_connect = "https://github.com https://api.github.com https://accounts.google.com https://oauth2.googleapis.com https://login.microsoftonline.com https://graph.microsoft.com"
         if config.ENVIRONMENT == "production":
             # Produktion: Restriktive CSP
             # style-src: fonts.googleapis.com für Google Fonts CSS; font-src: fonts.gstatic.com für Font-Dateien (.woff2)
@@ -65,7 +67,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
                 "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
                 "img-src 'self' data: https:; "
                 "font-src 'self' data: https://fonts.gstatic.com; "
-                f"connect-src 'self' {posthog_connect}; "
+                f"connect-src 'self' {posthog_connect} {oauth_connect}; "
                 "frame-ancestors 'none';"
             )
         else:
@@ -76,7 +78,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
                 "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
                 "img-src 'self' data: https:; "
                 "font-src 'self' data: https://fonts.gstatic.com; "
-                f"connect-src 'self' ws: wss: {posthog_connect}; "
+                f"connect-src 'self' ws: wss: {posthog_connect} {oauth_connect}; "
                 "frame-ancestors 'none';"
             )
         

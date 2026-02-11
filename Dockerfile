@@ -52,6 +52,7 @@ RUN pip install --no-cache-dir -r requirements.txt && pip install --no-cache-dir
 
 # App-Code kopieren
 COPY app/ ./app/
+COPY scripts/ ./scripts/
 COPY alembic.ini .
 COPY alembic/ ./alembic/
 COPY VERSION .

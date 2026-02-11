@@ -1,0 +1,33 @@
+# Skaffold-Konfiguration für lokale K8s-Entwicklung
+#
+# Secrets sind in k8s/secrets.yaml (inkl. Dev-Dummy-Werte)
+#
+# Nutzung: skaffold dev
+#
+# Bei Kind/Minikube/Docker Desktop wird das Image automatisch in den Cluster
+# geladen (kein Registry-Push nötig).
+#
+apiVersion: skaffold/v2beta29
+kind: Config
+metadata:
+  name: fastflow
+build:
+  artifacts:
+    - image: fastflow-orchestrator
+      context: .
+      docker:
+        dockerfile: Dockerfile
+deploy:
+  kubectl:
+    manifests:
+      - k8s/pvc.yaml
+      - k8s/postgres.yaml
+      - k8s/secrets.yaml
+      - k8s/configmap.yaml
+      - k8s/deployment.yaml
+      - k8s/service.yaml
+portForward:
+  - resourceType: service
+    resourceName: fastflow-orchestrator
+    port: 80
+    localPort: 8000

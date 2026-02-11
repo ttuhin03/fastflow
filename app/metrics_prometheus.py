@@ -345,6 +345,7 @@ def create_instrumentator() -> Instrumentator:
         excluded_handlers=[
             "/metrics",      # Metrics-Endpoint selbst ausschließen
             "/health",       # Health-Check ausschließen
+            "/healthz",
             "/api/health",
             "/ready",
             "/api/ready",

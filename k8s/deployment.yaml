@@ -1,0 +1,133 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fastflow-orchestrator
+  labels:
+    app: fastflow-orchestrator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fastflow-orchestrator
+  template:
+    metadata:
+      labels:
+        app: fastflow-orchestrator
+    spec:
+      # Wartet auf PostgreSQL, falls DATABASE_URL gesetzt (postgres-secret)
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          command:
+            - sh
+            - -c
+            - |
+              if [ -n "$${DATABASE_URL}" ] && echo "$${DATABASE_URL}" | grep -q postgresql; then
+                echo "Waiting for PostgreSQL..."
+                until pg_isready -h postgres -p 5432 -U fastflow; do sleep 2; done
+                echo "PostgreSQL ready"
+              else
+                echo "Using SQLite, skipping postgres wait"
+              fi
+          envFrom:
+            - secretRef:
+                name: postgres-secret
+                optional: true
+      # Docker-Proxy Sidecar: Zugriff auf Host-Docker für Pipeline-Runs
+      # Erfordert Nodes mit Docker (Kind + extraMounts, Minikube docker driver, Docker Desktop)
+      containers:
+        - name: docker-proxy
+          image: tecnativa/docker-socket-proxy:latest
+          volumeMounts:
+            - name: docker-socket
+              mountPath: /var/run/docker.sock
+              readOnly: true
+          env:
+            - name: CONTAINERS
+              value: "1"
+            - name: IMAGES
+              value: "1"
+            - name: BUILD
+              value: "1"
+            - name: NETWORKS
+              value: "0"
+            - name: VOLUMES
+              value: "1"
+            - name: SYSTEM
+              value: "0"
+            - name: EXEC
+              value: "1"
+            - name: POST
+              value: "1"
+            - name: DELETE
+              value: "1"
+            - name: STATS
+              value: "1"
+
+        - name: orchestrator
+          image: fastflow-orchestrator:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: fastflow-config
+            - secretRef:
+                name: fastflow-secrets
+                optional: true
+            # PostgreSQL: DATABASE_URL aus postgres-secret (optional)
+            - secretRef:
+                name: postgres-secret
+                optional: true
+          env:
+            - name: DOCKER_PROXY_URL
+              value: "http://localhost:2375"
+            - name: PIPELINES_DIR
+              value: /app/pipelines
+            - name: LOGS_DIR
+              value: /app/logs
+            - name: DATA_DIR
+              value: /app/data
+            - name: UV_CACHE_DIR
+              value: /app/data/uv_cache
+            - name: UV_PYTHON_INSTALL_DIR
+              value: /app/data/uv_python
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+            - name: logs
+              mountPath: /app/logs
+            - name: pipelines
+              mountPath: /app/pipelines
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8000
+            initialDelaySeconds: 40
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+      volumes:
+        - name: docker-socket
+          hostPath:
+            path: /var/run/docker.sock
+            type: Socket
+        - name: data
+          persistentVolumeClaim:
+            claimName: fastflow-data-pvc
+        - name: logs
+          persistentVolumeClaim:
+            claimName: fastflow-logs-pvc
+        - name: pipelines
+          persistentVolumeClaim:
+            claimName: fastflow-pipelines-pvc

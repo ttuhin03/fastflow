@@ -27,7 +27,7 @@ Kurze Checkliste vor dem Go-Live und für den Betrieb.
 
 ## Health & Readiness
 
-- **Liveness**: `GET /health` oder `GET /api/health` – Prozess lebt (für Kubernetes `livenessProbe`, Docker HEALTHCHECK)
+- **Liveness**: `GET /health`, `GET /healthz` oder `GET /api/health` – Prozess lebt (für Kubernetes `livenessProbe`, Docker HEALTHCHECK)
 - **Readiness**: `GET /ready` oder `GET /api/ready` – DB und Docker erreichbar (für Kubernetes `readinessProbe`)
 
 In Kubernetes:
@@ -47,4 +47,4 @@ In Kubernetes:
 - [ ] Login über OAuth testen
 - [ ] Einmal einen Pipeline-Run ausführen und Logs prüfen
 
-Siehe auch: [Deployment Guide (PRODUCTION)](./PRODUCTION.md), [Konfiguration](./CONFIGURATION.md).
+Siehe auch: [Deployment Guide (PRODUCTION)](./PRODUCTION.md), [Kubernetes](./K8S.md), [Konfiguration](./CONFIGURATION.md).
