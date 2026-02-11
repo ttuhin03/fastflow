@@ -60,6 +60,9 @@ COPY VERSION .
 # Static-Files vom Frontend-Build kopieren
 COPY --from=frontend-builder /app/frontend/dist ./static
 
+# Pipelines (werden bei ENVIRONMENT=development in leeres /app/pipelines kopiert)
+COPY pipelines/ ./pipelines-seed/
+
 # Entrypoint: Migrationen, dann uvicorn
 COPY entrypoint.sh .
 RUN chmod +x entrypoint.sh

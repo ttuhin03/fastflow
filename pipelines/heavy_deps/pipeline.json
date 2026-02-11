@@ -1,0 +1,10 @@
+{
+  "enabled": true,
+  "description": "Pipeline mit vielen Dependencies (numpy, pandas, flask, scikit-learn, …) zum Testen von uv-Setup und setup_duration",
+  "tags": ["test", "dependencies", "setup_duration", "uv"],
+  "timeout": 300,
+  "retry_attempts": 1,
+  "cpu_hard_limit": 2,
+  "mem_hard_limit": "2G",
+  "default_env": {}
+}

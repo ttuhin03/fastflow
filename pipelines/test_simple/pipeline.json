@@ -1,0 +1,21 @@
+{
+  "enabled": true,
+  "description": "Einfache Test-Pipeline ohne Dependencies zum Testen der UI",
+  "tags": [
+    "test",
+    "simple",
+    "demo"
+  ],
+  "timeout": 60,
+  "schedule_cron": "0 8 * * *",
+  "retry_attempts": 2,
+  "cpu_hard_limit": 2,
+  "mem_hard_limit": "512M",
+  "cpu_soft_limit": 1,
+  "mem_soft_limit": "400M",
+  "default_env": {
+    "TEST_ENV_VAR": "test_value_from_json",
+    "ENVIRONMENT": "development",
+    "LOG_LEVEL": "INFO"
+  }
+}

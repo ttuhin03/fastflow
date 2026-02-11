@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "description": "Fehlerhafte Test-Pipeline zum Testen der Fehlerbehandlung und Logging",
+  "tags": ["test", "failing", "error-handling"],
+  "timeout": 30,
+  "retry_attempts": 1,
+  "cpu_hard_limit": 2,
+  "mem_hard_limit": "256M",
+  "cpu_soft_limit": 1,
+  "mem_soft_limit": "200M",
+  "default_env": {
+    "ERROR_MODE": "true",
+    "LOG_LEVEL": "ERROR",
+    "FAILURE_REASON": "intentional_test_failure"
+  }
+}

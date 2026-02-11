@@ -1,0 +1,8 @@
+{
+  "enabled": true,
+  "description": "Demo-Pipeline mit Python 3.11 (ohne requirements.txt)",
+  "tags": ["demo", "python-version", "3.11"],
+  "python_version": "3.11",
+  "timeout": 60,
+  "retry_attempts": 1
+}

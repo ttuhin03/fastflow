@@ -1,0 +1,16 @@
+{
+  "type": "notebook",
+  "enabled": true,
+  "description": "Beispiel-Notebook-Pipeline mit Cell-Level-Retry (pipeline.json cells + optional Zellen-Metadaten)",
+  "tags": ["notebook", "example", "nbclient"],
+  "python_version": "3.12",
+  "timeout": 120,
+  "retry_attempts": 3,
+  "default_env": {},
+  "cells": [
+    { "retries": 2, "delay_seconds": 1 },
+    { "retries": 0 },
+    { "retries": 3, "delay_seconds": 1 },
+    { "retries": 1, "delay_seconds": 2 }
+  ]
+}

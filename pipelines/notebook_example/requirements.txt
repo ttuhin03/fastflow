@@ -1,0 +1,4 @@
+# Für Notebook-Ausführung im Fast-Flow-Container (nb_runner.py)
+nbclient>=0.10
+nbformat>=5.9
+ipykernel>=6.25
