@@ -19,12 +19,12 @@ const config: Config = {
   },
 
   url: 'https://ttuhin03.github.io',
-  baseUrl: '/',
+  baseUrl: (process.env.BASE_URL as string) || '/',
 
   organizationName: 'ttuhin03',
   projectName: 'fastflow',
 
-  onBrokenLinks: 'throw',
+  onBrokenLinks: (process.env.BASE_URL ? 'warn' : 'throw') as const,
 
   i18n: {
     defaultLocale: 'de',

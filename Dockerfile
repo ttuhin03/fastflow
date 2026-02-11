@@ -16,8 +16,8 @@ COPY package.json package-lock.json ./
 COPY frontend/package.json ./frontend/
 COPY VERSION ./VERSION
 
-# VITE_DOCS_URL für Doku-Link (default: Doku auf Port 3001)
-ARG VITE_DOCS_URL=http://localhost:3001
+# VITE_DOCS_URL: /doku = Docusaurus (kein Konflikt mit FastAPI /docs)
+ARG VITE_DOCS_URL=/doku
 ENV VITE_DOCS_URL=$VITE_DOCS_URL
 
 # Frontend-Workspace installieren (inkl. Test-Deps für Build-Toolchain)
@@ -26,6 +26,17 @@ RUN npm ci --workspace=fastflow-frontend
 # Frontend-Code kopieren und bauen
 COPY frontend/ ./frontend/
 RUN npm run build --workspace=fastflow-frontend
+
+# Stage 1b: Docusaurus-Docs Build (für /docs unter FastAPI)
+FROM node:20-slim AS docs-builder
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY docs/package.json ./docs/
+RUN npm ci --workspace=docs
+COPY docs/ ./docs/
+# baseUrl /doku/ (nicht /docs – kollidiert mit FastAPI Swagger)
+ENV BASE_URL=/doku/
+RUN npm run build --workspace=docs
 
 # Stage 2: Python-Backend (Bookworm = stable Debian, zuverlässigere Mirrors als trixie)
 FROM python:3.11-slim-bookworm
@@ -59,6 +70,9 @@ COPY VERSION .
 
 # Static-Files vom Frontend-Build kopieren
 COPY --from=frontend-builder /app/frontend/dist ./static
+
+# Docusaurus-Docs unter /docs ausliefern
+COPY --from=docs-builder /app/docs/build ./static/docs
 
 # Pipelines (werden bei ENVIRONMENT=development in leeres /app/pipelines kopiert)
 COPY pipelines/ ./pipelines-seed/

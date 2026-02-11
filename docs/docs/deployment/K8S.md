@@ -13,11 +13,12 @@ Fast-Flow kann in einem lokalen oder produktiven Kubernetes-Cluster betrieben we
 
   | Option | Empfehlung | Hinweis |
   |--------|------------|---------|
-  | **Docker Desktop** | Einfachste Lösung | Einstellungen → „Enable Kubernetes“ aktivieren |
+  | **kubeadm** | Produktion | Reale oder VM-Nodes mit Docker auf dem Host |
+  | **Docker Desktop** | Lokale Entwicklung | Einstellungen → „Enable Kubernetes“ aktivieren |
   | **Kind** (Kubernetes in Docker) | Leichtgewichtig | Erfordert [extraMounts](#kind-docker-socket) für Docker-Socket |
   | **Minikube** | Feature-reich | Mit `--driver=docker` für Docker-Socket-Zugriff |
 
-- **Docker** auf dem Host (für Pipeline-Runs; der Orchestrator nutzt den Docker-Daemon via Socket)
+- **Docker** auf dem Host/Node (für Pipeline-Runs; der Orchestrator nutzt den Docker-Daemon via Socket)
 
 ## Kind: Docker-Socket freigeben
 
@@ -92,6 +93,32 @@ kubectl edit configmap fastflow-config
 
 Danach Pod neu starten: `kubectl rollout restart deployment/fastflow-orchestrator`
 
+### 6. Wichtige URLs
+
+| URL | Beschreibung |
+|-----|--------------|
+| `/` | React-Frontend (Dashboard) |
+| `/doku` | Docusaurus-Dokumentation |
+| `/docs` | FastAPI Swagger (API-Doku) |
+| `/redoc` | FastAPI ReDoc |
+
+### 7. Pipelines: hostPath und DEV vs. PROD
+
+Pipelines werden per **hostPath** (`/opt/fastflow-pipelines`) bereitgestellt, damit Worker-Container den gleichen Pfad auf dem Node mounten können.
+
+- **`PIPELINES_HOST_DIR`** (ConfigMap): Muss mit dem hostPath übereinstimmen (`/opt/fastflow-pipelines`). Ohne diese Variable funktionieren Pipeline-Runs nicht (404 auf `/app/main.py`).
+
+- **`ENVIRONMENT`** steuert die Befüllung:
+  - **`development`**: Beim Start werden Beispiel-Pipelines aus dem Image nach `/app/pipelines` kopiert, falls das Verzeichnis leer ist.
+  - **`production`**: Kein Kopieren. Pipelines kommen ausschließlich über [Git-Sync](./GIT_DEPLOYMENT.md) oder manuelles Befüllen des hostPath.
+
+Für Produktion in der ConfigMap setzen:
+
+```yaml
+ENVIRONMENT: "production"
+PIPELINES_HOST_DIR: "/opt/fastflow-pipelines"
+```
+
 ## Skaffold (Dev-Workflow)
 
 Mit [Skaffold](https://skaffold.dev/) wird bei Codeänderungen automatisch gebaut, deployed und Port-Forward eingerichtet.
@@ -131,12 +158,14 @@ curl http://localhost:8000/ready
 
 ## Architektur
 
-- **Orchestrator**: FastAPI + React-Frontend, Port 8000
+- **Orchestrator**: FastAPI + React-Frontend + Docusaurus-Doku, Port 8000
 - **PostgreSQL** (optional): Datenbank-Service auf Port 5432
 - **Docker-Proxy** (Sidecar): Sicherer Zugriff auf den Host-Docker-Socket für Pipeline-Runs
-- **PVCs**: `fastflow-data-pvc` (UV-Cache, ggf. SQLite), `fastflow-logs-pvc`, `fastflow-pipelines-pvc`, `postgres-pvc` (bei PostgreSQL)
+- **Volumes**:
+  - **PVCs**: `fastflow-data-pvc` (UV-Cache, ggf. SQLite), `fastflow-logs-pvc`, `postgres-pvc` (bei PostgreSQL)
+  - **hostPath** (Pipelines): `/opt/fastflow-pipelines` – Worker-Container müssen denselben Pfad auf dem Node mounten können
 
-Der Docker-Socket-Zugriff funktioniert nur, wenn die Cluster-Nodes Zugriff auf einen Docker-Daemon haben (Kind mit extraMounts, Minikube mit docker driver, Docker Desktop).
+Der Docker-Socket-Zugriff funktioniert nur, wenn die Cluster-Nodes Zugriff auf einen Docker-Daemon haben (kubeadm, Kind mit extraMounts, Minikube mit docker driver, Docker Desktop).
 
 ## Siehe auch
 
