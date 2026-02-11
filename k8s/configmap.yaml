@@ -9,7 +9,10 @@ metadata:
     app: fastflow-orchestrator
 data:
   # Umgebungsmodus (development | production)
+  # Dev: Beispiel-Pipelines werden bei leerem Verzeichnis kopiert. Prod: nur Git-Sync.
   ENVIRONMENT: "development"
+  # Host-Pfad für Pipelines (muss mit hostPath-Volume übereinstimmen, damit Worker mounten können)
+  PIPELINES_HOST_DIR: "/opt/fastflow-pipelines"
   # BASE_URL / FRONTEND_URL: Port-Forward 8000 (für NodePort 30080 auf 30080 ändern)
   BASE_URL: "http://localhost:8000"
   FRONTEND_URL: "http://localhost:8000"

@@ -129,5 +129,6 @@ spec:
           persistentVolumeClaim:
             claimName: fastflow-logs-pvc
         - name: pipelines
-          persistentVolumeClaim:
-            claimName: fastflow-pipelines-pvc
+          hostPath:
+            path: /opt/fastflow-pipelines
+            type: DirectoryOrCreate

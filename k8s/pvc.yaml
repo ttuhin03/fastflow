@@ -23,16 +23,4 @@ spec:
   resources:
     requests:
       storage: 2Gi
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: fastflow-pipelines-pvc
-  labels:
-    app: fastflow-orchestrator
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 2Gi
+# Pipelines: hostPath /opt/fastflow-pipelines (siehe deployment.yaml)
