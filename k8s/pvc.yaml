@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: fastflow-data-pvc
+  name: fastflow-pvc
   labels:
     app: fastflow-orchestrator
 spec:
@@ -9,18 +9,6 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 10Gi
+      storage: 20Gi
 ---
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: fastflow-logs-pvc
-  labels:
-    app: fastflow-orchestrator
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 5Gi
-# Pipelines: hostPath /opt/fastflow-pipelines (siehe deployment.yaml)
+# PostgreSQL hat eigenen PVC (k8s/postgres.yaml)

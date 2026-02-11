@@ -94,12 +94,15 @@ spec:
             - name: UV_PYTHON_INSTALL_DIR
               value: /app/data/uv_python
           volumeMounts:
-            - name: data
+            - name: fastflow-storage
               mountPath: /app/data
-            - name: logs
+              subPath: data
+            - name: fastflow-storage
               mountPath: /app/logs
-            - name: pipelines
+              subPath: logs
+            - name: fastflow-storage
               mountPath: /app/pipelines
+              subPath: pipelines
           livenessProbe:
             httpGet:
               path: /health
@@ -122,13 +125,6 @@ spec:
           hostPath:
             path: /var/run/docker.sock
             type: Socket
-        - name: data
+        - name: fastflow-storage
           persistentVolumeClaim:
-            claimName: fastflow-data-pvc
-        - name: logs
-          persistentVolumeClaim:
-            claimName: fastflow-logs-pvc
-        - name: pipelines
-          hostPath:
-            path: /opt/fastflow-pipelines
-            type: DirectoryOrCreate
+            claimName: fastflow-pvc
