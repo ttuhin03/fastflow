@@ -15,7 +15,8 @@ data:
   # Ermitteln: kubectl exec deploy/fastflow-orchestrator -c orchestrator -- grep pipelines /proc/self/mountinfo | head -1
   # Pfad setzen, dann rollout restart. Ohne Setzen funktionieren Pipeline-Runs nicht.
   # PIPELINES_HOST_DIR: "/var/lib/kubelet/pods/..."
-  # BASE_URL / FRONTEND_URL: Port-Forward 8000 (für NodePort 30080 auf 30080 ändern)
+  # BASE_URL / FRONTEND_URL: Bei Minikube-VM setzt scripts/minikube-vm.sh die Minikube-IP automatisch.
+  # Sonst: NodePort 30080 → http://<K8s-Node-IP>:30080 oder Port-Forward 8000.
   BASE_URL: "http://localhost:8000"
   FRONTEND_URL: "http://localhost:8000"
 
@@ -30,7 +31,7 @@ data:
   # SLOW_REQUEST_THRESHOLD_SECONDS: "5.0"
   # MAX_REQUEST_BODY_MB: "10"
 
-  # Docker & UV
+  # Docker & UV (Minikube-Skript setzt fastflow-worker:latest für Notebook-Pipelines)
   WORKER_BASE_IMAGE: "ghcr.io/astral-sh/uv:python3.11-bookworm-slim"
   DEFAULT_PYTHON_VERSION: "3.11"
   # UV_PRE_HEAT: "true"
@@ -94,3 +95,4 @@ data:
 
   # Microsoft Teams
   # TEAMS_ENABLED: "false"
+

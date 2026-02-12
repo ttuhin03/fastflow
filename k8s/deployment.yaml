@@ -38,6 +38,13 @@ spec:
       containers:
         - name: docker-proxy
           image: tecnativa/docker-socket-proxy:latest
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
           volumeMounts:
             - name: docker-socket
               mountPath: /var/run/docker.sock
@@ -67,6 +74,13 @@ spec:
         - name: orchestrator
           image: fastflow-orchestrator:latest
           imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 2000m
+              memory: 2Gi
           ports:
             - containerPort: 8000
               name: http
