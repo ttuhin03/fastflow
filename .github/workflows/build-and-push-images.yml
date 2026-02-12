@@ -1,0 +1,64 @@
+# Bei einem neuen Tag (z. B. v1.0.0) werden Orchestrator- und Worker-Image
+# gebaut und in die GitHub Container Registry (ghcr.io) gepusht.
+# Andere können dann z. B. in K8s nutzen:
+#   image: ghcr.io/OWNER/fastflow-orchestrator:v1.0.0
+#   WORKER_BASE_IMAGE: ghcr.io/OWNER/fastflow-worker:v1.0.0
+name: Build and push images
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract tag (strip v prefix for image tag)
+        id: tag
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          IMAGE_TAG="${TAG#v}"
+          echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          echo "full_tag=${TAG}" >> $GITHUB_OUTPUT
+
+      - name: Build and push Orchestrator image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/fastflow-orchestrator:${{ steps.tag.outputs.image_tag }}
+            ghcr.io/${{ github.repository_owner }}/fastflow-orchestrator:${{ steps.tag.outputs.full_tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.worker
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/fastflow-worker:${{ steps.tag.outputs.image_tag }}
+            ghcr.io/${{ github.repository_owner }}/fastflow-worker:${{ steps.tag.outputs.full_tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

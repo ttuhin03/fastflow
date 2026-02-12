@@ -16,8 +16,16 @@ So deployest du Fast-Flow auf einem **beliebigen K8s-Cluster** (z. B. eigener 
 
 ### 1. Images bereitstellen
 
-**Variante A – Registry (empfohlen für Produktion):**  
-Orchestrator und Worker bauen, in eine Registry pushen, in ConfigMap/Deployment den vollen Image-Namen inkl. Tag eintragen:
+**Variante A – Vorgefertigte Images von GitHub (ghcr.io):**  
+Bei jedem **Release-Tag** (z. B. `v1.0.0`) baut ein GitHub-Actions-Workflow automatisch beide Images und pusht sie in die GitHub Container Registry. Für ein K8s-Deployment reicht es dann, diese Images zu referenzieren (öffentliches Repo → Images ohne Login pullbar):
+
+- **Orchestrator:** `ghcr.io/<REPO-OWNER>/fastflow-orchestrator:1.0.0` (oder Tag mit `v`: `v1.0.0`)
+- **Worker:** `ghcr.io/<REPO-OWNER>/fastflow-worker:1.0.0`
+
+Beispiel für dieses Repo (Owner z. B. `ttuhin03`): Im Deployment `image: ghcr.io/ttuhin03/fastflow-orchestrator:v1.0.0`, in der ConfigMap `WORKER_BASE_IMAGE: "ghcr.io/ttuhin03/fastflow-worker:v1.0.0"`. `<REPO-OWNER>` durch den GitHub-Benutzernamen bzw. die Organisation ersetzen. Neues Image erzeugen: im Repo einen Tag pushen (z. B. `git tag v1.0.0 && git push origin v1.0.0`), der Workflow unter „Actions“ baut und pusht dann die Images.
+
+**Variante B – Eigene Registry:**  
+Orchestrator und Worker selbst bauen und in eine eigene Registry pushen:
 
 ```bash
 docker build -t your-registry.io/fastflow-orchestrator:v1.0.0 .
@@ -26,9 +34,9 @@ docker build -f Dockerfile.worker -t your-registry.io/fastflow-worker:v1.0.0 .
 docker push your-registry.io/fastflow-worker:v1.0.0
 ```
 
-Im Deployment `image:` auf `your-registry.io/fastflow-orchestrator:v1.0.0` setzen, in der ConfigMap `WORKER_BASE_IMAGE: "your-registry.io/fastflow-worker:v1.0.0"`. Bei privater Registry ggf. **imagePullSecrets** im Deployment anlegen und eintragen.
+Im Deployment `image:` auf `your-registry.io/fastflow-orchestrator:v1.0.0` setzen, in der ConfigMap `WORKER_BASE_IMAGE: "your-registry.io/fastflow-worker:v1.0.0"`. Bei privater Registry **imagePullSecrets** im Deployment eintragen.
 
-**Variante B – Cluster ohne Registry (z. B. Kind):**  
+**Variante C – Cluster ohne Registry (z. B. Kind):**  
 Images lokal bauen und in den Cluster laden (z. B. `kind load docker-image fastflow-orchestrator:latest`). Deployment mit `image: fastflow-orchestrator:latest` und `imagePullPolicy: IfNotPresent` nutzen.
 
 ### 2. Secrets und ConfigMap anpassen
