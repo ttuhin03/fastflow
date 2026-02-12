@@ -30,7 +30,7 @@ class PerformanceTrackingMiddleware(BaseHTTPMiddleware):
 
     # Pfade die nicht geloggt werden (z.B. Health-Checks, Metrics)
     SKIP_PATHS = frozenset({
-        "/health", "/api/health", "/ready", "/api/ready",
+        "/health", "/healthz", "/api/health", "/ready", "/api/ready",
         "/metrics",  # Metrics-Endpoint selbst, sonst Feedback-Loop
     })
 

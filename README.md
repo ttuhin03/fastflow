@@ -107,6 +107,18 @@ uvicorn app.main:app --reload
 # Frontend (Terminal 2): cd frontend && npm run dev
 ```
 
+### Option 3: Kubernetes lokal mit VM (Minikube, ohne Docker Desktop)
+
+Zum Testen der gesamten App auf Kubernetes in einer **echten VM** (z.B. QEMU, VirtualBox):
+
+```bash
+# Voraussetzungen: kubectl, minikube, ein VM-Treiber (qemu, virtualbox oder vmware)
+./scripts/minikube-vm.sh
+# Zugriff: kubectl port-forward svc/fastflow-orchestrator 8000:80 → http://localhost:8000
+```
+
+Vollständige Anleitung (OAuth, Notebook-Pipelines, Troubleshooting): [k8s/README.md](k8s/README.md).
+
 ### 🔐 Login (GitHub OAuth, Google OAuth)
 
 Die Anmeldung erfolgt **über GitHub oder Google**:

@@ -27,7 +27,7 @@ Token werden über GitHub OAuth (`GET /api/auth/github/authorize`) oder Google O
 
 ### Health Check
 
-#### `GET /health` oder `GET /api/health`
+#### `GET /health`, `GET /healthz` oder `GET /api/health`
 
 Prüft den Status der Anwendung.
 

@@ -1,0 +1,10 @@
+{
+  "enabled": true,
+  "description": "Demo-Pipeline mit Python 3.12 und requirements.txt",
+  "tags": ["demo", "python-version", "3.12"],
+  "python_version": "3.12",
+  "timeout": 60,
+  "retry_attempts": 1,
+  "cpu_hard_limit": 1,
+  "mem_hard_limit": "512M"
+}

@@ -191,25 +191,37 @@ def _get_host_path_for_volume(
     """
     # Versuche zuerst, Host-Pfad aus Container-Volumes zu extrahieren (zuverlässigste Methode)
     try:
-        # Container-Name aus Environment-Variable (falls gesetzt)
+        # 1) Container-Name = HOSTNAME (Pod-Name in K8s); unter K8s heißen Docker-Container oft anders
         container_name = os.getenv("HOSTNAME", "fastflow-orchestrator")
-        
-        # Versuche, Container zu finden
         try:
             container = client.containers.get(container_name)
-            # Container-Volumes inspizieren
             mounts = container.attrs.get("Mounts", [])
             for mount in mounts:
                 destination = mount.get("Destination")
-                # Prüfe ob der Container-Pfad übereinstimmt
                 if destination == container_path or container_path.startswith(destination + "/"):
                     source = mount.get("Source")
                     if source and os.path.isabs(source):
                         logger.debug(f"Host-Pfad für {container_path} aus Volume extrahiert: {source}")
                         return source
         except docker.errors.NotFound:
-            # Container nicht gefunden, verwende Fallback
             pass
+
+        # 2) Unter Kubernetes: Orchestrator-Container per Mount-Ziel finden (Docker-Name != Pod-Name)
+        for container in client.containers.list(all=True):
+            try:
+                mounts = container.attrs.get("Mounts", [])
+                for mount in mounts:
+                    destination = mount.get("Destination")
+                    if destination == container_path or container_path.startswith(destination + "/"):
+                        source = mount.get("Source")
+                        if source and os.path.isabs(source):
+                            logger.debug(
+                                "Host-Pfad für %s aus Container %s extrahiert: %s",
+                                container_path, container.name, source,
+                            )
+                            return source
+            except Exception:
+                continue
     except Exception as e:
         logger.debug(f"Fehler beim Extrahieren des Host-Pfads für {container_path}: {e}")
     
@@ -560,7 +572,10 @@ async def _run_container_task(
             runners_host_path = _get_host_path_for_volume(
                 client, str(config.RUNNERS_DIR), config.RUNNERS_HOST_DIR
             )
-            volumes_dict[runners_host_path] = {"bind": "/runner", "mode": "ro"}
+            # Nur mounten wenn echter Host-Pfad (z. B. Docker Compose). In K8s ist
+            # app/runners nur im Image – kein Volume; Worker-Image enthält /runner.
+            if not runners_host_path.strip().startswith("/app"):
+                volumes_dict[runners_host_path] = {"bind": "/runner", "mode": "ro"}
 
         # Container-Konfiguration für docker-socket-proxy
         container_config = {

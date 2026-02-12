@@ -188,6 +188,7 @@ setup_signal_handlers()
 
 
 @app.get("/health")
+@app.get("/healthz")
 @app.get("/api/health")
 async def health_check() -> JSONResponse:
     """
@@ -303,8 +304,11 @@ setup_prometheus_metrics(app)
 # Prüfe ob static-Verzeichnis existiert (nach Build)
 static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
 if os.path.exists(static_dir):
+    # Docusaurus-Doku unter /doku (VITE_DOCS_URL; /docs = FastAPI Swagger)
+    docs_dir = os.path.join(static_dir, "docs")
+    _docs_dir = docs_dir  # für Closure in serve_react_app
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
-    
+
     # Serve React-App für alle nicht-API-Routen
     # Diese Route muss als letzte registriert werden, damit API-Routen zuerst matchen
     from fastapi.responses import FileResponse
@@ -318,10 +322,31 @@ if os.path.exists(static_dir):
         Sicherheit: Path Traversal wird verhindert durch Validierung dass
         der finale Pfad innerhalb von static_dir liegt.
         """
-        # Ignoriere API-Routen, health/ready und static assets
+        # Ignoriere API-Routen, health/ready, static assets
         if full_path.startswith("api") or full_path in ("health", "ready") or full_path.startswith("static"):
             return JSONResponse({"detail": "Not found"}, status_code=404)
-        
+
+        # Docusaurus-Doku: /doku und /doku/... aus static/docs servieren
+        if full_path == "doku" or full_path.startswith("doku/"):
+            if os.path.exists(_docs_dir):
+                docs_path = PathLib(_docs_dir)
+                subpath = full_path[5:].lstrip("/") if len(full_path) > 5 else ""
+                if not subpath:
+                    idx = docs_path / "index.html"
+                    if idx.exists():
+                        return FileResponse(str(idx))
+                else:
+                    file_path = (docs_path / subpath).resolve()
+                    try:
+                        file_path.relative_to(docs_path)
+                    except ValueError:
+                        return JSONResponse({"detail": "Not found"}, status_code=404)
+                    if file_path.exists() and file_path.is_file():
+                        return FileResponse(str(file_path))
+                    if file_path.is_dir() and (file_path / "index.html").exists():
+                        return FileResponse(str(file_path / "index.html"))
+            return JSONResponse({"detail": "Not found"}, status_code=404)
+
         # Path Traversal-Schutz: Verwende pathlib für sichere Pfad-Auflösung
         try:
             static_path = PathLib(static_dir).resolve()

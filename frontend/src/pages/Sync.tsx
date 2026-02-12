@@ -212,15 +212,22 @@ export default function Sync() {
     },
   })
 
-  // Manifest Flow Mutations
+  // Manifest Flow: HTML per authentifiziertem Request holen und in neuem Fenster anzeigen
   const manifestAuthorizeMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiClient.get('/sync/github-manifest/authorize')
-      return response.data
+      const response = await apiClient.get('/sync/github-manifest/authorize', {
+        responseType: 'text',
+      })
+      return response.data as string
     },
-    onSuccess: (data) => {
-      // Redirect zu GitHub
-      window.location.href = data.authorization_url
+    onSuccess: (html) => {
+      const w = window.open('', '_blank')
+      if (w) {
+        w.document.write(html)
+        w.document.close()
+      } else {
+        showError('Popup wurde blockiert. Bitte erlauben Sie Popups für diese Seite.')
+      }
     },
     onError: (error: any) => {
       showError(`Fehler: ${error.response?.data?.detail || error.message}`)
@@ -570,9 +577,7 @@ export default function Sync() {
                     Alles andere passiert automatisch - App-Erstellung, Konfiguration und Installation.
                   </p>
                   <button
-                    onClick={() => {
-                      window.location.href = '/api/sync/github-manifest/authorize'
-                    }}
+                    onClick={() => manifestAuthorizeMutation.mutate()}
                     disabled={isReadonly || manifestAuthorizeMutation.isPending}
                     className="connect-github-button"
                   >

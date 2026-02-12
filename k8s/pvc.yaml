@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fastflow-pvc
+  labels:
+    app: fastflow-orchestrator
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+---
+# PostgreSQL hat eigenen PVC (k8s/postgres.yaml)
