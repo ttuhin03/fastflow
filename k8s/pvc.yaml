@@ -1,3 +1,6 @@
+# PVCs für Fast-Flow: Daten/Logs/Pipelines + UV-Cache/Pipeline-Kopien
+# Cache-PVC: RWO für Minikube/Single-Node; für Multi-Node RWM-Cluster eigene StorageClass nutzen.
+---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -11,4 +14,16 @@ spec:
     requests:
       storage: 20Gi
 ---
-# PostgreSQL hat eigenen PVC (k8s/postgres.yaml)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fastflow-cache-pvc
+  labels:
+    app: fastflow-orchestrator
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  # Für echten Multi-Node: accessModes: [ReadWriteMany] + storageClassName (NFS/EFS/CephFS)

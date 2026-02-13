@@ -34,23 +34,19 @@ _docker_client: Optional[docker.DockerClient] = None
 
 def init_docker_client_for_cleanup() -> None:
     """
-    Initialisiert den Docker-Client für Cleanup-Operationen.
-    
-    Wird beim App-Start aufgerufen, um sicherzustellen, dass Docker
-    für Garbage Collection verfügbar ist.
-    
-    Raises:
-        RuntimeError: Wenn Docker-Daemon nicht erreichbar ist
+    Initialisiert den Docker-Client für Cleanup-Operationen (nur bei PIPELINE_EXECUTOR=docker).
+    Bei Kubernetes-Backend wird kein Docker-Client benötigt.
     """
     global _docker_client
-    
+    if config.PIPELINE_EXECUTOR != "docker":
+        _docker_client = None
+        return
     try:
         from app.executor import _get_docker_client
         _docker_client = _get_docker_client()
         logger.info("Docker-Client für Cleanup initialisiert")
     except Exception as e:
         logger.warning(f"Docker-Client für Cleanup nicht verfügbar: {e}")
-        # Nicht kritisch, Cleanup kann trotzdem ohne Docker laufen
         _docker_client = None
 
 
@@ -588,8 +584,8 @@ async def run_cleanup_job() -> Dict[str, Any]:
         # Log-Cleanup
         log_stats = await cleanup_logs(session)
         
-        # Docker-Cleanup
-        docker_stats = await cleanup_docker_resources()
+        # Docker-Cleanup (nur bei PIPELINE_EXECUTOR=docker)
+        docker_stats = await cleanup_docker_resources() if config.PIPELINE_EXECUTOR == "docker" else {}
         
         # Kombinierte Statistiken
         combined_stats = {

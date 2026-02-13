@@ -519,3 +519,16 @@ textarea.form-input {
 .modal-footer .btn {
   min-width: 150px;
 }
+
+/* Pipeline-Executor Anzeige (Docker vs. Kubernetes) */
+.executor-info-card {
+  margin-bottom: var(--spacing-md);
+}
+
+.executor-docker {
+  color: var(--color-primary, #0ea5e9);
+}
+
+.executor-kubernetes {
+  color: #326ce5;
+}

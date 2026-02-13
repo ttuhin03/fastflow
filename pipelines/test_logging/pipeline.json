@@ -4,7 +4,7 @@
   "tags": ["test", "logging", "frontend-test", "demo"],
   "timeout": 30,
   "retry_attempts": 1,
-  "cpu_hard_limit":2,
+  "cpu_hard_limit":1,
   "mem_hard_limit": "256M",
   "cpu_soft_limit": 1,
   "mem_soft_limit": "200M",

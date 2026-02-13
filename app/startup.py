@@ -309,12 +309,13 @@ async def run_startup_tasks() -> None:
                 logger.info("Orchestrator-Einstellungen aus DB geladen")
     await _run_step("Orchestrator-Einstellungen", False, load_orchestrator_settings, None)
 
-    def init_docker():
+    def init_executor():
         from app.executor import init_docker_client
         init_docker_client()
-    # In Test-Modus Docker-Init überspringen (kein docker-proxy nötig)
+    # In Test-Modus Executor-Init überspringen (kein Docker/K8s nötig)
     if not config.TESTING:
-        await _run_step("Docker-Client-Initialisierung", True, init_docker, "Docker-Client initialisiert")
+        msg = "Kubernetes-Executor initialisiert" if config.PIPELINE_EXECUTOR == "kubernetes" else "Docker-Client initialisiert"
+        await _run_step("Pipeline-Executor-Initialisierung", True, init_executor, msg)
 
     async def zombie_reconcile():
         from app.core.database import get_session

@@ -24,6 +24,7 @@ from app.services.s3_backup import get_backup_failures, get_last_backup_timestam
 from app.models import PipelineRun, RunStatus, User
 from app.services.notifications import send_email_notification, send_teams_notification
 from app.executor import _get_docker_client
+from app.executor.kubernetes_backend import get_kubernetes_system_metrics
 from app.auth import require_admin, require_write, get_current_user
 from app.analytics.posthog_client import get_system_settings, shutdown_posthog, capture_exception
 from app.core.errors import get_500_detail
@@ -634,10 +635,22 @@ async def force_cleanup(
                 "actions": []
             },
             "docker_cleanup": {
-                "description": "Bereinigt verwaiste Docker-Container und Volumes",
+                "description": "Bereinigt verwaiste Docker-Container und Volumes (nur bei PIPELINE_EXECUTOR=docker)",
                 "actions": []
             }
         }
+        if config.PIPELINE_EXECUTOR == "docker":
+            cleanup_info["docker_cleanup"]["actions"].append(
+                "Löscht verwaiste Container mit Label 'fastflow-run-id' (ohne zugehörigen DB-Eintrag)"
+            )
+            cleanup_info["docker_cleanup"]["actions"].append(
+                "Löscht beendete Container mit Label 'fastflow-run-id'"
+            )
+            cleanup_info["docker_cleanup"]["actions"].append(
+                "Löscht verwaiste Volumes mit Label 'fastflow-run-id'"
+            )
+        else:
+            cleanup_info["docker_cleanup"]["actions"].append("Nicht aktiv (PIPELINE_EXECUTOR=kubernetes)")
         
         # Log-Cleanup Informationen
         if config.LOG_RETENTION_RUNS:
@@ -657,22 +670,11 @@ async def force_cleanup(
                 "Keine Log-Cleanup-Regeln konfiguriert"
             )
         
-        # Docker-Cleanup Informationen
-        cleanup_info["docker_cleanup"]["actions"].append(
-            "Löscht verwaiste Container mit Label 'fastflow-run-id' (ohne zugehörigen DB-Eintrag)"
-        )
-        cleanup_info["docker_cleanup"]["actions"].append(
-            "Löscht beendete Container mit Label 'fastflow-run-id'"
-        )
-        cleanup_info["docker_cleanup"]["actions"].append(
-            "Löscht verwaiste Volumes mit Label 'fastflow-run-id'"
-        )
-        
         # Log-Cleanup durchführen
         log_stats = await cleanup_logs(session)
         
-        # Docker-Ressourcen-Cleanup durchführen
-        docker_stats = await cleanup_docker_resources()
+        # Docker-Ressourcen-Cleanup (nur bei PIPELINE_EXECUTOR=docker)
+        docker_stats = await cleanup_docker_resources() if config.PIPELINE_EXECUTOR == "docker" else {}
         
         # Detaillierte Zusammenfassung erstellen
         summary = []
@@ -764,82 +766,73 @@ async def get_system_metrics(
         except Exception as e:
             logger.warning(f"Fehler beim Ermitteln der System-Metriken: {e}")
         
-        # Docker-Container-Metriken
-        try:
-            docker_client = _get_docker_client()
-            
-            # Alle Container mit fastflow-run-id Label finden
-            containers = docker_client.containers.list(
-                filters={"label": "fastflow-run-id"},
-                all=False  # Nur laufende Container
-            )
-            
-            metrics["active_containers"] = len(containers)
-            
-            total_ram_mb = 0.0
-            total_cpu_percent = 0.0
-            container_details = []
-            
-            for container in containers:
-                try:
-                    # Container-Stats abrufen
-                    stats = container.stats(stream=False)
-                    
-                    # RAM-Verbrauch berechnen
-                    memory_usage = stats.get("memory_stats", {}).get("usage", 0)
-                    memory_limit = stats.get("memory_stats", {}).get("limit", 0)
-                    ram_mb = memory_usage / (1024 * 1024) if memory_usage else 0
-                    ram_percent = (memory_usage / memory_limit * 100) if memory_limit > 0 else 0
-                    
-                    # CPU-Verbrauch berechnen
-                    cpu_percent = 0.0
-                    cpu_stats = stats.get("cpu_stats", {})
-                    precpu_stats = stats.get("precpu_stats", {})
-                    
-                    if cpu_stats and precpu_stats:
-                        cpu_delta = (
-                            cpu_stats.get("cpu_usage", {}).get("total_usage", 0) -
-                            precpu_stats.get("cpu_usage", {}).get("total_usage", 0)
-                        )
-                        system_delta = (
-                            cpu_stats.get("system_cpu_usage", 0) -
-                            precpu_stats.get("system_cpu_usage", 0)
-                        )
-                        
-                        if system_delta > 0:
-                            online_cpus = len(cpu_stats.get("cpu_usage", {}).get("percpu_usage", [])) or 1
-                            cpu_percent = (cpu_delta / system_delta) * online_cpus * 100.0
-                    
-                    total_ram_mb += ram_mb
-                    total_cpu_percent += cpu_percent
-                    
-                    # Container-Details
-                    run_id = container.labels.get("fastflow-run-id", "unknown")
-                    pipeline_name = container.labels.get("fastflow-pipeline", "unknown")
-                    
-                    container_details.append({
-                        "run_id": run_id,
-                        "pipeline_name": pipeline_name,
-                        "container_id": container.id[:12],
-                        "ram_mb": round(ram_mb, 2),
-                        "ram_percent": round(ram_percent, 2),
-                        "cpu_percent": round(cpu_percent, 2),
-                        "status": container.status
-                    })
-                    
-                except Exception as e:
-                    logger.warning(f"Fehler beim Ermitteln der Container-Stats für {container.id}: {e}")
-                    continue
-            
-            metrics["containers_ram_mb"] = round(total_ram_mb, 2)
-            metrics["containers_cpu_percent"] = round(total_cpu_percent, 2)
-            metrics["container_details"] = container_details
-            
-        except RuntimeError:
-            # Docker-Client nicht verfügbar
-            pass
-        except Exception as e:
-            logger.warning(f"Fehler beim Ermitteln der Docker-Container-Metriken: {e}")
+        # Docker-Container-Metriken (nur bei PIPELINE_EXECUTOR=docker)
+        if config.PIPELINE_EXECUTOR == "docker":
+            try:
+                docker_client = _get_docker_client()
+                containers = docker_client.containers.list(
+                    filters={"label": "fastflow-run-id"},
+                    all=False
+                )
+                metrics["active_containers"] = len(containers)
+                total_ram_mb = 0.0
+                total_cpu_percent = 0.0
+                container_details = []
+                for container in containers:
+                    try:
+                        stats = container.stats(stream=False)
+                        memory_usage = stats.get("memory_stats", {}).get("usage", 0)
+                        memory_limit = stats.get("memory_stats", {}).get("limit", 0)
+                        ram_mb = memory_usage / (1024 * 1024) if memory_usage else 0
+                        ram_percent = (memory_usage / memory_limit * 100) if memory_limit > 0 else 0
+                        cpu_percent = 0.0
+                        cpu_stats = stats.get("cpu_stats", {})
+                        precpu_stats = stats.get("precpu_stats", {})
+                        if cpu_stats and precpu_stats:
+                            cpu_delta = (
+                                cpu_stats.get("cpu_usage", {}).get("total_usage", 0) -
+                                precpu_stats.get("cpu_usage", {}).get("total_usage", 0)
+                            )
+                            system_delta = (
+                                cpu_stats.get("system_cpu_usage", 0) -
+                                precpu_stats.get("system_cpu_usage", 0)
+                            )
+                            if system_delta > 0:
+                                online_cpus = len(cpu_stats.get("cpu_usage", {}).get("percpu_usage", [])) or 1
+                                cpu_percent = (cpu_delta / system_delta) * online_cpus * 100.0
+                        total_ram_mb += ram_mb
+                        total_cpu_percent += cpu_percent
+                        container_details.append({
+                            "run_id": container.labels.get("fastflow-run-id", "unknown"),
+                            "pipeline_name": container.labels.get("fastflow-pipeline", "unknown"),
+                            "container_id": container.id[:12],
+                            "ram_mb": round(ram_mb, 2),
+                            "ram_percent": round(ram_percent, 2),
+                            "cpu_percent": round(cpu_percent, 2),
+                            "status": container.status
+                        })
+                    except Exception as e:
+                        logger.warning(f"Fehler beim Ermitteln der Container-Stats für {container.id}: {e}")
+                metrics["containers_ram_mb"] = round(total_ram_mb, 2)
+                metrics["containers_cpu_percent"] = round(total_cpu_percent, 2)
+                metrics["container_details"] = container_details
+            except RuntimeError:
+                pass
+            except Exception as e:
+                logger.warning(f"Fehler beim Ermitteln der Docker-Container-Metriken: {e}")
+
+        # Kubernetes: aktive Pipeline-Jobs (Pods) für Aktive Container / RAM / CPU
+        if config.PIPELINE_EXECUTOR == "kubernetes":
+            try:
+                k8s_metrics = await asyncio.get_running_loop().run_in_executor(
+                    None, get_kubernetes_system_metrics
+                )
+                metrics["active_containers"] = k8s_metrics.get("active_containers", 0)
+                metrics["containers_ram_mb"] = k8s_metrics.get("containers_ram_mb", 0.0)
+                metrics["containers_cpu_percent"] = k8s_metrics.get("containers_cpu_percent", 0.0)
+                metrics["container_details"] = k8s_metrics.get("container_details", [])
+            except Exception as e:
+                logger.warning(f"Fehler beim Ermitteln der Kubernetes-System-Metriken: {e}")
         
         return metrics
         

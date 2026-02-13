@@ -24,6 +24,7 @@ deploy:
       - k8s/postgres.yaml
       - k8s/secrets.yaml
       - k8s/configmap.yaml
+      - k8s/rbac-kubernetes-executor.yaml
       - k8s/deployment.yaml
       - k8s/service.yaml
 portForward:

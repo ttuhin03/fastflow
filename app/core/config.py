@@ -14,7 +14,7 @@ die globale `config`-Instanz verfügbar.
 """
 
 import os
-from typing import Optional, List
+from typing import Optional, List, Literal
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -106,6 +106,16 @@ class Config:
     Optional. Wenn nicht gesetzt, wird aus den Orchestrator-Mounts abgeleitet.
     """
     
+    # Pipeline-Executor-Backend (docker | kubernetes)
+    PIPELINE_EXECUTOR: Literal["docker", "kubernetes"] = (
+        "kubernetes" if os.getenv("PIPELINE_EXECUTOR", "docker").lower() == "kubernetes" else "docker"
+    )
+    """
+    Ausführungs-Backend für Pipeline-Runs.
+    - docker: Container über Docker-Socket-Proxy (Nodes brauchen Docker).
+    - kubernetes: Container als Kubernetes Jobs (für containerd-only/Talos).
+    """
+
     # Docker & UV-Konfiguration
     DOCKER_PROXY_URL: str = os.getenv("DOCKER_PROXY_URL", "http://docker-proxy:2375")
     """
@@ -190,11 +200,25 @@ class Config:
     RETRY_ATTEMPTS: int = int(os.getenv("RETRY_ATTEMPTS", "0"))
     """
     Globale Anzahl Retry-Versuche bei fehlgeschlagenen Runs.
-    
+
     Pipeline-spezifische Retry-Attempts aus Metadaten-JSON überschreiben
     diesen Wert. Retry erfolgt nur bei Exit-Code != 0.
     """
     
+    # Kubernetes-Executor (nur bei PIPELINE_EXECUTOR=kubernetes)
+    KUBERNETES_NAMESPACE: str = os.getenv("KUBERNETES_NAMESPACE", "default")
+    """Namespace für Pipeline-Jobs (Standard: default)."""
+    KUBERNETES_CACHE_PVC_NAME: str = os.getenv("KUBERNETES_CACHE_PVC_NAME", "fastflow-cache-pvc")
+    """Name des ReadWriteMany-PVC für UV-Cache und Pipeline-Kopien."""
+    KUBERNETES_SHARED_CACHE_MOUNT_PATH: str = os.getenv(
+        "KUBERNETES_SHARED_CACHE_MOUNT_PATH", "/shared"
+    )
+    """Mount-Pfad des Cache-PVC im Orchestrator (für Pipeline-Kopien)."""
+    KUBERNETES_JOB_TTL_SECONDS_AFTER_FINISHED: int = int(
+        os.getenv("KUBERNETES_JOB_TTL_SECONDS_AFTER_FINISHED", "300")
+    )
+    """Sekunden, nach denen abgeschlossene Jobs (und Pods) automatisch gelöscht werden. 0 = nicht löschen."""
+
     # Git-Konfiguration
     GIT_BRANCH: str = os.getenv("GIT_BRANCH", "main")
     """Git-Branch für Sync-Operationen (Standard: main)."""

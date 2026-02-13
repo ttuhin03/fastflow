@@ -67,7 +67,7 @@ if [ "$DELETE_PVCS" = true ]; then
   echo "Waiting for pods to terminate..."
   sleep 5
   echo "Deleting PVCs..."
-  kubectl delete pvc fastflow-pvc postgres-pvc --ignore-not-found=true --timeout=60s || true
+  kubectl delete pvc fastflow-pvc fastflow-cache-pvc postgres-pvc --ignore-not-found=true --timeout=60s || true
   echo "Done. Run the script again without --delete-pvcs to deploy with fresh volumes."
   exit 0
 fi
@@ -97,13 +97,21 @@ fi
 # VM-Treiber verfügbar? (vermeidet kryptische Minikube-Fehler)
 check_driver() {
   case "$MINIKUBE_DRIVER" in
+    docker)
+      if command -v docker &>/dev/null && docker info &>/dev/null 2>&1; then
+        return 0
+      fi
+      echo "Docker ist nicht lauffähig (wird für driver=docker benötigt)."
+      echo "Docker Desktop oder Colima starten, oder einen VM-Treiber nutzen: --driver=qemu"
+      return 1
+      ;;
     qemu|qemu2)
       if command -v qemu-system-aarch64 &>/dev/null || command -v qemu-system-x86_64 &>/dev/null; then
         return 0
       fi
       echo "QEMU ist nicht installiert (wird für driver=$MINIKUBE_DRIVER benötigt)."
       echo "Installation (macOS):  brew install qemu"
-      echo "Alternativ anderen Treiber verwenden:  ./scripts/minikube-vm.sh --driver=virtualbox"
+      echo "Alternativ:  ./scripts/minikube-vm.sh --driver=docker  (ohne VM)"
       return 1
       ;;
     virtualbox)
@@ -124,7 +132,7 @@ check_driver() {
   esac
 }
 
-# Cluster starten (VM + Docker-Runtime, damit /var/run/docker.sock im Node existiert)
+# Cluster starten (Pipeline-Runs laufen als K8s-Jobs, containerd reicht; Docker-Runtime optional)
 if [ "$NO_START" != true ]; then
   check_driver || exit 1
   echo "Starting Minikube with driver=$MINIKUBE_DRIVER, container-runtime=$CONTAINER_RUNTIME..."
@@ -132,24 +140,41 @@ if [ "$NO_START" != true ]; then
     echo "Cluster already running."
   else
     EXTRA_OPTS=()
-    if [ "$MINIKUBE_DRIVER" = "qemu" ]; then
-      # Mit socket_vmnet ist die VM vom Mac aus erreichbar und "minikube service" funktioniert.
-      # Voraussetzung: brew install socket_vmnet && sudo brew services start socket_vmnet
+    if [ "$MINIKUBE_DRIVER" = "qemu" ] || [ "$MINIKUBE_DRIVER" = "qemu2" ]; then
+      # socket_vmnet: VM vom Mac aus erreichbar. Ohne: API oft unter 10.0.2.15, Timeouts möglich.
       if [ -n "${MINIKUBE_NETWORK:-}" ]; then
         EXTRA_OPTS+=(--network="$MINIKUBE_NETWORK")
-      else
+      elif command -v socket_vmnet &>/dev/null; then
         EXTRA_OPTS+=(--network=socket_vmnet)
+      else
+        echo "Hinweis: socket_vmnet nicht gefunden. QEMU startet ggf. mit default-Netz (API-Server-Timeouts möglich)."
+        echo "  Besser: brew install socket_vmnet && sudo brew services start socket_vmnet"
+        echo "  Oder Docker-Treiber (ohne VM): ./scripts/minikube-vm.sh --driver=docker"
       fi
     fi
-    minikube start \
+    if ! minikube start \
       --driver="$MINIKUBE_DRIVER" \
       --container-runtime="$CONTAINER_RUNTIME" \
-      --cpus=2 \
+      --cpus=4 \
       --memory=4096 \
       --disk-size=40g \
-      "${EXTRA_OPTS[@]}"
+      "${EXTRA_OPTS[@]}"; then
+      echo ""
+      echo "Minikube-Start fehlgeschlagen. Häufige Abhilfe:"
+      echo "  1. Altes Profil löschen und erneut starten:"
+      echo "     minikube delete"
+      echo "     $0"
+      echo "  2. Ohne VM (Docker-Desktop/Colima):"
+      echo "     $0 --driver=docker"
+      echo "  3. QEMU mit explizitem Netzwerk: MINIKUBE_NETWORK=default $0"
+      exit 1
+    fi
   fi
 fi
+
+# Metrics-Server: für CPU/RAM-Anzeige in der UI (Run-Detail + Einstellungen → System-Metriken)
+echo "Enabling metrics-server (für CPU/RAM in Run-Detail und Einstellungen)..."
+minikube addons enable metrics-server 2>/dev/null || true
 
 # Docker-Env auf Minikube-Node setzen (Image wird im Node gebaut)
 echo "Setting Docker env to Minikube node..."
@@ -166,6 +191,7 @@ kubectl apply -f "$K8S_DIR/pvc.yaml"
 kubectl apply -f "$K8S_DIR/postgres.yaml"
 kubectl apply -f "$K8S_DIR/secrets.yaml"
 kubectl apply -f "$K8S_DIR/configmap.yaml"
+kubectl apply -f "$K8S_DIR/rbac-kubernetes-executor.yaml"
 # BASE_URL/FRONTEND_URL bleiben aus configmap.yaml (localhost:8000), damit OAuth-Redirect
 # bei Nutzung von kubectl port-forward mit der in GitHub eingetragenen Callback-URL übereinstimmt.
 # Worker-Image für K8s: enthält /runner (nb_runner.py) für Notebook-Pipelines

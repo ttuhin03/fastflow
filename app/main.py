@@ -200,6 +200,7 @@ async def health_check() -> JSONResponse:
             "status": "healthy",
             "version": config.VERSION,
             "environment": config.ENVIRONMENT,
+            "pipeline_executor": config.PIPELINE_EXECUTOR,
         }
     )
 
@@ -228,20 +229,29 @@ async def readiness_check() -> JSONResponse:
         checks["database"] = str(e)
         ok = False
 
-    # Docker-Proxy-Check (mit Circuit Breaker)
-    try:
-        from app.executor import _get_docker_client
-        from app.resilience import circuit_docker, CircuitBreakerOpenError
-        client = _get_docker_client()
-        if client:
-            circuit_docker.call(lambda: client.ping())
-        checks["docker"] = "ok"
-    except CircuitBreakerOpenError as e:
-        checks["docker"] = str(e)
-        ok = False
-    except Exception as e:
-        checks["docker"] = str(e)
-        ok = False
+    # Executor-Check: Docker-Proxy oder Kubernetes-API
+    if config.PIPELINE_EXECUTOR == "kubernetes":
+        try:
+            from app.executor.kubernetes_backend import _get_apis
+            _get_apis()
+            checks["kubernetes"] = "ok"
+        except Exception as e:
+            checks["kubernetes"] = str(e)
+            ok = False
+    else:
+        try:
+            from app.executor import _get_docker_client
+            from app.resilience import circuit_docker, CircuitBreakerOpenError
+            client = _get_docker_client()
+            if client:
+                circuit_docker.call(lambda: client.ping())
+            checks["docker"] = "ok"
+        except CircuitBreakerOpenError as e:
+            checks["docker"] = str(e)
+            ok = False
+        except Exception as e:
+            checks["docker"] = str(e)
+            ok = False
 
     # UV-Cache-Volume beschreibbar (kritisch für Pipeline-Runs)
     try:

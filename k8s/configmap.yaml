@@ -41,6 +41,10 @@ data:
   # CONTAINER_TIMEOUT: ""
   # RETRY_ATTEMPTS: "0"
 
+  # Kubernetes (PIPELINE_EXECUTOR=kubernetes): KUBERNETES_NAMESPACE etc. werden im Deployment gesetzt
+  # Abgeschlossene Pipeline-Jobs (succeeded/failed) nach N Sekunden automatisch löschen. 0 = nicht löschen.
+  KUBERNETES_JOB_TTL_SECONDS_AFTER_FINISHED: "300"
+
   # Git-Konfiguration
   # GIT_BRANCH: "main"
   # AUTO_SYNC_ENABLED: "false"

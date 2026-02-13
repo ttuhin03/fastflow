@@ -1,3 +1,7 @@
+# Deployment für Fast-Flow auf Kubernetes
+# Pipeline-Runs laufen als K8s-Jobs (kein Docker auf den Nodes nötig).
+# Für Docker-basierte Runs: Docker Compose / Dockerfile nutzen.
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -14,7 +18,7 @@ spec:
       labels:
         app: fastflow-orchestrator
     spec:
-      # Wartet auf PostgreSQL, falls DATABASE_URL gesetzt (postgres-secret)
+      serviceAccountName: fastflow-executor
       initContainers:
         - name: wait-for-postgres
           image: postgres:16-alpine
@@ -33,44 +37,7 @@ spec:
             - secretRef:
                 name: postgres-secret
                 optional: true
-      # Docker-Proxy Sidecar: Zugriff auf Host-Docker für Pipeline-Runs
-      # Erfordert Nodes mit Docker (Kind + extraMounts, Minikube docker driver, Docker Desktop)
       containers:
-        - name: docker-proxy
-          image: tecnativa/docker-socket-proxy:latest
-          resources:
-            requests:
-              cpu: 50m
-              memory: 64Mi
-            limits:
-              cpu: 200m
-              memory: 128Mi
-          volumeMounts:
-            - name: docker-socket
-              mountPath: /var/run/docker.sock
-              readOnly: true
-          env:
-            - name: CONTAINERS
-              value: "1"
-            - name: IMAGES
-              value: "1"
-            - name: BUILD
-              value: "1"
-            - name: NETWORKS
-              value: "0"
-            - name: VOLUMES
-              value: "1"
-            - name: SYSTEM
-              value: "0"
-            - name: EXEC
-              value: "1"
-            - name: POST
-              value: "1"
-            - name: DELETE
-              value: "1"
-            - name: STATS
-              value: "1"
-
         - name: orchestrator
           image: fastflow-orchestrator:latest
           imagePullPolicy: IfNotPresent
@@ -90,13 +57,20 @@ spec:
             - secretRef:
                 name: fastflow-secrets
                 optional: true
-            # PostgreSQL: DATABASE_URL aus postgres-secret (optional)
             - secretRef:
                 name: postgres-secret
                 optional: true
           env:
-            - name: DOCKER_PROXY_URL
-              value: "http://localhost:2375"
+            - name: PIPELINE_EXECUTOR
+              value: "kubernetes"
+            - name: KUBERNETES_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: KUBERNETES_CACHE_PVC_NAME
+              value: "fastflow-cache-pvc"
+            - name: KUBERNETES_SHARED_CACHE_MOUNT_PATH
+              value: "/shared"
             - name: PIPELINES_DIR
               value: /app/pipelines
             - name: LOGS_DIR
@@ -117,6 +91,8 @@ spec:
             - name: fastflow-storage
               mountPath: /app/pipelines
               subPath: pipelines
+            - name: cache-pvc
+              mountPath: /shared
           livenessProbe:
             httpGet:
               path: /health
@@ -133,12 +109,10 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
-
       volumes:
-        - name: docker-socket
-          hostPath:
-            path: /var/run/docker.sock
-            type: Socket
         - name: fastflow-storage
           persistentVolumeClaim:
             claimName: fastflow-pvc
+        - name: cache-pvc
+          persistentVolumeClaim:
+            claimName: fastflow-cache-pvc

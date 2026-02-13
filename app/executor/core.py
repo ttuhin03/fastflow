@@ -88,16 +88,20 @@ _SETUP_READY_WRAPPER = (
 
 def init_docker_client() -> None:
     """
-    Initialisiert den Docker-Client und prüft die Verbindung.
+    Initialisiert das Pipeline-Executor-Backend (Docker oder Kubernetes).
     
-    Wird beim App-Start aufgerufen, um sicherzustellen, dass Docker
-    verfügbar ist. Kommuniziert über docker-socket-proxy für sichere
-    Docker-API-Zugriffe. Pullt das Worker-Image falls nötig.
-    
-    Raises:
-        RuntimeError: Wenn Docker-Proxy nicht erreichbar ist
-        docker.errors.APIError: Wenn Image-Pull fehlschlägt
+    Bei PIPELINE_EXECUTOR=kubernetes wird der K8s-Client initialisiert,
+    sonst der Docker-Client (docker-socket-proxy).
     """
+    if config.PIPELINE_EXECUTOR == "kubernetes":
+        from app.executor import kubernetes_backend
+        kubernetes_backend.init_kubernetes_client()
+        return
+    _init_docker_client_impl()
+
+
+def _init_docker_client_impl() -> None:
+    """Initialisiert den Docker-Client (nur bei PIPELINE_EXECUTOR=docker)."""
     global _docker_client
     
     try:
@@ -420,15 +424,26 @@ async def run_pipeline(
         except Exception:
             pass
 
-        # Container-Start in Hintergrund-Task (Session wird intern erstellt)
-        asyncio.create_task(
-            _run_container_task(
-                run.id,
-                pipeline,
-                merged_env_vars,
-                pre_heating_lock
+        # Container-Start in Hintergrund-Task (Backend: Docker oder Kubernetes Jobs)
+        if config.PIPELINE_EXECUTOR == "kubernetes":
+            from app.executor import kubernetes_backend
+            asyncio.create_task(
+                kubernetes_backend.run_container_task(
+                    run.id,
+                    pipeline,
+                    merged_env_vars,
+                    pre_heating_lock,
+                )
             )
-        )
+        else:
+            asyncio.create_task(
+                _run_container_task(
+                    run.id,
+                    pipeline,
+                    merged_env_vars,
+                    pre_heating_lock
+                )
+            )
         
         return run
         
@@ -1865,7 +1880,7 @@ async def _trigger_downstream_pipelines(
 
 async def cancel_run(run_id: UUID, session: Session) -> bool:
     """
-    Bricht einen laufenden Run ab (Container stoppen).
+    Bricht einen laufenden Run ab (Container/Job stoppen).
     
     Args:
         run_id: Run-ID
@@ -1874,6 +1889,9 @@ async def cancel_run(run_id: UUID, session: Session) -> bool:
     Returns:
         True wenn Run erfolgreich abgebrochen wurde, sonst False
     """
+    if config.PIPELINE_EXECUTOR == "kubernetes":
+        from app.executor import kubernetes_backend
+        return await kubernetes_backend.cancel_run(run_id, session)
     try:
         # Container aus Tracking-Dictionary abrufen
         async with _concurrency_lock:
@@ -1936,15 +1954,18 @@ def get_metrics_queue(run_id: UUID) -> Optional[asyncio.Queue]:
 
 async def reconcile_zombie_containers(session: Session) -> None:
     """
-    Reconciliert Zombie-Container (Crash-Recovery).
+    Reconciliert Zombie-Container/Jobs (Crash-Recovery).
     
-    Beim App-Start: Scannt alle laufenden Docker-Container mit Label
-    `fastflow-run-id` und gleicht sie mit der Datenbank ab.
-    Re-attacht zu laufenden Containern und setzt Status korrekt.
+    Beim App-Start: Scannt laufende Runs (Docker-Container oder K8s-Jobs)
+    und gleicht sie mit der Datenbank ab.
     
     Args:
         session: SQLModel Session
     """
+    if config.PIPELINE_EXECUTOR == "kubernetes":
+        from app.executor import kubernetes_backend
+        await kubernetes_backend.reconcile_zombie_jobs(session)
+        return
     try:
         client = _get_docker_client()
         
@@ -2170,7 +2191,7 @@ async def _re_attach_container(
 
 async def check_container_health(run_id: UUID, session: Session) -> Dict[str, Any]:
     """
-    Führt einen Health-Check für einen laufenden Container durch.
+    Führt einen Health-Check für einen laufenden Run (Container oder Job) durch.
     
     Args:
         run_id: Run-ID
@@ -2179,6 +2200,9 @@ async def check_container_health(run_id: UUID, session: Session) -> Dict[str, An
     Returns:
         Dictionary mit Health-Status-Informationen
     """
+    if config.PIPELINE_EXECUTOR == "kubernetes":
+        from app.executor import kubernetes_backend
+        return await kubernetes_backend.check_container_health(run_id, session)
     try:
         # Container aus Tracking-Dictionary abrufen
         async with _concurrency_lock:
@@ -2229,12 +2253,16 @@ async def graceful_shutdown(session: Session) -> None:
     """
     Führt einen Graceful Shutdown durch (alle laufenden Runs beenden).
     
-    Wird beim App-Shutdown aufgerufen, um alle laufenden Container
+    Wird beim App-Shutdown aufgerufen, um alle laufenden Container/Jobs
     sauber zu beenden und Status in DB zu aktualisieren.
     
     Args:
         session: SQLModel Session
     """
+    if config.PIPELINE_EXECUTOR == "kubernetes":
+        from app.executor import kubernetes_backend
+        await kubernetes_backend.graceful_shutdown(session)
+        return
     logger.info("Graceful Shutdown: Beende alle laufenden Runs...")
     
     # Alle RUNNING-Runs in DB finden

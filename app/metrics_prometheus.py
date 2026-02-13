@@ -292,7 +292,8 @@ def update_all_metrics() -> None:
     update_database_metrics()
     update_log_metrics()
     update_pipeline_metrics()
-    update_docker_metrics()
+    if config.PIPELINE_EXECUTOR == "docker":
+        update_docker_metrics()
 
 
 # ============================================================================

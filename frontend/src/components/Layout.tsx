@@ -231,6 +231,11 @@ export default function Layout() {
             <MdCircle className="status-dot-icon" />
             <span className="status-text">
               {backendStatus === 'online' ? 'Online' : backendStatus === 'offline' ? 'Offline' : 'Prüfe...'}
+              {health?.pipeline_executor && (
+                <span className="executor-label" style={{ marginLeft: '6px', opacity: 0.85 }}>
+                  · {health.pipeline_executor === 'kubernetes' ? 'K8s' : 'Docker'}
+                </span>
+              )}
             </span>
           </div>
 

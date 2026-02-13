@@ -85,7 +85,7 @@ export default function Settings() {
     },
   })
 
-  const { data: health } = useQuery<{ status?: string; environment?: string }>({
+  const { data: health } = useQuery<{ status?: string; environment?: string; pipeline_executor?: 'docker' | 'kubernetes' }>({
     queryKey: ['health'],
     queryFn: async () => { const r = await apiClient.get('/health'); return r.data },
     staleTime: 60 * 1000,
@@ -509,6 +509,16 @@ export default function Settings() {
 
         {section === 'system' && (
           <div className="settings">
+      <div className="settings-section card executor-info-card">
+        <h3 className="section-title">Pipeline-Executor</h3>
+        <p className="setting-hint" style={{ marginBottom: 0 }}>
+          {health?.pipeline_executor === 'kubernetes' ? (
+            <>Aktiv: <strong className="executor-kubernetes">Kubernetes (Jobs)</strong> – Pipeline-Runs laufen als K8s-Jobs.</>
+          ) : (
+            <>Aktiv: <strong className="executor-docker">Docker (Socket-Proxy)</strong> – Pipeline-Runs laufen als Docker-Container.</>
+          )}
+        </p>
+      </div>
       {isAdmin && (
         <div className="settings-section card">
           <h3 className="section-title">
