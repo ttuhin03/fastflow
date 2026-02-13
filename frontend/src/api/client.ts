@@ -1,11 +1,11 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios'
 import { showError } from '../utils/toast'
+import { getApiBaseUrl } from '../config'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 const LOGIN_PATH = import.meta.env.VITE_LOGIN_PATH || '/login'
 
 export const apiClient: AxiosInstance = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: getApiBaseUrl(),
   headers: {
     'Content-Type': 'application/json',
   },

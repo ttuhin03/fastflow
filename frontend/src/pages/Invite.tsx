@@ -1,9 +1,5 @@
 import { useSearchParams } from 'react-router-dom'
-
-const getApiOrigin = () => {
-  const u = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
-  return u.replace(/\/api\/?$/, '') || 'http://localhost:8000'
-}
+import { getApiOrigin } from '../config'
 
 export default function Invite() {
   const [search] = useSearchParams()

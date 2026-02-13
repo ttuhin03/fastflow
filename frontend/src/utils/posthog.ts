@@ -5,11 +5,12 @@
  */
 
 import posthog from 'posthog-js'
+import { getApiBaseUrl } from '../config'
 
 let initialized = false
 
 function getTelemetryStatusUrl(): string {
-  const base = (import.meta.env.VITE_API_URL || 'http://localhost:8000/api').replace(/\/$/, '')
+  const base = getApiBaseUrl().replace(/\/$/, '')
   return `${base}/settings/telemetry-status`
 }
 

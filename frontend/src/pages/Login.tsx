@@ -2,12 +2,8 @@ import { useRef, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { MdCode } from 'react-icons/md'
 import Tooltip from '../components/Tooltip'
+import { getApiOrigin } from '../config'
 import './Login.css'
-
-const getApiOrigin = () => {
-  const u = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
-  return u.replace(/\/api\/?$/, '') || 'http://localhost:8000'
-}
 
 const UNAVAILABLE_MESSAGE = 'Dieser Anmeldeanbieter ist nicht konfiguriert. Bitte Administrator kontaktieren.'
 
@@ -24,7 +20,7 @@ export default function Login() {
   const { data: providers = {} } = useQuery<AuthProviders>({
     queryKey: ['auth/providers'],
     queryFn: async () => {
-      const r = await fetch(`${getApiOrigin()}/api/auth/providers`)
+      const r = await fetch('/api/auth/providers')
       if (!r.ok) return {}
       return r.json()
     },

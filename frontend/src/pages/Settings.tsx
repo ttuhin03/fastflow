@@ -6,11 +6,7 @@ import apiClient from '../api/client'
 import { MdSave, MdRefresh, MdInfo, MdWarning, MdEmail, MdGroup, MdLink, MdCheck, MdPerson, MdSync, MdStorage, MdPlayCircle, MdNotifications, MdPeople } from 'react-icons/md'
 import { showError, showSuccess } from '../utils/toast'
 import { captureException } from '../utils/posthog'
-
-const getApiOrigin = () => {
-  const u = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
-  return u.replace(/\/api\/?$/, '') || 'http://localhost:8000'
-}
+import { getApiOrigin } from '../config'
 import Tooltip from '../components/Tooltip'
 import InfoIcon from '../components/InfoIcon'
 import StorageStats from '../components/StorageStats'
