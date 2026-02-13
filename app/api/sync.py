@@ -595,14 +595,20 @@ async def github_manifest_callback(
             state_data = get_oauth_state(state)
         
         # Code-Exchange: Tausche Code gegen App-Credentials
+        # GitHub erwartet den temporären Code als Bearer-Token für diesen Endpoint.
         exchange_url = f"https://api.github.com/app-manifests/{code}/conversions"
         headers = {
             "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28"
+            "X-GitHub-Api-Version": "2022-11-28",
+            "Authorization": f"Bearer {code}",
+            "Content-Type": "application/json",
+            "User-Agent": "FastFlow-Orchestrator",
         }
         
         try:
-            response = requests.post(exchange_url, headers=headers, timeout=30)
+            response = requests.post(
+                exchange_url, headers=headers, json={}, timeout=30
+            )
             
             if response.status_code == 201:
                 # Erfolg! Credentials erhalten
@@ -664,14 +670,23 @@ async def github_manifest_callback(
                         
                         return RedirectResponse(url=install_url)
             
-            # Exchange fehlgeschlagen - weiterleiten mit Code für manuellen Exchange
-            # (z.B. wenn User Token erforderlich ist)
+            # Exchange fehlgeschlagen – Response loggen für Debugging
+            try:
+                err_body = response.text
+                logger.warning(
+                    "GitHub App-Manifest Exchange fehlgeschlagen: status=%s body=%s",
+                    response.status_code,
+                    err_body[:500] if err_body else "(leer)",
+                )
+            except Exception:
+                pass
             redirect_url = _safe_frontend_redirect(
                 "/sync", tab="github", manifest_code=code or "", state=state or "", exchange_error="true"
             )
             return RedirectResponse(url=redirect_url)
             
-        except requests.RequestException:
+        except requests.RequestException as e:
+            logger.warning("GitHub App-Manifest Exchange RequestException: %s", e)
             # Netzwerk-Fehler - weiterleiten mit Code
             redirect_url = _safe_frontend_redirect(
                 "/sync", tab="github", manifest_code=code or "", state=state or "", exchange_error="true"
@@ -734,17 +749,19 @@ async def github_manifest_exchange(
         
         # Exchange Code gegen Credentials
         # POST https://api.github.com/app-manifests/{code}/conversions
+        # GitHub erwartet den temporären Code als Bearer-Token.
         exchange_url = f"https://api.github.com/app-manifests/{request.code}/conversions"
-        
-        # GitHub API erfordert einen User Token für den Exchange
-        # Aber: Der Exchange kann auch ohne Token funktionieren, wenn der Code gültig ist
-        # Versuche es erstmal ohne Token (GitHub akzeptiert das manchmal)
         headers = {
             "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28"
+            "X-GitHub-Api-Version": "2022-11-28",
+            "Authorization": f"Bearer {request.code}",
+            "Content-Type": "application/json",
+            "User-Agent": "FastFlow-Orchestrator",
         }
         
-        response = requests.post(exchange_url, headers=headers, timeout=30)
+        response = requests.post(
+            exchange_url, headers=headers, json={}, timeout=30
+        )
         
         if response.status_code == 401:
             # Token erforderlich - das ist normal für den Manifest Exchange

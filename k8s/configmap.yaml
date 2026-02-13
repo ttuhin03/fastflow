@@ -32,7 +32,7 @@ data:
   # MAX_REQUEST_BODY_MB: "10"
 
   # Docker & UV (Minikube-Skript setzt fastflow-worker:latest für Notebook-Pipelines)
-  WORKER_BASE_IMAGE: "ghcr.io/astral-sh/uv:python3.11-bookworm-slim"
+  WORKER_BASE_IMAGE: "ghcr.io/ttuhin03/fastflow-worker:v0.7.1"
   DEFAULT_PYTHON_VERSION: "3.11"
   # UV_PRE_HEAT: "true"
 
