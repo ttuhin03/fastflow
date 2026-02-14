@@ -19,7 +19,7 @@ from app.models import Pipeline
 from app.services.pipeline_discovery import discover_pipelines, invalidate_cache
 
 from app.git_sync.sync_log import _write_sync_log
-from app.git_sync.github_token import get_github_app_token
+from app.services.git_sync_repo_config import get_sync_repo_config
 
 logger = logging.getLogger(__name__)
 
@@ -42,14 +42,56 @@ def _run_git_command(cmd: list, cwd: Path, env: Optional[Dict[str, str]] = None)
         return (-1, "", str(e))
 
 
-async def _git_pull(branch: str, pipelines_dir: Path) -> Tuple[bool, str]:
-    """Führt Git Pull aus (mit GitHub Apps falls konfiguriert). Retry bis zu 3 Versuche."""
+def _build_auth_url(repo_url: str, token: Optional[str]) -> str:
+    """Baut HTTPS-URL mit Token für Clone/Pull (x-access-token für GitHub-kompatibel)."""
+    if not token or not repo_url.strip():
+        return repo_url.strip()
+    url = repo_url.strip()
+    if "x-access-token" in url or (url.startswith("https://") and "@" in url.split("://", 1)[1]):
+        return url
+    if url.startswith("https://"):
+        rest = url.split("://", 1)[1]
+        return f"https://x-access-token:{token}@{rest}"
+    if url.startswith("http://"):
+        rest = url.split("://", 1)[1]
+        return f"http://x-access-token:{token}@{rest}"
+    return url
+
+
+def _ensure_repo_cloned(
+    repo_url: str,
+    token: Optional[str],
+    branch: str,
+    pipelines_dir: Path,
+) -> Tuple[bool, str]:
+    """Führt initialen Git-Clone aus, wenn pipelines_dir leer ist. Returns (success, message)."""
+    pipelines_dir.mkdir(parents=True, exist_ok=True)
+    if (pipelines_dir / ".git").exists():
+        return (True, "")
+    try:
+        existing = list(pipelines_dir.iterdir())
+        if existing:
+            return (False, "Pipelines-Verzeichnis ist nicht leer und kein Git-Repository")
+    except OSError as e:
+        return (False, f"Verzeichnis nicht lesbar: {e}")
+    auth_url = _build_auth_url(repo_url, token)
+    cmd = ["git", "clone", "--branch", branch, auth_url, str(pipelines_dir)]
+    exit_code, stdout, stderr = _run_git_command(cmd, pipelines_dir.parent)
+    if exit_code != 0:
+        return (False, f"Git Clone fehlgeschlagen: {stderr or stdout}")
+    return (True, "")
+
+
+async def _git_pull(
+    branch: str, pipelines_dir: Path, sync_token: Optional[str] = None
+) -> Tuple[bool, str]:
+    """Führt Git Pull aus (mit optionalem Token für private Repos). Retry bis zu 3 Versuche."""
     git_dir = pipelines_dir / ".git"
     if not git_dir.exists():
         return (False, "Pipelines-Verzeichnis ist kein Git-Repository")
     last_msg = ""
     for attempt in range(1, 4):
-        success, msg = await _git_pull_once(branch, pipelines_dir)
+        success, msg = await _git_pull_once(branch, pipelines_dir, sync_token)
         if success:
             return (True, msg)
         last_msg = msg
@@ -60,11 +102,12 @@ async def _git_pull(branch: str, pipelines_dir: Path) -> Tuple[bool, str]:
     return (False, last_msg)
 
 
-async def _git_pull_once(branch: str, pipelines_dir: Path) -> Tuple[bool, str]:
+async def _git_pull_once(
+    branch: str, pipelines_dir: Path, sync_token: Optional[str] = None
+) -> Tuple[bool, str]:
     """Einzelner Git-Pull-Versuch (Fetch, Reset, Pull)."""
-    github_token = get_github_app_token()
     env = None
-    if github_token:
+    if sync_token:
         remote_url_cmd = ["git", "config", "remote.origin.url"]
         exit_code, stdout, stderr = _run_git_command(remote_url_cmd, pipelines_dir)
         if exit_code == 0:
@@ -72,7 +115,13 @@ async def _git_pull_once(branch: str, pipelines_dir: Path) -> Tuple[bool, str]:
             if "x-access-token" not in remote_url and remote_url.startswith("https://"):
                 parts = remote_url.split("://")
                 if len(parts) == 2:
-                    new_url = f"https://x-access-token:{github_token}@{parts[1]}"
+                    new_url = f"https://x-access-token:{sync_token}@{parts[1]}"
+                    set_url_cmd = ["git", "config", "remote.origin.url", new_url]
+                    _run_git_command(set_url_cmd, pipelines_dir)
+            elif "x-access-token" not in remote_url and remote_url.startswith("http://"):
+                parts = remote_url.split("://")
+                if len(parts) == 2:
+                    new_url = f"http://x-access-token:{sync_token}@{parts[1]}"
                     set_url_cmd = ["git", "config", "remote.origin.url", new_url]
                     _run_git_command(set_url_cmd, pipelines_dir)
     fetch_cmd = ["git", "fetch", "origin", branch]
@@ -292,10 +341,38 @@ async def sync_pipelines(
     try:
         async with _sync_lock:
             pipelines_dir = config.PIPELINES_DIR
+            repo_config = get_sync_repo_config(session)
+            sync_token: Optional[str] = None
+            if repo_config:
+                sync_token = repo_config.get("token")
+                branch = repo_config.get("branch") or branch
+                git_dir = pipelines_dir / ".git"
+                if not git_dir.exists():
+                    ok, msg = await asyncio.get_running_loop().run_in_executor(
+                        _executor,
+                        lambda: _ensure_repo_cloned(
+                            repo_config["repo_url"],
+                            sync_token,
+                            branch,
+                            pipelines_dir,
+                        ),
+                    )
+                    if not ok:
+                        await _write_sync_log(
+                            {"event": "sync_failed", "branch": branch, "status": "failed", "error": msg}
+                        )
+                        raise RuntimeError(f"Git Clone fehlgeschlagen: {msg}")
+            elif not (pipelines_dir / ".git").exists():
+                await _write_sync_log(
+                    {"event": "sync_failed", "branch": branch, "status": "failed", "error": "Kein Repository konfiguriert"}
+                )
+                raise RuntimeError(
+                    "Kein Repository konfiguriert. Bitte in Sync → Repository URL angeben oder GIT_REPO_URL setzen."
+                )
             sync_start_time = datetime.now(timezone.utc)
             logger.info("Starte Git Pull für Branch: %s", branch)
             await _write_sync_log({"event": "sync_started", "branch": branch, "status": "started"})
-            success, message = await _git_pull(branch, pipelines_dir)
+            success, message = await _git_pull(branch, pipelines_dir, sync_token)
             if not success:
                 await _write_sync_log({"event": "sync_failed", "branch": branch, "status": "failed", "error": message})
                 raise RuntimeError(f"Git Pull fehlgeschlagen: {message}")
@@ -367,6 +444,20 @@ async def sync_pipelines(
     finally:
         if close_session:
             session.close()
+
+
+def test_sync_repo_config(session: Session) -> Tuple[bool, str]:
+    """Testet die Sync-Repo-Konfiguration per git ls-remote."""
+    cfg = get_sync_repo_config(session)
+    if not cfg or not cfg.get("repo_url"):
+        return (False, "Keine Repository-URL konfiguriert")
+    url = _build_auth_url(cfg["repo_url"], cfg.get("token"))
+    branch = cfg.get("branch") or "main"
+    cmd = ["git", "ls-remote", "--heads", url, f"refs/heads/{branch}"]
+    exit_code, stdout, stderr = _run_git_command(cmd, Path("."))
+    if exit_code != 0:
+        return (False, (stderr or stdout or "Unbekannter Fehler").strip())
+    return (True, "Verbindung erfolgreich")
 
 
 async def get_sync_status() -> Dict[str, Any]:

@@ -8,48 +8,24 @@ Dieses Modul enthält alle REST-API-Endpoints für Git-Synchronisation:
 
 from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from sqlmodel import Session
-from datetime import datetime
-import json
 import logging
-import urllib.parse
-import requests
 
 from app.core.database import get_session
 from app.core.errors import get_500_detail
-from app.git_sync import sync_pipelines, get_sync_status, get_sync_logs, test_github_app_token
+from app.git_sync import sync_pipelines, get_sync_status, get_sync_logs, test_sync_repo_config
 from app.core.config import config
-from app.auth import require_write, require_admin, get_current_user
+from app.auth import require_write, get_current_user
 from app.models import User
-from app.auth.github_config import (
-    save_github_config,
-    load_github_config,
-    delete_github_config,
-    validate_github_private_key
-)
-from app.auth.github_oauth import (
-    generate_oauth_state,
-    store_oauth_state,
-    get_oauth_state,
-    delete_oauth_state
+from app.services.git_sync_repo_config import (
+    get_sync_repo_config_public,
+    save_sync_repo_config,
+    delete_sync_repo_config,
 )
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/sync", tags=["sync"])
-
-
-def _safe_frontend_redirect(path: str, **query_params: Optional[str]) -> str:
-    """
-    Build redirect URL using only allowlisted base (config).
-    Query values are URL-encoded to prevent open-redirect or injection.
-    """
-    base = (config.FRONTEND_URL or config.BASE_URL or "http://localhost:3000").rstrip("/")
-    safe_params = {k: (v or "") for k, v in query_params.items()}
-    if safe_params:
-        return f"{base}{path}?{urllib.parse.urlencode(safe_params)}"
-    return f"{base}{path}"
 
 
 class SyncRequest(BaseModel):
@@ -108,30 +84,23 @@ async def sync(
 
 @router.get("/status", response_model=Dict[str, Any])
 async def sync_status(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
 ) -> Dict[str, Any]:
     """
     Gibt Git-Status anzeigen.
-    
-    Zeigt Informationen über:
-    - Aktueller Branch
-    - Remote-URL
-    - Letzter Commit
-    - Pipeline-Discovery-Status
-    - Pre-Heating-Status (welche Pipelines sind gecached)
-    
-    Returns:
-        Dictionary mit Git-Status-Informationen
+    Enthält auch repo_configured (ob Repository-URL gesetzt ist).
     """
     try:
         status_info = await get_sync_status()
+        repo_public = get_sync_repo_config_public(session)
+        status_info["repo_configured"] = repo_public.get("configured", False)
         return status_info
-        
     except Exception as e:
         logger.exception("Fehler beim Abrufen des Git-Status")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=get_500_detail(e)
+            detail=get_500_detail(e),
         )
 
 
@@ -217,608 +186,99 @@ async def get_sync_logs_endpoint(
         )
 
 
-class GitHubConfigRequest(BaseModel):
-    """Request-Model für GitHub Apps Konfiguration."""
-    app_id: str
-    installation_id: str
-    private_key: str
+class RepoConfigRequest(BaseModel):
+    """Request-Model für Repository-URL + Token Konfiguration."""
+    repo_url: str = Field(..., min_length=1, description="HTTPS-URL des Repositories")
+    token: Optional[str] = Field(default=None, description="Personal Access Token (optional, für private Repos)")
+    branch: Optional[str] = Field(default=None, description="Branch (z. B. main)")
 
 
-@router.get("/github-config", response_model=Dict[str, Any])
-async def get_github_config(
-    current_user: User = Depends(get_current_user)
+@router.get("/repo-config", response_model=Dict[str, Any])
+async def get_repo_config(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
 ) -> Dict[str, Any]:
     """
-    Gibt aktuelle GitHub Apps Konfiguration zurück.
-    
-    Private Key wird aus Sicherheitsgründen NICHT zurückgegeben.
-    
-    Returns:
-        Dictionary mit Konfiguration (app_id, installation_id, configured, has_private_key)
+    Gibt die Sync-Repository-Konfiguration zurück (ohne Token).
+    Env-Variablen GIT_REPO_URL / GIT_SYNC_TOKEN haben Vorrang vor DB.
     """
     try:
-        config_data = load_github_config()
-        return config_data
+        return get_sync_repo_config_public(session)
     except Exception as e:
-        logger.exception("Fehler beim Abrufen der GitHub Config")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=get_500_detail(e)
-        )
-
-
-@router.post("/github-config", response_model=Dict[str, Any])
-async def save_github_config_endpoint(
-    request: GitHubConfigRequest,
-    current_user = Depends(require_write)
-) -> Dict[str, Any]:
-    """
-    Speichert GitHub Apps Konfiguration.
-    
-    Speichert Private Key in ./data/github_app_key.pem und aktualisiert
-    Environment-Variablen und .env Datei.
-    
-    Args:
-        request: Request-Body mit app_id, installation_id, private_key
-        
-    Returns:
-        Dictionary mit gespeicherter Konfiguration
-        
-    Raises:
-        HTTPException: Wenn Validierung fehlschlägt
-    """
-    try:
-        # Validiere Private Key Format
-        if not validate_github_private_key(request.private_key):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Ungültiges Private Key Format. Muss PEM-Format sein (-----BEGIN ... -----END ...)"
-            )
-        
-        # Speichere Konfiguration
-        save_github_config(
-            app_id=request.app_id,
-            installation_id=request.installation_id,
-            private_key=request.private_key
-        )
-        
-        # Lade aktualisierte Konfiguration
-        config_data = load_github_config()
-        
-        return {
-            "success": True,
-            "message": "GitHub Apps Konfiguration erfolgreich gespeichert",
-            **config_data
-        }
-        
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception("Fehler beim Speichern der GitHub Config")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=get_500_detail(e)
-        )
-
-
-@router.post("/github-config/test", response_model=Dict[str, Any])
-async def test_github_config(
-    current_user: User = Depends(require_write)
-) -> Dict[str, Any]:
-    """
-    Testet die GitHub Apps Konfiguration durch Token-Generierung.
-    
-    Versucht ein Installation Access Token zu generieren ohne Git-Operationen.
-    Nützlich zum Validieren der Konfiguration.
-    
-    Returns:
-        Dictionary mit Test-Ergebnis (success, message)
-    """
-    try:
-        success, message = test_github_app_token()
-        
-        if success:
-            return {
-                "success": True,
-                "message": message
-            }
-        else:
-            return {
-                "success": False,
-                "message": message
-            }
-            
-    except Exception as e:
-        logger.exception("Fehler beim Testen der GitHub Config")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=get_500_detail(e)
-        )
-
-
-@router.get("/github-installation/callback")
-async def github_installation_callback(
-    installation_id: str = Query(..., description="Installation ID von GitHub"),
-    setup_action: Optional[str] = Query(None, description="Setup Action (install, update)"),
-    state: Optional[str] = Query(None, description="OAuth State Token")
-) -> RedirectResponse:
-    """
-    Callback-Endpoint für GitHub App Installation.
-    
-    GitHub redirects hierher nach der Installation der App.
-    Die Installation ID wird automatisch abgerufen und gespeichert.
-    
-    Args:
-        installation_id: Installation ID von GitHub
-        setup_action: Setup Action (install, update)
-        state: Optional OAuth State Token
-        
-    Returns:
-        Redirect zum Frontend mit Erfolgs-Message
-    """
-    try:
-        # Lade aktuelle Config (App ID sollte bereits vorhanden sein)
-        current_config = load_github_config()
-        
-        if not current_config.get("app_id"):
-            # App ID fehlt - sollte nicht passieren, aber Fallback
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="GitHub App ist nicht konfiguriert. Bitte erstellen Sie zuerst eine App."
-            )
-        
-        # Validiere State falls vorhanden
-        if state:
-            state_data = get_oauth_state(state)
-            if state_data and state_data.get("type") == "installation":
-                # State ist gültig - verwende App ID aus State
-                app_id = state_data.get("app_id")
-            else:
-                app_id = current_config.get("app_id")
-        else:
-            app_id = current_config.get("app_id")
-        
-        # Aktualisiere Konfiguration mit Installation ID
-        # Lade Private Key (muss bereits vorhanden sein)
-        from app.auth.github_config import GITHUB_KEY_PATH
-        if not GITHUB_KEY_PATH.exists():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Private Key fehlt. Bitte konfigurieren Sie die App zuerst."
-            )
-        
-        with open(GITHUB_KEY_PATH, "r") as f:
-            private_key = f.read()
-        
-        # Speichere vollständige Konfiguration
-        save_github_config(
-            app_id=str(app_id),
-            installation_id=installation_id,
-            private_key=private_key
-        )
-        
-        # Lösche State falls vorhanden
-        if state:
-            delete_oauth_state(state)
-        
-        # Redirect zum Frontend mit Erfolgs-Message (allowlisted base only)
-        redirect_url = _safe_frontend_redirect("/sync", tab="github", installation_success="true")
-        return RedirectResponse(url=redirect_url)
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception("Fehler beim Verarbeiten der Installation")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=get_500_detail(e)
-        )
-
-
-@router.delete("/github-config", response_model=Dict[str, Any])
-async def delete_github_config_endpoint(
-    current_user: User = Depends(require_write),
-) -> Dict[str, Any]:
-    """
-    Löscht GitHub Apps Konfiguration.
-    
-    Entfernt Private Key Datei und Environment-Variablen.
-    Erfordert Write-Rechte.
-    
-    Returns:
-        Dictionary mit Bestätigung
-    """
-    try:
-        delete_github_config()
-        
-        return {
-            "success": True,
-            "message": "GitHub Apps Konfiguration erfolgreich gelöscht"
-        }
-        
-    except Exception as e:
-        logger.exception("Fehler beim Löschen der GitHub Config")
+        logger.exception("Fehler beim Abrufen der Repo-Config")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=get_500_detail(e),
         )
 
 
-# GitHub App Manifest Flow Endpoints
-
-@router.get("/github-manifest/authorize")
-async def github_manifest_authorize(
-    current_user: User = Depends(require_admin),
-):
-    """
-    Generiert HTML-Formular für GitHub App Manifest Flow (Coolify-Methode).
-    
-    Erstellt ein HTML-Formular, das per POST an GitHub sendet.
-    Das Formular wird per JavaScript automatisch abgesendet für nahtlosen Flow.
-    
-    Returns:
-        HTML-Seite mit automatisch absendendem Formular
-    """
-    from fastapi.responses import HTMLResponse
-    
-    try:
-        # Generiere State Token für CSRF-Schutz
-        state = generate_oauth_state()
-        
-        # Base URL für Callbacks
-        base_url = config.BASE_URL.rstrip('/')
-        callback_url = f"{base_url}/api/sync/github-manifest/callback"
-        setup_url = f"{base_url}/api/sync/github-installation/callback"
-        
-        # Erstelle Manifest JSON
-        manifest = {
-            "name": "Fast-Flow Orchestrator",
-            "url": base_url,
-            "hook_attributes": {
-                "url": f"{base_url}/api/webhooks/github",
-                "active": False
-            },
-            "redirect_url": callback_url,
-            "setup_url": setup_url,
-            "callback_urls": [callback_url],
-            "public": False,
-            "default_permissions": {
-                "contents": "read",
-                "metadata": "read"
-            },
-            "default_events": [],
-            "request_oauth_on_install": False
-        }
-        
-        # Speichere State
-        store_oauth_state(state, {
-            "type": "manifest",
-            "callback_url": callback_url,
-            "setup_url": setup_url
-        })
-        
-        # Encode Manifest als JSON-String
-        manifest_json = json.dumps(manifest)
-        
-        # HTML-Formular mit automatischem Submit (Coolify-Methode)
-        html = f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>GitHub App erstellen...</title>
-    <style>
-        body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background: #1a1a1a;
-            color: white;
-        }}
-        .container {{
-            text-align: center;
-        }}
-        .spinner {{
-            border: 3px solid #333;
-            border-top: 3px solid #646cff;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
-        }}
-        @keyframes spin {{
-            0% {{ transform: rotate(0deg); }}
-            100% {{ transform: rotate(360deg); }}
-        }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="spinner"></div>
-        <p>Weiterleitung zu GitHub...</p>
-    </div>
-    <form id="githubForm" method="POST" action="https://github.com/settings/apps/new?setup_action=install">
-        <input type="hidden" name="manifest" value='{manifest_json.replace("'", "&#39;")}'>
-        <input type="hidden" name="state" value="{state}">
-    </form>
-    <script>
-        // Automatisches Absenden des Formulars (Coolify-Methode)
-        document.getElementById('githubForm').submit();
-    </script>
-</body>
-</html>
-        """
-        
-        return HTMLResponse(content=html)
-        
-    except Exception as e:
-        logger.exception("Fehler beim Generieren des Manifest-Formulars")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=get_500_detail(e)
-        )
-
-
-@router.get("/github-manifest/callback")
-async def github_manifest_callback(
-    code: str = Query(..., description="Temporärer Code von GitHub"),
-    installation_id: Optional[str] = Query(None, description="Installation ID (wenn setup_action=install verwendet wurde)"),
-    state: Optional[str] = Query(None, description="OAuth State Token")
-) -> RedirectResponse:
-    """
-    Callback-Endpoint für GitHub App Manifest Flow.
-    
-    GitHub redirects hierher nach der App-Erstellung UND Installation (wenn setup_action=install).
-    Mit setup_action=install kommt sowohl code als auch installation_id in einem Schritt!
-    
-    Args:
-        code: Temporärer Code von GitHub (muss innerhalb 1 Stunde eingelöst werden)
-        installation_id: Installation ID (wenn setup_action=install verwendet wurde)
-        state: OAuth State Token für CSRF-Schutz
-        
-    Returns:
-        Redirect zum Frontend
-    """
-    try:
-        # Validiere State (optional, da GitHub manchmal ohne state redirectet)
-        state_data = None
-        if state:
-            state_data = get_oauth_state(state)
-        
-        # Code-Exchange: Tausche Code gegen App-Credentials
-        # GitHub erwartet den temporären Code als Bearer-Token für diesen Endpoint.
-        exchange_url = f"https://api.github.com/app-manifests/{code}/conversions"
-        headers = {
-            "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
-            "Authorization": f"Bearer {code}",
-            "Content-Type": "application/json",
-            "User-Agent": "FastFlow-Orchestrator",
-        }
-        
-        try:
-            response = requests.post(
-                exchange_url, headers=headers, json={}, timeout=30
-            )
-            
-            if response.status_code == 201:
-                # Erfolg! Credentials erhalten
-                credentials = response.json()
-                
-                app_id = str(credentials.get("id"))
-                private_key = credentials.get("pem")
-                client_id = credentials.get("client_id")
-                client_secret = credentials.get("client_secret")
-                
-                if app_id and private_key:
-                    # Prüfe ob installation_id bereits vorhanden ist (dank setup_action=install!)
-                    if installation_id:
-                        # Perfekt! Alles in einem Schritt - App erstellt UND installiert
-                        save_github_config(
-                            app_id=app_id,
-                            installation_id=installation_id,
-                            private_key=private_key
-                        )
-                        
-                        # Lösche State falls vorhanden
-                        if state:
-                            delete_oauth_state(state)
-                        
-                        # Redirect zum Frontend mit Erfolgs-Message (allowlisted base only)
-                        redirect_url = _safe_frontend_redirect("/sync", tab="github", setup_success="true")
-                        return RedirectResponse(url=redirect_url)
-                    else:
-                        # Installation ID fehlt - speichere App-Daten zuerst
-                        save_github_config(
-                            app_id=app_id,
-                            installation_id="",  # Wird nach Installation gesetzt
-                            private_key=private_key
-                        )
-                        
-                        # Hole App Slug aus Credentials
-                        app_slug = credentials.get("slug")
-                        if not app_slug:
-                            # Fallback: Extrahiere aus html_url oder verwende App ID
-                            html_url = credentials.get("html_url", "")
-                            if html_url:
-                                app_slug = html_url.split("/")[-1]
-                            else:
-                                app_slug = app_id
-                        
-                        # Speichere App ID im State für Installation Callback (falls state vorhanden)
-                        if state:
-                            store_oauth_state(state, {
-                                "type": "installation",
-                                "app_id": app_id,
-                                "app_slug": app_slug
-                            })
-                        
-                        # SOFORTIGER Redirect zur Installation (Coolify-Methode)
-                        # User landet direkt in der Repository-Auswahl (state encoded to prevent injection)
-                        install_url = f"https://github.com/apps/{app_slug}/installations/new"
-                        if state:
-                            install_url += "?" + urllib.parse.urlencode({"state": state})
-                        
-                        return RedirectResponse(url=install_url)
-            
-            # Exchange fehlgeschlagen – Response loggen für Debugging
-            try:
-                err_body = response.text
-                logger.warning(
-                    "GitHub App-Manifest Exchange fehlgeschlagen: status=%s body=%s",
-                    response.status_code,
-                    err_body[:500] if err_body else "(leer)",
-                )
-            except Exception:
-                pass
-            redirect_url = _safe_frontend_redirect(
-                "/sync", tab="github", manifest_code=code or "", state=state or "", exchange_error="true"
-            )
-            return RedirectResponse(url=redirect_url)
-            
-        except requests.RequestException as e:
-            logger.warning("GitHub App-Manifest Exchange RequestException: %s", e)
-            # Netzwerk-Fehler - weiterleiten mit Code
-            redirect_url = _safe_frontend_redirect(
-                "/sync", tab="github", manifest_code=code or "", state=state or "", exchange_error="true"
-            )
-            return RedirectResponse(url=redirect_url)
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        # Bei anderen Fehlern: Weiterleiten mit Code
-        redirect_url = _safe_frontend_redirect(
-            "/sync", tab="github", manifest_code=code or "", state=state or "", exchange_error="true"
-        )
-        return RedirectResponse(url=redirect_url)
-
-
-class ManifestExchangeRequest(BaseModel):
-    """Request-Model für Manifest Code Exchange."""
-    code: str
-    state: str
-
-
-@router.post("/github-manifest/exchange", response_model=Dict[str, Any])
-async def github_manifest_exchange(
-    request: ManifestExchangeRequest,
-    current_user: User = Depends(require_admin),
+@router.post("/repo-config", response_model=Dict[str, Any])
+async def save_repo_config(
+    request: RepoConfigRequest,
+    current_user=Depends(require_write),
+    session: Session = Depends(get_session),
 ) -> Dict[str, Any]:
-    """
-    Tauscht Manifest Code gegen GitHub App Credentials.
-    
-    Ruft GitHub API auf, um den temporären Code gegen die vollständigen
-    App-Credentials zu tauschen (App ID, Private Key, Client ID, etc.).
-    
-    Args:
-        request: Request mit code und state
-        
-    Returns:
-        Dictionary mit gespeicherter Konfiguration
-        
-    Raises:
-        HTTPException: Wenn Code-Exchange fehlschlägt
-    """
+    """Speichert Repository-URL, optional Token (verschlüsselt) und Branch in der DB."""
+    url = (request.repo_url or "").strip()
+    if not url:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Repository-URL ist erforderlich",
+        )
+    if not url.startswith("https://") and not url.startswith("http://"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Repository-URL muss mit https:// oder http:// beginnen",
+        )
     try:
-        # Validiere State
-        state_data = get_oauth_state(request.state)
-        if not state_data:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Ungültiger oder abgelaufener state token"
-            )
-        
-        # Prüfe ob Code im State gespeichert ist (vom Callback)
-        stored_code = state_data.get("code")
-        if stored_code and stored_code != request.code:
-            # Code wurde bereits verwendet oder stimmt nicht überein
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Code stimmt nicht mit gespeichertem Code überein"
-            )
-        
-        # Exchange Code gegen Credentials
-        # POST https://api.github.com/app-manifests/{code}/conversions
-        # GitHub erwartet den temporären Code als Bearer-Token.
-        exchange_url = f"https://api.github.com/app-manifests/{request.code}/conversions"
-        headers = {
-            "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
-            "Authorization": f"Bearer {request.code}",
-            "Content-Type": "application/json",
-            "User-Agent": "FastFlow-Orchestrator",
-        }
-        
-        response = requests.post(
-            exchange_url, headers=headers, json={}, timeout=30
+        save_sync_repo_config(
+            session,
+            repo_url=url,
+            token=(request.token or "").strip() or None,
+            branch=(request.branch or "").strip() or None,
         )
-        
-        if response.status_code == 401:
-            # Token erforderlich - das ist normal für den Manifest Exchange
-            # Der Benutzer muss eingeloggt sein auf GitHub
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="GitHub API erfordert Authentifizierung. Bitte stellen Sie sicher, dass Sie auf GitHub eingeloggt sind und versuchen Sie es erneut."
-            )
-        
-        response.raise_for_status()
-        credentials = response.json()
-        
-        # Extrahiere Credentials
-        app_id = str(credentials.get("id"))
-        private_key = credentials.get("pem")
-        client_id = credentials.get("client_id")
-        client_secret = credentials.get("client_secret")
-        webhook_secret = credentials.get("webhook_secret")
-        
-        if not app_id or not private_key:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="GitHub API hat keine vollständigen Credentials zurückgegeben"
-            )
-        
-        # Speichere Konfiguration
-        # Für jetzt speichern wir nur App ID und Private Key
-        # Installation ID muss später über den Installation Flow abgerufen werden
-        save_github_config(
-            app_id=app_id,
-            installation_id="",  # Wird später über Installation Flow gesetzt
-            private_key=private_key
-        )
-        
-        # Lösche State nach erfolgreichem Exchange
-        delete_oauth_state(request.state)
-        
         return {
             "success": True,
-            "message": "GitHub App erfolgreich erstellt und konfiguriert",
-            "app_id": app_id,
-            "client_id": client_id,
-            "has_private_key": True,
-            "next_step": "Bitte installieren Sie die App in Ihrem Repository/Organisation"
+            "message": "Repository-Konfiguration gespeichert",
+            **get_sync_repo_config_public(session),
         }
-        
-    except HTTPException:
-        raise
-    except requests.RequestException as e:
-        logger.exception("Fehler beim Code-Exchange mit GitHub API")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=get_500_detail(e)
-        )
     except Exception as e:
-        logger.exception("Fehler beim Manifest Exchange")
+        logger.exception("Fehler beim Speichern der Repo-Config")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=get_500_detail(e)
+            detail=get_500_detail(e),
+        )
+
+
+@router.delete("/repo-config", response_model=Dict[str, Any])
+async def delete_repo_config(
+    current_user: User = Depends(require_write),
+    session: Session = Depends(get_session),
+) -> Dict[str, Any]:
+    """Löscht die Sync-Repository-Konfiguration aus der DB (Env-Werte bleiben unberührt)."""
+    try:
+        delete_sync_repo_config(session)
+        return {"success": True, "message": "Repository-Konfiguration gelöscht"}
+    except Exception as e:
+        logger.exception("Fehler beim Löschen der Repo-Config")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=get_500_detail(e),
+        )
+
+
+@router.post("/repo-config/test", response_model=Dict[str, Any])
+async def test_repo_config(
+    current_user: User = Depends(require_write),
+    session: Session = Depends(get_session),
+) -> Dict[str, Any]:
+    """Testet die Repository-Konfiguration per git ls-remote."""
+    try:
+        success, message = test_sync_repo_config(session)
+        return {"success": success, "message": message}
+    except Exception as e:
+        logger.exception("Fehler beim Testen der Repo-Config")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=get_500_detail(e),
         )

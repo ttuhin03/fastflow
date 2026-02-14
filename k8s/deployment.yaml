@@ -39,6 +39,7 @@ spec:
                 optional: true
       containers:
         - name: orchestrator
+          # bei echtem Deployment "ghcr.io/ttuhin03/fastflow-orchestrator:v0.7.1",
           image: fastflow-orchestrator:latest
           imagePullPolicy: IfNotPresent
           resources:

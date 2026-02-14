@@ -41,8 +41,12 @@ Fast-Flow wird primär über Environment-Variablen in einer `.env` Datei konfigu
 
 ## Git Sync
 
+Repository-URL und optionales Token können **entweder** per Umgebungsvariablen **oder** in der UI unter **Einstellungen → Git Sync → Repository** gesetzt werden. Env-Variablen haben Vorrang.
+
 | Variable | Standardwert | Beschreibung |
 |----------|--------------|--------------|
+| `GIT_REPO_URL` | *Leer* | HTTPS-URL des Pipeline-Repositories (z.B. `https://github.com/org/repo.git`). |
+| `GIT_SYNC_TOKEN` | *Leer* | Optional: Personal Access Token (PAT) für private Repositories. |
 | `GIT_BRANCH` | `main` | Der Git-Branch, der synchronisiert werden soll. |
 | `AUTO_SYNC_ENABLED` | `false` | Ob Pipelines automatisch synchronisiert werden sollen. |
 | `AUTO_SYNC_INTERVAL` | *Leer* | Intervall in Sekunden für den automatischen Sync. |
@@ -94,16 +98,6 @@ Pipeline-Logs werden vor der lokalen Löschung (Cleanup) auf S3/MinIO gesichert.
 | `PROXY_HEADERS_TRUSTED` | `false` | Wenn `true`: `X-Forwarded-For` wird für Rate Limiting verwendet. **Nur** aktivieren, wenn die App hinter einem vertrauenswürdigen Reverse-Proxy (Nginx, Traefik) läuft. Bei `false` wird `request.client.host` genutzt (Schutz vor Spoofing). | Bei Proxy: `true` |
 
 **OAuth beim Start:** Es muss mindestens ein OAuth-Provider (GitHub oder Google) vollständig konfiguriert sein (jeweils `CLIENT_ID` und `CLIENT_SECRET`). Ohne dies startet die App nicht. Beim Start werden die gesetzten Credentials per Request an den jeweiligen Anbieter verifiziert; bei ungültigen Werten oder Redirect-URI-Mismatch startet die App ebenfalls nicht.
-
-## GitHub Apps (Optional)
-
-Für die Authentifizierung bei privaten GitHub Repositories via GitHub App.
-
-| Variable | Beschreibung |
-|----------|--------------|
-| `GITHUB_APP_ID` | Die App ID der GitHub App. |
-| `GITHUB_INSTALLATION_ID`| Die Installations-ID der App (siehe URL nach Installation). |
-| `GITHUB_PRIVATE_KEY_PATH`| Pfad zur `.pem` Datei mit dem Private Key der App. |
 
 ## Benachrichtigungen (Optional)
 

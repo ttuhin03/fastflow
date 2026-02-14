@@ -462,6 +462,9 @@ class OrchestratorSettings(SQLModel, table=True):
     # Git Sync
     auto_sync_enabled: Optional[bool] = Field(default=None)
     auto_sync_interval: Optional[int] = Field(default=None)
+    git_sync_repo_url: Optional[str] = Field(default=None, description="HTTPS-URL des Pipeline-Repos")
+    git_sync_token_encrypted: Optional[str] = Field(default=None, description="Verschlüsseltes PAT für private Repos")
+    git_sync_branch: Optional[str] = Field(default=None, description="Branch für Sync (Override)")
     # E-Mail
     email_enabled: Optional[bool] = Field(default=None)
     smtp_host: Optional[str] = Field(default=None)

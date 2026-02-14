@@ -1,5 +1,5 @@
 """
-Auth package: session auth, OAuth (GitHub/Google/Microsoft/Custom), OAuth processing, GitHub config.
+Auth package: session auth, OAuth (GitHub/Google/Microsoft/Custom), OAuth processing.
 """
 
 from app.auth.auth import (
@@ -43,13 +43,6 @@ from app.auth.custom_oauth_user import (
     get_custom_oauth_user_data,
 )
 from app.auth.oauth_processing import process_oauth_login
-from app.auth.github_config import (
-    GITHUB_KEY_PATH,
-    delete_github_config,
-    load_github_config,
-    save_github_config,
-    validate_github_private_key,
-)
 
 __all__ = [
     "create_access_token",
@@ -81,9 +74,4 @@ __all__ = [
     "get_custom_oauth_authorize_url",
     "get_custom_oauth_user_data",
     "process_oauth_login",
-    "GITHUB_KEY_PATH",
-    "delete_github_config",
-    "load_github_config",
-    "save_github_config",
-    "validate_github_private_key",
 ]

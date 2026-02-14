@@ -50,9 +50,6 @@ class Config:
         LOG_MAX_SIZE_MB: Maximale Größe einer Log-Datei in MB (None = unbegrenzt)
         LOG_STREAM_RATE_LIMIT: Maximale Zeilen pro Sekunde für SSE-Log-Streaming
         ENCRYPTION_KEY: Fernet Key für Secrets-Verschlüsselung (MUSS gesetzt werden)
-        GITHUB_APP_ID: GitHub App ID für Authentifizierung (optional)
-        GITHUB_INSTALLATION_ID: GitHub Installation ID (optional)
-        GITHUB_PRIVATE_KEY_PATH: Pfad zur GitHub App Private Key .pem Datei (optional)
     """
     
     # Version aus Datei lesen
@@ -222,6 +219,19 @@ class Config:
     # Git-Konfiguration
     GIT_BRANCH: str = os.getenv("GIT_BRANCH", "main")
     """Git-Branch für Sync-Operationen (Standard: main)."""
+
+    GIT_REPO_URL: Optional[str] = os.getenv("GIT_REPO_URL")
+    """
+    HTTPS-URL des Pipeline-Repositories (z. B. https://github.com/org/repo.git).
+    Kann auch über die Sync-UI (Repository-URL + Token) gesetzt werden.
+    Env/Var hat Vorrang vor DB-Wert.
+    """
+
+    GIT_SYNC_TOKEN: Optional[str] = os.getenv("GIT_SYNC_TOKEN")
+    """
+    Personal Access Token (PAT) für private Repos. Nur nötig bei privaten Repositories.
+    Sensibel – in K8s über Secret setzen. Kann auch in der Sync-UI gesetzt werden.
+    """
     
     AUTO_SYNC_ENABLED: bool = os.getenv("AUTO_SYNC_ENABLED", "false").lower() == "true"
     """
@@ -330,33 +340,7 @@ class Config:
     Generierung: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     """
     
-    # GitHub Apps Authentifizierung
-    GITHUB_APP_ID: Optional[str] = os.getenv("GITHUB_APP_ID")
-    """
-    GitHub App ID für Authentifizierung (optional).
-    
-    Wird verwendet, um Installation Access Tokens für Git-Operationen
-    zu generieren. Erforderlich für Private Repositories.
-    """
-    
-    GITHUB_INSTALLATION_ID: Optional[str] = os.getenv("GITHUB_INSTALLATION_ID")
-    """
-    GitHub Installation ID (optional).
-    
-    Installation-ID der GitHub App in der Organisation/Repository.
-    Erforderlich zusammen mit GITHUB_APP_ID und GITHUB_PRIVATE_KEY_PATH.
-    """
-    
-    GITHUB_PRIVATE_KEY_PATH: Optional[str] = os.getenv("GITHUB_PRIVATE_KEY_PATH")
-    """
-    Pfad zur GitHub App Private Key .pem Datei (optional).
-    
-    Private Key wird verwendet, um JWT-Tokens für GitHub API-Aufrufe
-    zu signieren. Muss zusammen mit GITHUB_APP_ID und GITHUB_INSTALLATION_ID
-    gesetzt werden.
-    """
-    
-    # GitHub OAuth (User-Login, getrennt von GitHub App)
+    # GitHub OAuth (User-Login)
     GITHUB_CLIENT_ID: Optional[str] = os.getenv("GITHUB_CLIENT_ID")
     """
     GitHub OAuth App Client ID für User-Login.

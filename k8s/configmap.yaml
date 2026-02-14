@@ -31,8 +31,9 @@ data:
   # SLOW_REQUEST_THRESHOLD_SECONDS: "5.0"
   # MAX_REQUEST_BODY_MB: "10"
 
-  # Docker & UV (Minikube-Skript setzt fastflow-worker:latest für Notebook-Pipelines)
-  WORKER_BASE_IMAGE: "ghcr.io/ttuhin03/fastflow-worker:v0.7.1"
+  # Docker & UV. Lokales Testen: scripts/minikube-vm.sh patcht auf fastflow-worker:latest.
+  # Ohne Script: für lokales Image hier "fastflow-worker:latest" eintragen (nach Build + minikube docker-env).
+  WORKER_BASE_IMAGE: "fastflow-worker:latest"
   DEFAULT_PYTHON_VERSION: "3.11"
   # UV_PRE_HEAT: "true"
 
@@ -45,7 +46,9 @@ data:
   # Abgeschlossene Pipeline-Jobs (succeeded/failed) nach N Sekunden automatisch löschen. 0 = nicht löschen.
   KUBERNETES_JOB_TTL_SECONDS_AFTER_FINISHED: "300"
 
-  # Git-Konfiguration
+  # Git-Sync: Repository-URL (nicht sensibel). Token in secrets.yaml.
+  # Kann auch in der Sync-UI unter "Repository" gesetzt werden.
+  # GIT_REPO_URL: "https://github.com/org/pipeline-repo.git"
   # GIT_BRANCH: "main"
   # AUTO_SYNC_ENABLED: "false"
   # AUTO_SYNC_INTERVAL: ""
@@ -72,9 +75,6 @@ data:
   # Proxy & CORS
   # PROXY_HEADERS_TRUSTED: "false"
   # CORS_ORIGINS: "https://yourdomain.com"
-
-  # GitHub Apps (optional) – GITHUB_APP_ID, GITHUB_INSTALLATION_ID
-  # GITHUB_PRIVATE_KEY_PATH: "/path/to/key.pem"
 
   # OAuth – CLIENT_IDs (Secrets in secrets.yaml)
   # INITIAL_ADMIN_EMAIL: "admin@example.com"
