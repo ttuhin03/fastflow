@@ -14,7 +14,7 @@ import logging
 
 from app.core.database import get_session
 from app.core.errors import get_500_detail
-from app.git_sync import sync_pipelines, get_sync_status, get_sync_logs, test_sync_repo_config
+from app.git_sync import sync_pipelines, get_sync_status, get_sync_logs, test_sync_repo_config, clear_pipelines_directory
 from app.core.config import config
 from app.auth import require_write, get_current_user
 from app.models import User
@@ -278,6 +278,33 @@ async def test_repo_config(
         return {"success": success, "message": message}
     except Exception as e:
         logger.exception("Fehler beim Testen der Repo-Config")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=get_500_detail(e),
+        )
+
+
+@router.post("/clear-pipelines", response_model=Dict[str, Any])
+async def clear_pipelines(
+    current_user: User = Depends(require_write),
+) -> Dict[str, Any]:
+    """
+    Leert das Pipelines-Verzeichnis vollständig (inkl. .git).
+    Danach kann ein neues Repository per Sync geklont werden.
+    Erfordert Schreibrechte.
+    """
+    try:
+        ok, message = clear_pipelines_directory()
+        if not ok:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=message,
+            )
+        return {"success": True, "message": message}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Fehler beim Leeren des Pipeline-Verzeichnisses")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=get_500_detail(e),

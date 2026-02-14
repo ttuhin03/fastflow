@@ -66,8 +66,8 @@ def track_event(
     props = _scrub_properties(merged)
     try:
         did = get_distinct_id(session)
-        # PostHog capture(event, distinct_id=…, properties=…), vgl. Product Analytics Installation
-        client.capture(event_name, distinct_id=did, properties=props)
+        # Nur Keyword-Argumente: Kompatibel mit PostHog 3.x (dort ist 1. Position distinct_id) und 6.x+
+        client.capture(distinct_id=did, event=event_name, properties=props)
     except Exception as e:
         logger.warning("PostHog track_event fehlgeschlagen: %s", e)
 

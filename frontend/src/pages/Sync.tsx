@@ -176,6 +176,21 @@ export default function Sync() {
     },
   })
 
+  const clearPipelinesMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiClient.post('/sync/clear-pipelines')
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sync-status'] })
+      queryClient.invalidateQueries({ queryKey: ['pipelines'] })
+      showSuccess('Pipelines-Verzeichnis wurde geleert. Sie können nun ein neues Repo synchronisieren.')
+    },
+    onError: (error: any) => {
+      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
+    },
+  })
+
   const handleSync = async () => {
     if (syncMutation.isPending) return
     const confirmed = await showConfirm('Git-Sync ausführen? Dies kann einige Zeit dauern.')
@@ -211,6 +226,15 @@ export default function Sync() {
 
   const handleTestRepoConfig = () => {
     testRepoConfigMutation.mutate()
+  }
+
+  const handleClearPipelines = async () => {
+    const confirmed = await showConfirm(
+      'Alle Pipelines im Verzeichnis löschen (inkl. .git)? Danach können Sie ein neues Repository per Sync klonen. Diese Aktion kann nicht rückgängig gemacht werden.'
+    )
+    if (confirmed) {
+      clearPipelinesMutation.mutate()
+    }
   }
 
   const handleDeleteRepoConfig = async () => {
@@ -542,6 +566,22 @@ export default function Sync() {
                     <li>Alternativ: GIT_REPO_URL und ggf. GIT_SYNC_TOKEN in .env bzw. ConfigMap/Secret setzen.</li>
                   </ul>
                 </div>
+                {!isReadonly && (
+                  <div className="clear-pipelines-section">
+                    <h4>Neues Repo verbinden</h4>
+                    <p>
+                      Wenn bereits Pipelines (z. B. Beispiele) im Verzeichnis liegen, muss es zuerst geleert werden, damit ein neues Repository geklont werden kann.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleClearPipelines}
+                      disabled={clearPipelinesMutation.isPending}
+                      className="clear-pipelines-button"
+                    >
+                      {clearPipelinesMutation.isPending ? 'Leert...' : 'Pipelines-Verzeichnis leeren'}
+                    </button>
+                  </div>
+                )}
               </div>
             </>
           )}

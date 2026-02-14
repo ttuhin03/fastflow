@@ -13,6 +13,7 @@ from app.git_sync.sync import (
     run_pre_heat_at_startup,
     get_pipeline_json_github_url,
     test_sync_repo_config,
+    clear_pipelines_directory,
 )
 from app.git_sync.sync_log import get_sync_logs
 
@@ -23,4 +24,5 @@ __all__ = [
     "test_sync_repo_config",
     "run_pre_heat_at_startup",
     "get_pipeline_json_github_url",
+    "clear_pipelines_directory",
 ]

@@ -4,6 +4,7 @@ Git-Sync: Pull, Pre-Heating, Sync-Status.
 
 import asyncio
 import os
+import shutil
 import subprocess
 import logging
 from pathlib import Path
@@ -56,6 +57,29 @@ def _build_auth_url(repo_url: str, token: Optional[str]) -> str:
         rest = url.split("://", 1)[1]
         return f"http://x-access-token:{token}@{rest}"
     return url
+
+
+def clear_pipelines_directory() -> Tuple[bool, str]:
+    """
+    Löscht den gesamten Inhalt des Pipeline-Verzeichnisses (inkl. .git).
+    Danach kann ein neues Repo per Sync geklont werden.
+    Returns (success, message).
+    """
+    pipelines_dir = config.PIPELINES_DIR
+    try:
+        if not pipelines_dir.exists():
+            pipelines_dir.mkdir(parents=True, exist_ok=True)
+            return (True, "Verzeichnis war leer oder wurde erstellt.")
+        for item in pipelines_dir.iterdir():
+            if item.is_dir():
+                shutil.rmtree(item)
+            else:
+                item.unlink()
+        invalidate_cache()
+        return (True, "Pipelines-Verzeichnis wurde geleert.")
+    except OSError as e:
+        logger.exception("Fehler beim Leeren des Pipeline-Verzeichnisses")
+        return (False, str(e))
 
 
 def _ensure_repo_cloned(
