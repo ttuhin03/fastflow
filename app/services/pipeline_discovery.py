@@ -456,6 +456,8 @@ def discover_pipelines(force_refresh: bool = False) -> List[DiscoveredPipeline]:
                 return _pipeline_cache
     
     pipelines_dir = config.PIPELINES_DIR
+    subdir = (config.PIPELINES_SUBDIR or "").strip().strip("/")
+    scan_dir = (pipelines_dir / subdir) if subdir else pipelines_dir
     
     # Verzeichnis prüfen
     if not pipelines_dir.exists():
@@ -468,10 +470,13 @@ def discover_pipelines(force_refresh: bool = False) -> List[DiscoveredPipeline]:
             f"Pipelines-Pfad ist kein Verzeichnis: {pipelines_dir}"
         )
     
+    if not scan_dir.exists() or not scan_dir.is_dir():
+        return []
+    
     discovered: List[DiscoveredPipeline] = []
     
-    # Alle Unterverzeichnisse scannen
-    for item in pipelines_dir.iterdir():
+    # Alle Unterverzeichnisse im Scan-Verzeichnis (Repo-Root oder PIPELINES_SUBDIR) scannen
+    for item in scan_dir.iterdir():
         # Nur Verzeichnisse berücksichtigen (ignoriere Dateien)
         if not item.is_dir():
             continue

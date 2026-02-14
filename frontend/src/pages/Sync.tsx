@@ -11,7 +11,7 @@ import './Sync.css'
 interface SyncStatus {
   branch: string
   remote_url?: string
-  last_commit?: string
+  last_commit?: { hash: string; message: string; date: string }
   last_sync?: string
   status?: string
   pipelines_cached?: string[]
@@ -27,6 +27,7 @@ interface RepoConfig {
   repo_url: string | null
   branch: string | null
   configured: boolean
+  pipelines_subdir?: string | null
 }
 
 export default function Sync() {
@@ -43,6 +44,7 @@ export default function Sync() {
     repo_url: '',
     token: '',
     branch: 'main',
+    pipelines_subdir: '',
   })
 
   const syncInterval = useRefetchInterval(10000)
@@ -94,6 +96,7 @@ export default function Sync() {
         repo_url: repoConfig.repo_url || '',
         token: '',
         branch: repoConfig.branch || 'main',
+        pipelines_subdir: repoConfig.pipelines_subdir ?? '',
       })
     }
   }, [repoConfig, activeTab])
@@ -128,7 +131,7 @@ export default function Sync() {
   })
 
   const saveRepoConfigMutation = useMutation({
-    mutationFn: async (data: { repo_url: string; token?: string; branch?: string }) => {
+    mutationFn: async (data: { repo_url: string; token?: string; branch?: string; pipelines_subdir?: string }) => {
       const response = await apiClient.post('/sync/repo-config', data)
       return response.data
     },
@@ -137,6 +140,7 @@ export default function Sync() {
       queryClient.invalidateQueries({ queryKey: ['sync-status'] })
       showSuccess('Repository-Konfiguration gespeichert')
       setRepoForm((f) => ({ ...f, token: '' }))
+      queryClient.invalidateQueries({ queryKey: ['pipelines'] })
     },
     onError: (error: any) => {
       showError(`Fehler beim Speichern: ${error.response?.data?.detail || error.message}`)
@@ -169,7 +173,7 @@ export default function Sync() {
       queryClient.invalidateQueries({ queryKey: ['repo-config'] })
       queryClient.invalidateQueries({ queryKey: ['sync-status'] })
       showSuccess('Repository-Konfiguration gelöscht')
-      setRepoForm({ repo_url: '', token: '', branch: 'main' })
+      setRepoForm({ repo_url: '', token: '', branch: 'main', pipelines_subdir: '' })
     },
     onError: (error: any) => {
       showError(`Fehler beim Löschen: ${error.response?.data?.detail || error.message}`)
@@ -221,6 +225,7 @@ export default function Sync() {
       repo_url: url,
       token: repoForm.token.trim() || undefined,
       branch: repoForm.branch.trim() || undefined,
+      pipelines_subdir: repoForm.pipelines_subdir.trim() || undefined,
     })
   }
 
@@ -241,6 +246,15 @@ export default function Sync() {
     const confirmed = await showConfirm('Repository-Konfiguration wirklich löschen?')
     if (confirmed) {
       deleteRepoConfigMutation.mutate()
+    }
+  }
+
+  const handleClearPipelines = async () => {
+    const confirmed = await showConfirm(
+      'Alle Pipelines im Verzeichnis löschen (inkl. .git)? Danach können Sie ein neues Repository per Sync klonen. Diese Aktion kann nicht rückgängig gemacht werden.'
+    )
+    if (confirmed) {
+      clearPipelinesMutation.mutate()
     }
   }
 
@@ -306,7 +320,10 @@ export default function Sync() {
                 Letzter Commit:
                 <InfoIcon content="Commit-Hash des letzten synchronisierten Commits" />
               </span>
-              <span className="status-value">{syncStatus.last_commit}</span>
+              <span className="status-value">
+                {syncStatus.last_commit.hash.slice(0, 7)} – {syncStatus.last_commit.message}
+                {syncStatus.last_commit.date && ` (${syncStatus.last_commit.date})`}
+              </span>
             </div>
           )}
           {syncStatus?.last_sync && (
@@ -526,6 +543,20 @@ export default function Sync() {
                     value={repoForm.branch}
                     onChange={(e) => setRepoForm({ ...repoForm, branch: e.target.value })}
                     placeholder="main"
+                    disabled={isReadonly}
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="repo-pipelines-subdir">
+                    Pipelines-Unterordner (optional):
+                    <InfoIcon content="Wenn Ihre Pipelines im Repo in einem Unterordner liegen (z. B. pipelines/), hier den Ordnernamen eintragen. Leer = Repo-Root." />
+                  </label>
+                  <input
+                    id="repo-pipelines-subdir"
+                    type="text"
+                    value={repoForm.pipelines_subdir}
+                    onChange={(e) => setRepoForm({ ...repoForm, pipelines_subdir: e.target.value })}
+                    placeholder="z. B. pipelines"
                     disabled={isReadonly}
                   />
                 </div>

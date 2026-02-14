@@ -57,15 +57,22 @@ def get_sync_repo_config_public(session: Session) -> Dict[str, Any]:
     Liest die Sync-Repo-Konfiguration für API-Antwort (ohne Token).
 
     Returns:
-        Dict mit repo_url (oder None), branch, configured (bool).
+        Dict mit repo_url (oder None), branch, configured (bool), pipelines_subdir (optional).
     """
     cfg = get_sync_repo_config(session)
+    subdir = (config.PIPELINES_SUBDIR or "").strip().strip("/") or None
     if not cfg:
-        return {"repo_url": None, "branch": config.GIT_BRANCH, "configured": False}
+        return {
+            "repo_url": None,
+            "branch": config.GIT_BRANCH,
+            "configured": False,
+            "pipelines_subdir": subdir,
+        }
     return {
         "repo_url": cfg["repo_url"],
         "branch": cfg["branch"],
         "configured": True,
+        "pipelines_subdir": subdir,
     }
 
 
@@ -74,11 +81,13 @@ def save_sync_repo_config(
     repo_url: str,
     token: Optional[str] = None,
     branch: Optional[str] = None,
+    pipelines_subdir: Optional[str] = None,
 ) -> None:
-    """Speichert Repo-URL, optional Token (verschlüsselt) und Branch in der DB."""
+    """Speichert Repo-URL, optional Token (verschlüsselt), Branch und Pipelines-Unterordner in der DB."""
     settings = get_orchestrator_settings_or_default(session)
     settings.git_sync_repo_url = (repo_url or "").strip() or None
     settings.git_sync_branch = (branch or "").strip() or None
+    settings.pipelines_subdir = (pipelines_subdir or "").strip().strip("/") or None
     if token is not None:
         settings.git_sync_token_encrypted = encrypt(token) if token.strip() else None
     session.add(settings)
@@ -93,5 +102,6 @@ def delete_sync_repo_config(session: Session) -> None:
         settings.git_sync_repo_url = None
         settings.git_sync_token_encrypted = None
         settings.git_sync_branch = None
+        settings.pipelines_subdir = None
         session.add(settings)
         session.commit()

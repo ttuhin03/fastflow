@@ -76,6 +76,13 @@ class Config:
     wenn der Code in einem Docker-Container läuft, um den Host-Pfad zu verwenden.
     """
     
+    PIPELINES_SUBDIR: Optional[str] = os.getenv("PIPELINES_SUBDIR")
+    """
+    Optionaler Unterordner im Repo, in dem die Pipeline-Ordner liegen.
+    Z. B. 'pipelines': dann wird in PIPELINES_DIR/pipelines/ nach main.py/main.ipynb gesucht.
+    Leer/None: Suche direkt in PIPELINES_DIR (Repo-Root).
+    """
+    
     RUNNERS_DIR: Path = (Path(__file__).resolve().parent.parent / "runners").resolve()
     """Pfad zum Runner-Verzeichnis (app/runners, z. B. nb_runner.py für Notebook-Pipelines)."""
     

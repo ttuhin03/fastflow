@@ -80,6 +80,9 @@ def apply_orchestrator_settings_to_config(settings: OrchestratorSettings) -> Non
         config.TEAMS_ENABLED = settings.teams_enabled
     if settings.teams_webhook_url is not None:
         config.TEAMS_WEBHOOK_URL = settings.teams_webhook_url
+    if getattr(settings, "pipelines_subdir", None) is not None:
+        if not config.PIPELINES_SUBDIR or not str(config.PIPELINES_SUBDIR).strip():
+            config.PIPELINES_SUBDIR = settings.pipelines_subdir
 
 
 def _parse_email_recipients(value: Optional[str]) -> List[str]:

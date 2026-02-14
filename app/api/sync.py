@@ -191,6 +191,7 @@ class RepoConfigRequest(BaseModel):
     repo_url: str = Field(..., min_length=1, description="HTTPS-URL des Repositories")
     token: Optional[str] = Field(default=None, description="Personal Access Token (optional, für private Repos)")
     branch: Optional[str] = Field(default=None, description="Branch (z. B. main)")
+    pipelines_subdir: Optional[str] = Field(default=None, description="Unterordner im Repo mit Pipeline-Ordnern, z. B. pipelines")
 
 
 @router.get("/repo-config", response_model=Dict[str, Any])
@@ -236,7 +237,13 @@ async def save_repo_config(
             repo_url=url,
             token=(request.token or "").strip() or None,
             branch=(request.branch or "").strip() or None,
+            pipelines_subdir=(request.pipelines_subdir or "").strip() or None,
         )
+        from app.services.orchestrator_settings import (
+            get_orchestrator_settings_or_default,
+            apply_orchestrator_settings_to_config,
+        )
+        apply_orchestrator_settings_to_config(get_orchestrator_settings_or_default(session))
         return {
             "success": True,
             "message": "Repository-Konfiguration gespeichert",

@@ -50,6 +50,7 @@ data:
   # Kann auch in der Sync-UI unter "Repository" gesetzt werden.
   # GIT_REPO_URL: "https://github.com/org/pipeline-repo.git"
   # GIT_BRANCH: "main"
+  # PIPELINES_SUBDIR: "pipelines"   # Wenn Pipelines in einem Unterordner liegen
   # AUTO_SYNC_ENABLED: "false"
   # AUTO_SYNC_INTERVAL: ""
 
