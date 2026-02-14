@@ -249,15 +249,6 @@ export default function Sync() {
     }
   }
 
-  const handleClearPipelines = async () => {
-    const confirmed = await showConfirm(
-      'Alle Pipelines im Verzeichnis löschen (inkl. .git)? Danach können Sie ein neues Repository per Sync klonen. Diese Aktion kann nicht rückgängig gemacht werden.'
-    )
-    if (confirmed) {
-      clearPipelinesMutation.mutate()
-    }
-  }
-
   if (isLoading) {
     return <div>Laden...</div>
   }
