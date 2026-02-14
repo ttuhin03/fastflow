@@ -11,11 +11,24 @@ import './Sync.css'
 interface SyncStatus {
   branch: string
   remote_url?: string
-  last_commit?: { hash: string; message: string; date: string }
+  last_commit?: { hash: string; message: string; date: string } | string
   last_sync?: string
   status?: string
   pipelines_cached?: string[]
   repo_configured?: boolean
+}
+
+/** Formatiert last_commit sicher (Backend liefert Objekt { hash, message, date }); nie ein Objekt als React-Child rendern. */
+function formatLastCommit(lc: SyncStatus['last_commit']): string {
+  if (lc == null) return ''
+  if (typeof lc === 'string') return lc
+  if (typeof lc === 'object' && lc !== null && 'hash' in lc) {
+    const hash = typeof lc.hash === 'string' ? lc.hash.slice(0, 7) : ''
+    const msg = typeof lc.message === 'string' ? lc.message : ''
+    const date = typeof lc.date === 'string' ? lc.date : ''
+    return [hash, msg].filter(Boolean).join(' – ') + (date ? ` (${date})` : '')
+  }
+  return ''
 }
 
 interface SyncSettings {
@@ -305,16 +318,13 @@ export default function Sync() {
               <span className="status-value">{syncStatus.remote_url}</span>
             </div>
           )}
-          {syncStatus?.last_commit && (
+          {formatLastCommit(syncStatus?.last_commit) && (
             <div className="status-row">
               <span className="status-label">
                 Letzter Commit:
                 <InfoIcon content="Commit-Hash des letzten synchronisierten Commits" />
               </span>
-              <span className="status-value">
-                {syncStatus.last_commit.hash.slice(0, 7)} – {syncStatus.last_commit.message}
-                {syncStatus.last_commit.date && ` (${syncStatus.last_commit.date})`}
-              </span>
+              <span className="status-value">{formatLastCommit(syncStatus?.last_commit)}</span>
             </div>
           )}
           {syncStatus?.last_sync && (

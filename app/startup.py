@@ -382,6 +382,29 @@ async def run_startup_tasks() -> None:
         asyncio.create_task(run_pre_heat_at_startup())
     await _run_step("UV Pre-Heating", False, pre_heat, "UV Pre-Heating beim Start geplant (Hintergrund)")
 
+    async def sync_pipelines_at_startup():
+        """Einmaliger Git-Pull beim Start, wenn ein Repo konfiguriert ist (Hintergrund, blockiert Start nicht)."""
+        try:
+            from app.core.database import get_session
+            from app.git_sync import sync_pipelines
+            from app.services.git_sync_repo_config import get_sync_repo_config
+            session_gen = get_session()
+            session = next(session_gen)
+            try:
+                repo_config = get_sync_repo_config(session)
+                if not repo_config or not repo_config.get("repo_url"):
+                    return
+                logger.info("Git-Sync beim Start (Hintergrund): Starte einmaligen Pull...")
+                await sync_pipelines(session=session)
+                logger.info("Git-Sync beim Start abgeschlossen")
+            finally:
+                session.close()
+        except Exception as e:
+            logger.warning("Git-Sync beim Start fehlgeschlagen (nicht kritisch): %s", e)
+
+    asyncio.create_task(sync_pipelines_at_startup())
+    logger.info("Git-Sync beim Start geplant (Hintergrund, wenn Repo konfiguriert)")
+
     if config.ENVIRONMENT == "development":
         def posthog_test():
             from app.analytics.posthog_client import capture_startup_test_exception
