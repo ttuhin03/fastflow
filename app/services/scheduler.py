@@ -245,19 +245,21 @@ def _add_job_to_scheduler(job: ScheduledJob) -> None:
             logger.error(f"Ungültiger Trigger für Job {job.id}: {job.trigger_type} = {job.trigger_value}")
             return
         
-        # Job-Funktion: Pipeline ausführen oder Daemon-Restart
+        # Textuelle Referenz (modul:funktion), damit der Job mit SQLAlchemyJobStore serialisiert werden kann
         if getattr(job, "source", "api") == "daemon_restart":
-            job_func = _create_daemon_restart_job_function(job.pipeline_name)
+            func_ref = "app.services.scheduler:run_daemon_restart"
+            job_args: list = [job.pipeline_name]
         else:
-            job_func = _create_job_function(job.pipeline_name, getattr(job, "run_config_id", None))
-        
-        # Job zum Scheduler hinzufügen
+            func_ref = "app.services.scheduler:run_scheduled_pipeline"
+            job_args = [job.pipeline_name, getattr(job, "run_config_id", None)]
+
         _scheduler.add_job(
-            job_func,
+            func_ref,
             trigger=trigger,
             id=str(job.id),
             replace_existing=True,
-            max_instances=1  # Verhindert gleichzeitige Ausführungen desselben Jobs
+            max_instances=1,  # Verhindert gleichzeitige Ausführungen desselben Jobs
+            args=job_args,
         )
         
         logger.info(f"Job zum Scheduler hinzugefügt: {job.id} (Pipeline: {job.pipeline_name})")
@@ -345,67 +347,45 @@ def _create_trigger(
         return None
 
 
-def _create_daemon_restart_job_function(pipeline_name: str):
+def run_scheduled_pipeline(pipeline_name: str, run_config_id: Optional[str] = None) -> None:
     """
-    Erstellt eine Job-Funktion für Dauerläufer-Restart (restart_interval).
-
-    Bricht laufenden Run ab, wartet Cooldown, startet Pipeline neu.
+    Wird vom APScheduler aufgerufen (per textueller Referenz).
+    Führt die angegebene Pipeline aus. Muss Modul-Level sein, damit der Job
+    mit SQLAlchemyJobStore serialisiert werden kann (keine Closures).
     """
-    def job_function():
+    pipeline = get_pipeline(pipeline_name)
+    if pipeline is None:
+        logger.error("Pipeline nicht gefunden für Job: %s", pipeline_name)
+        return
+    if not pipeline.is_enabled():
+        logger.warning("Pipeline ist deaktiviert für Job: %s", pipeline_name)
+        return
+    try:
+        asyncio.run(run_pipeline(pipeline_name, triggered_by="scheduler", run_config_id=run_config_id))
+        logger.info(
+            "Geplante Pipeline ausgeführt: %s%s",
+            pipeline_name,
+            f" (run_config_id={run_config_id})" if run_config_id else "",
+        )
+    except Exception as e:
+        logger.error("Fehler bei geplanter Pipeline-Ausführung %s: %s", pipeline_name, e)
         try:
-            from app.services.daemon_watcher import perform_daemon_restart
-            asyncio.run(perform_daemon_restart(pipeline_name))
-        except Exception as e:
-            logger.error("Fehler bei Daemon-Restart für %s: %s", pipeline_name, e, exc_info=True)
-    return job_function
+            from app.services.notifications import send_scheduler_error_notification
+            asyncio.run(send_scheduler_error_notification(pipeline_name, str(e)))
+        except Exception as notif_error:
+            logger.error("Fehler beim Senden der Scheduler-Notification: %s", notif_error)
 
 
-def _create_job_function(pipeline_name: str, run_config_id: Optional[str] = None):
+def run_daemon_restart(pipeline_name: str) -> None:
     """
-    Erstellt eine Job-Funktion für Pipeline-Ausführung.
-    
-    Args:
-        pipeline_name: Name der Pipeline
-        run_config_id: Optionale Run-Konfiguration aus pipeline.json schedules
-    
-    Returns:
-        Callable: Job-Funktion
+    Wird vom APScheduler für Dauerläufer-Restart aufgerufen (per textueller Referenz).
+    Muss Modul-Level sein für Serialisierung im JobStore.
     """
-    def job_function():
-        """
-        Job-Funktion, die die Pipeline ausführt.
-        
-        Wird vom Scheduler aufgerufen. Führt die Pipeline asynchron aus.
-        """
-        # Pipeline-Validierung: Prüfe ob Pipeline existiert
-        pipeline = get_pipeline(pipeline_name)
-        if pipeline is None:
-            logger.error(f"Pipeline nicht gefunden für Job: {pipeline_name}")
-            return
-        
-        # Pipeline-Validierung: Prüfe ob Pipeline aktiviert ist
-        if not pipeline.is_enabled():
-            logger.warning(f"Pipeline ist deaktiviert für Job: {pipeline_name}")
-            return
-        
-        # Pipeline asynchron ausführen
-        # Hinweis: APScheduler ruft synchrone Funktionen auf, daher müssen wir
-        # asyncio.run() verwenden, um die async run_pipeline-Funktion aufzurufen
-        # run_pipeline erstellt intern eine Session wenn keine übergeben wird
-        try:
-            asyncio.run(run_pipeline(pipeline_name, triggered_by="scheduler", run_config_id=run_config_id))
-            logger.info(f"Geplante Pipeline ausgeführt: {pipeline_name}" + (f" (run_config_id={run_config_id})" if run_config_id else ""))
-        except Exception as e:
-            logger.error(f"Fehler bei geplanter Pipeline-Ausführung {pipeline_name}: {e}")
-            # Notification für Scheduler-Fehler (asynchron im Hintergrund)
-            try:
-                import asyncio
-                from app.services.notifications import send_scheduler_error_notification
-                asyncio.create_task(send_scheduler_error_notification(pipeline_name, str(e)))
-            except Exception as notif_error:
-                logger.error(f"Fehler beim Senden der Scheduler-Notification: {notif_error}")
-    
-    return job_function
+    try:
+        from app.services.daemon_watcher import perform_daemon_restart
+        asyncio.run(perform_daemon_restart(pipeline_name))
+    except Exception as e:
+        logger.error("Fehler bei Daemon-Restart für %s: %s", pipeline_name, e, exc_info=True)
 
 
 def _job_executed_listener(event) -> None:
