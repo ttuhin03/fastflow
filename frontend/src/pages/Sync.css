@@ -366,6 +366,189 @@
   margin-top: 0.5rem;
 }
 
+/* Repository card: gleicher Look wie Einstellungs-Sektionen (Design-Variablen) */
+.sync-repo-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.sync-repo-card .section-title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  margin: 0;
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.sync-repo-card .repo-config-intro {
+  margin: 0;
+  font-size: var(--font-size-sm);
+}
+
+.sync-repo-card .setting-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-normal);
+  font-style: italic;
+}
+
+.sync-repo-card .setting-label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.sync-repo-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.sync-repo-form .setting-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.sync-repo-form .repo-deploy-key-input,
+.sync-repo-form .repo-deploy-key-display {
+  font-family: monospace;
+  resize: vertical;
+  min-height: 5rem;
+}
+
+.repo-deploy-key-display {
+  min-height: 4rem;
+}
+
+.deploy-key-generate-section {
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--color-border);
+}
+
+.deploy-key-generate-heading {
+  margin: 0 0 var(--spacing-xs) 0;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+
+.deploy-key-generate-hint {
+  margin: 0 0 var(--spacing-sm) 0;
+}
+
+.generated-public-key-box {
+  margin-top: var(--spacing-md);
+}
+
+.generated-public-key-box .repo-deploy-key-display {
+  margin-bottom: var(--spacing-sm);
+}
+
+.generated-public-key-box .btn {
+  margin-bottom: var(--spacing-sm);
+}
+
+.manual-key-toggle {
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-xs) 0;
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  text-align: left;
+}
+
+.manual-key-toggle:hover {
+  color: var(--color-text-primary);
+}
+
+.manual-deploy-key-section {
+  margin-top: var(--spacing-sm);
+  padding-top: var(--spacing-sm);
+  border-top: 1px dashed var(--color-border);
+}
+
+.sync-repo-form-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+}
+
+.sync-repo-form-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.sync-repo-card .delete-button.btn-outlined {
+  color: var(--color-error);
+  border-color: color-mix(in srgb, var(--color-error) 70%, transparent);
+}
+
+.sync-repo-card .delete-button.btn-outlined:hover:not(:disabled) {
+  background-color: rgba(244, 67, 54, 0.1);
+  border-color: var(--color-error);
+}
+
+.sync-repo-help {
+  margin-top: var(--spacing-lg);
+  padding: var(--spacing-md);
+  background-color: var(--color-surface);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--color-primary);
+}
+
+.sync-repo-help h4 {
+  margin: 0 0 var(--spacing-sm) 0;
+  color: var(--color-text-primary);
+}
+
+.sync-repo-help ul {
+  margin: 0;
+  padding-left: var(--spacing-lg);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.sync-repo-help li {
+  margin-bottom: var(--spacing-xs);
+  line-height: var(--line-height);
+}
+
+.repo-configured-badge {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background-color: var(--color-surface);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.clear-pipelines-section {
+  margin-top: var(--spacing-lg);
+  padding: var(--spacing-md);
+  background-color: var(--color-surface);
+  border-radius: var(--radius-sm);
+  border-left: 4px solid var(--color-warning);
+}
+
+.clear-pipelines-section h4 {
+  margin: 0 0 var(--spacing-sm) 0;
+  color: var(--color-text-primary);
+}
+
+.clear-pipelines-section p {
+  margin-bottom: var(--spacing-md);
+}
+
+/* Legacy: github-form weiterhin für andere Sync-Formulare (z. B. Einstellungen-Tab) */
 .github-form {
   display: flex;
   flex-direction: column;
@@ -379,63 +562,20 @@
 }
 
 .github-form label {
-  color: #888;
-  font-size: 0.9rem;
-  font-weight: 500;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
 }
 
 .github-form input[type="text"],
 .github-form input[type="file"],
 .github-form textarea {
-  padding: 0.5rem;
-  background-color: #1a1a1a;
-  color: white;
-  border: 1px solid #444;
-  border-radius: 4px;
-  font-size: 0.9rem;
-}
-
-.github-form textarea.repo-deploy-key-input {
-  font-family: monospace;
-  resize: vertical;
-  min-height: 6rem;
-}
-
-.deploy-key-generate-section {
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid #333;
-}
-
-.deploy-key-generate-heading {
-  margin: 0 0 0.5rem 0;
-  font-size: 1rem;
-  font-weight: 600;
-}
-
-.deploy-key-generate-hint {
-  color: #888;
-  font-size: 0.9rem;
-  margin: 0 0 0.75rem 0;
-}
-
-.generated-public-key-box {
-  margin-top: 1rem;
-}
-
-.generated-public-key-box .generated-key-display {
-  min-height: 4rem;
-  margin-bottom: 0.5rem;
-}
-
-.generated-public-key-box .copy-key-button {
-  margin-bottom: 0.5rem;
-}
-
-.generated-key-hint {
-  color: #888;
-  font-size: 0.85rem;
-  margin: 0.5rem 0 0 0;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
 }
 
 .github-form input[type="file"] {
@@ -443,148 +583,32 @@
 }
 
 .github-form input[type="file"]::file-selector-button {
-  padding: 0.5rem 1rem;
-  background-color: #646cff;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background-color: var(--color-primary);
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  margin-right: 1rem;
-}
-
-.github-form input[type="file"]::file-selector-button:hover {
-  background-color: #535bf2;
+  margin-right: var(--spacing-md);
 }
 
 .github-form small {
-  color: #666;
-  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
   margin-top: -0.25rem;
 }
 
 .file-info {
-  color: #4caf50;
-  font-size: 0.9rem;
-  margin-top: 0.25rem;
+  color: var(--color-success);
+  font-size: var(--font-size-sm);
+  margin-top: var(--spacing-xs);
 }
 
 .github-form .form-actions {
   display: flex;
-  gap: 0.5rem;
-  margin-top: 1rem;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
   flex-wrap: wrap;
-}
-
-.test-button {
-  padding: 0.5rem 1rem;
-  background-color: #2196f3;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.9rem;
-}
-
-.test-button:hover:not(:disabled) {
-  background-color: #1976d2;
-}
-
-.test-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.delete-button {
-  padding: 0.5rem 1rem;
-  background-color: #f44336;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.9rem;
-}
-
-.delete-button:hover:not(:disabled) {
-  background-color: #d32f2f;
-}
-
-.delete-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.github-info {
-  margin-top: 2rem;
-  padding: 1rem;
-  background-color: #1a1a1a;
-  border-radius: 4px;
-  border-left: 3px solid #646cff;
-}
-
-.github-info h4 {
-  margin-top: 0;
-  margin-bottom: 0.75rem;
-  color: #646cff;
-}
-
-.github-info ul {
-  margin: 0;
-  padding-left: 1.5rem;
-  color: #ccc;
-  font-size: 0.9rem;
-}
-
-.github-info li {
-  margin-bottom: 0.5rem;
-  line-height: 1.5;
-}
-
-.github-info a {
-  color: #646cff;
-  text-decoration: none;
-}
-
-.github-info a:hover {
-  text-decoration: underline;
-}
-
-.clear-pipelines-section {
-  margin-top: 2rem;
-  padding: 1rem;
-  background-color: #1a1a1a;
-  border-radius: 8px;
-  border-left: 4px solid #f44336;
-}
-
-.clear-pipelines-section h4 {
-  margin-top: 0;
-  margin-bottom: 0.5rem;
-  color: #e57373;
-}
-
-.clear-pipelines-section p {
-  color: #ccc;
-  font-size: 0.9rem;
-  margin-bottom: 1rem;
-}
-
-.clear-pipelines-button {
-  padding: 0.5rem 1rem;
-  background-color: #f44336;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.95rem;
-}
-
-.clear-pipelines-button:hover:not(:disabled) {
-  background-color: #d32f2f;
-}
-
-.clear-pipelines-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 .github-connect-section {

@@ -67,6 +67,7 @@ export default function Sync() {
     pipelines_subdir: '',
   })
   const [generatedPublicKey, setGeneratedPublicKey] = useState<string | null>(null)
+  const [showManualDeployKey, setShowManualDeployKey] = useState(false)
 
   const syncInterval = useRefetchInterval(10000)
   const { data: syncStatus, isLoading } = useQuery<SyncStatus>({
@@ -126,6 +127,7 @@ export default function Sync() {
   useEffect(() => {
     if (!isSshUrl(repoForm.repo_url)) {
       setGeneratedPublicKey(null)
+      setShowManualDeployKey(false)
     }
   }, [repoForm.repo_url])
 
@@ -569,14 +571,13 @@ export default function Sync() {
       )}
 
       {activeTab === 'repository' && (
-        <div className="sync-repo-card">
-          <h3>Repository verbinden</h3>
-          <p className="repo-config-intro">
-            Verbinden Sie das Repo per <strong>HTTPS + Personal Access Token (PAT)</strong> oder per <strong>SSH + Deploy Key</strong>.
-            Env: GIT_REPO_URL und GIT_SYNC_TOKEN bzw. GIT_SYNC_DEPLOY_KEY.
+        <div className="sync-repo-card settings-section card">
+          <h3 className="section-title">Repository verbinden</h3>
+          <p className="repo-config-intro setting-hint">
+            <strong>HTTPS:</strong> URL + optional Personal Access Token. — <strong>SSH:</strong> URL + Deploy-Key (empfohlen: vom Server erzeugen).
           </p>
           {repoConfigLoading ? (
-            <div>Lade Konfiguration...</div>
+            <div className="setting-hint">Lade Konfiguration...</div>
           ) : (
             <>
               {repoConfig?.configured && (
@@ -584,15 +585,16 @@ export default function Sync() {
                   Repository ist konfiguriert: {repoConfig.repo_url}
                 </div>
               )}
-              <div className="github-form">
-                <div className="form-group">
-                  <label htmlFor="repo-url">
+              <div className="sync-repo-form">
+                <div className="setting-item">
+                  <label htmlFor="repo-url" className="setting-label">
                     Repository-URL (HTTPS oder SSH):
                     <InfoIcon content="HTTPS: https://github.com/org/repo.git — SSH: git@github.com:org/repo.git" />
                   </label>
                   <input
                     id="repo-url"
                     type="text"
+                    className="form-input"
                     value={repoForm.repo_url}
                     onChange={(e) => setRepoForm({ ...repoForm, repo_url: e.target.value })}
                     placeholder="https://github.com/org/repo.git oder git@github.com:org/repo.git"
@@ -600,14 +602,15 @@ export default function Sync() {
                   />
                 </div>
                 {!isSshUrl(repoForm.repo_url) && (
-                  <div className="form-group">
-                    <label htmlFor="repo-token">
+                  <div className="setting-item">
+                    <label htmlFor="repo-token" className="setting-label">
                       Token (optional, für private Repos):
                       <InfoIcon content="Personal Access Token mit repo-Berechtigung. Leer lassen bei öffentlichen Repos." />
                     </label>
                     <input
                       id="repo-token"
                       type="password"
+                      className="form-input"
                       value={repoForm.token}
                       onChange={(e) => setRepoForm({ ...repoForm, token: e.target.value })}
                       placeholder="ghp_..."
@@ -618,82 +621,93 @@ export default function Sync() {
                 )}
                 {isSshUrl(repoForm.repo_url) && (
                   <>
-                    <div className="form-group">
-                      <label htmlFor="repo-deploy-key">
-                        Eigenen privaten Key eingeben (optional):
-                        <InfoIcon content="Inhalt des privaten SSH-Keys (z. B. selbst erzeugt mit ssh-keygen). Erforderlich, wenn Sie keinen Key vom Server erzeugen lassen." />
-                      </label>
-                      <textarea
-                        id="repo-deploy-key"
-                        value={repoForm.deploy_key}
-                        onChange={(e) => setRepoForm({ ...repoForm, deploy_key: e.target.value })}
-                        placeholder="-----BEGIN OPENSSH PRIVATE KEY-----..."
-                        disabled={isReadonly}
-                        rows={4}
-                        className="repo-deploy-key-input"
-                        autoComplete="off"
-                      />
-                    </div>
                     {!isReadonly && (
-                      <div className="form-group deploy-key-generate-section">
-                        <h4 className="deploy-key-generate-heading">Oder: Deploy-Key vom Server erzeugen</h4>
-                        <p className="deploy-key-generate-hint">
-                          Server erzeugt ein Key-Paar. Tragen Sie nur den angezeigten öffentlichen Key bei GitHub (Settings → Deploy keys) ein.
+                      <div className="deploy-key-generate-section">
+                        <h4 className="deploy-key-generate-heading">Deploy-Key (empfohlen)</h4>
+                        <p className="deploy-key-generate-hint setting-hint">
+                          Server erzeugt ein Key-Paar. Nur den öffentlichen Key bei GitHub (Settings → Deploy keys) eintragen – kein privater Key nötig.
                         </p>
-                        <div className="form-actions">
+                        <div className="sync-repo-form-actions">
                           <button
                             type="button"
                             onClick={handleGenerateDeployKey}
                             disabled={generateDeployKeyMutation.isPending}
-                            className="save-button"
+                            className="btn btn-primary"
                           >
                             {generateDeployKeyMutation.isPending ? 'Erzeuge...' : repoConfig?.configured ? 'Deploy-Key neu erzeugen' : 'Deploy-Key erzeugen und speichern'}
                           </button>
                         </div>
                         {generatedPublicKey && (
-                          <div className="form-group generated-public-key-box">
-                            <label>Öffentlicher Key (bei GitHub eintragen):</label>
+                          <div className="setting-item generated-public-key-box">
+                            <label className="setting-label">Öffentlicher Key (bei GitHub eintragen):</label>
                             <textarea
                               readOnly
                               value={generatedPublicKey}
                               rows={3}
-                              className="repo-deploy-key-input generated-key-display"
+                              className="form-input repo-deploy-key-display"
                             />
                             <button
                               type="button"
                               onClick={handleCopyPublicKey}
-                              className="test-button copy-key-button"
+                              className="btn btn-outlined"
                             >
                               In Zwischenablage kopieren
                             </button>
-                            <p className="generated-key-hint">
-                              Diesen Key in GitHub unter Settings → Deploy keys → Add deploy key einfügen. Anschließend „Konfiguration testen“ oder Sync ausführen.
+                            <p className="generated-key-hint setting-hint">
+                              In GitHub: Settings → Deploy keys → Add deploy key. Danach „Konfiguration testen“ oder Sync ausführen.
                             </p>
                           </div>
                         )}
+                        <button
+                          type="button"
+                          className="manual-key-toggle"
+                          onClick={() => setShowManualDeployKey((v) => !v)}
+                        >
+                          {showManualDeployKey ? '− Manuellen Key ausblenden' : '+ Eigenen privaten Key manuell eintragen'}
+                        </button>
+                      </div>
+                    )}
+                    {showManualDeployKey && (
+                      <div className="setting-item manual-deploy-key-section">
+                        <label htmlFor="repo-deploy-key" className="setting-label">
+                          Privater SSH-Key (z. B. mit ssh-keygen erzeugt):
+                          <InfoIcon content="Inhalt des privaten Keys einfügen, falls Sie keinen Key vom Server verwenden." />
+                        </label>
+                        <textarea
+                          id="repo-deploy-key"
+                          value={repoForm.deploy_key}
+                          onChange={(e) => setRepoForm({ ...repoForm, deploy_key: e.target.value })}
+                          placeholder="-----BEGIN OPENSSH PRIVATE KEY-----..."
+                          disabled={isReadonly}
+                          rows={4}
+                          className="form-input repo-deploy-key-input"
+                          autoComplete="off"
+                        />
                       </div>
                     )}
                   </>
                 )}
-                <div className="form-group">
-                  <label htmlFor="repo-branch">Branch:</label>
+                <div className="setting-item">
+                  <label htmlFor="repo-branch" className="setting-label">Branch:</label>
                   <input
                     id="repo-branch"
                     type="text"
+                    className="form-input"
                     value={repoForm.branch}
                     onChange={(e) => setRepoForm({ ...repoForm, branch: e.target.value })}
                     placeholder="main"
                     disabled={isReadonly}
                   />
                 </div>
-                <div className="form-group">
-                  <label htmlFor="repo-pipelines-subdir">
+                <div className="setting-item">
+                  <label htmlFor="repo-pipelines-subdir" className="setting-label">
                     Pipelines-Unterordner (optional):
                     <InfoIcon content="Wenn Ihre Pipelines im Repo in einem Unterordner liegen (z. B. pipelines/), hier den Ordnernamen eintragen. Leer = Repo-Root." />
                   </label>
                   <input
                     id="repo-pipelines-subdir"
                     type="text"
+                    className="form-input"
                     value={repoForm.pipelines_subdir}
                     onChange={(e) => setRepoForm({ ...repoForm, pipelines_subdir: e.target.value })}
                     placeholder="z. B. pipelines"
@@ -701,11 +715,11 @@ export default function Sync() {
                   />
                 </div>
                 {!isReadonly && (
-                  <div className="form-actions">
+                  <div className="sync-repo-form-actions">
                     <button
                       onClick={handleSaveRepoConfig}
                       disabled={saveRepoConfigMutation.isPending}
-                      className="save-button"
+                      className="btn btn-primary"
                     >
                       {saveRepoConfigMutation.isPending ? 'Speichert...' : 'Speichern'}
                     </button>
@@ -713,7 +727,7 @@ export default function Sync() {
                       <button
                         onClick={handleTestRepoConfig}
                         disabled={testRepoConfigMutation.isPending}
-                        className="test-button"
+                        className="btn btn-outlined"
                       >
                         {testRepoConfigMutation.isPending ? 'Testet...' : 'Konfiguration testen'}
                       </button>
@@ -722,32 +736,31 @@ export default function Sync() {
                       <button
                         onClick={handleDeleteRepoConfig}
                         disabled={deleteRepoConfigMutation.isPending}
-                        className="delete-button"
+                        className="btn btn-outlined delete-button"
                       >
                         {deleteRepoConfigMutation.isPending ? 'Löscht...' : 'Löschen'}
                       </button>
                     )}
                   </div>
                 )}
-                <div className="github-info">
-                  <h4>Hilfe:</h4>
+                <div className="sync-repo-help">
+                  <h4 className="setting-label">Kurz</h4>
                   <ul>
-                    <li><strong>HTTPS:</strong> Öffentliche Repos: nur URL + Branch. Private Repos: Personal Access Token (GitHub: Settings → Developer settings → Personal access tokens, Scope <code>repo</code>).</li>
-                    <li><strong>SSH:</strong> SSH-URL (z. B. git@github.com:org/repo.git) und privaten Deploy-Key eintragen – oder Key vom Server erzeugen lassen und nur den angezeigten öffentlichen Key bei GitHub (Settings → Deploy keys) eintragen.</li>
-                    <li>Env: GIT_REPO_URL und GIT_SYNC_TOKEN (HTTPS) bzw. GIT_SYNC_DEPLOY_KEY (SSH) in .env oder ConfigMap/Secret.</li>
+                    <li><strong>HTTPS:</strong> URL + optional PAT (private Repos). <strong>SSH:</strong> URL + Deploy-Key (am einfachsten: „Deploy-Key erzeugen“, öffentlichen Key bei GitHub eintragen).</li>
+                    <li>Branch und optional Pipelines-Unterordner eintragen, dann Speichern und „Konfiguration testen“.</li>
                   </ul>
                 </div>
                 {!isReadonly && (
                   <div className="clear-pipelines-section">
-                    <h4>Neues Repo verbinden</h4>
-                    <p>
+                    <h4 className="setting-label">Neues Repo verbinden</h4>
+                    <p className="setting-hint">
                       Wenn bereits Pipelines (z. B. Beispiele) im Verzeichnis liegen, muss es zuerst geleert werden, damit ein neues Repository geklont werden kann.
                     </p>
                     <button
                       type="button"
                       onClick={handleClearPipelines}
                       disabled={clearPipelinesMutation.isPending}
-                      className="clear-pipelines-button"
+                      className="btn btn-outlined"
                     >
                       {clearPipelinesMutation.isPending ? 'Leert...' : 'Pipelines-Verzeichnis leeren'}
                     </button>
