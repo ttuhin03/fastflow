@@ -330,7 +330,8 @@ async def run_startup_tasks() -> None:
         await _run_step("Zombie-Reconciliation", False, zombie_reconcile, "Zombie-Reconciliation abgeschlossen")
 
     def start_sched():
-        from app.services.scheduler import start_scheduler
+        from app.services.scheduler import set_main_loop, start_scheduler
+        set_main_loop(asyncio.get_running_loop())
         start_scheduler()
     if not config.TESTING:
         await _run_step("Scheduler-Start", False, start_sched, "Scheduler gestartet")

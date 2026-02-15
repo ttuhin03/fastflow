@@ -55,6 +55,17 @@ def _parse_schedule_datetime(value: Optional[str], end_of_day: bool = False) -> 
 # Globale Scheduler-Instanz
 _scheduler: Optional[BackgroundScheduler] = None
 
+# Haupt-Event-Loop der App (wird beim Start gesetzt). Scheduler-Jobs führen run_pipeline
+# auf dieser Loop aus, damit der create_task(run_container_task) nicht beim Loop-Ende abbricht.
+_main_loop: Optional[asyncio.AbstractEventLoop] = None
+
+
+def set_main_loop(loop: asyncio.AbstractEventLoop) -> None:
+    """Setzt die Haupt-Event-Loop für Scheduler-Jobs (von Startup aufgerufen)."""
+    global _main_loop
+    _main_loop = loop
+    logger.debug("Haupt-Event-Loop für Scheduler gesetzt")
+
 
 def get_database_url() -> str:
     """
@@ -352,6 +363,10 @@ def run_scheduled_pipeline(pipeline_name: str, run_config_id: Optional[str] = No
     Wird vom APScheduler aufgerufen (per textueller Referenz).
     Führt die angegebene Pipeline aus. Muss Modul-Level sein, damit der Job
     mit SQLAlchemyJobStore serialisiert werden kann (keine Closures).
+
+    run_pipeline wird auf der Haupt-Event-Loop der App ausgeführt (run_coroutine_threadsafe),
+    damit der von run_pipeline gestartete Hintergrund-Task (K8s-Job starten) nicht abbricht,
+    wenn die Loop endet (asyncio.run() würde die Loop beenden und Tasks abbrechen).
     """
     pipeline = get_pipeline(pipeline_name)
     if pipeline is None:
@@ -361,7 +376,14 @@ def run_scheduled_pipeline(pipeline_name: str, run_config_id: Optional[str] = No
         logger.warning("Pipeline ist deaktiviert für Job: %s", pipeline_name)
         return
     try:
-        asyncio.run(run_pipeline(pipeline_name, triggered_by="scheduler", run_config_id=run_config_id))
+        if _main_loop is not None and _main_loop.is_running():
+            future = asyncio.run_coroutine_threadsafe(
+                run_pipeline(pipeline_name, triggered_by="scheduler", run_config_id=run_config_id),
+                _main_loop,
+            )
+            future.result(timeout=60)  # Warten bis Run erstellt und an Executor übergeben wurde
+        else:
+            asyncio.run(run_pipeline(pipeline_name, triggered_by="scheduler", run_config_id=run_config_id))
         logger.info(
             "Geplante Pipeline ausgeführt: %s%s",
             pipeline_name,
@@ -371,7 +393,12 @@ def run_scheduled_pipeline(pipeline_name: str, run_config_id: Optional[str] = No
         logger.error("Fehler bei geplanter Pipeline-Ausführung %s: %s", pipeline_name, e)
         try:
             from app.services.notifications import send_scheduler_error_notification
-            asyncio.run(send_scheduler_error_notification(pipeline_name, str(e)))
+            if _main_loop is not None and _main_loop.is_running():
+                asyncio.run_coroutine_threadsafe(
+                    send_scheduler_error_notification(pipeline_name, str(e)), _main_loop
+                ).result(timeout=10)
+            else:
+                asyncio.run(send_scheduler_error_notification(pipeline_name, str(e)))
         except Exception as notif_error:
             logger.error("Fehler beim Senden der Scheduler-Notification: %s", notif_error)
 
@@ -383,7 +410,13 @@ def run_daemon_restart(pipeline_name: str) -> None:
     """
     try:
         from app.services.daemon_watcher import perform_daemon_restart
-        asyncio.run(perform_daemon_restart(pipeline_name))
+        if _main_loop is not None and _main_loop.is_running():
+            future = asyncio.run_coroutine_threadsafe(
+                perform_daemon_restart(pipeline_name), _main_loop
+            )
+            future.result(timeout=120)
+        else:
+            asyncio.run(perform_daemon_restart(pipeline_name))
     except Exception as e:
         logger.error("Fehler bei Daemon-Restart für %s: %s", pipeline_name, e, exc_info=True)
 
