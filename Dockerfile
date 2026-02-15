@@ -49,9 +49,10 @@ LABEL description="Workflow-Orchestrierungstool für schnelle, isolierte Pipelin
 WORKDIR /app
 
 # System-Dependencies installieren (mit Retry bei transienten Netzwerkfehlern)
+# openssh-client: für Git-Sync per SSH/Deploy-Key (GIT_SSH_COMMAND)
 RUN for i in 1 2 3; do \
     (apt-get update && apt-get install -y --no-install-recommends \
-        git curl ca-certificates \
+        git curl ca-certificates openssh-client \
     && rm -rf /var/lib/apt/lists/*) && break; \
     sleep 10; \
     done
