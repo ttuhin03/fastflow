@@ -174,6 +174,9 @@ async def run_container_task(
         else:
             t = pipeline.get_timeout()
             effective_timeout = None if t == 0 else t
+        # Globaler Container-Timeout aus Einstellungen (Pipeline & Runs), falls weder Schedule noch Pipeline einen setzen
+        if effective_timeout is None:
+            effective_timeout = app_config.CONTAINER_TIMEOUT
         _retry = schedule_config.get("retry_attempts") if schedule_config else None
         effective_retry = _retry if _retry is not None else getattr(pipeline.metadata, "retry_attempts", None)
         _retry_strat = schedule_config.get("retry_strategy") if schedule_config else None
@@ -637,6 +640,14 @@ async def _stream_pod_logs(
                         log_line = f"[{ts_display}] {content}"
                         await log_file.write(log_line + "\n")
                         await log_file.flush()
+                        if app_config.LOG_MAX_SIZE_MB and log_file_path.exists():
+                            file_size_mb = log_file_path.stat().st_size / (1024 * 1024)
+                            if file_size_mb > app_config.LOG_MAX_SIZE_MB:
+                                logger.warning(
+                                    "Log-Datei für Run %s überschreitet LOG_MAX_SIZE_MB (%s MB): %.2f MB – Stream gekappt",
+                                    run_id, app_config.LOG_MAX_SIZE_MB, file_size_mb,
+                                )
+                                break
                         try:
                             log_queue.put_nowait(log_line)
                         except asyncio.QueueFull:

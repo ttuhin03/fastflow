@@ -324,22 +324,35 @@ async def run_pipeline(
     if not pipeline.is_enabled():
         raise ValueError(f"Pipeline ist deaktiviert: {name}")
     
-    # Concurrency-Limit prüfen
-    async with _concurrency_lock:
-        if len(_running_containers) >= config.MAX_CONCURRENT_RUNS:
-            raise RuntimeError(
-                f"Concurrency-Limit erreicht ({config.MAX_CONCURRENT_RUNS}). "
-                "Bitte warte bis ein Run abgeschlossen ist."
-            )
-    
-    # Datenbank-Session verwenden oder neue erstellen (für max_instances-Check und Run-Erstellung)
+    # Datenbank-Session verwenden oder neue erstellen (für Concurrency- und max_instances-Check)
     if session is None:
-        from app.core.database import get_session
         session_gen = get_session()
         session = next(session_gen)
         close_session = True
     else:
         close_session = False
+    
+    # Concurrency-Limit prüfen (Docker: laufende Container; K8s: RUNNING-Runs in DB)
+    async with _concurrency_lock:
+        if config.PIPELINE_EXECUTOR == "kubernetes":
+            from sqlmodel import select, func
+            count_stmt = select(func.count(PipelineRun.id)).where(PipelineRun.status == RunStatus.RUNNING)
+            running_count = session.exec(count_stmt).one()
+            if config.MAX_CONCURRENT_RUNS and running_count >= config.MAX_CONCURRENT_RUNS:
+                if close_session:
+                    session.close()
+                raise RuntimeError(
+                    f"Concurrency-Limit erreicht ({running_count}/{config.MAX_CONCURRENT_RUNS}). "
+                    "Bitte warte bis ein Run abgeschlossen ist."
+                )
+        else:
+            if len(_running_containers) >= config.MAX_CONCURRENT_RUNS:
+                if close_session:
+                    session.close()
+                raise RuntimeError(
+                    f"Concurrency-Limit erreicht ({config.MAX_CONCURRENT_RUNS}). "
+                    "Bitte warte bis ein Run abgeschlossen ist."
+                )
     
     try:
         # Pipeline-spezifisches max_instances-Limit prüfen
