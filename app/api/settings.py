@@ -94,7 +94,7 @@ class SystemSettingsResponse(BaseModel):
     is_setup_completed: bool
     enable_telemetry: bool
     enable_error_reporting: bool
-    dependency_audit_enabled: bool = False
+    dependency_audit_enabled: bool = True
     dependency_audit_cron: str = "0 3 * * *"
 
 
@@ -226,7 +226,7 @@ async def get_system_settings_endpoint(
         is_setup_completed=ss.is_setup_completed,
         enable_telemetry=ss.enable_telemetry,
         enable_error_reporting=ss.enable_error_reporting,
-        dependency_audit_enabled=getattr(ss, "dependency_audit_enabled", False),
+        dependency_audit_enabled=getattr(ss, "dependency_audit_enabled", True),
         dependency_audit_cron=getattr(ss, "dependency_audit_cron", "0 3 * * *") or "0 3 * * *",
     )
 
@@ -288,7 +288,7 @@ async def update_system_settings_endpoint(
         is_setup_completed=ss.is_setup_completed,
         enable_telemetry=ss.enable_telemetry,
         enable_error_reporting=ss.enable_error_reporting,
-        dependency_audit_enabled=getattr(ss, "dependency_audit_enabled", False),
+        dependency_audit_enabled=getattr(ss, "dependency_audit_enabled", True),
         dependency_audit_cron=getattr(ss, "dependency_audit_cron", "0 3 * * *") or "0 3 * * *",
     )
 

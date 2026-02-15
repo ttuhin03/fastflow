@@ -431,7 +431,7 @@ class SystemSettings(SQLModel, table=True):
         description="Anonyme UUID für PostHog distinct_id (keine E-Mail/Klarnamen)",
     )
     dependency_audit_enabled: bool = Field(
-        default=False,
+        default=True,
         description="Automatische Sicherheitsprüfung (pip-audit) täglich; Benachrichtigung bei Schwachstellen",
     )
     dependency_audit_cron: str = Field(

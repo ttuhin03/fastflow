@@ -557,7 +557,7 @@ export default function Settings() {
             <label className="settings-telemetry-toggle">
               <input
                 type="checkbox"
-                checked={systemSettings?.dependency_audit_enabled ?? false}
+                checked={systemSettings?.dependency_audit_enabled ?? true}
                 disabled={updateSystemSettingsMutation.isPending || isReadonly}
                 onChange={(e) =>
                   updateSystemSettingsMutation.mutate({ dependency_audit_enabled: e.target.checked })

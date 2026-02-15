@@ -177,7 +177,7 @@ def schedule_dependency_audit_job() -> None:
 
         with Session(engine) as session:
             ss = get_system_settings(session)
-            enabled = getattr(ss, "dependency_audit_enabled", False)
+            enabled = getattr(ss, "dependency_audit_enabled", True)
             cron_expr = getattr(ss, "dependency_audit_cron", "0 3 * * *") or "0 3 * * *"
 
         try:
