@@ -290,12 +290,12 @@ def _create_trigger(
             kwargs["start_date"] = start_date
         if end_date is not None:
             kwargs["end_date"] = end_date
-        if kwargs:
-            kwargs["timezone"] = timezone.utc
+        # Immer UTC verwenden, damit Cron/Interval unabhängig von Server-Zeitzone laufen
+        kwargs["timezone"] = timezone.utc
 
         if trigger_type == TriggerType.CRON:
             # Cron-Expression parsen (Format: "minute hour day month day_of_week")
-            # Beispiel: "0 0 * * *" = täglich um Mitternacht
+            # Beispiel: "0 0 * * *" = täglich um Mitternacht UTC, "0 * * * *" = stündlich
             parts = trigger_value.strip().split()
             if len(parts) != 5:
                 logger.error(f"Ungültige Cron-Expression: {trigger_value} (erwartet 5 Teile)")
@@ -753,11 +753,26 @@ def get_job_details(job_id: UUID, session: Optional[Session] = None) -> Dict[str
     if _scheduler is not None and _scheduler.running:
         try:
             scheduler_job = _scheduler.get_job(str(job_id))
-            if scheduler_job:
-                if scheduler_job.next_run_time:
-                    details["next_run_time"] = scheduler_job.next_run_time.isoformat()
+            if scheduler_job and scheduler_job.next_run_time:
+                details["next_run_time"] = scheduler_job.next_run_time.isoformat()
         except Exception as e:
             logger.warning(f"Fehler beim Abrufen von Scheduler-Job-Details für {job_id}: {e}")
+
+    # Fallback: next_run_time aus Trigger berechnen, falls Scheduler keinen liefert
+    if details.get("next_run_time") is None and job.trigger_type != TriggerType.DATE:
+        try:
+            trigger = _create_trigger(
+                job.trigger_type,
+                job.trigger_value,
+                start_date=getattr(job, "start_date", None),
+                end_date=getattr(job, "end_date", None),
+            )
+            if trigger is not None:
+                next_fire = trigger.get_next_fire_time(None, datetime.now(timezone.utc))
+                if next_fire is not None:
+                    details["next_run_time"] = next_fire.isoformat()
+        except Exception as e:
+            logger.debug("Fallback next_run_time für Job %s: %s", job_id, e)
     
     # Run-Count aus Datenbank abrufen
     if session is None:

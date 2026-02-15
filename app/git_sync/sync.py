@@ -480,8 +480,9 @@ async def sync_pipelines(
             logger.info("Git Pull erfolgreich: %s", message)
             invalidate_cache()
             discovered_pipelines = discover_pipelines(force_refresh=True)
-            from app.services.scheduler import sync_scheduler_jobs_from_pipeline_json
+            from app.services.scheduler import sync_scheduler_jobs_from_pipeline_json, _sync_jobs_from_database
             sync_scheduler_jobs_from_pipeline_json(session)
+            _sync_jobs_from_database()  # Sicherstellen, dass alle aktiven DB-Jobs im Scheduler sind
             pre_heat_results: Dict[str, Dict[str, Any]] = {}
             if config.UV_PRE_HEAT:
                 logger.info("Starte UV Pre-Heating (Python-Install + pip compile für requirements.txt)")
