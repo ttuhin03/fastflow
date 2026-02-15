@@ -772,44 +772,6 @@ export default function Settings() {
             </div>
           </div>
 
-          {/* Auto Sync Settings */}
-          <div className="settings-section card">
-            <h3 className="section-title">Auto-Sync Einstellungen</h3>
-            <div className="settings-grid">
-              <div className="setting-item">
-                <label className="setting-label checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={currentSettings.auto_sync_enabled}
-                    onChange={(e) => handleInputChange('auto_sync_enabled', e.target.checked)}
-                    className="checkbox-input"
-                    disabled={isReadonly}
-                  />
-                  <span>Auto-Sync aktiviert</span>
-                  <InfoIcon content="Aktiviert automatisches Git-Sync in konfigurierten Intervallen" />
-                </label>
-              </div>
-
-              <div className="setting-item">
-                <label htmlFor="auto_sync_interval" className="setting-label">
-                  Auto-Sync Intervall (Sekunden)
-                  <span className="setting-hint">(None = deaktiviert)</span>
-                  <InfoIcon content="Intervall in Sekunden (Minimum: 60)" />
-                </label>
-                <input
-                  id="auto_sync_interval"
-                  type="number"
-                  min="0"
-                  className="form-input"
-                  value={currentSettings.auto_sync_interval || ''}
-                  onChange={(e) => handleInputChange('auto_sync_interval', e.target.value)}
-                  placeholder="Deaktiviert"
-                  disabled={isReadonly || !currentSettings.auto_sync_enabled}
-                />
-              </div>
-            </div>
-          </div>
-
           {/* Actions */}
           {!isReadonly && (
             <div className="settings-actions card">
