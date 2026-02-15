@@ -5,7 +5,7 @@ import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import { showError, showSuccess, showConfirm } from '../utils/toast'
-import { MdInfo, MdRefresh, MdMemory, MdPlayArrow, MdSchedule, MdLock, MdExtension, MdAccountTree } from 'react-icons/md'
+import { MdInfo, MdMemory, MdPlayArrow, MdSchedule, MdLock, MdExtension, MdAccountTree } from 'react-icons/md'
 import RunStatusCircles from '../components/RunStatusCircles'
 import ProgressBar from '../components/ProgressBar'
 import Skeleton from '../components/Skeleton'
@@ -78,25 +78,32 @@ export default function Pipelines() {
     refetchInterval: pipelinesInterval,
   })
 
-  const resetStatsMutation = useMutation({
+  const [startingPipeline, setStartingPipeline] = useState<string | null>(null)
+
+  const startPipelineMutation = useMutation({
     mutationFn: async (name: string) => {
-      const response = await apiClient.post(`/pipelines/${name}/stats/reset`)
+      const response = await apiClient.post(`/pipelines/${name}/run`, {
+        env_vars: {},
+        parameters: {},
+      })
       return response.data
     },
-    onSuccess: () => {
+    onSuccess: async (data: { id: string }) => {
       queryClient.invalidateQueries({ queryKey: ['pipelines'] })
-      showSuccess('Statistiken wurden zurückgesetzt')
+      queryClient.invalidateQueries({ queryKey: ['runs'] })
+      setStartingPipeline(null)
+      navigate(`/runs/${data.id}`)
     },
     onError: (error: any) => {
-      showError(`Fehler beim Zurücksetzen: ${error.response?.data?.detail || error.message}`)
+      setStartingPipeline(null)
+      showError(`Fehler beim Starten: ${error.response?.data?.detail || error.message}`)
     },
   })
 
-  const handleResetStats = async (name: string) => {
-    const confirmed = await showConfirm(`Möchten Sie die Statistiken für '${name}' wirklich zurücksetzen?`)
-    if (confirmed) {
-      resetStatsMutation.mutate(name)
-    }
+  const handleStartPipeline = (name: string) => {
+    if (startingPipeline) return
+    setStartingPipeline(name)
+    startPipelineMutation.mutate(name)
   }
 
   const successRate = (pipeline: Pipeline): number => {
@@ -292,23 +299,23 @@ export default function Pipelines() {
               </div>
 
               <div className="pipeline-actions">
+                {!isReadonly && (
+                  <button
+                    onClick={() => handleStartPipeline(pipeline.name)}
+                    className="btn btn-primary"
+                    disabled={!pipeline.enabled || startingPipeline === pipeline.name}
+                  >
+                    <MdPlayArrow />
+                    Starten
+                  </button>
+                )}
                 <button
                   onClick={() => navigate(`/pipelines/${pipeline.name}`)}
-                  className="btn btn-primary details-button"
+                  className="btn btn-outline"
                 >
                   <MdInfo />
                   Details
                 </button>
-                {!isReadonly && (
-                  <button
-                    onClick={() => handleResetStats(pipeline.name)}
-                    className="btn btn-warning reset-button"
-                    disabled={resetStatsMutation.isPending}
-                  >
-                    <MdRefresh />
-                    Stats zurücksetzen
-                  </button>
-                )}
               </div>
             </div>
           ))}

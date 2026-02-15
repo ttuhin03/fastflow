@@ -176,25 +176,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {syncStatus && (
-        <div className="sync-status card">
-          <div className="sync-status-item">
-            <strong>
-              Branch:
-              <InfoIcon content="Aktueller Git-Branch" />
-            </strong> {syncStatus.branch}
-          </div>
-          {syncStatus.last_sync && (
-            <div className="sync-status-item">
-              <strong>
-                Letzter Sync:
-                <InfoIcon content="Zeitpunkt des letzten Git-Syncs" />
-              </strong> {new Date(syncStatus.last_sync).toLocaleString('de-DE')}
-            </div>
-          )}
-        </div>
-      )}
-
       <div className="stats-grid">
         <div className="stat-card card">
           <div className="stat-icon pipelines">
