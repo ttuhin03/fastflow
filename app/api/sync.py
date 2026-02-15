@@ -22,6 +22,7 @@ from app.services.git_sync_repo_config import (
     get_sync_repo_config_public,
     save_sync_repo_config,
     delete_sync_repo_config,
+    generate_and_save_deploy_key,
 )
 
 logger = logging.getLogger(__name__)
@@ -192,6 +193,13 @@ def _is_ssh_url(url: str) -> bool:
     return u.startswith("git@") or u.startswith("ssh://")
 
 
+class GenerateDeployKeyRequest(BaseModel):
+    """Request-Model für server-seitige Deploy-Key-Erzeugung (SSH-URL)."""
+    repo_url: str = Field(..., min_length=1, description="SSH-URL (git@... oder ssh://...)")
+    branch: Optional[str] = Field(default=None, description="Branch (z. B. main)")
+    pipelines_subdir: Optional[str] = Field(default=None, description="Unterordner im Repo mit Pipeline-Ordnern")
+
+
 class RepoConfigRequest(BaseModel):
     """Request-Model für Repository-URL + Token oder Deploy Key."""
     repo_url: str = Field(
@@ -280,6 +288,56 @@ async def delete_repo_config(
         return {"success": True, "message": "Repository-Konfiguration gelöscht"}
     except Exception as e:
         logger.exception("Fehler beim Löschen der Repo-Config")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=get_500_detail(e),
+        )
+
+
+@router.post("/repo-config/generate-deploy-key", response_model=Dict[str, Any])
+async def generate_deploy_key(
+    request: GenerateDeployKeyRequest,
+    current_user: User = Depends(require_write),
+    session: Session = Depends(get_session),
+) -> Dict[str, Any]:
+    """
+    Erzeugt ein Ed25519-Deploy-Key-Paar, speichert den privaten Key verschlüsselt
+    sowie repo_url, branch, pipelines_subdir. Gibt nur den öffentlichen Key zurück;
+    diesen bei GitHub unter Settings → Deploy keys eintragen.
+    """
+    url = (request.repo_url or "").strip()
+    if not url:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Repository-URL ist erforderlich",
+        )
+    if not _is_ssh_url(url):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nur SSH-URL erlaubt (git@... oder ssh://...). Für HTTPS PAT verwenden.",
+        )
+    try:
+        public_key = generate_and_save_deploy_key(
+            session,
+            repo_url=url,
+            branch=(request.branch or "").strip() or None,
+            pipelines_subdir=(request.pipelines_subdir or "").strip() or None,
+        )
+        from app.services.orchestrator_settings import (
+            get_orchestrator_settings_or_default,
+            apply_orchestrator_settings_to_config,
+        )
+        apply_orchestrator_settings_to_config(get_orchestrator_settings_or_default(session))
+        return {
+            "success": True,
+            "message": "Deploy-Key erzeugt. Öffentlichen Key bei GitHub (Settings → Deploy keys) eintragen.",
+            "public_key": public_key,
+            **get_sync_repo_config_public(session),
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.exception("Fehler beim Erzeugen des Deploy-Keys")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=get_500_detail(e),

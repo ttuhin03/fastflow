@@ -53,7 +53,7 @@ Repository-URL und Authentifizierung (PAT oder Deploy Key) können **entweder** 
 | `AUTO_SYNC_INTERVAL` | *Leer* | Intervall in Sekunden für den automatischen Sync. |
 | `UV_PRE_HEAT` | `true` | Ob Dependencies beim Sync automatisch vorinstalliert ("aufgewärmt") werden sollen. |
 
-**Deploy Key (SSH):** Bei SSH-URL (z.B. `git@github.com:org/repo.git`) muss ein privater SSH-Key hinterlegt werden. Den Deploy Key legst du im Repository unter *Settings → Deploy keys* an; den **privaten** Key trägst du hier oder in der Sync-UI ein. Es wird immer nur eine Methode (PAT oder Deploy Key) genutzt – abhängig von der gewählten URL. Beim Wechsel der Methode (z.B. von HTTPS auf SSH) das Pipelines-Verzeichnis in der UI leeren und Sync erneut ausführen.
+**Deploy Key (SSH):** Bei SSH-URL (z.B. `git@github.com:org/repo.git`) muss ein privater SSH-Key hinterlegt werden. Den Deploy Key legst du im Repository unter *Settings → Deploy keys* an; den **privaten** Key trägst du hier oder in der Sync-UI ein. **Halbautomatisch:** In der Sync-UI kann bei SSH ein Deploy-Key vom Server erzeugt werden – nur den angezeigten öffentlichen Key bei GitHub (Deploy keys) eintragen. Es wird immer nur eine Methode (PAT oder Deploy Key) genutzt – abhängig von der gewählten URL. Beim Wechsel der Methode (z.B. von HTTPS auf SSH) das Pipelines-Verzeichnis in der UI leeren und Sync erneut ausführen.
 
 ## Logs & Retention
 

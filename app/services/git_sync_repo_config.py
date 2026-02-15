@@ -16,6 +16,7 @@ from app.core.config import config
 from app.models import OrchestratorSettings
 from app.services.orchestrator_settings import get_orchestrator_settings_or_default
 from app.services.secrets import decrypt, encrypt
+from app.services.deploy_key_generator import generate_ed25519_keypair
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +119,45 @@ def save_sync_repo_config(
     session.add(settings)
     session.commit()
     session.refresh(settings)
+
+
+def generate_and_save_deploy_key(
+    session: Session,
+    repo_url: str,
+    branch: Optional[str] = None,
+    pipelines_subdir: Optional[str] = None,
+) -> str:
+    """
+    Erzeugt ein Ed25519-Deploy-Key-Paar, speichert den privaten Key verschlüsselt
+    sowie repo_url, branch, pipelines_subdir; setzt Token auf None (SSH-Modus).
+    Gibt nur den öffentlichen Key zurück (für Eintrag bei GitHub Deploy keys).
+
+    Args:
+        session: DB-Session
+        repo_url: SSH-URL (git@... oder ssh://...)
+        branch: Optionaler Branch
+        pipelines_subdir: Optionaler Pipelines-Unterordner
+
+    Returns:
+        Öffentlicher Key als einzeiliger String (ssh-ed25519 AAAA...).
+
+    Raises:
+        ValueError: Wenn repo_url kein SSH-Format hat.
+    """
+    url = (repo_url or "").strip()
+    if not _is_ssh_url(url):
+        raise ValueError("repo_url muss SSH-Format haben (git@... oder ssh://...)")
+    private_pem, public_openssh = generate_ed25519_keypair()
+    settings = get_orchestrator_settings_or_default(session)
+    settings.git_sync_repo_url = url
+    settings.git_sync_branch = (branch or "").strip() or None
+    settings.pipelines_subdir = (pipelines_subdir or "").strip().strip("/") or None
+    settings.git_sync_token_encrypted = None
+    settings.git_sync_deploy_key_encrypted = encrypt(private_pem)
+    session.add(settings)
+    session.commit()
+    session.refresh(settings)
+    return public_openssh
 
 
 def delete_sync_repo_config(session: Session) -> None:

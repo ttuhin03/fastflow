@@ -401,6 +401,43 @@
   min-height: 6rem;
 }
 
+.deploy-key-generate-section {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #333;
+}
+
+.deploy-key-generate-heading {
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.deploy-key-generate-hint {
+  color: #888;
+  font-size: 0.9rem;
+  margin: 0 0 0.75rem 0;
+}
+
+.generated-public-key-box {
+  margin-top: 1rem;
+}
+
+.generated-public-key-box .generated-key-display {
+  min-height: 4rem;
+  margin-bottom: 0.5rem;
+}
+
+.generated-public-key-box .copy-key-button {
+  margin-bottom: 0.5rem;
+}
+
+.generated-key-hint {
+  color: #888;
+  font-size: 0.85rem;
+  margin: 0.5rem 0 0 0;
+}
+
 .github-form input[type="file"] {
   cursor: pointer;
 }

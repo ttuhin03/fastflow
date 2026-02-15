@@ -66,6 +66,7 @@ export default function Sync() {
     branch: 'main',
     pipelines_subdir: '',
   })
+  const [generatedPublicKey, setGeneratedPublicKey] = useState<string | null>(null)
 
   const syncInterval = useRefetchInterval(10000)
   const { data: syncStatus, isLoading } = useQuery<SyncStatus>({
@@ -121,6 +122,12 @@ export default function Sync() {
       })
     }
   }, [repoConfig, activeTab])
+
+  useEffect(() => {
+    if (!isSshUrl(repoForm.repo_url)) {
+      setGeneratedPublicKey(null)
+    }
+  }, [repoForm.repo_url])
 
   const syncMutation = useMutation({
     mutationFn: async (branch?: string) => {
@@ -191,6 +198,24 @@ export default function Sync() {
     },
   })
 
+  const generateDeployKeyMutation = useMutation({
+    mutationFn: async (data: { repo_url: string; branch?: string; pipelines_subdir?: string }) => {
+      const response = await apiClient.post('/sync/repo-config/generate-deploy-key', data)
+      return response.data as { success: boolean; public_key: string }
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['repo-config'] })
+      queryClient.invalidateQueries({ queryKey: ['sync-status'] })
+      if (data.public_key) {
+        setGeneratedPublicKey(data.public_key)
+        showSuccess('Deploy-Key erzeugt. Öffentlichen Key bei GitHub (Deploy keys) eintragen.')
+      }
+    },
+    onError: (error: any) => {
+      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
+    },
+  })
+
   const deleteRepoConfigMutation = useMutation({
     mutationFn: async () => {
       const response = await apiClient.delete('/sync/repo-config')
@@ -201,6 +226,7 @@ export default function Sync() {
       queryClient.invalidateQueries({ queryKey: ['sync-status'] })
       showSuccess('Repository-Konfiguration gelöscht')
       setRepoForm({ repo_url: '', token: '', deploy_key: '', branch: 'main', pipelines_subdir: '' })
+      setGeneratedPublicKey(null)
     },
     onError: (error: any) => {
       showError(`Fehler beim Löschen: ${error.response?.data?.detail || error.message}`)
@@ -272,6 +298,30 @@ export default function Sync() {
 
   const handleTestRepoConfig = () => {
     testRepoConfigMutation.mutate()
+  }
+
+  const handleGenerateDeployKey = () => {
+    const url = repoForm.repo_url.trim()
+    if (!url) {
+      showError('Bitte zuerst die SSH-Repository-URL eingeben')
+      return
+    }
+    if (!isSshUrl(url)) {
+      showError('Nur bei SSH-URL (git@... oder ssh://...) kann ein Deploy-Key erzeugt werden')
+      return
+    }
+    generateDeployKeyMutation.mutate({
+      repo_url: url,
+      branch: repoForm.branch.trim() || undefined,
+      pipelines_subdir: repoForm.pipelines_subdir.trim() || undefined,
+    })
+  }
+
+  const handleCopyPublicKey = () => {
+    if (generatedPublicKey && navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(generatedPublicKey)
+      showSuccess('Öffentlicher Key in die Zwischenablage kopiert')
+    }
   }
 
   const handleClearPipelines = async () => {
@@ -567,22 +617,63 @@ export default function Sync() {
                   </div>
                 )}
                 {isSshUrl(repoForm.repo_url) && (
-                  <div className="form-group">
-                    <label htmlFor="repo-deploy-key">
-                      Deploy Key (privater SSH-Key):
-                      <InfoIcon content="Inhalt des privaten SSH-Keys (z. B. aus Repo-Deploy-Key). Erforderlich für SSH-URL." />
-                    </label>
-                    <textarea
-                      id="repo-deploy-key"
-                      value={repoForm.deploy_key}
-                      onChange={(e) => setRepoForm({ ...repoForm, deploy_key: e.target.value })}
-                      placeholder="-----BEGIN OPENSSH PRIVATE KEY-----..."
-                      disabled={isReadonly}
-                      rows={4}
-                      className="repo-deploy-key-input"
-                      autoComplete="off"
-                    />
-                  </div>
+                  <>
+                    <div className="form-group">
+                      <label htmlFor="repo-deploy-key">
+                        Eigenen privaten Key eingeben (optional):
+                        <InfoIcon content="Inhalt des privaten SSH-Keys (z. B. selbst erzeugt mit ssh-keygen). Erforderlich, wenn Sie keinen Key vom Server erzeugen lassen." />
+                      </label>
+                      <textarea
+                        id="repo-deploy-key"
+                        value={repoForm.deploy_key}
+                        onChange={(e) => setRepoForm({ ...repoForm, deploy_key: e.target.value })}
+                        placeholder="-----BEGIN OPENSSH PRIVATE KEY-----..."
+                        disabled={isReadonly}
+                        rows={4}
+                        className="repo-deploy-key-input"
+                        autoComplete="off"
+                      />
+                    </div>
+                    {!isReadonly && (
+                      <div className="form-group deploy-key-generate-section">
+                        <h4 className="deploy-key-generate-heading">Oder: Deploy-Key vom Server erzeugen</h4>
+                        <p className="deploy-key-generate-hint">
+                          Server erzeugt ein Key-Paar. Tragen Sie nur den angezeigten öffentlichen Key bei GitHub (Settings → Deploy keys) ein.
+                        </p>
+                        <div className="form-actions">
+                          <button
+                            type="button"
+                            onClick={handleGenerateDeployKey}
+                            disabled={generateDeployKeyMutation.isPending}
+                            className="save-button"
+                          >
+                            {generateDeployKeyMutation.isPending ? 'Erzeuge...' : repoConfig?.configured ? 'Deploy-Key neu erzeugen' : 'Deploy-Key erzeugen und speichern'}
+                          </button>
+                        </div>
+                        {generatedPublicKey && (
+                          <div className="form-group generated-public-key-box">
+                            <label>Öffentlicher Key (bei GitHub eintragen):</label>
+                            <textarea
+                              readOnly
+                              value={generatedPublicKey}
+                              rows={3}
+                              className="repo-deploy-key-input generated-key-display"
+                            />
+                            <button
+                              type="button"
+                              onClick={handleCopyPublicKey}
+                              className="test-button copy-key-button"
+                            >
+                              In Zwischenablage kopieren
+                            </button>
+                            <p className="generated-key-hint">
+                              Diesen Key in GitHub unter Settings → Deploy keys → Add deploy key einfügen. Anschließend „Konfiguration testen“ oder Sync ausführen.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
                 )}
                 <div className="form-group">
                   <label htmlFor="repo-branch">Branch:</label>
@@ -642,7 +733,7 @@ export default function Sync() {
                   <h4>Hilfe:</h4>
                   <ul>
                     <li><strong>HTTPS:</strong> Öffentliche Repos: nur URL + Branch. Private Repos: Personal Access Token (GitHub: Settings → Developer settings → Personal access tokens, Scope <code>repo</code>).</li>
-                    <li><strong>SSH:</strong> SSH-URL (z. B. git@github.com:org/repo.git) und privaten Deploy-Key eintragen (Deploy Key im Repo unter Settings → Deploy keys anlegen).</li>
+                    <li><strong>SSH:</strong> SSH-URL (z. B. git@github.com:org/repo.git) und privaten Deploy-Key eintragen – oder Key vom Server erzeugen lassen und nur den angezeigten öffentlichen Key bei GitHub (Settings → Deploy keys) eintragen.</li>
                     <li>Env: GIT_REPO_URL und GIT_SYNC_TOKEN (HTTPS) bzw. GIT_SYNC_DEPLOY_KEY (SSH) in .env oder ConfigMap/Secret.</li>
                   </ul>
                 </div>
