@@ -7,6 +7,8 @@ import os
 import shutil
 import subprocess
 import logging
+import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, List, Set
 from datetime import datetime, timezone
@@ -23,6 +25,43 @@ from app.git_sync.sync_log import _write_sync_log
 from app.services.git_sync_repo_config import get_sync_repo_config
 
 logger = logging.getLogger(__name__)
+
+
+def _is_ssh_url(url: str) -> bool:
+    """True wenn URL SSH-Format hat (git@... oder ssh://...)."""
+    u = (url or "").strip()
+    return u.startswith("git@") or u.startswith("ssh://")
+
+
+@contextmanager
+def _ssh_key_env(deploy_key: str):
+    """Erstellt eine temporäre Key-Datei und liefert ein Env-Dict mit GIT_SSH_COMMAND. Löscht die Datei danach."""
+    fd = None
+    key_path = None
+    try:
+        fd, path = tempfile.mkstemp(prefix="fastflow_deploy_key_", suffix=".key")
+        key_content = deploy_key.encode() if isinstance(deploy_key, str) else deploy_key
+        os.write(fd, key_content)
+        os.close(fd)
+        fd = None
+        key_path = Path(path)
+        key_path.chmod(0o600)
+        env = os.environ.copy()
+        env["GIT_SSH_COMMAND"] = (
+            f"ssh -i {key_path} -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null"
+        )
+        yield env
+    finally:
+        if fd is not None:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        if key_path is not None and key_path.exists():
+            try:
+                key_path.unlink()
+            except OSError:
+                pass
 
 _executor = ThreadPoolExecutor(max_workers=2)
 _sync_lock = asyncio.Lock()
@@ -85,6 +124,7 @@ def clear_pipelines_directory() -> Tuple[bool, str]:
 def _ensure_repo_cloned(
     repo_url: str,
     token: Optional[str],
+    deploy_key: Optional[str],
     branch: str,
     pipelines_dir: Path,
 ) -> Tuple[bool, str]:
@@ -98,24 +138,35 @@ def _ensure_repo_cloned(
             return (False, "Pipelines-Verzeichnis ist nicht leer und kein Git-Repository")
     except OSError as e:
         return (False, f"Verzeichnis nicht lesbar: {e}")
-    auth_url = _build_auth_url(repo_url, token)
-    cmd = ["git", "clone", "--branch", branch, auth_url, str(pipelines_dir)]
-    exit_code, stdout, stderr = _run_git_command(cmd, pipelines_dir.parent)
+    if deploy_key:
+        clone_url = repo_url.strip()
+        with _ssh_key_env(deploy_key) as env:
+            cmd = ["git", "clone", "--branch", branch, clone_url, str(pipelines_dir)]
+            exit_code, stdout, stderr = _run_git_command(cmd, pipelines_dir.parent, env)
+    else:
+        auth_url = _build_auth_url(repo_url, token)
+        cmd = ["git", "clone", "--branch", branch, auth_url, str(pipelines_dir)]
+        exit_code, stdout, stderr = _run_git_command(cmd, pipelines_dir.parent)
     if exit_code != 0:
         return (False, f"Git Clone fehlgeschlagen: {stderr or stdout}")
     return (True, "")
 
 
 async def _git_pull(
-    branch: str, pipelines_dir: Path, sync_token: Optional[str] = None
+    branch: str,
+    pipelines_dir: Path,
+    sync_token: Optional[str] = None,
+    sync_deploy_key: Optional[str] = None,
 ) -> Tuple[bool, str]:
-    """Führt Git Pull aus (mit optionalem Token für private Repos). Retry bis zu 3 Versuche."""
+    """Führt Git Pull aus (mit optionalem Token oder Deploy Key für private Repos). Retry bis zu 3 Versuche."""
     git_dir = pipelines_dir / ".git"
     if not git_dir.exists():
         return (False, "Pipelines-Verzeichnis ist kein Git-Repository")
     last_msg = ""
     for attempt in range(1, 4):
-        success, msg = await _git_pull_once(branch, pipelines_dir, sync_token)
+        success, msg = await _git_pull_once(
+            branch, pipelines_dir, sync_token=sync_token, sync_deploy_key=sync_deploy_key
+        )
         if success:
             return (True, msg)
         last_msg = msg
@@ -127,11 +178,30 @@ async def _git_pull(
 
 
 async def _git_pull_once(
-    branch: str, pipelines_dir: Path, sync_token: Optional[str] = None
+    branch: str,
+    pipelines_dir: Path,
+    sync_token: Optional[str] = None,
+    sync_deploy_key: Optional[str] = None,
 ) -> Tuple[bool, str]:
     """Einzelner Git-Pull-Versuch (Fetch, Reset, Pull)."""
     env = None
-    if sync_token:
+    if sync_deploy_key:
+        # SSH: Env mit GIT_SSH_COMMAND wird pro Aufruf erzeugt; wir müssen die Key-Datei
+        # für die Dauer aller Git-Befehle behalten. Da _git_pull_once synchron in einem
+        # Executor läuft, können wir hier with _ssh_key_env nutzen.
+        with _ssh_key_env(sync_deploy_key) as env:
+            return await _git_pull_once_with_env(branch, pipelines_dir, sync_token, env)
+    return await _git_pull_once_with_env(branch, pipelines_dir, sync_token, None)
+
+
+async def _git_pull_once_with_env(
+    branch: str,
+    pipelines_dir: Path,
+    sync_token: Optional[str],
+    env: Optional[Dict[str, str]],
+) -> Tuple[bool, str]:
+    """Pull-Logik mit optionalem env (für SSH oder HTTPS mit Token-URL-Update)."""
+    if sync_token and not env:
         remote_url_cmd = ["git", "config", "remote.origin.url"]
         exit_code, stdout, stderr = _run_git_command(remote_url_cmd, pipelines_dir)
         if exit_code == 0:
@@ -367,9 +437,13 @@ async def sync_pipelines(
             pipelines_dir = config.PIPELINES_DIR
             repo_config = get_sync_repo_config(session)
             sync_token: Optional[str] = None
+            sync_deploy_key: Optional[str] = None
             if repo_config:
-                sync_token = repo_config.get("token")
                 branch = repo_config.get("branch") or branch
+                if _is_ssh_url(repo_config["repo_url"]):
+                    sync_deploy_key = repo_config.get("deploy_key")
+                else:
+                    sync_token = repo_config.get("token")
                 git_dir = pipelines_dir / ".git"
                 if not git_dir.exists():
                     ok, msg = await asyncio.get_running_loop().run_in_executor(
@@ -377,6 +451,7 @@ async def sync_pipelines(
                         lambda: _ensure_repo_cloned(
                             repo_config["repo_url"],
                             sync_token,
+                            sync_deploy_key,
                             branch,
                             pipelines_dir,
                         ),
@@ -396,7 +471,9 @@ async def sync_pipelines(
             sync_start_time = datetime.now(timezone.utc)
             logger.info("Starte Git Pull für Branch: %s", branch)
             await _write_sync_log({"event": "sync_started", "branch": branch, "status": "started"})
-            success, message = await _git_pull(branch, pipelines_dir, sync_token)
+            success, message = await _git_pull(
+                branch, pipelines_dir, sync_token=sync_token, sync_deploy_key=sync_deploy_key
+            )
             if not success:
                 await _write_sync_log({"event": "sync_failed", "branch": branch, "status": "failed", "error": message})
                 raise RuntimeError(f"Git Pull fehlgeschlagen: {message}")
@@ -475,10 +552,19 @@ def test_sync_repo_config(session: Session) -> Tuple[bool, str]:
     cfg = get_sync_repo_config(session)
     if not cfg or not cfg.get("repo_url"):
         return (False, "Keine Repository-URL konfiguriert")
-    url = _build_auth_url(cfg["repo_url"], cfg.get("token"))
     branch = cfg.get("branch") or "main"
-    cmd = ["git", "ls-remote", "--heads", url, f"refs/heads/{branch}"]
-    exit_code, stdout, stderr = _run_git_command(cmd, Path("."))
+    if _is_ssh_url(cfg["repo_url"]):
+        deploy_key = cfg.get("deploy_key")
+        if not deploy_key:
+            return (False, "Bei SSH-URL muss ein Deploy Key (privater SSH-Key) konfiguriert sein")
+        url = cfg["repo_url"].strip()
+        with _ssh_key_env(deploy_key) as env:
+            cmd = ["git", "ls-remote", "--heads", url, f"refs/heads/{branch}"]
+            exit_code, stdout, stderr = _run_git_command(cmd, Path("."), env)
+    else:
+        url = _build_auth_url(cfg["repo_url"], cfg.get("token"))
+        cmd = ["git", "ls-remote", "--heads", url, f"refs/heads/{branch}"]
+        exit_code, stdout, stderr = _run_git_command(cmd, Path("."))
     if exit_code != 0:
         return (False, (stderr or stdout or "Unbekannter Fehler").strip())
     return (True, "Verbindung erfolgreich")

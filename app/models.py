@@ -462,8 +462,9 @@ class OrchestratorSettings(SQLModel, table=True):
     # Git Sync
     auto_sync_enabled: Optional[bool] = Field(default=None)
     auto_sync_interval: Optional[int] = Field(default=None)
-    git_sync_repo_url: Optional[str] = Field(default=None, description="HTTPS-URL des Pipeline-Repos")
-    git_sync_token_encrypted: Optional[str] = Field(default=None, description="Verschlüsseltes PAT für private Repos")
+    git_sync_repo_url: Optional[str] = Field(default=None, description="HTTPS- oder SSH-URL des Pipeline-Repos")
+    git_sync_token_encrypted: Optional[str] = Field(default=None, description="Verschlüsseltes PAT für private Repos (HTTPS)")
+    git_sync_deploy_key_encrypted: Optional[str] = Field(default=None, description="Verschlüsselter privater SSH-Deploy-Key (für SSH-URL)")
     git_sync_branch: Optional[str] = Field(default=None, description="Branch für Sync (Override)")
     pipelines_subdir: Optional[str] = Field(default=None, description="Unterordner im Repo mit Pipeline-Ordnern, z. B. pipelines")
     # E-Mail

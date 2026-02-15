@@ -239,7 +239,13 @@ class Config:
     Personal Access Token (PAT) für private Repos. Nur nötig bei privaten Repositories.
     Sensibel – in K8s über Secret setzen. Kann auch in der Sync-UI gesetzt werden.
     """
-    
+
+    GIT_SYNC_DEPLOY_KEY: Optional[str] = os.getenv("GIT_SYNC_DEPLOY_KEY")
+    """
+    Inhalt des privaten SSH-Deploy-Keys (für SSH-URL, z. B. git@github.com:org/repo.git).
+    Alternative zu GIT_SYNC_TOKEN. Env hat Vorrang vor DB. Sensibel – als Secret setzen.
+    """
+
     AUTO_SYNC_ENABLED: bool = os.getenv("AUTO_SYNC_ENABLED", "false").lower() == "true"
     """
     Aktiviert automatisches Git-Sync.

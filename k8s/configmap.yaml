@@ -46,9 +46,10 @@ data:
   # Abgeschlossene Pipeline-Jobs (succeeded/failed) nach N Sekunden automatisch löschen. 0 = nicht löschen.
   KUBERNETES_JOB_TTL_SECONDS_AFTER_FINISHED: "300"
 
-  # Git-Sync: Repository-URL (nicht sensibel). Token in secrets.yaml.
-  # Kann auch in der Sync-UI unter "Repository" gesetzt werden.
+  # Git-Sync: Repository-URL (nicht sensibel). PAT oder Deploy Key in secrets.yaml.
+  # Entweder HTTPS + GIT_SYNC_TOKEN oder SSH + GIT_SYNC_DEPLOY_KEY. Sync-UI: Repository.
   # GIT_REPO_URL: "https://github.com/org/pipeline-repo.git"
+  # GIT_REPO_URL: "git@github.com:org/pipeline-repo.git"   # SSH
   # GIT_BRANCH: "main"
   # PIPELINES_SUBDIR: "pipelines"   # Wenn Pipelines in einem Unterordner liegen
   # AUTO_SYNC_ENABLED: "false"

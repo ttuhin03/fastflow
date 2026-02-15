@@ -41,16 +41,19 @@ Fast-Flow wird primär über Environment-Variablen in einer `.env` Datei konfigu
 
 ## Git Sync
 
-Repository-URL und optionales Token können **entweder** per Umgebungsvariablen **oder** in der UI unter **Einstellungen → Git Sync → Repository** gesetzt werden. Env-Variablen haben Vorrang.
+Repository-URL und Authentifizierung (PAT oder Deploy Key) können **entweder** per Umgebungsvariablen **oder** in der UI unter **Einstellungen → Git Sync → Repository** gesetzt werden. Env-Variablen haben Vorrang. Es wird **entweder** **HTTPS + Personal Access Token (PAT)** **oder** **SSH + Deploy Key** verwendet – die Methode ergibt sich aus der URL.
 
 | Variable | Standardwert | Beschreibung |
 |----------|--------------|--------------|
-| `GIT_REPO_URL` | *Leer* | HTTPS-URL des Pipeline-Repositories (z.B. `https://github.com/org/repo.git`). |
-| `GIT_SYNC_TOKEN` | *Leer* | Optional: Personal Access Token (PAT) für private Repositories. |
+| `GIT_REPO_URL` | *Leer* | URL des Pipeline-Repositories: HTTPS (z.B. `https://github.com/org/repo.git`) oder SSH (z.B. `git@github.com:org/repo.git`). |
+| `GIT_SYNC_TOKEN` | *Leer* | Optional: Personal Access Token (PAT) für private Repos bei **HTTPS**-URL. |
+| `GIT_SYNC_DEPLOY_KEY` | *Leer* | Optional: Inhalt des privaten SSH-Deploy-Keys bei **SSH**-URL. Sensibel – als Secret setzen. |
 | `GIT_BRANCH` | `main` | Der Git-Branch, der synchronisiert werden soll. |
 | `AUTO_SYNC_ENABLED` | `false` | Ob Pipelines automatisch synchronisiert werden sollen. |
 | `AUTO_SYNC_INTERVAL` | *Leer* | Intervall in Sekunden für den automatischen Sync. |
 | `UV_PRE_HEAT` | `true` | Ob Dependencies beim Sync automatisch vorinstalliert ("aufgewärmt") werden sollen. |
+
+**Deploy Key (SSH):** Bei SSH-URL (z.B. `git@github.com:org/repo.git`) muss ein privater SSH-Key hinterlegt werden. Den Deploy Key legst du im Repository unter *Settings → Deploy keys* an; den **privaten** Key trägst du hier oder in der Sync-UI ein. Es wird immer nur eine Methode (PAT oder Deploy Key) genutzt – abhängig von der gewählten URL. Beim Wechsel der Methode (z.B. von HTTPS auf SSH) das Pipelines-Verzeichnis in der UI leeren und Sync erneut ausführen.
 
 ## Logs & Retention
 

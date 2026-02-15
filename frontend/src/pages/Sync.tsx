@@ -41,6 +41,12 @@ interface RepoConfig {
   branch: string | null
   configured: boolean
   pipelines_subdir?: string | null
+  auth_mode?: 'pat' | 'deploy_key'
+}
+
+function isSshUrl(url: string): boolean {
+  const u = (url || '').trim()
+  return u.startsWith('git@') || u.startsWith('ssh://')
 }
 
 export default function Sync() {
@@ -56,6 +62,7 @@ export default function Sync() {
   const [repoForm, setRepoForm] = useState({
     repo_url: '',
     token: '',
+    deploy_key: '',
     branch: 'main',
     pipelines_subdir: '',
   })
@@ -108,6 +115,7 @@ export default function Sync() {
       setRepoForm({
         repo_url: repoConfig.repo_url || '',
         token: '',
+        deploy_key: '',
         branch: repoConfig.branch || 'main',
         pipelines_subdir: repoConfig.pipelines_subdir ?? '',
       })
@@ -144,7 +152,13 @@ export default function Sync() {
   })
 
   const saveRepoConfigMutation = useMutation({
-    mutationFn: async (data: { repo_url: string; token?: string; branch?: string; pipelines_subdir?: string }) => {
+    mutationFn: async (data: {
+      repo_url: string
+      token?: string
+      deploy_key?: string
+      branch?: string
+      pipelines_subdir?: string
+    }) => {
       const response = await apiClient.post('/sync/repo-config', data)
       return response.data
     },
@@ -152,7 +166,7 @@ export default function Sync() {
       queryClient.invalidateQueries({ queryKey: ['repo-config'] })
       queryClient.invalidateQueries({ queryKey: ['sync-status'] })
       showSuccess('Repository-Konfiguration gespeichert')
-      setRepoForm((f) => ({ ...f, token: '' }))
+      setRepoForm((f) => ({ ...f, token: '', deploy_key: '' }))
       queryClient.invalidateQueries({ queryKey: ['pipelines'] })
     },
     onError: (error: any) => {
@@ -186,7 +200,7 @@ export default function Sync() {
       queryClient.invalidateQueries({ queryKey: ['repo-config'] })
       queryClient.invalidateQueries({ queryKey: ['sync-status'] })
       showSuccess('Repository-Konfiguration gelöscht')
-      setRepoForm({ repo_url: '', token: '', branch: 'main', pipelines_subdir: '' })
+      setRepoForm({ repo_url: '', token: '', deploy_key: '', branch: 'main', pipelines_subdir: '' })
     },
     onError: (error: any) => {
       showError(`Fehler beim Löschen: ${error.response?.data?.detail || error.message}`)
@@ -230,16 +244,30 @@ export default function Sync() {
       showError('Bitte geben Sie die Repository-URL ein')
       return
     }
-    if (!url.startsWith('https://') && !url.startsWith('http://')) {
-      showError('URL muss mit https:// oder http:// beginnen')
+    if (
+      !url.startsWith('https://') &&
+      !url.startsWith('http://') &&
+      !url.startsWith('git@') &&
+      !url.startsWith('ssh://')
+    ) {
+      showError('URL muss mit https://, http://, git@ oder ssh:// beginnen')
       return
     }
-    saveRepoConfigMutation.mutate({
-      repo_url: url,
-      token: repoForm.token.trim() || undefined,
-      branch: repoForm.branch.trim() || undefined,
-      pipelines_subdir: repoForm.pipelines_subdir.trim() || undefined,
-    })
+    if (isSshUrl(url)) {
+      saveRepoConfigMutation.mutate({
+        repo_url: url,
+        deploy_key: repoForm.deploy_key.trim() || undefined,
+        branch: repoForm.branch.trim() || undefined,
+        pipelines_subdir: repoForm.pipelines_subdir.trim() || undefined,
+      })
+    } else {
+      saveRepoConfigMutation.mutate({
+        repo_url: url,
+        token: repoForm.token.trim() || undefined,
+        branch: repoForm.branch.trim() || undefined,
+        pipelines_subdir: repoForm.pipelines_subdir.trim() || undefined,
+      })
+    }
   }
 
   const handleTestRepoConfig = () => {
@@ -494,8 +522,8 @@ export default function Sync() {
         <div className="sync-repo-card">
           <h3>Repository verbinden</h3>
           <p className="repo-config-intro">
-            Geben Sie die HTTPS-URL Ihres Pipeline-Repositories ein. Für private Repos einen Personal Access Token (PAT) mit Lese-Recht angeben.
-            Alternativ können Sie GIT_REPO_URL und GIT_SYNC_TOKEN in der Umgebung setzen.
+            Verbinden Sie das Repo per <strong>HTTPS + Personal Access Token (PAT)</strong> oder per <strong>SSH + Deploy Key</strong>.
+            Env: GIT_REPO_URL und GIT_SYNC_TOKEN bzw. GIT_SYNC_DEPLOY_KEY.
           </p>
           {repoConfigLoading ? (
             <div>Lade Konfiguration...</div>
@@ -509,33 +537,53 @@ export default function Sync() {
               <div className="github-form">
                 <div className="form-group">
                   <label htmlFor="repo-url">
-                    Repository-URL (HTTPS):
-                    <InfoIcon content="z. B. https://github.com/org/repo.git" />
+                    Repository-URL (HTTPS oder SSH):
+                    <InfoIcon content="HTTPS: https://github.com/org/repo.git — SSH: git@github.com:org/repo.git" />
                   </label>
                   <input
                     id="repo-url"
-                    type="url"
+                    type="text"
                     value={repoForm.repo_url}
                     onChange={(e) => setRepoForm({ ...repoForm, repo_url: e.target.value })}
-                    placeholder="https://github.com/org/repo.git"
+                    placeholder="https://github.com/org/repo.git oder git@github.com:org/repo.git"
                     disabled={isReadonly}
                   />
                 </div>
-                <div className="form-group">
-                  <label htmlFor="repo-token">
-                    Token (optional, für private Repos):
-                    <InfoIcon content="Personal Access Token mit repo-Berechtigung. Leer lassen bei öffentlichen Repos." />
-                  </label>
-                  <input
-                    id="repo-token"
-                    type="password"
-                    value={repoForm.token}
-                    onChange={(e) => setRepoForm({ ...repoForm, token: e.target.value })}
-                    placeholder="ghp_..."
-                    disabled={isReadonly}
-                    autoComplete="off"
-                  />
-                </div>
+                {!isSshUrl(repoForm.repo_url) && (
+                  <div className="form-group">
+                    <label htmlFor="repo-token">
+                      Token (optional, für private Repos):
+                      <InfoIcon content="Personal Access Token mit repo-Berechtigung. Leer lassen bei öffentlichen Repos." />
+                    </label>
+                    <input
+                      id="repo-token"
+                      type="password"
+                      value={repoForm.token}
+                      onChange={(e) => setRepoForm({ ...repoForm, token: e.target.value })}
+                      placeholder="ghp_..."
+                      disabled={isReadonly}
+                      autoComplete="off"
+                    />
+                  </div>
+                )}
+                {isSshUrl(repoForm.repo_url) && (
+                  <div className="form-group">
+                    <label htmlFor="repo-deploy-key">
+                      Deploy Key (privater SSH-Key):
+                      <InfoIcon content="Inhalt des privaten SSH-Keys (z. B. aus Repo-Deploy-Key). Erforderlich für SSH-URL." />
+                    </label>
+                    <textarea
+                      id="repo-deploy-key"
+                      value={repoForm.deploy_key}
+                      onChange={(e) => setRepoForm({ ...repoForm, deploy_key: e.target.value })}
+                      placeholder="-----BEGIN OPENSSH PRIVATE KEY-----..."
+                      disabled={isReadonly}
+                      rows={4}
+                      className="repo-deploy-key-input"
+                      autoComplete="off"
+                    />
+                  </div>
+                )}
                 <div className="form-group">
                   <label htmlFor="repo-branch">Branch:</label>
                   <input
@@ -593,9 +641,9 @@ export default function Sync() {
                 <div className="github-info">
                   <h4>Hilfe:</h4>
                   <ul>
-                    <li>Öffentliche Repos: Nur URL und optional Branch eintragen.</li>
-                    <li>Private Repos: Personal Access Token (GitHub: Settings → Developer settings → Personal access tokens) mit Scope <code>repo</code> erstellen.</li>
-                    <li>Alternativ: GIT_REPO_URL und ggf. GIT_SYNC_TOKEN in .env bzw. ConfigMap/Secret setzen.</li>
+                    <li><strong>HTTPS:</strong> Öffentliche Repos: nur URL + Branch. Private Repos: Personal Access Token (GitHub: Settings → Developer settings → Personal access tokens, Scope <code>repo</code>).</li>
+                    <li><strong>SSH:</strong> SSH-URL (z. B. git@github.com:org/repo.git) und privaten Deploy-Key eintragen (Deploy Key im Repo unter Settings → Deploy keys anlegen).</li>
+                    <li>Env: GIT_REPO_URL und GIT_SYNC_TOKEN (HTTPS) bzw. GIT_SYNC_DEPLOY_KEY (SSH) in .env oder ConfigMap/Secret.</li>
                   </ul>
                 </div>
                 {!isReadonly && (

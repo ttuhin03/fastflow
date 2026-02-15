@@ -385,13 +385,20 @@
 }
 
 .github-form input[type="text"],
-.github-form input[type="file"] {
+.github-form input[type="file"],
+.github-form textarea {
   padding: 0.5rem;
   background-color: #1a1a1a;
   color: white;
   border: 1px solid #444;
   border-radius: 4px;
   font-size: 0.9rem;
+}
+
+.github-form textarea.repo-deploy-key-input {
+  font-family: monospace;
+  resize: vertical;
+  min-height: 6rem;
 }
 
 .github-form input[type="file"] {

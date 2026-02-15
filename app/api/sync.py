@@ -186,10 +186,21 @@ async def get_sync_logs_endpoint(
         )
 
 
+def _is_ssh_url(url: str) -> bool:
+    """True wenn URL SSH-Format hat (git@... oder ssh://...)."""
+    u = (url or "").strip()
+    return u.startswith("git@") or u.startswith("ssh://")
+
+
 class RepoConfigRequest(BaseModel):
-    """Request-Model für Repository-URL + Token Konfiguration."""
-    repo_url: str = Field(..., min_length=1, description="HTTPS-URL des Repositories")
-    token: Optional[str] = Field(default=None, description="Personal Access Token (optional, für private Repos)")
+    """Request-Model für Repository-URL + Token oder Deploy Key."""
+    repo_url: str = Field(
+        ...,
+        min_length=1,
+        description="HTTPS- oder SSH-URL (z. B. https://github.com/org/repo.git oder git@github.com:org/repo.git)",
+    )
+    token: Optional[str] = Field(default=None, description="Personal Access Token (optional, für private Repos per HTTPS)")
+    deploy_key: Optional[str] = Field(default=None, description="Privater SSH-Deploy-Key (erforderlich bei SSH-URL)")
     branch: Optional[str] = Field(default=None, description="Branch (z. B. main)")
     pipelines_subdir: Optional[str] = Field(default=None, description="Unterordner im Repo mit Pipeline-Ordnern, z. B. pipelines")
 
@@ -219,23 +230,24 @@ async def save_repo_config(
     current_user=Depends(require_write),
     session: Session = Depends(get_session),
 ) -> Dict[str, Any]:
-    """Speichert Repository-URL, optional Token (verschlüsselt) und Branch in der DB."""
+    """Speichert Repository-URL, optional Token oder Deploy Key (verschlüsselt) und Branch in der DB."""
     url = (request.repo_url or "").strip()
     if not url:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Repository-URL ist erforderlich",
         )
-    if not url.startswith("https://") and not url.startswith("http://"):
+    if not url.startswith("https://") and not url.startswith("http://") and not url.startswith("git@") and not url.startswith("ssh://"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Repository-URL muss mit https:// oder http:// beginnen",
+            detail="Repository-URL muss mit https://, http://, git@ oder ssh:// beginnen",
         )
     try:
         save_sync_repo_config(
             session,
             repo_url=url,
             token=(request.token or "").strip() or None,
+            deploy_key=(request.deploy_key or "").strip() or None,
             branch=(request.branch or "").strip() or None,
             pipelines_subdir=(request.pipelines_subdir or "").strip() or None,
         )
