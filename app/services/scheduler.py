@@ -55,6 +55,11 @@ def _parse_schedule_datetime(value: Optional[str], end_of_day: bool = False) -> 
 # Globale Scheduler-Instanz
 _scheduler: Optional[BackgroundScheduler] = None
 
+# Zeitpunkt des Scheduler-Starts (API-Start). Geplante Runs werden in den ersten 2 Min übersprungen,
+# damit die alte Instanz noch sauber runterfahren kann; manuelle Starts sind unverändert erlaubt.
+_scheduler_started_at: Optional[datetime] = None
+SCHEDULER_GRACE_SECONDS = 120  # 2 Minuten
+
 # Haupt-Event-Loop der App (wird beim Start gesetzt). Scheduler-Jobs führen run_pipeline
 # auf dieser Loop aus, damit der create_task(run_container_task) nicht beim Loop-Ende abbricht.
 _main_loop: Optional[asyncio.AbstractEventLoop] = None
@@ -146,9 +151,11 @@ def start_scheduler() -> None:
         logger.warning("Scheduler läuft bereits")
         return
     
+    global _scheduler_started_at
     try:
         _scheduler.start()
-        logger.info("Scheduler gestartet")
+        _scheduler_started_at = datetime.now(timezone.utc)
+        logger.info("Scheduler gestartet (geplante Runs in den ersten %s Sekunden übersprungen)", SCHEDULER_GRACE_SECONDS)
         
         # Jobs aus Datenbank laden und synchronisieren
         _sync_jobs_from_database()
@@ -364,10 +371,24 @@ def run_scheduled_pipeline(pipeline_name: str, run_config_id: Optional[str] = No
     Führt die angegebene Pipeline aus. Muss Modul-Level sein, damit der Job
     mit SQLAlchemyJobStore serialisiert werden kann (keine Closures).
 
+    In den ersten SCHEDULER_GRACE_SECONDS nach API-Start werden geplante Runs
+    übersprungen (alte Instanz kann noch herunterfahren). Manuelle Starts
+    laufen weiterhin sofort (API ruft run_pipeline direkt auf).
+
     run_pipeline wird auf der Haupt-Event-Loop der App ausgeführt (run_coroutine_threadsafe),
     damit der von run_pipeline gestartete Hintergrund-Task (K8s-Job starten) nicht abbricht,
     wenn die Loop endet (asyncio.run() würde die Loop beenden und Tasks abbrechen).
     """
+    if _scheduler_started_at is not None:
+        elapsed = (datetime.now(timezone.utc) - _scheduler_started_at).total_seconds()
+        if elapsed < SCHEDULER_GRACE_SECONDS:
+            logger.info(
+                "Geplanten Run übersprungen (Grace-Period nach Start): %s (noch %.0fs von %ss)",
+                pipeline_name,
+                SCHEDULER_GRACE_SECONDS - elapsed,
+                SCHEDULER_GRACE_SECONDS,
+            )
+            return
     pipeline = get_pipeline(pipeline_name)
     if pipeline is None:
         logger.error("Pipeline nicht gefunden für Job: %s", pipeline_name)
@@ -408,6 +429,16 @@ def run_daemon_restart(pipeline_name: str) -> None:
     Wird vom APScheduler für Dauerläufer-Restart aufgerufen (per textueller Referenz).
     Muss Modul-Level sein für Serialisierung im JobStore.
     """
+    if _scheduler_started_at is not None:
+        elapsed = (datetime.now(timezone.utc) - _scheduler_started_at).total_seconds()
+        if elapsed < SCHEDULER_GRACE_SECONDS:
+            logger.info(
+                "Daemon-Restart übersprungen (Grace-Period nach Start): %s (noch %.0fs von %ss)",
+                pipeline_name,
+                SCHEDULER_GRACE_SECONDS - elapsed,
+                SCHEDULER_GRACE_SECONDS,
+            )
+            return
     try:
         from app.services.daemon_watcher import perform_daemon_restart
         if _main_loop is not None and _main_loop.is_running():
