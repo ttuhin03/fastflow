@@ -71,8 +71,18 @@ def run_notebook(notebook_path: str) -> int:
     """
     Führt das Notebook aus. Gibt 0 bei Erfolg zurück, sonst 1.
     """
-    import nbformat
-    from nbclient import NotebookClient
+    try:
+        import nbformat
+        from nbclient import NotebookClient
+    except ModuleNotFoundError as e:
+        print(
+            f"Fehler: {e}\n"
+            "Notebook-Pipelines benötigen nbformat, nbclient und ipykernel.\n"
+            "Bitte im Pipeline-Ordner (neben main.ipynb) eine requirements.txt anlegen mit:\n"
+            "  nbformat\n  nbclient\n  ipykernel",
+            file=sys.stderr,
+        )
+        return 1
 
     path = Path(notebook_path)
     if not path.exists() or not path.is_file():
