@@ -92,9 +92,16 @@ def run_notebook(notebook_path: str) -> int:
     nb = nbformat.read(path, as_version=4)
     client = NotebookClient(nb)
     pipeline_cells = _load_pipeline_cells(path.parent / "pipeline.json")
+    notebook_dir = path.resolve().parent
 
     with client.setup_kernel():
         emit(SETUP_READY_MARKER)
+        # CWD auf Pipeline-Verzeichnis setzen (z. B. /app), damit Path.cwd() und
+        # relative Pfade wie bei Python-Pipelines funktionieren.
+        setup_cell = nbformat.v4.new_code_cell(
+            "import os\nos.chdir(%r)" % str(notebook_dir)
+        )
+        client.execute_cell(setup_cell, -1, execution_count=0)
         execution_count = 0
         code_cell_index = -1
 
