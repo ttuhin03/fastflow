@@ -62,7 +62,7 @@ export default function Dashboard() {
     refetchInterval: pipelinesInterval,
   })
 
-  const { data: syncStatus } = useQuery<SyncStatus>({
+  useQuery<SyncStatus>({
     queryKey: ['sync-status'],
     queryFn: async () => {
       const response = await apiClient.get('/sync/status')

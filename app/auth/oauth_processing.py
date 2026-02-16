@@ -243,12 +243,16 @@ async def process_oauth_login(
         logger.info("OAuth: match=initial_admin provider=%s user=%s", provider, user.username)
         return _oauth_return(user, False, False, is_new_user=created, registration_source="initial_admin" if created else None)
 
-    # 5) Einladung: state = Invitation.token, E-Mail muss recipient_email entsprechen
+    # 5) Einladung: Invitation.token aus state oder aus gespeichertem invitation_token (Custom OAuth)
+    invitation_token = None
     if state:
+        stored = get_oauth_state(state)
+        invitation_token = (stored.get("invitation_token") if stored else None) or state
+    if invitation_token:
         stmt = (
             select(Invitation)
             .where(
-                Invitation.token == state,
+                Invitation.token == invitation_token,
                 Invitation.is_used == False,
                 Invitation.expires_at > datetime.now(timezone.utc),
             )
@@ -258,6 +262,8 @@ async def process_oauth_login(
             inv.is_used = True
             session.add(inv)
             session.commit()
+            if state:
+                delete_oauth_state(state)
             user = create_oauth_user(session, oauth_data, inv.role, provider, status=UserStatus.ACTIVE)
             logger.info("OAuth: match=invitation provider=%s user=%s role=%s recipient=%s", provider, user.username, inv.role.value, inv.recipient_email)
             return _oauth_return(user, False, False, is_new_user=True, registration_source="invitation")

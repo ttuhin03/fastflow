@@ -346,15 +346,22 @@ if os.path.exists(static_dir):
                     if idx.exists():
                         return FileResponse(str(idx))
                 else:
-                    file_path = (docs_path / subpath).resolve()
+                    # Kein User-Input in Pfad: nur Basis + validierte Segmente (kein "..", keine Separatoren)
+                    parts = [p for p in subpath.split("/") if p and p not in (".", "..")]
+                    if any(".." in p or "/" in p or "\\" in p for p in parts):
+                        return JSONResponse({"detail": "Not found"}, status_code=404)
+                    safe_path = docs_path
+                    for seg in parts:
+                        safe_path = safe_path / seg
+                    safe_path = safe_path.resolve()
                     try:
-                        file_path.relative_to(docs_path)
+                        safe_path.relative_to(docs_path)
                     except ValueError:
                         return JSONResponse({"detail": "Not found"}, status_code=404)
-                    if file_path.exists() and file_path.is_file():
-                        return FileResponse(str(file_path))
-                    if file_path.is_dir() and (file_path / "index.html").exists():
-                        return FileResponse(str(file_path / "index.html"))
+                    if safe_path.exists() and safe_path.is_file():
+                        return FileResponse(str(safe_path))
+                    if safe_path.is_dir() and (safe_path / "index.html").exists():
+                        return FileResponse(str(safe_path / "index.html"))
             return JSONResponse({"detail": "Not found"}, status_code=404)
 
         # Path Traversal-Schutz: Verwende pathlib für sichere Pfad-Auflösung

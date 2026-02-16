@@ -123,13 +123,12 @@ async def github_authorize(
 ) -> RedirectResponse:
     """
     Leitet zur GitHub OAuth Authorize-URL weiter.
-    state: optional, wird als OAuth state mitgegeben (Invitation-Token oder CSRF).
+    state: optional (Invitation-Token); wird serverseitig gespeichert, Redirect-Ziel nur aus Konfiguration.
     """
     if not config.GITHUB_CLIENT_ID:
         raise HTTPException(status_code=503, detail="GitHub OAuth ist nicht konfiguriert (GITHUB_CLIENT_ID fehlt)")
-    s = state if state else generate_oauth_state()
-    if not state:
-        store_oauth_state(s, {"purpose": "login"})
+    s = generate_oauth_state()
+    store_oauth_state(s, {"purpose": "login", "invitation_token": state})
     url = get_github_authorize_url(s)
     if not url.startswith(GITHUB_AUTHORIZE_URL):
         raise HTTPException(status_code=400, detail="Invalid redirect target")
@@ -197,13 +196,12 @@ async def google_authorize(
 ) -> RedirectResponse:
     """
     Leitet zur Google OAuth Authorize-URL weiter.
-    state: optional (Invitation-Token oder leer für Login mit CSRF).
+    state: optional (Invitation-Token); wird serverseitig gespeichert, Redirect-Ziel nur aus Konfiguration.
     """
     if not config.GOOGLE_CLIENT_ID:
         raise HTTPException(status_code=503, detail="Google OAuth ist nicht konfiguriert (GOOGLE_CLIENT_ID fehlt)")
-    s = state if state else generate_oauth_state()
-    if not state:
-        store_oauth_state(s, {"purpose": "login"})
+    s = generate_oauth_state()
+    store_oauth_state(s, {"purpose": "login", "invitation_token": state})
     url = get_google_authorize_url(s)
     if not url.startswith(GOOGLE_AUTHORIZE_URL):
         raise HTTPException(status_code=400, detail="Invalid redirect target")
@@ -269,13 +267,12 @@ async def microsoft_authorize(
 ) -> RedirectResponse:
     """
     Leitet zur Microsoft Entra ID OAuth Authorize-URL weiter.
-    state: optional (Invitation-Token oder leer für Login mit CSRF).
+    state: optional (Invitation-Token); wird serverseitig gespeichert, Redirect-Ziel nur aus Konfiguration.
     """
     if not config.MICROSOFT_CLIENT_ID:
         raise HTTPException(status_code=503, detail="Microsoft OAuth ist nicht konfiguriert (MICROSOFT_CLIENT_ID fehlt)")
-    s = state if state else generate_oauth_state()
-    if not state:
-        store_oauth_state(s, {"purpose": "login"})
+    s = generate_oauth_state()
+    store_oauth_state(s, {"purpose": "login", "invitation_token": state})
     url = get_microsoft_authorize_url(s)
     if not url.startswith(MICROSOFT_AUTHORIZE_URL_BASE):
         raise HTTPException(status_code=400, detail="Invalid redirect target")
@@ -405,12 +402,15 @@ async def custom_authorize(
     """
     Leitet zur Custom OAuth Authorize-URL weiter (Keycloak, Auth0, etc.).
     Nur aktiv, wenn Custom OAuth konfiguriert ist.
+    Redirect-Ziel kommt nur aus Konfiguration (kein User-Input in URL), um
+    Open-Redirect zu vermeiden; User-State (z.B. Invitation-Token) wird im
+    Server-State gespeichert.
     """
-    s = state if state else generate_oauth_state()
-    if not state:
-        store_oauth_state(s, {"purpose": "login"})
+    s = generate_oauth_state()
+    store_oauth_state(s, {"purpose": "login", "invitation_token": state})
     url = get_custom_oauth_authorize_url(s)
-    if config.CUSTOM_OAUTH_AUTHORIZE_URL and not url.startswith(config.CUSTOM_OAUTH_AUTHORIZE_URL.split("?")[0]):
+    allowed_base = (config.CUSTOM_OAUTH_AUTHORIZE_URL or "").split("?")[0]
+    if not allowed_base or not url.startswith(allowed_base):
         raise HTTPException(status_code=400, detail="Invalid redirect target")
     return RedirectResponse(url=url, status_code=302)
 
