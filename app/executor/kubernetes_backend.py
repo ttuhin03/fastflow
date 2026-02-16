@@ -242,8 +242,9 @@ async def run_container_task(
             name="cache",
             persistent_volume_claim=client.V1PersistentVolumeClaimVolumeSource(claim_name=pvc_name),
         )
+        # /app rw, damit Pipelines Ausgabedateien schreiben können
         mounts = [
-            client.V1VolumeMount(name="cache", mount_path="/app", sub_path=sub_path_run, read_only=True),
+            client.V1VolumeMount(name="cache", mount_path="/app", sub_path=sub_path_run, read_only=False),
             client.V1VolumeMount(name="cache", mount_path="/root/.cache/uv", sub_path="uv_cache", read_only=False),
             client.V1VolumeMount(name="cache", mount_path="/cache/uv_python", sub_path="uv_python", read_only=False),
         ]

@@ -591,8 +591,9 @@ async def _run_container_task(
         container_env = {**base_env, **env_vars}
         
         # Bei Notebook-Pipelines: Runner-Verzeichnis (app/runners) nach /runner mounten
+        # /app rw, damit Pipelines Ausgabedateien (z. B. generierte XML/CSV) schreiben können
         volumes_dict: Dict[str, Dict[str, str]] = {
-            pipeline_host_path: {"bind": "/app", "mode": "ro"},
+            pipeline_host_path: {"bind": "/app", "mode": "rw"},
             uv_cache_host_path: {"bind": "/root/.cache/uv", "mode": "rw"},
             uv_python_host_path: {"bind": "/cache/uv_python", "mode": "rw"},
         }
