@@ -282,6 +282,27 @@ async def readiness_check() -> JSONResponse:
         checks["disk"] = str(e)
         ok = False
 
+    # Inodes (df -i): oft voll bei vielen kleinen Dateien (Logs, Cache)
+    if hasattr(os, "statvfs"):
+        try:
+            st = os.statvfs(str(config.DATA_DIR))
+            inode_total = st.f_files
+            inode_free = getattr(st, "f_favail", st.f_ffree)
+            inode_used = inode_total - inode_free
+            checks["inode_total"] = inode_total
+            checks["inode_free"] = inode_free
+            inode_pct = (inode_used / inode_total * 100) if inode_total else 0
+            if inode_free < 1000 or inode_pct > 95:
+                checks["inodes"] = f"kritisch: nur {inode_free} Inodes frei ({inode_pct:.1f}% belegt)"
+                ok = False
+            else:
+                checks["inodes"] = "ok"
+        except Exception as e:
+            logger.warning("Readiness: Inode-Check fehlgeschlagen: %s", e)
+            checks["inodes"] = str(e)
+    else:
+        checks["inodes"] = "n/a (nur Unix)"
+
     if not ok:
         return JSONResponse(
             status_code=503,

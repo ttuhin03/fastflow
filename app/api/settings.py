@@ -352,6 +352,7 @@ async def get_storage_stats(
         - database_size_mb: Größe der Datenbank in MB (falls verfügbar)
         - database_size_gb: Größe der Datenbank in GB (falls verfügbar)
         - database_percentage: Anteil der Datenbank am Gesamtspeicherplatz in Prozent (falls verfügbar)
+        - inode_total, inode_free, inode_used, inode_used_percent: Inode-Statistik (nur Unix, df -i)
     """
     try:
         logs_dir = config.LOGS_DIR
@@ -394,7 +395,22 @@ async def get_storage_stats(
         except (OSError, PermissionError):
             # Kann nicht ermittelt werden
             pass
-        
+
+        # Inodes (df -i): oft Problem bei vielen kleinen Dateien
+        inode_total: Optional[int] = None
+        inode_free: Optional[int] = None
+        inode_used_percent: Optional[float] = None
+        if hasattr(os, "statvfs"):
+            try:
+                stat_path = str(logs_dir) if logs_dir.exists() else "/"
+                st = os.statvfs(stat_path)
+                inode_total = st.f_files
+                inode_free = getattr(st, "f_favail", st.f_ffree)
+                inode_used = inode_total - inode_free
+                inode_used_percent = (inode_used / inode_total * 100) if inode_total else None
+            except (OSError, PermissionError, AttributeError):
+                pass
+
         total_disk_space_gb = total_disk_space_bytes / (1024 * 1024 * 1024)
         used_disk_space_gb = used_disk_space_bytes / (1024 * 1024 * 1024)
         free_disk_space_gb = free_disk_space_bytes / (1024 * 1024 * 1024)
@@ -458,7 +474,13 @@ async def get_storage_stats(
             "free_disk_space_gb": round(free_disk_space_gb, 2),
             "log_files_percentage": round(log_files_percentage, 2),
         }
-        
+        if inode_total is not None and inode_free is not None:
+            result["inode_total"] = inode_total
+            result["inode_free"] = inode_free
+            result["inode_used"] = inode_total - inode_free
+            if inode_used_percent is not None:
+                result["inode_used_percent"] = round(inode_used_percent, 2)
+
         # Datenbank-Statistiken nur hinzufügen, wenn verfügbar
         if database_size_bytes > 0:
             result.update({

@@ -50,6 +50,24 @@
   color: #9c27b0;
 }
 
+.storage-stat-card .stat-icon.inode-icon {
+  background-color: rgba(76, 175, 80, 0.15);
+  color: #4caf50;
+}
+
+.storage-stat-card .stat-icon.inode-icon.inode-warn {
+  background-color: rgba(244, 67, 54, 0.15);
+  color: var(--color-error);
+}
+
+.disk-usage-fill.inode {
+  background: linear-gradient(90deg, #4caf50, #81c784);
+}
+
+.disk-usage-fill.inode.inode-warn {
+  background: linear-gradient(90deg, var(--color-warning), var(--color-error));
+}
+
 .storage-stat-card .stat-content {
   flex: 1;
   min-width: 0;

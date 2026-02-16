@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
-import { MdStorage, MdDescription, MdDataUsage, MdArchive } from 'react-icons/md'
+import { MdStorage, MdDescription, MdDataUsage, MdArchive, MdFolder } from 'react-icons/md'
 import './StorageStats.css'
 
 interface StorageStats {
@@ -15,6 +15,10 @@ interface StorageStats {
   database_size_mb?: number
   database_size_gb?: number
   database_percentage?: number
+  inode_total?: number
+  inode_free?: number
+  inode_used?: number
+  inode_used_percent?: number
 }
 
 export default function StorageStats() {
@@ -99,6 +103,31 @@ export default function StorageStats() {
             </p>
           </div>
         </div>
+
+        {stats.inode_total !== undefined && stats.inode_free !== undefined && (
+          <div className="storage-stat-card card">
+            <div className={`stat-icon inode-icon ${(stats.inode_used_percent ?? 0) > 90 ? 'inode-warn' : ''}`}>
+              <MdFolder />
+            </div>
+            <div className="stat-content">
+              <h4 className="stat-label">Inodes (df -i)</h4>
+              <p className={`stat-value percentage ${getPercentageColor(stats.inode_used_percent ?? 0)}`}>
+                {stats.inode_used_percent !== undefined ? `${stats.inode_used_percent.toFixed(1)}%` : '—'} belegt
+              </p>
+              <div className="disk-usage-bar">
+                <div
+                  className={`disk-usage-fill inode ${(stats.inode_used_percent ?? 0) > 90 ? 'inode-warn' : ''}`}
+                  style={{
+                    width: `${(stats.inode_used_percent ?? 0).toFixed(1)}%`,
+                  }}
+                />
+              </div>
+              <p className="stat-detail">
+                {stats.inode_free.toLocaleString()} frei von {stats.inode_total.toLocaleString()} Inodes
+              </p>
+            </div>
+          </div>
+        )}
 
         {stats.database_size_bytes !== undefined && stats.database_size_bytes > 0 && (
           <div className="storage-stat-card card">
