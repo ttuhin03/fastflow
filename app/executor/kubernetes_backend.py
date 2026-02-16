@@ -94,6 +94,51 @@ def _copy_pipeline_to_shared(pipeline: DiscoveredPipeline, run_id: UUID) -> Path
     return dest
 
 
+def _cleanup_shared_pipeline_run(run_id: UUID) -> None:
+    """Löscht das Pipeline-Run-Verzeichnis im shared Volume (nach Run-Ende, um Speicher freizugeben)."""
+    path = _shared_pipeline_run_path(run_id)
+    if not path.exists():
+        return
+    try:
+        shutil.rmtree(path, ignore_errors=True)
+        if path.exists():
+            logger.warning("Cleanup pipeline_runs/%s: Verzeichnis nicht vollständig gelöscht", run_id)
+        else:
+            logger.debug("Cleanup pipeline_runs/%s ok", run_id)
+    except Exception as e:
+        logger.warning("Cleanup pipeline_runs/%s fehlgeschlagen: %s", run_id, e)
+
+
+def cleanup_orphaned_shared_pipeline_runs(session: Session) -> int:
+    """
+    Löscht alle pipeline_runs/<run_id>-Verzeichnisse im shared Volume, deren Run
+    nicht mehr RUNNING ist (oder in der DB fehlt). Wird beim App-Start aufgerufen,
+    um nach Update bestehende alte Verzeichnisse zu bereinigen.
+    Returns: Anzahl gelöschter Verzeichnisse.
+    """
+    from app.models import PipelineRun, RunStatus
+
+    base = Path(app_config.KUBERNETES_SHARED_CACHE_MOUNT_PATH) / "pipeline_runs"
+    if not base.is_dir():
+        return 0
+    deleted = 0
+    for entry in base.iterdir():
+        if not entry.is_dir():
+            continue
+        try:
+            run_id = UUID(entry.name)
+        except ValueError:
+            logger.debug("Startup-Cleanup: ignoriere Nicht-UUID-Verzeichnis %s", entry.name)
+            continue
+        run = session.get(PipelineRun, run_id)
+        if run is None or run.status != RunStatus.RUNNING:
+            _cleanup_shared_pipeline_run(run_id)
+            deleted += 1
+    if deleted:
+        logger.info("Startup-Cleanup: %d alte pipeline_runs-Verzeichnisse gelöscht", deleted)
+    return deleted
+
+
 def _memory_to_quantity(mem_limit: str) -> str:
     """Konvertiert Memory-Limit (z. B. '512m', '1g') in K8s quantity."""
     s = (mem_limit or "").strip().lower()
@@ -438,6 +483,7 @@ async def run_container_task(
     finally:
         executor_core._log_queues.pop(run_id, None)
         executor_core._metrics_queues.pop(run_id, None)
+        _cleanup_shared_pipeline_run(run_id)
         try:
             next(session_gen)
         except StopIteration:
@@ -913,6 +959,7 @@ async def cancel_run(run_id: UUID, session: Session) -> bool:
                     run.finished_at = datetime.now(timezone.utc)
                     session.add(run)
                     session.commit()
+                _cleanup_shared_pipeline_run(run_id)
                 return True
     except ApiException as e:
         logger.warning("Job-Löschung für Run %s: %s", run_id, e)
@@ -968,6 +1015,7 @@ async def reconcile_zombie_jobs(session: Session) -> None:
                     logger.info("Orphaned Job %s (Run %s) gelöscht", job.metadata.name, run_id)
                 except ApiException:
                     pass
+                _cleanup_shared_pipeline_run(run_id)
                 continue
             if job.status.succeeded and job.status.succeeded > 0 and run.status == RunStatus.RUNNING:
                 run.status = RunStatus.SUCCESS
@@ -975,12 +1023,14 @@ async def reconcile_zombie_jobs(session: Session) -> None:
                 run.exit_code = 0
                 session.add(run)
                 session.commit()
+                _cleanup_shared_pipeline_run(run_id)
             elif job.status.failed and job.status.failed > 0 and run.status == RunStatus.RUNNING:
                 run.status = RunStatus.FAILED
                 run.finished_at = datetime.now(timezone.utc)
                 run.exit_code = -1
                 session.add(run)
                 session.commit()
+                _cleanup_shared_pipeline_run(run_id)
         logger.info("Kubernetes Zombie-Reconciliation abgeschlossen")
     except Exception as e:
         logger.error("Zombie-Reconciliation Fehler: %s", e, exc_info=True)
@@ -1013,6 +1063,7 @@ async def graceful_shutdown(session: Session) -> None:
             run.finished_at = datetime.now(timezone.utc)
             session.add(run)
             session.commit()
+            _cleanup_shared_pipeline_run(run.id)
         except Exception as e:
             logger.warning("Graceful Shutdown Run %s: %s", run.id, e)
     logger.info("Graceful Shutdown (Kubernetes) abgeschlossen: %s Runs", len(runs))

@@ -329,6 +329,19 @@ async def run_startup_tasks() -> None:
     if not config.TESTING:
         await _run_step("Zombie-Reconciliation", False, zombie_reconcile, "Zombie-Reconciliation abgeschlossen")
 
+    def k8s_cleanup_orphaned_pipeline_runs():
+        from app.core.database import get_session
+        from app.executor.kubernetes_backend import cleanup_orphaned_shared_pipeline_runs
+        session_gen = get_session()
+        session = next(session_gen)
+        try:
+            n = cleanup_orphaned_shared_pipeline_runs(session)
+            return f"Kubernetes pipeline_runs Startup-Cleanup: {n} alte Verzeichnisse gelöscht" if n else None
+        finally:
+            session.close()
+    if not config.TESTING and config.PIPELINE_EXECUTOR == "kubernetes":
+        await _run_step("Kubernetes pipeline_runs Startup-Cleanup", False, k8s_cleanup_orphaned_pipeline_runs, None)
+
     def start_sched():
         from app.services.scheduler import set_main_loop, start_scheduler
         set_main_loop(asyncio.get_running_loop())
