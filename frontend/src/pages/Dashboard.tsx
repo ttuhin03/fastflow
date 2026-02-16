@@ -1,20 +1,9 @@
-import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
 import { showError, showSuccess, showConfirm } from '../utils/toast'
-import { 
-  MdPlayArrow, 
-  MdInfo, 
-  MdCheckCircle, 
-  MdCancel, 
-  MdSync,
-  MdSchedule,
-  MdMemory,
-  MdViewList
-} from 'react-icons/md'
+import { MdCheckCircle, MdCancel, MdSync, MdSchedule, MdViewList } from 'react-icons/md'
 import Tooltip from '../components/Tooltip'
 import InfoIcon from '../components/InfoIcon'
 import RunStatusCircles from '../components/RunStatusCircles'
@@ -45,10 +34,8 @@ interface SyncStatus {
 }
 
 export default function Dashboard() {
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { isReadonly } = useAuth()
-  const [startingPipeline, setStartingPipeline] = useState<string | null>(null)
   const pipelinesInterval = useRefetchInterval(5000)
   const syncInterval = useRefetchInterval(10000)
   const dailyStatsInterval = useRefetchInterval(30000, 60000)
@@ -89,30 +76,6 @@ export default function Dashboard() {
     staleTime: 60_000,
   })
 
-  const startPipelineMutation = useMutation({
-    mutationFn: async (name: string) => {
-      const response = await apiClient.post(`/pipelines/${name}/run`, {
-        env_vars: {},
-        parameters: {},
-      })
-      return response.data
-    },
-    onSuccess: async (data) => {
-      queryClient.invalidateQueries({ queryKey: ['pipelines'] })
-      queryClient.invalidateQueries({ queryKey: ['runs'] })
-      queryClient.invalidateQueries({ queryKey: ['all-pipelines-daily-stats'] })
-      queryClient.invalidateQueries({ queryKey: ['pipeline-daily-stats'] })
-      // Force immediate refetch of daily stats with fresh data
-      await queryClient.refetchQueries({ queryKey: ['all-pipelines-daily-stats'], exact: false })
-      setStartingPipeline(null)
-      navigate(`/runs/${data.id}`)
-    },
-    onError: (error: any) => {
-      setStartingPipeline(null)
-      showError(`Fehler beim Starten der Pipeline: ${error.response?.data?.detail || error.message}`)
-    },
-  })
-
   const syncMutation = useMutation({
     mutationFn: async () => {
       const response = await apiClient.post('/sync', {})
@@ -129,12 +92,6 @@ export default function Dashboard() {
   })
 
 
-  const handleStartPipeline = (name: string) => {
-    if (startingPipeline) return
-    setStartingPipeline(name)
-    startPipelineMutation.mutate(name)
-  }
-
   const handleSync = async () => {
     if (syncMutation.isPending) return
     const confirmed = await showConfirm('Git-Sync ausführen? Dies kann einige Zeit dauern.')
@@ -150,11 +107,6 @@ export default function Dashboard() {
         <p>Laden...</p>
       </div>
     )
-  }
-
-  const successRate = (pipeline: Pipeline) => {
-    if (pipeline.total_runs === 0) return 0
-    return ((pipeline.successful_runs / pipeline.total_runs) * 100).toFixed(1)
   }
 
   const totalRuns = pipelines?.reduce((sum, p) => sum + p.total_runs, 0) || 0
@@ -246,89 +198,12 @@ export default function Dashboard() {
                     </span>
                   </Tooltip>
                 </div>
-                
-                {pipeline.metadata.description && (
-                  <p className="pipeline-description">{pipeline.metadata.description}</p>
-                )}
-                
-                <div className="pipeline-stats">
-                  <div className="stat-row">
-                    <span className="stat-label-small">Runs:</span>
-                    <span className="stat-value-small">{pipeline.total_runs}</span>
-                  </div>
-                  <div className="stat-row">
-                    <span className="stat-label-small success">Erfolgreich:</span>
-                    <span className="stat-value-small success">{pipeline.successful_runs}</span>
-                  </div>
-                  <div className="stat-row">
-                    <span className="stat-label-small error">Fehlgeschlagen:</span>
-                    <span className="stat-value-small error">{pipeline.failed_runs}</span>
-                  </div>
-                  {pipeline.total_runs > 0 && (
-                    <div className="stat-row">
-                      <span className="stat-label-small">Erfolgsrate:</span>
-                      <span className="stat-value-small">{successRate(pipeline)}%</span>
-                    </div>
-                  )}
-                </div>
-                
-                {pipeline.metadata.cpu_hard_limit && (
-                  <Tooltip content="Hard Limits für diese Pipeline">
-                    <div className="resource-limits">
-                      <div className="resource-item">
-                        <MdMemory />
-                        <span>CPU: {pipeline.metadata.cpu_hard_limit}</span>
-                      </div>
-                      {pipeline.metadata.mem_hard_limit && (
-                        <div className="resource-item">
-                          <MdMemory />
-                          <span>RAM: {pipeline.metadata.mem_hard_limit}</span>
-                        </div>
-                      )}
-                    </div>
-                  </Tooltip>
-                )}
-                
-                <div className="pipeline-badges">
-                  {pipeline.has_requirements && (
-                    <Tooltip content="Pipeline hat eigene Python-Dependencies">
-                      <span className="badge badge-info">requirements.txt</span>
-                    </Tooltip>
-                  )}
-                  {pipeline.last_cache_warmup && (
-                    <Tooltip content="Pipeline wurde vorab geladen (pre-heated) für schnellere Ausführung">
-                      <span className="badge badge-success">Cached</span>
-                    </Tooltip>
-                  )}
-                </div>
-
                 <div className="pipeline-recent-runs">
                   <span className="recent-runs-label">
                     Letzte Runs:
                     <InfoIcon content="Zeigt die Status der letzten Runs (grün=erfolgreich, rot=fehlgeschlagen, gelb=läuft)" />
                   </span>
                   <RunStatusCircles pipelineName={pipeline.name} />
-                </div>
-
-                
-                <div className="pipeline-actions">
-                  {!isReadonly && (
-                    <button
-                      onClick={() => handleStartPipeline(pipeline.name)}
-                      disabled={!pipeline.enabled || startingPipeline === pipeline.name}
-                      className="btn btn-success start-button"
-                    >
-                      <MdPlayArrow />
-                      {startingPipeline === pipeline.name ? 'Startet...' : 'Starten'}
-                    </button>
-                  )}
-                  <button
-                    onClick={() => navigate(`/pipelines/${pipeline.name}`)}
-                    className="btn btn-outlined details-button"
-                  >
-                    <MdInfo />
-                    Details
-                  </button>
                 </div>
               </div>
             ))}

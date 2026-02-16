@@ -5,9 +5,8 @@ import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import { showError } from '../utils/toast'
-import { MdInfo, MdMemory, MdPlayArrow, MdSchedule, MdLock, MdExtension, MdAccountTree } from 'react-icons/md'
+import { MdInfo, MdPlayArrow, MdSchedule, MdLock, MdExtension, MdAccountTree } from 'react-icons/md'
 import RunStatusCircles from '../components/RunStatusCircles'
-import ProgressBar from '../components/ProgressBar'
 import Skeleton from '../components/Skeleton'
 import Runs from './Runs'
 import Scheduler from './Scheduler'
@@ -106,11 +105,6 @@ export default function Pipelines() {
     startPipelineMutation.mutate(name)
   }
 
-  const successRate = (pipeline: Pipeline): number => {
-    if (pipeline.total_runs === 0) return 0
-    return parseFloat(((pipeline.successful_runs / pipeline.total_runs) * 100).toFixed(1))
-  }
-
   const renderNav = () => (
     <nav className="pipelines-nav" role="tablist" aria-label="Pipelines-Bereiche">
       <div ref={trayRef} className="pipelines-nav-tray">
@@ -189,16 +183,11 @@ export default function Pipelines() {
           <div className="pipelines">
             <div className="pipelines-grid">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="pipeline-card card">
+                <div key={i} className="pipeline-card card pipeline-card-compact">
                   <div className="pipeline-header">
                     <Skeleton width="60%" height="24px" />
                     <Skeleton width="60px" height="24px" variant="rectangular" />
                   </div>
-                  <Skeleton width="100%" height="16px" />
-                  <div className="pipeline-stats">
-                    <Skeleton width="100%" height="40px" />
-                  </div>
-                  <Skeleton width="100%" height="8px" />
                   <Skeleton width="100%" height="28px" />
                   <div className="pipeline-actions">
                     <Skeleton width="50%" height="36px" />
@@ -221,97 +210,31 @@ export default function Pipelines() {
       {pipelines && pipelines.length > 0 ? (
         <div className="pipelines-grid">
           {pipelines.map((pipeline, index) => (
-            <div key={pipeline.name} className="pipeline-card card" style={{ animationDelay: `${index * 0.04}s` }}>
+            <div key={pipeline.name} className="pipeline-card card pipeline-card-compact" style={{ animationDelay: `${index * 0.04}s` }}>
               <div className="pipeline-header">
                 <h3 className="pipeline-name">{pipeline.name}</h3>
                 <span className={`badge ${pipeline.enabled ? 'badge-success' : 'badge-secondary'}`}>
                   {pipeline.enabled ? 'Aktiv' : 'Inaktiv'}
                 </span>
               </div>
-
-              {pipeline.metadata.description && (
-                <p className="pipeline-description">{pipeline.metadata.description}</p>
-              )}
-
-              <div className="pipeline-stats">
-                <div className="stat-item">
-                  <span className="stat-label">Runs:</span>
-                  <span className="stat-value">{pipeline.total_runs}</span>
-                </div>
-                <div className="stat-item">
-                  <span className="stat-label success">Erfolgreich:</span>
-                  <span className="stat-value success">{pipeline.successful_runs}</span>
-                </div>
-                <div className="stat-item">
-                  <span className="stat-label error">Fehlgeschlagen:</span>
-                  <span className="stat-value error">{pipeline.failed_runs}</span>
-                </div>
-              </div>
-
-              {pipeline.total_runs > 0 && (
-                <div className="pipeline-success-rate">
-                  <ProgressBar value={successRate(pipeline)} />
-                </div>
-              )}
-
               <div className="pipeline-recent-runs">
                 <span className="recent-runs-label">Letzte Runs:</span>
                 <RunStatusCircles pipelineName={pipeline.name} />
               </div>
-
-              {pipeline.metadata.cpu_hard_limit && (
-                <div className="resource-limits">
-                  <div className="limit-item">
-                    <MdMemory />
-                    <div>
-                      <span className="limit-label">CPU:</span>
-                      <span className="limit-value">{pipeline.metadata.cpu_hard_limit}</span>
-                    </div>
-                  </div>
-                  {pipeline.metadata.mem_hard_limit && (
-                    <div className="limit-item">
-                      <MdMemory />
-                      <div>
-                        <span className="limit-label">RAM:</span>
-                        <span className="limit-value">{pipeline.metadata.mem_hard_limit}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="pipeline-badges">
-                {pipeline.has_requirements && (
-                  <span className="badge badge-info">requirements.txt</span>
-                )}
-                {pipeline.last_cache_warmup && (
-                  <span className="badge badge-success">Cached</span>
-                )}
-                {pipeline.metadata.tags && pipeline.metadata.tags.length > 0 && (
-                  <>
-                    {pipeline.metadata.tags.map((tag) => (
-                      <span key={tag} className="badge badge-secondary">
-                        {tag}
-                      </span>
-                    ))}
-                  </>
-                )}
-              </div>
-
               <div className="pipeline-actions">
                 {!isReadonly && (
                   <button
                     onClick={() => handleStartPipeline(pipeline.name)}
-                    className="btn btn-primary"
+                    className="btn btn-success start-button"
                     disabled={!pipeline.enabled || startingPipeline === pipeline.name}
                   >
                     <MdPlayArrow />
-                    Starten
+                    {startingPipeline === pipeline.name ? 'Startet...' : 'Starten'}
                   </button>
                 )}
                 <button
                   onClick={() => navigate(`/pipelines/${pipeline.name}`)}
-                  className="btn btn-outline"
+                  className="btn btn-outlined details-button"
                 >
                   <MdInfo />
                   Details

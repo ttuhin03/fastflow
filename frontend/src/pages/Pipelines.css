@@ -137,8 +137,8 @@
 
 .pipelines-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: var(--spacing-lg);
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--spacing-md);
 }
 
 .pipeline-card {
@@ -148,6 +148,19 @@
   padding: var(--spacing-lg);
   transition: transform var(--transition-base), box-shadow var(--transition-base);
   animation: fade-in 0.35s ease-out both;
+}
+
+.pipeline-card-compact {
+  padding: var(--spacing-md);
+  gap: var(--spacing-sm);
+}
+
+.pipeline-card-compact .pipeline-name {
+  font-size: var(--font-size-base);
+}
+
+.pipeline-card-compact .pipeline-recent-runs {
+  padding: var(--spacing-xs) var(--spacing-sm);
 }
 
 .pipeline-card:hover {
@@ -291,14 +304,19 @@
 
 .pipeline-actions {
   display: flex;
-  gap: var(--spacing-sm);
-  margin-top: var(--spacing-md);
+  gap: var(--spacing-xs);
+  margin-top: 0;
   flex-wrap: wrap;
 }
 
+.pipeline-card-compact .pipeline-actions {
+  margin-top: var(--spacing-xs);
+}
+
+.start-button,
 .details-button {
   flex: 1;
-  min-width: 120px;
+  min-width: 100px;
   display: flex;
   align-items: center;
   justify-content: center;
