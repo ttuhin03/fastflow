@@ -4,8 +4,12 @@ import { getApiBaseUrl } from '../config'
 
 const LOGIN_PATH = import.meta.env.VITE_LOGIN_PATH || '/login'
 
+/** Timeout für normale API-Requests (SSE/Streams nutzen fetch() und sind davon ausgenommen). */
+const API_REQUEST_TIMEOUT_MS = 30_000
+
 export const apiClient: AxiosInstance = axios.create({
   baseURL: getApiBaseUrl(),
+  timeout: API_REQUEST_TIMEOUT_MS,
   headers: {
     'Content-Type': 'application/json',
   },
