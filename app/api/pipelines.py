@@ -307,7 +307,10 @@ async def get_pipelines_dependencies(
     if not pipelines:
         return []
 
-    packages_list = [deps_module.get_pipeline_packages(p.name) for p in pipelines]
+    # Async: get_pipeline_packages ist sync (Disk I/O) – nicht den Event-Loop blockieren
+    packages_list = await asyncio.gather(
+        *[asyncio.to_thread(deps_module.get_pipeline_packages, p.name) for p in pipelines]
+    )
     result: List[Dict[str, Any]] = []
 
     if audit:

@@ -277,18 +277,30 @@ async def stream_run_logs(
         import json
         
         try:
-            # SCHRITT 1: Lese alle bereits vorhandenen Logs aus der Queue
-            # (falls Logs bereits geschrieben wurden, bevor SSE-Stream verbunden hat)
+            # SCHRITT 1: Lese bereits vorhandene Logs aus der Queue (max. LOG_STREAM_PENDING_MAX_LINES)
+            # Verhindert OOM bei spätem Connect und großer Queue
             pending_logs = []
+            skipped_count = 0
+            max_pending = config.LOG_STREAM_PENDING_MAX_LINES
             try:
-                while True:
-                    # Versuche Log ohne Warten zu holen
+                while len(pending_logs) < max_pending:
                     log_line = log_queue.get_nowait()
                     pending_logs.append(log_line)
+                # Weitere Zeilen verwerfen (Queue leeren, um Platz für neue zu machen)
+                while True:
+                    log_queue.get_nowait()
+                    skipped_count += 1
             except asyncio.QueueEmpty:
-                # Queue ist leer, weiter mit normalem Streaming
                 pass
-            
+
+            if skipped_count > 0:
+                # Hinweis an Frontend: ältere Zeilen übersprungen
+                skip_data = json.dumps({
+                    "skipped": skipped_count,
+                    "message": f"{skipped_count} ältere Log-Zeilen übersprungen (max. {max_pending}). Log-Datei enthält alle Zeilen.",
+                })
+                yield f"data: {skip_data}\n\n"
+
             # Sende alle vorhandenen Logs (mit Rate-Limiting)
             for log_line in pending_logs:
                 # Rate-Limiting

@@ -149,11 +149,11 @@ class Config:
     Dependencies nicht bei jedem Run neu herunterladen zu müssen.
     """
     
-    PIPELINE_CACHE_TTL_SECONDS: int = int(os.getenv("PIPELINE_CACHE_TTL_SECONDS", "60"))
+    PIPELINE_CACHE_TTL_SECONDS: int = int(os.getenv("PIPELINE_CACHE_TTL_SECONDS", "120"))
     """
     TTL für Pipeline-Discovery-Cache in Sekunden.
     Nach Ablauf wird beim nächsten Aufruf neu gescannt. Git-Sync invalidiert sofort.
-    Standard: 60.
+    Standard: 120 (Produktion: weniger häufig Filesystem-Scans).
     """
 
     UV_PRE_HEAT: bool = os.getenv("UV_PRE_HEAT", "true").lower() == "true"
@@ -311,7 +311,15 @@ class Config:
     Alle Logs werden in Datei geschrieben (vollständig), SSE-Streaming
     ist rate-limited.
     """
+
+    LOG_STREAM_PENDING_MAX_LINES: int = int(os.getenv("LOG_STREAM_PENDING_MAX_LINES", "10000"))
+    """
+    Maximale Anzahl Log-Zeilen, die beim SSE-Connect aus der Queue gelesen werden.
     
+    Verhindert OOM, wenn der Client spät verbindet und die Queue bereits
+    viele Zeilen enthält. Ältere Zeilen werden übersprungen.
+    """
+
     # Log-Backup (S3/MinIO)
     S3_BACKUP_ENABLED: bool = os.getenv("S3_BACKUP_ENABLED", "false").lower() == "true"
     """
@@ -564,11 +572,11 @@ class Config:
     MAX_REQUEST_BODY_MB: Optional[int] = (
         int(os.getenv("MAX_REQUEST_BODY_MB"))
         if os.getenv("MAX_REQUEST_BODY_MB")
-        else None
+        else (10 if os.getenv("ENVIRONMENT", "development").lower() == "production" else None)
     )
     """
     Maximale Request-Body-Größe in MB. Überschreitende Requests erhalten 413.
-    None = unbegrenzt. Empfohlen in Produktion z.B. 10.
+    In Produktion Standard: 10 MB (Schutz vor großen Bodies). Development: unbegrenzt.
     """
 
     PROXY_HEADERS_TRUSTED: bool = (

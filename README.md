@@ -325,7 +325,7 @@ Während Airflow eine Postgres-DB, einen Redis-Broker, einen Scheduler, einen We
 
 - **Backend**: FastAPI (Python 3.11+)
 - **Frontend**: React + TypeScript (Vite)
-- **Database**: SQLModel (SQLite/PostgreSQL)
+- **Database**: SQLModel (SQLite/PostgreSQL) – *Produktion: [PostgreSQL empfohlen](docs/docs/deployment/PRODUCTION.md#datenbank-postgresql-für-produktion)*
 - **Execution**: Docker Engine API + uv
 - **Security**: Docker Socket Proxy (tecnativa/docker-socket-proxy) für sichere Docker-API-Zugriffe
 - **Scheduling**: APScheduler (Persistent)

@@ -15,6 +15,19 @@ Vor dem Go-Live sicherstellen:
 - [ ] **JWT Key setzen**: Einen langen, zufälligen `JWT_SECRET_KEY` setzen.
 - [ ] **Encryption Key setzen**: `ENCRYPTION_KEY` sicher generieren und speichern.
 - [ ] **Environment**: Setze `ENVIRONMENT=production` in der `.env`.
+- [ ] **PostgreSQL für Produktion** (siehe Abschnitt Datenbank).
+
+## Datenbank: PostgreSQL für Produktion
+
+**Für den Enterprise-Einsatz wird PostgreSQL dringend empfohlen.** SQLite eignet sich für lokale Entwicklung und sehr kleine Einzelplatz-Setups, ist aber für produktiven Mehrnutzer-Betrieb nicht geeignet:
+
+| Aspekt | SQLite | PostgreSQL |
+|--------|--------|------------|
+| **Concurrency** | Ein Writer, "database is locked" bei Last | Echte parallele Schreibzugriffe |
+| **Skalierung** | Begrenzt | Skalierbar |
+| **Enterprise-Tauglichkeit** | Entwicklung/Prototyping | Produktion, Multi-User |
+
+**Setup:** Setze `DATABASE_URL=postgresql://user:password@host:5432/fastflow` in der `.env` (oder als Secret in Kubernetes). Der Orchestrator verwendet dann automatisch PostgreSQL inklusive Connection-Pool.
 
 ## Reverse Proxy Setup (Nginx)
 
