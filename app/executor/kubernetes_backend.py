@@ -434,7 +434,10 @@ async def run_container_task(
             except Exception:
                 pass
 
-        await executor_core._update_pipeline_stats(pipeline.name, exit_code_value == 0, session, triggered_by=run.triggered_by)
+        await executor_core._update_pipeline_stats(
+            pipeline.name, exit_code_value == 0, session, triggered_by=run.triggered_by,
+            run_date=run.started_at.date() if run.started_at else None,
+        )
         if exit_code_value == 0:
             await executor_core._trigger_downstream_pipelines(pipeline.name, success=True, session=session)
 
@@ -479,7 +482,10 @@ async def run_container_task(
             run.env_vars["_fastflow_error_message"] = str(e)
             session.add(run)
             session.commit()
-            await executor_core._update_pipeline_stats(run.pipeline_name, False, session, triggered_by=run.triggered_by)
+            await executor_core._update_pipeline_stats(
+                run.pipeline_name, False, session, triggered_by=run.triggered_by,
+                run_date=run.started_at.date() if run.started_at else None,
+            )
     finally:
         executor_core._log_queues.pop(run_id, None)
         executor_core._metrics_queues.pop(run_id, None)

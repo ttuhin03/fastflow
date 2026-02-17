@@ -17,10 +17,10 @@ import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import JSONResponse
 from sqlmodel import Session, select, func, text
-from sqlalchemy import case
+from sqlalchemy import case, delete
 
 from app.core.database import get_session
-from app.models import DownstreamTrigger, Pipeline, PipelineRun, RunStatus, User
+from app.models import DownstreamTrigger, Pipeline, PipelineDailyStat, PipelineRun, RunStatus, User
 from app.executor import run_pipeline
 from app.services.pipeline_discovery import discover_pipelines, get_pipeline as get_discovered_pipeline
 from app.auth import require_write, get_current_user
@@ -138,32 +138,58 @@ def _get_daily_stats_from_db(
     include_run_ids: bool = False,
 ) -> List[DailyStat]:
     """
-    Tägliche Statistiken per SQL-Aggregation (DB-Ebene statt In-Memory).
-    Vermeidet das Laden aller Run-Objekte bei vielen Runs.
+    Tägliche Statistiken aus persistenter Tabelle PipelineDailyStat (überleben Log/Run-Cleanup).
+    run_ids optional aus PipelineRun (nur für noch vorhandene Runs).
     """
-    date_expr = func.date(PipelineRun.started_at)
-    success_case = case((PipelineRun.status == RunStatus.SUCCESS, 1), else_=0)
-    failed_case = case((PipelineRun.status == RunStatus.FAILED, 1), else_=0)
+    start_date = start_dt.date()
+    end_date = end_dt.date()
 
-    stmt = (
-        select(
-            date_expr.label("date"),
-            func.count(PipelineRun.id).label("total"),
-            func.sum(success_case).label("successful"),
-            func.sum(failed_case).label("failed"),
-        )
-        .where(PipelineRun.started_at >= start_dt)
-        .where(PipelineRun.started_at <= end_dt)
-    )
     if pipeline_name is not None:
-        stmt = stmt.where(PipelineRun.pipeline_name == pipeline_name)
-    stmt = stmt.group_by(date_expr).order_by(date_expr)
+        stmt = (
+            select(PipelineDailyStat)
+            .where(PipelineDailyStat.pipeline_name == pipeline_name)
+            .where(PipelineDailyStat.day >= start_date)
+            .where(PipelineDailyStat.day <= end_date)
+            .order_by(PipelineDailyStat.day)
+        )
+        rows = session.exec(stmt).all()
+        # Ein Zeile pro Tag
+        by_date: Dict[str, Any] = {}
+        for r in rows:
+            date_str = r.day.isoformat()
+            by_date[date_str] = {
+                "total": r.total_runs,
+                "successful": r.successful_runs,
+                "failed": r.failed_runs,
+            }
+    else:
+        # Alle Pipelines: pro Datum summieren
+        stmt = (
+            select(
+                PipelineDailyStat.day,
+                func.sum(PipelineDailyStat.total_runs).label("total"),
+                func.sum(PipelineDailyStat.successful_runs).label("successful"),
+                func.sum(PipelineDailyStat.failed_runs).label("failed"),
+            )
+            .where(PipelineDailyStat.day >= start_date)
+            .where(PipelineDailyStat.day <= end_date)
+            .group_by(PipelineDailyStat.day)
+            .order_by(PipelineDailyStat.day)
+        )
+        rows = session.exec(stmt).all()
+        by_date = {}
+        for row in rows:
+            date_str = row.day.isoformat() if hasattr(row.day, "isoformat") else str(row.day)[:10]
+            by_date[date_str] = {
+                "total": int(row.total or 0),
+                "successful": int(row.successful or 0),
+                "failed": int(row.failed or 0),
+            }
 
-    rows = session.exec(stmt).all()
-    result: List[DailyStat] = []
+    # run_ids (best-effort) aus noch vorhandenen PipelineRuns
     run_ids_by_date: Dict[str, List[str]] = {}
-
     if include_run_ids:
+        date_expr = func.date(PipelineRun.started_at)
         ids_stmt = (
             select(date_expr.label("date"), PipelineRun.id)
             .where(PipelineRun.started_at >= start_dt)
@@ -180,20 +206,20 @@ def _get_daily_stats_from_db(
             if len(run_ids_by_date[date_str]) < 10:
                 run_ids_by_date[date_str].append(str(row.id))
 
-    for row in rows:
-        d = row.date
-        date_str = d.isoformat()[:10] if hasattr(d, "isoformat") else str(d)[:10]
-        total = row.total or 0
-        successful = row.successful or 0
-        failed = row.failed or 0
+    result: List[DailyStat] = []
+    for date_str in sorted(by_date.keys()):
+        d = by_date[date_str]
+        total = d["total"]
+        successful = d["successful"]
+        failed = d["failed"]
         success_rate = (successful / total * 100.0) if total > 0 else 0.0
         run_ids = (run_ids_by_date.get(date_str, [])[:10] or None) if include_run_ids else None
         result.append(
             DailyStat(
                 date=date_str,
                 total_runs=total,
-                successful_runs=int(successful),
-                failed_runs=int(failed),
+                successful_runs=successful,
+                failed_runs=failed,
                 success_rate=success_rate,
                 run_ids=run_ids,
             )
@@ -559,6 +585,9 @@ async def reset_pipeline_stats(
     pipeline.successful_runs = 0
     pipeline.failed_runs = 0
     pipeline.webhook_runs = 0
+
+    # Persistente Daily-Stats für diese Pipeline löschen (Kalender konsistent mit Total)
+    session.exec(delete(PipelineDailyStat).where(PipelineDailyStat.pipeline_name == name))
     
     session.add(pipeline)
     session.commit()

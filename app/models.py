@@ -10,7 +10,7 @@ Dieses Modul definiert alle SQLModel-Models für die Datenbank:
 - Session (Session-Tokens für persistente Authentifizierung)
 """
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from enum import Enum
 from typing import Optional, Dict, Any
 from uuid import UUID, uuid4
@@ -89,6 +89,20 @@ class Pipeline(SQLModel, table=True):
         default=0,
         description="Anzahl webhook-getriggerter Runs (resetbar)"
     )
+
+
+class PipelineDailyStat(SQLModel, table=True):
+    """
+    Tägliche Run-Statistiken pro Pipeline (persistent, wird beim Cleanup nicht gelöscht).
+    Wird beim Run-Ende erhöht; Kalender liest daraus, sodass Anzahlen nach Flush erhalten bleiben.
+    """
+    __tablename__ = "pipeline_daily_stats"
+
+    pipeline_name: str = Field(foreign_key="pipelines.pipeline_name", primary_key=True)
+    day: date = Field(primary_key=True, description="Kalendertag (UTC)")
+    total_runs: int = Field(default=0)
+    successful_runs: int = Field(default=0)
+    failed_runs: int = Field(default=0)
 
 
 class PipelineRun(SQLModel, table=True):

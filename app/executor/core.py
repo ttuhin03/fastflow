@@ -27,7 +27,7 @@ import json
 import logging
 import os
 import time
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Dict, Optional, List, Any, AsyncGenerator
 from uuid import UUID
@@ -41,7 +41,7 @@ from app.analytics import track_pipeline_run_finished, track_pipeline_run_starte
 from app.core.config import config
 from app.metrics_prometheus import track_run_started, track_run_finished
 from app.resilience import circuit_docker, CircuitBreakerOpenError
-from app.models import Pipeline, PipelineRun, RunStatus, RunCellLog
+from app.models import Pipeline, PipelineDailyStat, PipelineRun, RunStatus, RunCellLog
 from app.services.pipeline_discovery import DiscoveredPipeline, get_pipeline
 from app.services.downstream_triggers import get_downstream_pipelines_to_trigger
 from app.resilience.retry_strategy import wait_for_retry
@@ -876,7 +876,10 @@ async def _run_container_task(
                 logger.debug(f"Prometheus track_run_finished fehlgeschlagen: {e}")
         
         # Pipeline-Statistiken aktualisieren (atomar)
-        await _update_pipeline_stats(pipeline.name, exit_code_value == 0, session, triggered_by=run.triggered_by)
+        await _update_pipeline_stats(
+            pipeline.name, exit_code_value == 0, session, triggered_by=run.triggered_by,
+            run_date=run.started_at.date() if run.started_at else None,
+        )
 
         # Downstream-Trigger bei Erfolg (Pipeline-Chaining)
         if exit_code_value == 0:
@@ -1000,8 +1003,11 @@ async def _run_container_task(
                 logger.debug(f"Prometheus track_run_finished fehlgeschlagen: {prom_err}")
             
             # Pipeline-Statistiken aktualisieren (Fehler)
-            await _update_pipeline_stats(run.pipeline_name, False, session, triggered_by=run.triggered_by)
-            
+            await _update_pipeline_stats(
+                run.pipeline_name, False, session, triggered_by=run.triggered_by,
+                run_date=run.started_at.date() if run.started_at else None,
+            )
+
             # Retry-Logik auch für Exceptions (nur für Script-Pipelines; Notebooks haben Zellen-Retry im selben Run)
             if run:
                 pipeline = get_pipeline(run.pipeline_name)
@@ -1802,16 +1808,18 @@ async def _update_pipeline_stats(
     pipeline_name: str,
     success: bool,
     session: Session,
-    triggered_by: Optional[str] = None
+    triggered_by: Optional[str] = None,
+    run_date: Optional[date] = None,
 ) -> None:
     """
-    Aktualisiert Pipeline-Statistiken (atomar).
+    Aktualisiert Pipeline-Statistiken (atomar) und ggf. tägliche Zähler für den Kalender.
     
     Args:
         pipeline_name: Name der Pipeline
         success: True wenn Run erfolgreich war, sonst False
         session: SQLModel Session
         triggered_by: Trigger-Quelle ("manual", "webhook", oder "scheduler")
+        run_date: Datum des Runs (für persistente Daily-Stats; Kalender bleibt nach Cleanup erhalten)
     """
     try:
         # Atomare Updates (verhindert Race-Conditions)
@@ -1835,7 +1843,26 @@ async def _update_pipeline_stats(
                 .values(**update_values)
             )
             session.execute(stmt)
-            session.commit()
+
+        # Persistente Daily-Stats (Kalender bleibt nach Log/Run-Cleanup erhalten)
+        if run_date is not None:
+            daily = session.get(PipelineDailyStat, (pipeline_name, run_date))
+            if daily:
+                daily.total_runs += 1
+                daily.successful_runs += 1 if success else 0
+                daily.failed_runs += 0 if success else 1
+                session.add(daily)
+            else:
+                session.add(
+                    PipelineDailyStat(
+                        pipeline_name=pipeline_name,
+                        day=run_date,
+                        total_runs=1,
+                        successful_runs=1 if success else 0,
+                        failed_runs=0 if success else 1,
+                    )
+                )
+        session.commit()
     except Exception as e:
         logger.error(f"Fehler beim Aktualisieren der Pipeline-Statistiken für {pipeline_name}: {e}")
 
@@ -2072,8 +2099,11 @@ async def reconcile_zombie_containers(session: Session) -> None:
                     session.commit()
                     
                     # Pipeline-Statistiken aktualisieren
-                    await _update_pipeline_stats(run.pipeline_name, exit_code == 0, session, triggered_by=run.triggered_by)
-                    
+                    await _update_pipeline_stats(
+                        run.pipeline_name, exit_code == 0, session, triggered_by=run.triggered_by,
+                        run_date=run.started_at.date() if run.started_at else None,
+                    )
+
                     # Container entfernen
                     try:
                         await asyncio.get_running_loop().run_in_executor(
@@ -2180,8 +2210,10 @@ async def _re_attach_container(
             session.commit()
         
         # Pipeline-Statistiken aktualisieren
-        await _update_pipeline_stats(run.pipeline_name, exit_code_value == 0, session, triggered_by=run.triggered_by)
-        
+        await _update_pipeline_stats(
+            run.pipeline_name, exit_code_value == 0, session, triggered_by=run.triggered_by,
+            run_date=run.started_at.date() if run.started_at else None,
+        )
         # Container entfernen
         try:
             await asyncio.get_running_loop().run_in_executor(
