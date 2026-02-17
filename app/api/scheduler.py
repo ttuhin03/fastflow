@@ -3,7 +3,7 @@ Scheduler API Endpoints.
 
 Dieses Modul enthält alle REST-API-Endpoints für Scheduler-Management:
 - Jobs auflisten
-- Job aktualisieren/löschen (Erstellen nur via pipeline.json)
+- Job aktualisieren (Erstellen/Löschen nur via pipeline.json)
 
 Schedules werden aus pipeline.json (schedule_cron, schedule_interval_seconds etc.) synchronisiert.
 Bearbeitung erfolgt über den GitHub-Link der pipeline.json.
@@ -20,7 +20,6 @@ from app.models import ScheduledJob, TriggerType, User
 from app.git_sync import get_pipeline_json_github_url
 from app.services.scheduler import (
     update_job,
-    delete_job,
     get_all_jobs,
     get_job,
     get_job_details,
@@ -285,33 +284,3 @@ async def get_job_runs(
         })
     
     return runs_response
-
-
-@router.delete("/jobs/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_job_by_id(
-    job_id: UUID,
-    current_user = Depends(require_write),
-    session: Session = Depends(get_session)
-) -> None:
-    """
-    Löscht einen Job.
-    
-    Args:
-        job_id: Job-ID
-        session: SQLModel Session
-    
-    Raises:
-        HTTPException: Wenn Job nicht gefunden ist
-    """
-    try:
-        delete_job(job_id, session)
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Fehler beim Löschen des Jobs: {str(e)}"
-        )

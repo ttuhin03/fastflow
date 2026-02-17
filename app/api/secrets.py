@@ -8,6 +8,7 @@ Dieses Modul enthält REST-API-Endpoints für Secrets:
 Anlegen/Aktualisieren/Löschen von Secrets erfolgt manuell (z. B. Datenbank oder Konfiguration).
 """
 
+import asyncio
 from typing import List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
@@ -16,6 +17,7 @@ from pydantic import BaseModel, Field
 from app.core.database import get_session
 from app.models import Secret, User
 from app.services.secrets import encrypt, decrypt
+from app.services.pipeline_discovery import discover_pipelines
 from app.auth import require_write, get_current_user
 from app.core.errors import get_500_detail
 
@@ -116,3 +118,56 @@ async def get_secrets(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=get_500_detail(e),
         ) from e
+
+
+@router.get("/from-pipelines", response_model=List[Dict[str, Any]])
+async def get_secrets_from_pipelines(
+    current_user: User = Depends(get_current_user),
+) -> List[Dict[str, Any]]:
+    """
+    Gibt alle Env-Keys zurück, die in pipeline.json (encrypted_env, default_env)
+    der Pipelines definiert sind. Keine Werte – nur Key, Pipeline und Quelle.
+    Damit die UI anzeigen kann, welche „Secrets“ die Pipelines nutzen, auch wenn
+    sie nicht in der Datenbank stehen.
+    """
+    result: List[Dict[str, Any]] = []
+    discovered = await asyncio.to_thread(discover_pipelines)
+    for p in discovered:
+        meta = p.metadata
+        # Pipeline-Level: default_env
+        default_env = getattr(meta, "default_env", None) or {}
+        for key in default_env:
+            result.append({
+                "key": key,
+                "pipeline": p.name,
+                "source": "default_env",
+                "run_config_id": None,
+            })
+        # Pipeline-Level: encrypted_env
+        encrypted_env = getattr(meta, "encrypted_env", None) or {}
+        for key in encrypted_env:
+            result.append({
+                "key": key,
+                "pipeline": p.name,
+                "source": "encrypted_env",
+                "run_config_id": None,
+            })
+        # Schedules: default_env und encrypted_env pro run_config
+        schedules = getattr(meta, "schedules", None) or []
+        for s in schedules:
+            rcid = s.get("id")
+            for key in (s.get("default_env") or {}):
+                result.append({
+                    "key": key,
+                    "pipeline": p.name,
+                    "source": "default_env",
+                    "run_config_id": rcid,
+                })
+            for key in (s.get("encrypted_env") or {}):
+                result.append({
+                    "key": key,
+                    "pipeline": p.name,
+                    "source": "encrypted_env",
+                    "run_config_id": rcid,
+                })
+    return result

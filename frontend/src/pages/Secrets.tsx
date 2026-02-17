@@ -14,6 +14,13 @@ interface Secret {
   updated_at: string
 }
 
+interface SecretFromPipeline {
+  key: string
+  pipeline: string
+  source: 'encrypted_env' | 'default_env'
+  run_config_id: string | null
+}
+
 export default function Secrets() {
   const { isReadonly } = useAuth()
   const [showValues, setShowValues] = useState<Record<string, boolean>>({})
@@ -24,6 +31,14 @@ export default function Secrets() {
     queryKey: ['secrets'],
     queryFn: async () => {
       const response = await apiClient.get('/secrets')
+      return response.data
+    },
+  })
+
+  const { data: fromPipelines } = useQuery<SecretFromPipeline[]>({
+    queryKey: ['secrets-from-pipelines'],
+    queryFn: async () => {
+      const response = await apiClient.get('/secrets/from-pipelines')
       return response.data
     },
   })
@@ -66,7 +81,7 @@ export default function Secrets() {
         <h2>Secrets & Parameter</h2>
       </div>
       <p className="secrets-readonly-hint">
-        Secrets und Parameter werden manuell in der Konfiguration (z. B. pipeline.json <code>encrypted_env</code> oder Datenbank) gepflegt. Hier nur Anzeige und „Für pipeline.json verschlüsseln“.
+        Secrets kommen aus der Datenbank oder aus pipeline.json (<code>encrypted_env</code> / <code>default_env</code>). Unten siehst du beides: DB-Einträge und Keys, die in Pipelines verwendet werden.
       </p>
 
       {!isReadonly && (
@@ -121,56 +136,99 @@ export default function Secrets() {
         </div>
       )}
 
-      {secrets && secrets.length > 0 ? (
-        <table className="secrets-table">
-          <thead>
-            <tr>
-              <th>Key</th>
-              <th>Type</th>
-              <th>Value</th>
-              <th>Erstellt</th>
-              <th>Aktualisiert</th>
-            </tr>
-          </thead>
-          <tbody>
-            {secrets.map((secret) => (
-              <tr key={secret.key}>
-                <td>{secret.key}</td>
-                <td>
-                  <Tooltip content={secret.is_parameter 
-                    ? "Nicht verschlüsselt, für Konfiguration"
-                    : "Verschlüsselt gespeichert"}>
-                    <span className={`type-badge ${secret.is_parameter ? 'parameter' : 'secret'}`}>
-                      {secret.is_parameter ? 'Parameter' : 'Secret'}
-                    </span>
-                  </Tooltip>
-                </td>
-                <td>
-                  <div className="value-cell">
-                    {showValues[secret.key] ? (
-                      <span className="secret-value">{secret.value}</span>
-                    ) : (
-                      <span className="secret-value-hidden">••••••••</span>
-                    )}
-                    <Tooltip content="Tippen, um den Wert anzuzeigen/zu verbergen">
-                      <button
-                        onClick={() => toggleShowValue(secret.key)}
-                        className="toggle-button"
-                      >
-                        {showValues[secret.key] ? 'Verbergen' : 'Anzeigen'}
-                      </button>
-                    </Tooltip>
-                  </div>
-                </td>
-                <td>{new Date(secret.created_at).toLocaleString('de-DE')}</td>
-                <td>{new Date(secret.updated_at).toLocaleString('de-DE')}</td>
+      <section className="secrets-db-section">
+        <h3 className="section-title">In Datenbank</h3>
+        {secrets && secrets.length > 0 ? (
+          <table className="secrets-table">
+            <thead>
+              <tr>
+                <th>Key</th>
+                <th>Type</th>
+                <th>Value</th>
+                <th>Erstellt</th>
+                <th>Aktualisiert</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : (
-        <p className="no-secrets">Keine Secrets gefunden</p>
-      )}
+            </thead>
+            <tbody>
+              {secrets.map((secret) => (
+                <tr key={secret.key}>
+                  <td>{secret.key}</td>
+                  <td>
+                    <Tooltip content={secret.is_parameter 
+                      ? "Nicht verschlüsselt, für Konfiguration"
+                      : "Verschlüsselt gespeichert"}>
+                      <span className={`type-badge ${secret.is_parameter ? 'parameter' : 'secret'}`}>
+                        {secret.is_parameter ? 'Parameter' : 'Secret'}
+                      </span>
+                    </Tooltip>
+                  </td>
+                  <td>
+                    <div className="value-cell">
+                      {showValues[secret.key] ? (
+                        <span className="secret-value">{secret.value}</span>
+                      ) : (
+                        <span className="secret-value-hidden">••••••••</span>
+                      )}
+                      <Tooltip content="Tippen, um den Wert anzuzeigen/zu verbergen">
+                        <button
+                          onClick={() => toggleShowValue(secret.key)}
+                          className="toggle-button"
+                        >
+                          {showValues[secret.key] ? 'Verbergen' : 'Anzeigen'}
+                        </button>
+                      </Tooltip>
+                    </div>
+                  </td>
+                  <td>{new Date(secret.created_at).toLocaleString('de-DE')}</td>
+                  <td>{new Date(secret.updated_at).toLocaleString('de-DE')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p className="no-secrets">Keine Einträge in der Datenbank</p>
+        )}
+      </section>
+
+      <section className="secrets-pipelines-section">
+        <h3 className="section-title">In pipeline.json verwendet</h3>
+        <p className="secrets-pipelines-hint">
+          Env-Keys aus <code>encrypted_env</code> und <code>default_env</code> aller Pipelines (Werte werden hier nicht angezeigt).
+        </p>
+        {fromPipelines && fromPipelines.length > 0 ? (
+          <table className="secrets-table">
+            <thead>
+              <tr>
+                <th>Key</th>
+                <th>Pipeline</th>
+                <th>Quelle</th>
+              </tr>
+            </thead>
+            <tbody>
+              {fromPipelines.map((row, idx) => (
+                <tr key={`${row.pipeline}-${row.key}-${row.run_config_id || ''}-${idx}`}>
+                  <td>{row.key}</td>
+                  <td>
+                    {row.pipeline}
+                    {row.run_config_id && (
+                      <span className="run-config-badge" title="Run-Konfiguration (schedules[].id)">
+                        {row.run_config_id}
+                      </span>
+                    )}
+                  </td>
+                  <td>
+                    <span className={`type-badge ${row.source === 'encrypted_env' ? 'secret' : 'parameter'}`}>
+                      {row.source === 'encrypted_env' ? 'encrypted_env' : 'default_env'}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p className="no-secrets">Keine Env-Keys in pipeline.json gefunden</p>
+        )}
+      </section>
     </div>
   )
 }

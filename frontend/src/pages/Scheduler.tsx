@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
-import { showError, showSuccess, showConfirm } from '../utils/toast'
+import { showError } from '../utils/toast'
 import Tooltip from '../components/Tooltip'
 import './Scheduler.css'
 
@@ -34,19 +34,6 @@ export default function Scheduler() {
     },
   })
 
-  const deleteMutation = useMutation({
-    mutationFn: async (jobId: string) => {
-      await apiClient.delete(`/scheduler/jobs/${jobId}`)
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['scheduler-jobs'] })
-      showSuccess('Job erfolgreich gelöscht')
-    },
-    onError: (error: any) => {
-      showError(`Fehler beim Löschen: ${error.response?.data?.detail || error.message}`)
-    },
-  })
-
   const toggleEnabledMutation = useMutation({
     mutationFn: async ({ jobId, enabled }: { jobId: string; enabled: boolean }) => {
       const response = await apiClient.put(`/scheduler/jobs/${jobId}`, { enabled })
@@ -66,14 +53,6 @@ export default function Scheduler() {
       window.open(url, '_blank', 'noopener,noreferrer')
     } else {
       showError('GitHub-Link für pipeline.json nicht verfügbar (kein GitHub-Repository konfiguriert)')
-    }
-  }
-
-  const handleDelete = async (jobId: string, job: Job) => {
-    const label = job.run_config_id ? `${job.pipeline_name} (${job.run_config_id})` : job.pipeline_name
-    const confirmed = await showConfirm(`Möchten Sie den Job für '${label}' wirklich löschen?`)
-    if (confirmed) {
-      deleteMutation.mutate(jobId)
     }
   }
 
@@ -187,7 +166,7 @@ export default function Scheduler() {
                       {!isReadonly && (
                         <>
                           <Tooltip content={job.pipeline_json_edit_url
-                            ? "pipeline.json auf GitHub bearbeiten"
+                            ? "pipeline.json auf GitHub bearbeiten (Schedules dort anlegen/entfernen)"
                             : "GitHub-Repository nicht konfiguriert"}>
                             <button
                               onClick={() => handleEdit(job)}
@@ -197,12 +176,6 @@ export default function Scheduler() {
                               Bearbeiten
                             </button>
                           </Tooltip>
-                          <button
-                            onClick={() => handleDelete(job.id, job)}
-                            className="delete-button"
-                          >
-                            Löschen
-                          </button>
                         </>
                       )}
                     </div>
