@@ -36,9 +36,10 @@ interface SyncStatus {
 export default function Dashboard() {
   const queryClient = useQueryClient()
   const { isReadonly } = useAuth()
-  const pipelinesInterval = useRefetchInterval(5000)
-  const syncInterval = useRefetchInterval(10000)
-  const dailyStatsInterval = useRefetchInterval(30000, 60000)
+  // Reduzierte Polling-Frequenz: weniger API-Last bei vielen Nutzern (Enterprise-tauglich)
+  const pipelinesInterval = useRefetchInterval(30_000, 120_000)   // sichtbar: 30s, Hintergrund: 2min
+  const syncInterval = useRefetchInterval(15_000, 120_000)        // sichtbar: 15s, Hintergrund: 2min
+  const dailyStatsInterval = useRefetchInterval(60_000, 120_000)  // sichtbar: 1min, Hintergrund: 2min
 
   const { data: pipelines, isLoading } = useQuery<Pipeline[]>({
     queryKey: ['pipelines'],
@@ -47,6 +48,7 @@ export default function Dashboard() {
       return response.data
     },
     refetchInterval: pipelinesInterval,
+    staleTime: 30_000,  // 30s – vermeidet unnötige Refetches bei Tab-Wechsel
   })
 
   useQuery<SyncStatus>({
@@ -73,7 +75,7 @@ export default function Dashboard() {
       }
     },
     refetchInterval: dailyStatsInterval,
-    staleTime: 60_000,
+    staleTime: 120_000,  // 2min – Daily-Stats ändern sich selten
   })
 
   const syncMutation = useMutation({
