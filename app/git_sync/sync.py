@@ -422,7 +422,7 @@ async def sync_pipelines(
     branch: Optional[str] = None,
     session: Optional[Session] = None,
 ) -> Dict[str, Any]:
-    """Führt Git-Sync mit UV Pre-Heating aus."""
+    """Führt Git-Sync mit UV Pre-Heating aus. Gibt sofort zurück wenn bereits ein Sync läuft (already_running)."""
     if branch is None:
         branch = config.GIT_BRANCH
     if session is None:
@@ -432,6 +432,18 @@ async def sync_pipelines(
         close_session = True
     else:
         close_session = False
+
+    if _sync_lock.locked():
+        if close_session:
+            session.close()
+        return {
+            "success": False,
+            "message": "Ein Sync läuft bereits. Status unter GET /api/sync/status.",
+            "already_running": True,
+            "branch": branch,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
     try:
         async with _sync_lock:
             pipelines_dir = config.PIPELINES_DIR

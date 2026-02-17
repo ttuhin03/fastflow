@@ -8,6 +8,7 @@ Dieses Modul enthält alle REST-API-Endpoints für Git-Synchronisation:
 
 from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status, Query
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlmodel import Session
 import logging
@@ -67,7 +68,19 @@ async def sync(
             branch=body.branch if body else None,
             session=session
         )
-        
+
+        if result.get("already_running"):
+            return JSONResponse(
+                status_code=status.HTTP_202_ACCEPTED,
+                content={
+                    "success": False,
+                    "message": result.get("message", "Ein Sync läuft bereits."),
+                    "already_running": True,
+                    "branch": result.get("branch"),
+                    "timestamp": result.get("timestamp"),
+                },
+            )
+
         if not result.get("success"):
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
