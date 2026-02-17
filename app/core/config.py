@@ -320,6 +320,18 @@ class Config:
     viele Zeilen enthält. Ältere Zeilen werden übersprungen.
     """
 
+    LOG_READ_MAX_MB: int = (
+        int(os.getenv("LOG_READ_MAX_MB"))
+        if os.getenv("LOG_READ_MAX_MB")
+        else 50
+    )
+    """
+    Maximale Log-Dateigröße in MB, die beim Lesen geladen werden darf.
+    
+    Verhindert OOM bei sehr großen Logs. Bei Überschreitung: Fehlermeldung mit Hinweis,
+    tail=N zu nutzen (liest nur die letzten N Zeilen). Standard: 50 MB.
+    """
+
     # Log-Backup (S3/MinIO)
     S3_BACKUP_ENABLED: bool = os.getenv("S3_BACKUP_ENABLED", "false").lower() == "true"
     """

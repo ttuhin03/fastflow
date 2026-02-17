@@ -14,7 +14,7 @@ from uuid import UUID
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import aiofiles
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
 from fastapi.responses import JSONResponse
 from sqlmodel import Session, select, func, text
 from sqlalchemy import case, delete
@@ -24,6 +24,7 @@ from app.models import DownstreamTrigger, Pipeline, PipelineDailyStat, PipelineR
 from app.executor import run_pipeline
 from app.services.pipeline_discovery import discover_pipelines, get_pipeline as get_discovered_pipeline
 from app.auth import require_write, get_current_user
+from app.middleware.rate_limiting import limiter
 from app.core.config import config
 from app.core import dependencies as deps_module
 from app.schemas.pipelines import (
@@ -294,7 +295,9 @@ async def get_pipelines(
 
 
 @router.get("/dependencies", response_model=List[Dict[str, Any]])
+@limiter.limit("15/minute")
 async def get_pipelines_dependencies(
+    request: Request,
     audit: bool = Query(False, description="Run pip-audit for vulnerabilities (can be slow)"),
     current_user: User = Depends(get_current_user),
 ) -> List[Dict[str, Any]]:
@@ -877,7 +880,9 @@ async def delete_downstream_trigger(
 
 
 @router.get("/daily-stats/all", response_model=DailyStatsResponse)
+@limiter.limit("10/minute")
 async def get_all_pipelines_daily_stats(
+    request: Request,
     days: int = Query(365, ge=1, le=3650, description="Anzahl der Tage zurück (Standard: 365, Max: 3650)"),
     start_date: Optional[str] = Query(None, description="Startdatum für Filterung (ISO-Format: YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="Enddatum für Filterung (ISO-Format: YYYY-MM-DD)"),

@@ -26,6 +26,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from app.core.config import config
+from app.middleware.rate_limiting import limiter
 
 logger = logging.getLogger(__name__)
 
@@ -414,6 +415,7 @@ def setup_prometheus_metrics(app: FastAPI) -> None:
 
     # Manueller /metrics Endpoint (zuverlässiger als instrumentator.expose())
     @app.get("/metrics", tags=["monitoring"], include_in_schema=True)
+    @limiter.exempt
     async def metrics_endpoint() -> StarletteResponse:
         """
         Prometheus-Metriken-Endpoint.

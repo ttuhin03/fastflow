@@ -190,6 +190,7 @@ setup_signal_handlers()
 @app.get("/health")
 @app.get("/healthz")
 @app.get("/api/health")
+@limiter.exempt
 async def health_check() -> JSONResponse:
     """
     Liveness-Check: Prozess lebt, ohne externe Abhängigkeiten.
@@ -207,6 +208,7 @@ async def health_check() -> JSONResponse:
 
 @app.get("/ready")
 @app.get("/api/ready")
+@limiter.exempt
 async def readiness_check() -> JSONResponse:
     """
     Readiness-Check: DB, Docker, UV-Cache-Volume und Disk-Space.

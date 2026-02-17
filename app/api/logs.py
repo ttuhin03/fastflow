@@ -10,6 +10,7 @@ Alle authentifizierten Benutzer (READONLY, WRITE, ADMIN) können Logs lesen.
 """
 
 import asyncio
+import json
 import aiofiles
 from pathlib import Path
 from typing import Optional
@@ -146,16 +147,37 @@ async def get_run_logs(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Log-Datei nicht gefunden: {log_file_path} (original: {run.log_file})"
         )
-    
+
+    # OOM-Schutz: Maximale Dateigröße vor dem Lesen prüfen
+    file_size_bytes = log_file_path.stat().st_size
+    max_bytes = config.LOG_READ_MAX_MB * 1024 * 1024
+    if file_size_bytes > max_bytes and tail is None:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=(
+                f"Log-Datei zu groß ({file_size_bytes // (1024*1024)} MB, Limit: {config.LOG_READ_MAX_MB} MB). "
+                "Nutze ?tail=N für die letzten N Zeilen (z.B. ?tail=10000)."
+            ),
+        )
+
     try:
-        # Asynchrones Datei-Lesen (verhindert Blocking des Event-Loops)
-        async with aiofiles.open(log_file_path, "r", encoding="utf-8") as f:
-            contents = await f.read()
-        
-        # Tail-Funktionalität (letzte N Zeilen)
-        if tail is not None and tail > 0:
+        # Tail-Optimierung: Bei tail nur die letzten Bytes lesen (OOM-Schutz bei großen Dateien)
+        if tail is not None and tail > 0 and file_size_bytes > max_bytes:
+            # Lese maximal die letzten X Bytes (ca. 150 Zeichen/Zeile, plus Puffer)
+            read_bytes = min(file_size_bytes, tail * 200, max_bytes)
+            async with aiofiles.open(log_file_path, "rb") as f:
+                await f.seek(max(0, file_size_bytes - read_bytes))
+                chunk = await f.read()
+            contents = chunk.decode("utf-8", errors="replace")
             lines = contents.split("\n")
             contents = "\n".join(lines[-tail:])
+        else:
+            # Normales Lesen (Datei klein genug oder tail nicht gesetzt)
+            async with aiofiles.open(log_file_path, "r", encoding="utf-8") as f:
+                contents = await f.read()
+            if tail is not None and tail > 0:
+                lines = contents.split("\n")
+                contents = "\n".join(lines[-tail:])
         
         filename = f"run-{run_id}-logs.txt"
         return PlainTextResponse(
@@ -236,12 +258,23 @@ async def stream_run_logs(
             # Nicht weiterwerfen, da wir im Fallback sind
         if log_file_path.exists():
             try:
+                # OOM-Schutz: Dateigröße prüfen vor dem Lesen
+                file_size_bytes = log_file_path.stat().st_size
+                max_bytes = config.LOG_READ_MAX_MB * 1024 * 1024
+                if file_size_bytes > max_bytes:
+                    raise HTTPException(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail=(
+                            f"Log-Datei zu groß für SSE ({file_size_bytes // (1024*1024)} MB, "
+                            f"Limit: {config.LOG_READ_MAX_MB} MB). Nutze Log-Download statt Live-Stream."
+                        ),
+                    )
                 async with aiofiles.open(log_file_path, "r", encoding="utf-8") as f:
                     contents = await f.read()
-                # Sende gesamte Log-Datei als SSE-Events
+                # Sende Log-Datei als SSE-Events
                 async def generate():
                     for line in contents.split("\n"):
-                        yield f"data: {line}\n\n"
+                        yield f"data: {json.dumps({'line': line})}\n\n"
                 return StreamingResponse(
                     generate(),
                     media_type="text/event-stream",
@@ -250,9 +283,11 @@ async def stream_run_logs(
                         "Connection": "keep-alive"
                     }
                 )
+            except HTTPException:
+                raise
             except Exception:
                 pass
-        
+
         # Keine Queue und keine Datei: Run ist noch nicht gestartet
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -274,8 +309,7 @@ async def stream_run_logs(
         min_interval = 1.0 / rate_limit if rate_limit > 0 else 0.01
         
         last_send_time = 0.0
-        import json
-        
+
         try:
             # SCHRITT 1: Lese bereits vorhandene Logs aus der Queue (max. LOG_STREAM_PENDING_MAX_LINES)
             # Verhindert OOM bei spätem Connect und großer Queue

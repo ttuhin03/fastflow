@@ -5,9 +5,13 @@ Dieses Modul stellt Rate Limiting für API-Endpoints bereit.
 Verwendet slowapi für in-memory Rate Limiting basierend auf IP-Adressen.
 
 Rate Limits:
-- /api/auth/github/authorize: 20/min (Limiter am Endpoint)
-- /api/webhooks/*: 30 Requests pro Minute pro IP (Bruteforce-Schutz)
-- Allgemein: 100 Requests pro Minute pro IP
+- Global (default): 200/min pro IP für alle /api/*-Routen
+- /api/auth/*: 20–60/min (spezifisch pro Endpoint)
+- /api/webhooks/*: 30/min (Bruteforce-Schutz)
+- /api/pipelines/daily-stats/all: 10/min (ressourcenintensiv)
+- /api/pipelines/dependencies: 15/min (pip-audit)
+- /api/sync (POST): 6/min
+- /health, /ready, /metrics: exempt (Load-Balancer/Monitoring)
 """
 
 import logging
@@ -42,5 +46,9 @@ def get_client_identifier(request: Request) -> str:
 
 
 # Rate Limiter initialisieren
-# Exportiert für Verwendung in Endpoints
-limiter = Limiter(key_func=get_client_identifier)
+# default_limits: gilt für alle API-Routen ohne eigene @limiter.limit()
+# Enterprise: DoS-Schutz bei vielen gleichzeitigen Nutzern
+limiter = Limiter(
+    key_func=get_client_identifier,
+    default_limits=["200/minute"],
+)

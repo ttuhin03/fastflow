@@ -7,7 +7,7 @@ Dieses Modul enthält alle REST-API-Endpoints für Git-Synchronisation:
 """
 
 from typing import Optional, Dict, Any, List
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, status, Query
 from pydantic import BaseModel, Field
 from sqlmodel import Session
 import logging
@@ -17,6 +17,7 @@ from app.core.errors import get_500_detail
 from app.git_sync import sync_pipelines, get_sync_status, get_sync_logs, test_sync_repo_config, clear_pipelines_directory
 from app.core.config import config
 from app.auth import require_write, get_current_user
+from app.middleware.rate_limiting import limiter
 from app.models import User
 from app.services.git_sync_repo_config import (
     get_sync_repo_config_public,
@@ -35,8 +36,10 @@ class SyncRequest(BaseModel):
 
 
 @router.post("", response_model=Dict[str, Any])
+@limiter.limit("6/minute")
 async def sync(
-    request: SyncRequest,
+    request: Request,
+    body: SyncRequest | None = Body(None),
     current_user = Depends(require_write),
     session: Session = Depends(get_session)
 ) -> Dict[str, Any]:
@@ -61,7 +64,7 @@ async def sync(
     """
     try:
         result = await sync_pipelines(
-            branch=request.branch,
+            branch=body.branch if body else None,
             session=session
         )
         
