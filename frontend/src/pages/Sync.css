@@ -489,12 +489,14 @@
 }
 
 .sync-repo-card .delete-button.btn-outlined {
+  background-color: transparent;
   color: var(--color-error);
-  border-color: color-mix(in srgb, var(--color-error) 70%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-error) 70%, transparent);
 }
 
 .sync-repo-card .delete-button.btn-outlined:hover:not(:disabled) {
-  background-color: rgba(244, 67, 54, 0.1);
+  background-color: rgba(244, 67, 54, 0.15);
+  color: var(--color-error);
   border-color: var(--color-error);
 }
 

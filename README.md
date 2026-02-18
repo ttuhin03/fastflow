@@ -1,8 +1,10 @@
 # Fast-Flow Orchestrator
 
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE) [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/) [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker)](docker-compose.yaml) [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat&logo=FastAPI&logoColor=white)](https://fastapi.tiangolo.com/) [![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react&logoColor=61DAFB)](https://reactjs.org/) [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE) [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/) [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker)](docker-compose.yaml) [![Kubernetes](https://img.shields.io/badge/Kubernetes-ready-326CE5?logo=kubernetes&logoColor=white)](k8s/README.md) [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat&logo=FastAPI&logoColor=white)](https://fastapi.tiangolo.com/) [![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react&logoColor=61DAFB)](https://reactjs.org/) [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
 [![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/ttuhin03/fastflow)](https://github.com/ttuhin03/fastflow/releases)
+
+> **Kubernetes-ready:** Fast-Flow läuft mit **Docker** (Compose oder Socket-Proxy) oder nativ auf **Kubernetes** – Pipeline-Runs als K8s-Jobs, ohne Docker-Socket. Siehe [k8s/README.md](k8s/README.md) und [Kubernetes Deployment](docs/docs/deployment/K8S.md).
 
 **The lightweight, Docker-native, Python-centric task orchestrator for 2026.**
 
@@ -44,7 +46,7 @@ Fast-Flow ist die Antwort auf die Komplexität von Airflow und die Schwerfällig
 
 ## 📖 Inhaltsverzeichnis
 - [App-Überblick (Screenshots)](#app-überblick)
-- [🚀 Schnellstart](#-schnellstart)
+- [🚀 Schnellstart (Docker · Lokal · Kubernetes)](#-schnellstart)
 - [🏗 Architektur: Das "Runner-Cache"-Prinzip](#-architektur-das-runner-cache-prinzip)
 - [🛠 Der Container-Prozess & Lifecycle](#-der-container-prozess--lifecycle)
 - [🔄 Git-Native Deployment](#-git-native-deployment)
@@ -107,17 +109,25 @@ uvicorn app.main:app --reload
 # Frontend (Terminal 2): cd frontend && npm run dev
 ```
 
-### Option 3: Kubernetes lokal mit VM (Minikube, ohne Docker Desktop)
+### Option 3: Kubernetes (K8s-ready)
 
-Zum Testen der gesamten App auf Kubernetes in einer **echten VM** (z.B. QEMU, VirtualBox):
+Fast-Flow kann auf einem beliebigen Kubernetes-Cluster laufen. **Pipeline-Runs laufen als Kubernetes-Jobs** (kein Docker-Socket nötig), ideal für produktive oder lokale K8s-Setups.
 
 ```bash
-# Voraussetzungen: kubectl, minikube, ein VM-Treiber (qemu, virtualbox oder vmware)
-./scripts/minikube-vm.sh
+# Manifests anwenden (Secrets/ConfigMap anpassen, siehe k8s/README.md)
+kubectl apply -f k8s/pvc.yaml
+kubectl apply -f k8s/postgres.yaml   # optional
+kubectl apply -f k8s/secrets.yaml
+kubectl apply -f k8s/configmap.yaml
+kubectl apply -f k8s/rbac-kubernetes-executor.yaml
+kubectl apply -f k8s/deployment.yaml
+kubectl apply -f k8s/service.yaml
 # Zugriff: kubectl port-forward svc/fastflow-orchestrator 8000:80 → http://localhost:8000
 ```
 
-Vollständige Anleitung (OAuth, Notebook-Pipelines, Troubleshooting): [k8s/README.md](k8s/README.md).
+**Lokal testen (Minikube in VM):** `./scripts/minikube-vm.sh` – siehe [k8s/README.md](k8s/README.md).
+
+Vollständige Anleitung (Images, OAuth, Produktion): [k8s/README.md](k8s/README.md) · [Kubernetes Deployment (Doku)](docs/docs/deployment/K8S.md).
 
 ### 🔐 Login (GitHub OAuth, Google OAuth)
 
@@ -326,8 +336,8 @@ Während Airflow eine Postgres-DB, einen Redis-Broker, einen Scheduler, einen We
 - **Backend**: FastAPI (Python 3.11+)
 - **Frontend**: React + TypeScript (Vite)
 - **Database**: SQLModel (SQLite/PostgreSQL) – *Produktion: [PostgreSQL empfohlen](docs/docs/deployment/PRODUCTION.md#datenbank-postgresql-für-produktion)*
-- **Execution**: Docker Engine API + uv
-- **Security**: Docker Socket Proxy (tecnativa/docker-socket-proxy) für sichere Docker-API-Zugriffe
+- **Execution**: Docker Engine API + uv **oder** Kubernetes Jobs (K8s-ready, siehe [k8s/README.md](k8s/README.md))
+- **Security**: Docker Socket Proxy (tecnativa/docker-socket-proxy) bei Docker-Betrieb; bei K8s keine Socket-Freigabe nötig
 - **Scheduling**: APScheduler (Persistent)
 - **Auth**: GitHub OAuth, JWT & Fernet Encryption
 

@@ -8,10 +8,10 @@ sidebar_position: 1
 
 ![Fast-Flow Banner](/img/fastflow_banner.png)
 
-Fast-Flow ist die Antwort auf die Komplexität von Airflow und die Schwerfälligkeit traditioneller CI/CD-Tools. Er wurde für Entwickler gebaut, die echte Isolation wollen, ohne auf die Geschwindigkeit lokaler Skripte zu verzichten.
+Fast-Flow ist die Antwort auf die Komplexität von Airflow und die Schwerfälligkeit traditioneller CI/CD-Tools. Er wurde für Entwickler gebaut, die echte Isolation wollen, ohne auf die Geschwindigkeit lokaler Skripte zu verzichten. **Fast-Flow läuft mit Docker (Compose oder Socket-Proxy) oder auf Kubernetes** – neben Docker ist auch ein nativer K8s-Betrieb möglich (Pipeline-Runs als Kubernetes-Jobs). Details: [Kubernetes Deployment](/docs/deployment/K8S).
 
 :::tip In 30 Sekunden
-**Ein Python-Skript pro Pipeline.** Kein DAG, kein Image-Build. `git push` → Sync → Run. Jede Pipeline läuft in einem isolierten Docker-Container mit **uv** (JIT-Dependencies). Ein FastAPI-Container + Docker-Socket-Proxy – fertig.
+**Ein Python-Skript pro Pipeline.** Kein DAG, kein Image-Build. `git push` → Sync → Run. Jede Pipeline läuft in einem isolierten Container (Docker oder K8s Job) mit **uv** (JIT-Dependencies). Ein FastAPI-Container + Docker-Socket-Proxy oder K8s – fertig.
 :::
 
 :::tip
@@ -27,7 +27,7 @@ Nutze das **[fastflow-pipeline-template](https://github.com/ttuhin03/fastflow-pi
 - **Code First:** Dein Python-Skript läuft, wie es ist – ohne DAG-Dekorateure, Operatoren oder IO-Manager.
 - **uv + Docker:** Jede Pipeline läuft in einem isolierten Container; Dependencies kommen per uv-Cache in Millisekunden. Die Python-Version ist beliebig pro Pipeline wählbar (z.B. 3.10, 3.11, 3.12).
 - **Git als Quelle:** Push to Deploy – kein Image-Build, kein manueller Upload. Der Orchestrator zieht Änderungen per Webhook oder Sync.
-- **Ein Container:** Kein Cluster, keine Worker-Farm. Ein FastAPI-Container plus Docker-Socket-Proxy.
+- **Docker oder Kubernetes:** Ein FastAPI-Container plus Docker-Socket-Proxy (Docker-Betrieb) oder Deployment auf Kubernetes mit Pipeline-Runs als K8s-Jobs. Siehe [Kubernetes Deployment](/docs/deployment/K8S).
 
 ## Nächste Schritte
 

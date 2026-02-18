@@ -62,6 +62,10 @@ if __name__ == "__main__":
 
 Nach Neustart des Backends erscheint die Pipeline in der UI; lokal testen mit `uv run main.py` (im Ordner `pipelines/hello/`).
 
+## Option 3: Kubernetes
+
+Fast-Flow läuft neben Docker auch **nativ auf Kubernetes**. Pipeline-Runs laufen dann als Kubernetes-Jobs (kein Docker-Socket nötig). Vollständige Anleitung: [Kubernetes Deployment](/docs/deployment/K8S) sowie das [k8s/README.md](https://github.com/ttuhin03/fastflow/blob/main/k8s/README.md) im Repository.
+
 ## Login (GitHub OAuth, Google OAuth)
 
 1. **GitHub:** OAuth-App (Settings → Developer settings → OAuth Apps), Callback `{BASE_URL}/api/auth/github/callback`.  
