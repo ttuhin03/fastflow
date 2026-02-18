@@ -1,10 +1,12 @@
 import { useRef, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { MdBlock } from 'react-icons/md'
 import './Login.css'
 import './RequestScreens.css'
 
 export default function RequestRejected() {
+  const { t } = useTranslation()
   const videoRef = useRef<HTMLVideoElement>(null)
 
   useEffect(() => {
@@ -35,14 +37,14 @@ export default function RequestRejected() {
             <div className="login-icon login-icon--error">
               <MdBlock />
             </div>
-            <h1>Anfrage abgelehnt</h1>
-            <p className="login-subtitle">Fast-Flow</p>
+            <h1>{t('requestRejected.title')}</h1>
+            <p className="login-subtitle">{t('appTitle')}</p>
           </div>
 
           <div className="login-form request-screen-body">
-            <p>Ihre Beitrittsanfrage wurde abgelehnt.</p>
+            <p>{t('requestRejected.body')}</p>
             <Link to="/login" className="login-btn login-btn-github">
-              Zurück zum Login
+              {t('requestRejected.backToLogin')}
             </Link>
           </div>
         </div>

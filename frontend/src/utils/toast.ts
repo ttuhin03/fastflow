@@ -1,12 +1,13 @@
 /**
  * Toast-Notification Utilities
- * 
+ *
  * Zentralisierte Funktionen für Toast-Benachrichtigungen.
  * Ersetzt alert() und confirm() durch moderne, nicht-blockierende Toasts.
  */
 
 import React from 'react'
 import toast from 'react-hot-toast'
+import i18n from '../i18n'
 
 /**
  * Zeigt eine Erfolgs-Toast-Nachricht an.
@@ -73,7 +74,7 @@ export const showConfirm = (
               cursor: 'pointer',
               fontWeight: '500',
             }
-          }, 'OK'),
+          }, i18n.t('toast.ok')),
           React.createElement('button', {
             onClick: () => {
               toast.dismiss(t.id)
@@ -89,7 +90,7 @@ export const showConfirm = (
               cursor: 'pointer',
               fontWeight: '500',
             }
-          }, 'Abbrechen')
+          }, i18n.t('toast.cancel'))
         )
       ),
       {

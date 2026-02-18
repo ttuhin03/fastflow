@@ -1,10 +1,12 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import { showError, showSuccess } from '../utils/toast'
 import './SetupWizard.css'
 
 export default function SetupWizard() {
+  const { t } = useTranslation()
   const { isAdmin, is_setup_completed, refetchUserInfo } = useAuth()
   const [enable_telemetry, setEnableTelemetry] = useState(false)
   const [enable_error_reporting, setEnableErrorReporting] = useState(false)
@@ -23,10 +25,10 @@ export default function SetupWizard() {
         enable_telemetry,
         enable_error_reporting,
       })
-      showSuccess('Einstellungen gespeichert.')
+      showSuccess(t('setupWizard.success'))
       await refetchUserInfo()
     } catch (err: any) {
-      showError(err?.response?.data?.detail || err?.message || 'Speichern fehlgeschlagen.')
+      showError(err?.response?.data?.detail || err?.message || t('setupWizard.saveFailed'))
     } finally {
       setSubmitting(false)
     }
@@ -35,13 +37,12 @@ export default function SetupWizard() {
   return (
     <div className="setup-wizard-overlay">
       <div className="setup-wizard-modal">
-        <h2 className="setup-wizard-title">Erste Einstellungen</h2>
+        <h2 className="setup-wizard-title">{t('setupWizard.title')}</h2>
         <p className="setup-wizard-text">
-          Fehlerberichte und Nutzungsstatistiken helfen uns, Fast-Flow zu verbessern.
-          Alles läuft anonym und sicher in der EU. Session Recording wird nicht verwendet.
+          {t('setupWizard.text')}
         </p>
         <p className="setup-wizard-link">
-          <a href="https://posthog.com" target="_blank" rel="noopener noreferrer">Mehr zu PostHog</a>
+          <a href="https://posthog.com" target="_blank" rel="noopener noreferrer">{t('setupWizard.linkPostHog')}</a>
         </p>
         <form onSubmit={handleSubmit} className="setup-wizard-form">
           <label className="setup-wizard-toggle">
@@ -51,7 +52,7 @@ export default function SetupWizard() {
               onChange={(e) => setEnableErrorReporting(e.target.checked)}
               className="setup-wizard-checkbox"
             />
-            <span>Fehlerberichte erlauben</span>
+            <span>{t('setupWizard.errorReporting')}</span>
           </label>
           <label className="setup-wizard-toggle">
             <input
@@ -60,14 +61,14 @@ export default function SetupWizard() {
               onChange={(e) => setEnableTelemetry(e.target.checked)}
               className="setup-wizard-checkbox"
             />
-            <span>Nutzungsstatistiken erlauben</span>
+            <span>{t('setupWizard.telemetry')}</span>
           </label>
           <p className="setup-wizard-note">
-            Das hilft unseren Entwicklern sehr – vielen Dank. Alles anonym und sicher. Session Recording (Bildschirmaufzeichnung) wird ausdrücklich nicht genutzt.
+            {t('setupWizard.note')}
           </p>
           <div className="setup-wizard-actions">
             <button type="submit" className="btn btn-primary" disabled={submitting}>
-              {submitting ? 'Speichern…' : 'Fertig'}
+              {submitting ? t('setupWizard.saving') : t('setupWizard.done')}
             </button>
           </div>
         </form>

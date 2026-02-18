@@ -1,4 +1,6 @@
 import { useState, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
+import { getFormatLocale } from '../utils/locale'
 import './CalendarHeatmap.css'
 
 interface DailyStat {
@@ -28,6 +30,8 @@ interface DayData {
 }
 
 export default function CalendarHeatmap({ dailyStats, days = 365, showTitle = true }: CalendarHeatmapProps) {
+  const { t } = useTranslation()
+  const formatLocale = getFormatLocale()
   const [hoveredDay, setHoveredDay] = useState<string | null>(null)
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 })
 
@@ -164,7 +168,7 @@ export default function CalendarHeatmap({ dailyStats, days = 365, showTitle = tr
         // Zeige Label wenn: erster Tag des Monats, oder Montag, oder erster Tag insgesamt
         if (dayOfMonth <= 7 || dayOfWeek === 1 || index === 0) {
           if (!monthSet.has(monthKey)) {
-            const monthName = day.date.toLocaleDateString('de-DE', { month: 'short' })
+            const monthName = day.date.toLocaleDateString(formatLocale, { month: 'short' })
             monthLabelsArray.push({ weekIndex, month: monthName })
             monthSet.add(monthKey)
           }
@@ -188,7 +192,7 @@ export default function CalendarHeatmap({ dailyStats, days = 365, showTitle = tr
   return (
     <div className="calendar-heatmap">
       <div className="calendar-heatmap-header">
-        {showTitle && <h3>Laufhistorie</h3>}
+        {showTitle && <h3>{t('dashboard.runHistory')}</h3>}
         <div className="calendar-legend">
           <span className="legend-label">Weniger</span>
           <div className="legend-colors">
@@ -266,7 +270,7 @@ export default function CalendarHeatmap({ dailyStats, days = 365, showTitle = tr
                         setTooltipPosition({ x, y })
                       }}
                       onMouseLeave={handleDayLeave}
-                      aria-label={`${day.dateStr}: ${day.total_runs} Runs, ${day.successful_runs} erfolgreich, ${day.failed_runs} fehlgeschlagen`}
+                      aria-label={`${day.dateStr}: ${t('calendar.runsSuccessfulFailed', { total: day.total_runs, successful: day.successful_runs, failed: day.failed_runs })}`}
                     />
                   )
                 })}
@@ -285,7 +289,7 @@ export default function CalendarHeatmap({ dailyStats, days = 365, showTitle = tr
           }}
         >
           <div className="tooltip-date">
-            {new Date(hoveredDayData.dateStr).toLocaleDateString('de-DE', {
+            {new Date(hoveredDayData.dateStr).toLocaleDateString(formatLocale, {
               weekday: 'long',
               year: 'numeric',
               month: 'long',
@@ -294,25 +298,25 @@ export default function CalendarHeatmap({ dailyStats, days = 365, showTitle = tr
           </div>
           <div className="tooltip-stats">
             <div className="tooltip-stat">
-              <span className="tooltip-label">Gesamt Runs:</span>
+              <span className="tooltip-label">{t('calendar.totalRuns')}</span>
               <span className="tooltip-value">{hoveredDayData.total_runs}</span>
             </div>
             <div className="tooltip-stat">
-              <span className="tooltip-label">Erfolgreich:</span>
+              <span className="tooltip-label">{t('dashboard.successful')}:</span>
               <span className="tooltip-value success">{hoveredDayData.successful_runs}</span>
             </div>
             <div className="tooltip-stat">
-              <span className="tooltip-label">Fehlgeschlagen:</span>
+              <span className="tooltip-label">{t('common.failed')}:</span>
               <span className="tooltip-value error">{hoveredDayData.failed_runs}</span>
             </div>
             <div className="tooltip-stat">
-              <span className="tooltip-label">Erfolgsrate:</span>
+              <span className="tooltip-label">{t('calendar.successRate')}</span>
               <span className="tooltip-value">{hoveredDayData.success_rate.toFixed(1)}%</span>
             </div>
           </div>
           {hoveredDayData.run_ids && hoveredDayData.run_ids.length > 0 && (
             <div className="tooltip-run-ids">
-              <div className="tooltip-run-ids-label">Run-IDs:</div>
+              <div className="tooltip-run-ids-label">{t('calendar.runIds')}</div>
               <div className="tooltip-run-ids-list">
                 {hoveredDayData.run_ids.map((runId) => (
                   <a
@@ -329,7 +333,7 @@ export default function CalendarHeatmap({ dailyStats, days = 365, showTitle = tr
                 ))}
                 {hoveredDayData.total_runs > hoveredDayData.run_ids.length && (
                   <span className="tooltip-run-ids-more">
-                    +{hoveredDayData.total_runs - hoveredDayData.run_ids.length} weitere
+                    +{hoveredDayData.total_runs - hoveredDayData.run_ids.length} {t('common.more')}
                   </span>
                 )}
               </div>

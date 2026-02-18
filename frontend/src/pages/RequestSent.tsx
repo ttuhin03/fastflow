@@ -1,10 +1,12 @@
 import { useRef, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { MdHourglassEmpty } from 'react-icons/md'
 import './Login.css'
 import './RequestScreens.css'
 
 export default function RequestSent() {
+  const { t } = useTranslation()
   const videoRef = useRef<HTMLVideoElement>(null)
 
   useEffect(() => {
@@ -35,19 +37,19 @@ export default function RequestSent() {
             <div className="login-icon">
               <MdHourglassEmpty />
             </div>
-            <h1>Beitrittsanfrage erstellt</h1>
-            <p className="login-subtitle">Fast-Flow</p>
+            <h1>{t('requestSent.createdTitle')}</h1>
+            <p className="login-subtitle">{t('appTitle')}</p>
           </div>
 
           <div className="login-form request-screen-body">
             <p>
-              Ihre Beitrittsanfrage wurde erstellt. Ein Administrator prüft sie.
+              {t('requestSent.body')}
             </p>
             <p className="request-note">
-              Sie erhalten ggf. eine E-Mail, sobald Sie freigegeben wurden. Bis dahin ist hier für Sie Schluss.
+              {t('requestSent.note')}
             </p>
             <Link to="/login" className="login-btn login-btn-github">
-              Falls Sie bereits freigegeben wurden, können Sie sich hier anmelden
+              {t('requestSent.loginLink')}
             </Link>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import { Suspense, lazy } from 'react'
+import { useTranslation } from 'react-i18next'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
@@ -40,9 +41,10 @@ const queryClient = new QueryClient({
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth()
+  const { t } = useTranslation()
 
   if (loading) {
-    return <div>Laden...</div>
+    return <div>{t('common.loading')}</div>
   }
 
   if (!isAuthenticated) {
@@ -53,7 +55,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function PageFallback() {
-  return <div className="loading-fallback">Laden...</div>
+  const { t } = useTranslation()
+  return <div className="loading-fallback">{t('common.loading')}</div>
 }
 
 function AppRoutes() {

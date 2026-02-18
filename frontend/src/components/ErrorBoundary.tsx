@@ -1,7 +1,8 @@
 import { Component, ErrorInfo, ReactNode } from 'react'
+import { withTranslation, WithTranslation } from 'react-i18next'
 import { captureException } from '../utils/posthog'
 
-interface Props {
+interface Props extends WithTranslation {
   children: ReactNode
   fallback?: ReactNode
 }
@@ -32,17 +33,18 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   render(): ReactNode {
+    const { t } = this.props
     if (this.state.hasError && this.state.error) {
       if (this.props.fallback) return this.props.fallback
       return (
         <div style={{ padding: '1.5rem', textAlign: 'center', color: '#aaa' }}>
-          <p>Ein Fehler ist aufgetreten. Die Anwendung wurde benachrichtigt.</p>
+          <p>{t('errors.generic')}</p>
           <button
             type="button"
             onClick={() => this.setState({ hasError: false, error: null })}
             style={{ marginTop: '0.5rem', padding: '0.25rem 0.5rem' }}
           >
-            Erneut versuchen
+            {t('errors.retry')}
           </button>
         </div>
       )
@@ -50,3 +52,5 @@ export class ErrorBoundary extends Component<Props, State> {
     return this.props.children
   }
 }
+
+export default withTranslation()(ErrorBoundary)

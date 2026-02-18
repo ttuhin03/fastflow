@@ -1,15 +1,17 @@
 import { useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { getApiOrigin } from '../config'
 
 export default function Invite() {
+  const { t } = useTranslation()
   const [search] = useSearchParams()
   const token = search.get('token')
 
   if (!token) {
     return (
       <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <h2>Ungültiger Einladungslink</h2>
-        <p>Der Einladungslink ist unvollständig oder ungültig.</p>
+        <h2>{t('invite.invalidLink')}</h2>
+        <p>{t('invite.invalidLinkDesc')}</p>
       </div>
     )
   }
@@ -19,9 +21,9 @@ export default function Invite() {
 
   return (
     <div style={{ padding: '2rem', textAlign: 'center', maxWidth: 480, margin: '0 auto' }}>
-      <h2>Du wurdest zu Fast-Flow eingeladen!</h2>
+      <h2>{t('invite.invitedTitle')}</h2>
       <p style={{ margin: '1rem 0' }}>
-        Melde dich mit GitHub oder Google an, um die Einladung anzunehmen. Die E-Mail muss der Einladung entsprechen.
+        {t('invite.invitedDesc')}
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', alignItems: 'center' }}>
         <button
@@ -29,14 +31,14 @@ export default function Invite() {
           onClick={() => { window.location.href = `${api}/api/auth/github/authorize?${stateParam}` }}
           className="btn btn-primary"
         >
-          Mit GitHub registrieren
+          {t('invite.registerGitHub')}
         </button>
         <button
           type="button"
           onClick={() => { window.location.href = `${api}/api/auth/google/authorize?${stateParam}` }}
           className="btn btn-primary"
         >
-          Mit Google registrieren
+          {t('invite.registerGoogle')}
         </button>
       </div>
     </div>

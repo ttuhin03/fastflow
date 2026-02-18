@@ -1,10 +1,12 @@
 import { useRef, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { MdLock } from 'react-icons/md'
 import './Login.css'
 import './RequestScreens.css'
 
 export default function AccountBlocked() {
+  const { t } = useTranslation()
   const videoRef = useRef<HTMLVideoElement>(null)
 
   useEffect(() => {
@@ -35,14 +37,14 @@ export default function AccountBlocked() {
             <div className="login-icon login-icon--error">
               <MdLock />
             </div>
-            <h1>Konto gesperrt</h1>
-            <p className="login-subtitle">Fast-Flow</p>
+            <h1>{t('accountBlocked.title')}</h1>
+            <p className="login-subtitle">{t('appTitle')}</p>
           </div>
 
           <div className="login-form request-screen-body">
-            <p>Ihr Konto wurde temporär gesperrt. Bitte wenden Sie sich an einen Administrator.</p>
+            <p>{t('accountBlocked.body')}</p>
             <Link to="/login" className="login-btn login-btn-github">
-              Zurück zum Login
+              {t('accountBlocked.backToLogin')}
             </Link>
           </div>
         </div>

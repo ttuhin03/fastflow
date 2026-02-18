@@ -1,9 +1,11 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import { showError } from '../utils/toast'
+import { getFormatLocale } from '../utils/locale'
 import Tooltip from '../components/Tooltip'
 import './Scheduler.css'
 
@@ -22,9 +24,11 @@ interface Job {
 }
 
 export default function Scheduler() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { isReadonly } = useAuth()
   const [expandedJob, setExpandedJob] = useState<string | null>(null)
+  const formatLocale = getFormatLocale()
 
   const { data: jobs, isLoading: jobsLoading } = useQuery<Job[]>({
     queryKey: ['scheduler-jobs'],
@@ -43,7 +47,7 @@ export default function Scheduler() {
       queryClient.invalidateQueries({ queryKey: ['scheduler-jobs'] })
     },
     onError: (error: any) => {
-      showError(`Fehler beim Umschalten: ${error.response?.data?.detail || error.message}`)
+      showError(t('scheduler.toggleError', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
@@ -52,7 +56,7 @@ export default function Scheduler() {
     if (url) {
       window.open(url, '_blank', 'noopener,noreferrer')
     } else {
-      showError('GitHub-Link für pipeline.json nicht verfügbar (kein GitHub-Repository konfiguriert)')
+      showError(t('scheduler.editError'))
     }
   }
 
@@ -61,28 +65,28 @@ export default function Scheduler() {
   }
 
   if (jobsLoading) {
-    return <div>Laden...</div>
+    return <div>{t('common.loading')}</div>
   }
 
   return (
     <div className="scheduler">
       <div className="scheduler-header">
-        <h2>Scheduler</h2>
+        <h2>{t('scheduler.title')}</h2>
       </div>
 
       {jobs && jobs.length > 0 ? (
         <table className="jobs-table">
           <thead>
             <tr>
-              <th>Pipeline</th>
-              <th>Trigger-Typ</th>
-              <th>Trigger-Wert</th>
-              <th>Status</th>
-              <th>Nächste Ausführung</th>
-              <th>Letzte Ausführung</th>
-              <th>Runs</th>
-              <th>Erstellt</th>
-              <th>Aktionen</th>
+              <th>{t('scheduler.pipeline')}</th>
+              <th>{t('scheduler.triggerType')}</th>
+              <th>{t('scheduler.triggerValue')}</th>
+              <th>{t('scheduler.status')}</th>
+              <th>{t('scheduler.nextRun')}</th>
+              <th>{t('scheduler.lastRun')}</th>
+              <th>{t('common.runs')}</th>
+              <th>{t('scheduler.created')}</th>
+              <th>{t('scheduler.actions')}</th>
             </tr>
           </thead>
           <tbody>
@@ -92,7 +96,7 @@ export default function Scheduler() {
                   <td>
                     {job.pipeline_name}
                     {job.run_config_id && (
-                      <span className="run-config-badge" title="Run-Konfiguration aus pipeline.json schedules">
+                      <span className="run-config-badge" title={t('scheduler.runConfigTooltip')}>
                         {job.run_config_id}
                       </span>
                     )}
@@ -106,7 +110,7 @@ export default function Scheduler() {
                       : `Intervall: alle ${job.trigger_value} Sekunden`}>
                       <code className="trigger-value">
                         {job.trigger_type === 'DATE' && job.trigger_value
-                          ? new Date(job.trigger_value).toLocaleString('de-DE')
+                          ? new Date(job.trigger_value).toLocaleString(formatLocale)
                           : job.trigger_value}
                       </code>
                     </Tooltip>
@@ -119,20 +123,20 @@ export default function Scheduler() {
                           className={`status-toggle ${job.enabled ? 'enabled' : 'disabled'}`}
                           disabled={toggleEnabledMutation.isPending}
                         >
-                          {job.enabled ? 'Aktiv' : 'Inaktiv'}
+                          {job.enabled ? t('scheduler.enabled') : t('scheduler.disabled')}
                         </button>
                       </Tooltip>
                     )}
                     {isReadonly && (
                       <span className={`status-badge ${job.enabled ? 'enabled' : 'disabled'}`}>
-                        {job.enabled ? 'Aktiv' : 'Inaktiv'}
+                        {job.enabled ? t('scheduler.enabled') : t('scheduler.disabled')}
                       </span>
                     )}
                   </td>
                   <td>
                     <Tooltip content="Wird basierend auf der CRON/INTERVAL Expression berechnet">
                       {job.next_run_time ? (
-                        new Date(job.next_run_time).toLocaleString('de-DE')
+                        new Date(job.next_run_time).toLocaleString(formatLocale)
                       ) : (
                         <span className="no-data">-</span>
                       )}
@@ -141,7 +145,7 @@ export default function Scheduler() {
                   <td>
                     <Tooltip content="Zeitpunkt des letzten erfolgreichen oder fehlgeschlagenen Runs">
                       {job.last_run_time ? (
-                        new Date(job.last_run_time).toLocaleString('de-DE')
+                        new Date(job.last_run_time).toLocaleString(formatLocale)
                       ) : (
                         <span className="no-data">-</span>
                       )}
@@ -152,7 +156,7 @@ export default function Scheduler() {
                       <span className="run-count">{job.run_count || 0}</span>
                     </Tooltip>
                   </td>
-                  <td>{new Date(job.created_at).toLocaleString('de-DE')}</td>
+                  <td>{new Date(job.created_at).toLocaleString(formatLocale)}</td>
                   <td>
                     <div className="action-buttons">
                       <Tooltip content="Zeige letzte 10 Runs dieses Jobs">
@@ -173,7 +177,7 @@ export default function Scheduler() {
                               className="edit-button"
                               disabled={!job.pipeline_json_edit_url}
                             >
-                              Bearbeiten
+                              {t('scheduler.edit')}
                             </button>
                           </Tooltip>
                         </>
@@ -193,13 +197,14 @@ export default function Scheduler() {
           </tbody>
         </table>
       ) : (
-        <p className="no-jobs">Keine Jobs gefunden</p>
+        <p className="no-jobs">{t('schedulerExtra.noJobsFound')}</p>
       )}
     </div>
   )
 }
 
 function JobDetails({ jobId }: { jobId: string }) {
+  const { t } = useTranslation()
   const { data: runs, isLoading } = useQuery({
     queryKey: ['job-runs', jobId],
     queryFn: async () => {
@@ -209,22 +214,22 @@ function JobDetails({ jobId }: { jobId: string }) {
   })
 
   if (isLoading) {
-    return <div>Lade Historie...</div>
+    return <div>{t('schedulerExtra.loadHistory')}</div>
   }
 
   return (
     <div className="job-details">
-      <h4>Letzte Runs</h4>
+      <h4>{t('schedulerExtra.lastRuns')}</h4>
       {runs && runs.length > 0 ? (
         <table className="job-runs-table">
           <thead>
             <tr>
-              <th>ID</th>
-              <th>Status</th>
-              <th>Gestartet</th>
-              <th>Beendet</th>
-              <th>Exit Code</th>
-              <th>Aktionen</th>
+              <th>{t('schedulerExtra.id')}</th>
+              <th>{t('scheduler.status')}</th>
+              <th>{t('schedulerExtra.started')}</th>
+              <th>{t('schedulerExtra.finished')}</th>
+              <th>{t('schedulerExtra.exitCode')}</th>
+              <th>{t('scheduler.actions')}</th>
             </tr>
           </thead>
           <tbody>
@@ -236,10 +241,10 @@ function JobDetails({ jobId }: { jobId: string }) {
                     {run.status}
                   </span>
                 </td>
-                <td>{new Date(run.started_at).toLocaleString('de-DE')}</td>
+                <td>{new Date(run.started_at).toLocaleString(getFormatLocale())}</td>
                 <td>
                   {run.finished_at
-                    ? new Date(run.finished_at).toLocaleString('de-DE')
+                    ? new Date(run.finished_at).toLocaleString(getFormatLocale())
                     : '-'}
                 </td>
                 <td>
@@ -253,7 +258,7 @@ function JobDetails({ jobId }: { jobId: string }) {
                 </td>
                 <td>
                   <Link to={`/runs/${run.id}`} className="view-link">
-                    Details
+                    {t('schedulerExtra.details')}
                   </Link>
                 </td>
               </tr>

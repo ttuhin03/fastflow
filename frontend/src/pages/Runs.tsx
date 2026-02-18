@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
+import { getFormatLocale } from '../utils/locale'
 import { MdInfo, MdCheckCircle, MdCancel, MdHourglassEmpty, MdPlayArrow, MdWarning, MdStop } from 'react-icons/md'
 import Tooltip from '../components/Tooltip'
 import InfoIcon from '../components/InfoIcon'
@@ -27,6 +29,7 @@ interface RunsResponse {
 }
 
 export default function Runs() {
+  const { t } = useTranslation()
   const [pipelineFilter, setPipelineFilter] = useState<string>('')
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
@@ -108,7 +111,7 @@ export default function Runs() {
     return (
       <div className="loading-container">
         <div className="spinner"></div>
-        <p>Laden...</p>
+        <p>{t('common.loading')}</p>
       </div>
     )
   }
@@ -293,7 +296,7 @@ export default function Runs() {
                         </div>
                       </Tooltip>
                     </td>
-                    <td>{new Date(run.started_at).toLocaleString('de-DE')}</td>
+                    <td>{new Date(run.started_at).toLocaleString(getFormatLocale())}</td>
                     <td>
                       <Tooltip content="Berechnet aus Start- und Endzeit">
                         {getDuration(run)}
@@ -347,7 +350,7 @@ export default function Runs() {
                   </div>
                   <div className="run-card-row">
                     <span className="run-card-label">Gestartet:</span>
-                    <span className="run-card-value">{new Date(run.started_at).toLocaleString('de-DE')}</span>
+                    <span className="run-card-value">{new Date(run.started_at).toLocaleString(getFormatLocale())}</span>
                   </div>
                   <div className="run-card-row">
                     <span className="run-card-label">Dauer:</span>

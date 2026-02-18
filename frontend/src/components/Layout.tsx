@@ -1,9 +1,11 @@
 import { useEffect, useState, useRef, useLayoutEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
+import i18n from '../i18n'
 import {
   MdDashboard,
   MdAccountTree,
@@ -24,19 +26,18 @@ import './Layout.css'
 
 interface NavItem {
   path: string
-  label: string
+  labelKey: string
   icon: React.ReactNode
 }
 
 const navItems: NavItem[] = [
-  { path: '/', label: 'Dashboard', icon: <MdDashboard /> },
-  { path: '/pipelines', label: 'Pipelines', icon: <MdAccountTree /> },
-  { path: '/settings', label: 'Einstellungen', icon: <MdSettings /> },
+  { path: '/', labelKey: 'nav.dashboard', icon: <MdDashboard /> },
+  { path: '/pipelines', labelKey: 'nav.pipelines', icon: <MdAccountTree /> },
+  { path: '/settings', labelKey: 'nav.settings', icon: <MdSettings /> },
 ]
 
-const BASE_TITLE = 'Fast-Flow'
-
 export default function Layout() {
+  const { t } = useTranslation()
   const { logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
@@ -129,8 +130,8 @@ export default function Layout() {
 
   useEffect(() => {
     const activeItem = navItems.find((item) => isActive(item.path))
-    document.title = activeItem ? `${activeItem.label} · ${BASE_TITLE}` : BASE_TITLE
-  }, [location.pathname])
+    document.title = activeItem ? `${t(activeItem.labelKey)} · ${t('appTitle')}` : t('appTitle')
+  }, [location.pathname, t])
 
   const handleLogout = async () => {
     await logout()
@@ -174,7 +175,7 @@ export default function Layout() {
       />
 
       {/* Mobile Menu Button */}
-      <button className="mobile-menu-button" onClick={toggleSidebar} aria-label="Menu">
+      <button className="mobile-menu-button" onClick={toggleSidebar} aria-label={t('nav.menu')}>
         {sidebarOpen ? <MdClose /> : <MdMenu />}
       </button>
 
@@ -184,7 +185,7 @@ export default function Layout() {
             <div className="sidebar-logo-icon">
               <MdCode />
             </div>
-            <h1 className="sidebar-logo">Fast-Flow</h1>
+            <h1 className="sidebar-logo">{t('appTitle')}</h1>
           </div>
         </div>
 
@@ -214,9 +215,9 @@ export default function Layout() {
                 <span className={`nav-icon ${iconClass} ${iconType}`}>
                   {item.icon}
                 </span>
-                <span className="nav-label">{item.label}</span>
+                <span className="nav-label">{t(item.labelKey)}</span>
                 {item.path === '/settings' && pendingCount > 0 && (
-                  <span className="nav-badge" title="Offene Beitrittsanfragen">
+                  <span className="nav-badge" title={t('nav.pendingInvites')}>
                     {pendingCount > 99 ? '99+' : pendingCount}
                   </span>
                 )}
@@ -225,12 +226,31 @@ export default function Layout() {
           })}
         </nav>
 
+        <div className="sidebar-lang">
+          <button
+            type="button"
+            className={`lang-btn ${i18n.language?.startsWith('de') ? 'active' : ''}`}
+            onClick={() => i18n.changeLanguage('de')}
+            aria-label="Deutsch"
+          >
+            {t('language.de')}
+          </button>
+          <span className="lang-sep">|</span>
+          <button
+            type="button"
+            className={`lang-btn ${i18n.language?.startsWith('en') ? 'active' : ''}`}
+            onClick={() => i18n.changeLanguage('en')}
+            aria-label="English"
+          >
+            {t('language.en')}
+          </button>
+        </div>
 
         <div className="sidebar-footer">
-          <div className={`backend-status ${backendStatus} ${healthPulse ? 'pulse' : ''}`} title={backendStatus === 'online' ? 'Backend online' : 'Backend offline'}>
+          <div className={`backend-status ${backendStatus} ${healthPulse ? 'pulse' : ''}`} title={backendStatus === 'online' ? t('nav.backendOnline') : t('nav.backendOffline')}>
             <MdCircle className="status-dot-icon" />
             <span className="status-text">
-              {backendStatus === 'online' ? 'Online' : backendStatus === 'offline' ? 'Offline' : 'Prüfe...'}
+              {backendStatus === 'online' ? t('nav.online') : backendStatus === 'offline' ? t('nav.offline') : t('nav.checking')}
               {health?.pipeline_executor && (
                 <span className="executor-label" style={{ marginLeft: '6px', opacity: 0.85 }}>
                   · {health.pipeline_executor === 'kubernetes' ? 'K8s' : 'Docker'}
@@ -246,7 +266,7 @@ export default function Layout() {
             className="sidebar-docs-link"
           >
             <MdMenuBook style={{ flexShrink: 0, width: 16, height: 16 }} />
-            <span>Doku</span>
+            <span>{t('nav.docs')}</span>
           </a>
 
           <a
@@ -258,7 +278,7 @@ export default function Layout() {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}>
               <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
             </svg>
-            <span>View on GitHub</span>
+            <span>{t('nav.viewOnGitHub')}</span>
           </a>
 
           <p className="sidebar-footer-text">
@@ -269,7 +289,7 @@ export default function Layout() {
           </p>
           <button onClick={handleLogout} className="logout-btn">
             <MdLogout />
-            <span>Abmelden</span>
+            <span>{t('nav.logout')}</span>
           </button>
         </div>
       </aside>
@@ -278,7 +298,7 @@ export default function Layout() {
         <header className="main-header">
           <div className="header-content">
             <h2 className="page-title">
-              {navItems.find(item => isActive(item.path))?.label || 'Dashboard'}
+              {navItems.find(item => isActive(item.path)) ? t(navItems.find(item => isActive(item.path))!.labelKey) : t('nav.dashboard')}
             </h2>
             <div className="header-center">
               <VersionInfo variant="banner" />

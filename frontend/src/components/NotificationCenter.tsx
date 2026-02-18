@@ -1,10 +1,13 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNotifications } from '../contexts/NotificationContext'
 import { MdNotifications, MdNotificationsNone, MdClose, MdError, MdWarning, MdInfo, MdCheckCircle } from 'react-icons/md'
 import { useNavigate } from 'react-router-dom'
+import { getFormatLocale } from '../utils/locale'
 import './NotificationCenter.css'
 
 export default function NotificationCenter() {
+  const { t } = useTranslation()
   const { notifications, unreadCount, markAsRead, markAllAsRead, clearNotification, clearAll } = useNotifications()
   const [isOpen, setIsOpen] = useState(false)
   const navigate = useNavigate()
@@ -54,30 +57,30 @@ export default function NotificationCenter() {
           <div className="notification-overlay" onClick={() => setIsOpen(false)}></div>
           <div className="notification-panel">
             <div className="notification-panel-header">
-              <h3>Benachrichtigungen</h3>
+              <h3>{t('notifications.title')}</h3>
               <div className="notification-panel-actions">
                 {unreadNotifications.length > 0 && (
                   <button
                     className="notification-action-btn"
                     onClick={markAllAsRead}
-                    title="Alle als gelesen markieren"
+                    title={t('notifications.markAllRead')}
                   >
-                    Alle gelesen
+                    {t('notifications.markAllReadShort')}
                   </button>
                 )}
                 {notifications.length > 0 && (
                   <button
                     className="notification-action-btn"
                     onClick={clearAll}
-                    title="Alle löschen"
+                    title={t('notifications.clearAll')}
                   >
-                    Alle löschen
+                    {t('notifications.clearAll')}
                   </button>
                 )}
                 <button
                   className="notification-close-btn"
                   onClick={() => setIsOpen(false)}
-                  aria-label="Schließen"
+                  aria-label={t('notifications.close')}
                 >
                   <MdClose />
                 </button>
@@ -88,7 +91,7 @@ export default function NotificationCenter() {
               {notifications.length === 0 ? (
                 <div className="notification-empty">
                   <MdNotificationsNone />
-                  <p>Keine Benachrichtigungen</p>
+                  <p>{t('notifications.empty')}</p>
                 </div>
               ) : (
                 notifications.map((notification) => (
@@ -107,7 +110,7 @@ export default function NotificationCenter() {
                             e.stopPropagation()
                             clearNotification(notification.id)
                           }}
-                          aria-label="Löschen"
+                          aria-label={t('notifications.delete')}
                         >
                           <MdClose />
                         </button>
@@ -115,7 +118,7 @@ export default function NotificationCenter() {
                       <p className="notification-item-message">{notification.message}</p>
                       <div className="notification-item-footer">
                         <span className="notification-item-time">
-                          {notification.timestamp.toLocaleString('de-DE')}
+                          {notification.timestamp.toLocaleString(getFormatLocale())}
                         </span>
                         {notification.actionUrl && (
                           <button
@@ -125,7 +128,7 @@ export default function NotificationCenter() {
                               handleActionClick(notification)
                             }}
                           >
-                            {notification.actionLabel || 'Anzeigen'}
+                            {notification.actionLabel || t('notifications.show')}
                           </button>
                         )}
                       </div>

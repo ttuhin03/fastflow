@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import { showError, showSuccess, showConfirm } from '../utils/toast'
+import { getFormatLocale } from '../utils/locale'
 import Tooltip from '../components/Tooltip'
 import InfoIcon from '../components/InfoIcon'
 import './Sync.css'
@@ -50,8 +52,10 @@ function isSshUrl(url: string): boolean {
 }
 
 export default function Sync() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { isReadonly } = useAuth()
+  const formatLocale = getFormatLocale()
   const [syncBranch, setSyncBranch] = useState('')
   const [activeTab, setActiveTab] = useState<'status' | 'settings' | 'logs' | 'repository'>('status')
   const [settingsForm, setSettingsForm] = useState<SyncSettings>({
@@ -139,10 +143,10 @@ export default function Sync() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sync-status'] })
       queryClient.invalidateQueries({ queryKey: ['pipelines'] })
-      showSuccess('Git-Sync erfolgreich abgeschlossen')
+      showSuccess(t('sync.syncSuccess'))
     },
     onError: (error: any) => {
-      showError(`Fehler beim Git-Sync: ${error.response?.data?.detail || error.message}`)
+      showError(t('sync.syncError', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
@@ -153,10 +157,10 @@ export default function Sync() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sync-settings'] })
-      showSuccess('Sync-Einstellungen aktualisiert')
+      showSuccess(t('sync.settingsUpdated'))
     },
     onError: (error: any) => {
-      showError(`Fehler beim Aktualisieren: ${error.response?.data?.detail || error.message}`)
+      showError(t('sync.updateError', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
@@ -174,12 +178,12 @@ export default function Sync() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['repo-config'] })
       queryClient.invalidateQueries({ queryKey: ['sync-status'] })
-      showSuccess('Repository-Konfiguration gespeichert')
+      showSuccess(t('sync.repoSaved'))
       setRepoForm((f) => ({ ...f, token: '', deploy_key: '' }))
       queryClient.invalidateQueries({ queryKey: ['pipelines'] })
     },
     onError: (error: any) => {
-      showError(`Fehler beim Speichern: ${error.response?.data?.detail || error.message}`)
+      showError(t('sync.repoSaveError', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
@@ -196,7 +200,7 @@ export default function Sync() {
       }
     },
     onError: (error: any) => {
-      showError(`Fehler beim Testen: ${error.response?.data?.detail || error.message}`)
+      showError(t('sync.testError', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
@@ -210,11 +214,11 @@ export default function Sync() {
       queryClient.invalidateQueries({ queryKey: ['sync-status'] })
       if (data.public_key) {
         setGeneratedPublicKey(data.public_key)
-        showSuccess('Deploy-Key erzeugt. Öffentlichen Key bei GitHub (Deploy keys) eintragen.')
+        showSuccess(t('sync.deployKeyGenerated'))
       }
     },
     onError: (error: any) => {
-      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
+      showError(t('sync.deployKeyError', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
@@ -226,12 +230,12 @@ export default function Sync() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['repo-config'] })
       queryClient.invalidateQueries({ queryKey: ['sync-status'] })
-      showSuccess('Repository-Konfiguration gelöscht')
+      showSuccess(t('sync.repoDeleted'))
       setRepoForm({ repo_url: '', token: '', deploy_key: '', branch: 'main', pipelines_subdir: '' })
       setGeneratedPublicKey(null)
     },
     onError: (error: any) => {
-      showError(`Fehler beim Löschen: ${error.response?.data?.detail || error.message}`)
+      showError(t('sync.deleteError', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
@@ -243,16 +247,16 @@ export default function Sync() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sync-status'] })
       queryClient.invalidateQueries({ queryKey: ['pipelines'] })
-      showSuccess('Pipelines-Verzeichnis wurde geleert. Sie können nun ein neues Repo synchronisieren.')
+      showSuccess(t('sync.clearSuccess'))
     },
     onError: (error: any) => {
-      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
+      showError(t('sync.clearError', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
   const handleSync = async () => {
     if (syncMutation.isPending) return
-    const confirmed = await showConfirm('Git-Sync ausführen? Dies kann einige Zeit dauern.')
+    const confirmed = await showConfirm(t('dashboard.syncConfirm'))
     if (confirmed) {
       syncMutation.mutate(syncBranch || undefined)
     }
@@ -260,7 +264,7 @@ export default function Sync() {
 
   const handleSaveSettings = () => {
     if (settingsForm.auto_sync_interval !== null && settingsForm.auto_sync_interval < 60) {
-      showError('Auto-Sync-Intervall muss mindestens 60 Sekunden betragen')
+      showError(t('sync.minIntervalError'))
       return
     }
     updateSettingsMutation.mutate(settingsForm)
@@ -269,7 +273,7 @@ export default function Sync() {
   const handleSaveRepoConfig = () => {
     const url = repoForm.repo_url.trim()
     if (!url) {
-      showError('Bitte geben Sie die Repository-URL ein')
+      showError(t('sync.enterRepoUrl'))
       return
     }
     if (
@@ -278,7 +282,7 @@ export default function Sync() {
       !url.startsWith('git@') &&
       !url.startsWith('ssh://')
     ) {
-      showError('URL muss mit https://, http://, git@ oder ssh:// beginnen')
+      showError(t('sync.urlMustStart'))
       return
     }
     if (isSshUrl(url)) {
@@ -305,11 +309,11 @@ export default function Sync() {
   const handleGenerateDeployKey = () => {
     const url = repoForm.repo_url.trim()
     if (!url) {
-      showError('Bitte zuerst die SSH-Repository-URL eingeben')
+      showError(t('sync.enterSshUrl'))
       return
     }
     if (!isSshUrl(url)) {
-      showError('Nur bei SSH-URL (git@... oder ssh://...) kann ein Deploy-Key erzeugt werden')
+      showError(t('sync.deployKeyOnlySsh'))
       return
     }
     generateDeployKeyMutation.mutate({
@@ -322,28 +326,26 @@ export default function Sync() {
   const handleCopyPublicKey = () => {
     if (generatedPublicKey && navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(generatedPublicKey)
-      showSuccess('Öffentlicher Key in die Zwischenablage kopiert')
+      showSuccess(t('sync.publicKeyCopied'))
     }
   }
 
   const handleClearPipelines = async () => {
-    const confirmed = await showConfirm(
-      'Alle Pipelines im Verzeichnis löschen (inkl. .git)? Danach können Sie ein neues Repository per Sync klonen. Diese Aktion kann nicht rückgängig gemacht werden.'
-    )
+    const confirmed = await showConfirm(t('sync.clearConfirm'))
     if (confirmed) {
       clearPipelinesMutation.mutate()
     }
   }
 
   const handleDeleteRepoConfig = async () => {
-    const confirmed = await showConfirm('Repository-Konfiguration wirklich löschen?')
+    const confirmed = await showConfirm(t('sync.repoDeleteConfirm'))
     if (confirmed) {
       deleteRepoConfigMutation.mutate()
     }
   }
 
   if (isLoading) {
-    return <div>Laden...</div>
+    return <div>{t('common.loading')}</div>
   }
 
   return (
@@ -355,45 +357,45 @@ export default function Sync() {
           className={activeTab === 'status' ? 'active' : ''}
           onClick={() => setActiveTab('status')}
         >
-          Status
+          {t('sync.status')}
         </button>
         <button
           className={activeTab === 'settings' ? 'active' : ''}
           onClick={() => setActiveTab('settings')}
         >
-          Einstellungen
+          {t('sync.settings')}
         </button>
         <button
           className={activeTab === 'logs' ? 'active' : ''}
           onClick={() => setActiveTab('logs')}
         >
-          Logs
+          {t('sync.logs')}
         </button>
         <button
           className={activeTab === 'repository' ? 'active' : ''}
           onClick={() => setActiveTab('repository')}
         >
-          Repository
+          {t('sync.repository')}
         </button>
       </div>
 
       {activeTab === 'status' && (
         <>
       <div className="sync-status-card">
-        <h3>Status</h3>
+        <h3>{t('sync.status')}</h3>
         <div className="status-info">
           <div className="status-row">
             <span className="status-label">
-              Branch:
-              <InfoIcon content="Der Git-Branch, der für den Sync verwendet wird" />
+              {t('sync.branchLabel')}
+              <InfoIcon content={t('sync.branchInfo')} />
             </span>
             <span className="status-value">{syncStatus?.branch || '-'}</span>
           </div>
           {syncStatus?.remote_url && (
             <div className="status-row">
               <span className="status-label">
-                Remote URL:
-                <InfoIcon content="URL des Git-Repositories" />
+                {t('sync.remoteUrl')}
+                <InfoIcon content={t('sync.remoteUrlInfo')} />
               </span>
               <span className="status-value">{syncStatus.remote_url}</span>
             </div>
@@ -401,23 +403,23 @@ export default function Sync() {
           {formatLastCommit(syncStatus?.last_commit) && (
             <div className="status-row">
               <span className="status-label">
-                Letzter Commit:
-                <InfoIcon content="Commit-Hash des letzten synchronisierten Commits" />
+                {t('sync.lastCommit')}
+                <InfoIcon content={t('sync.lastCommitInfo')} />
               </span>
               <span className="status-value">{formatLastCommit(syncStatus?.last_commit)}</span>
             </div>
           )}
           {syncStatus?.last_sync && (
             <div className="status-row">
-              <span className="status-label">Letzter Sync:</span>
+              <span className="status-label">{t('sync.lastSync')}:</span>
               <span className="status-value">
-                {new Date(syncStatus.last_sync).toLocaleString('de-DE')}
+                {new Date(syncStatus.last_sync).toLocaleString(formatLocale)}
               </span>
             </div>
           )}
           {syncStatus?.status && (
             <div className="status-row">
-              <span className="status-label">Status:</span>
+              <span className="status-label">{t('sync.status')}:</span>
               <span className={`status-badge ${syncStatus.status.toLowerCase()}`}>
                 {syncStatus.status}
               </span>
@@ -427,10 +429,10 @@ export default function Sync() {
       </div>
 
       <div className="sync-actions-card">
-        <h3>Sync ausführen</h3>
+        <h3>{t('sync.runSync')}</h3>
         <div className="sync-form">
           <div className="form-group">
-            <label htmlFor="sync-branch">Branch (optional, leer = Standard):</label>
+            <label htmlFor="sync-branch">{t('sync.branchOptional')}</label>
             <input
               id="sync-branch"
               type="text"
@@ -446,7 +448,7 @@ export default function Sync() {
               disabled={syncMutation.isPending}
               className="sync-button"
             >
-              {syncMutation.isPending ? 'Sync läuft...' : 'Git Sync ausführen'}
+              {syncMutation.isPending ? t('dashboard.syncRunning') : t('sync.runSync')}
             </button>
           )}
         </div>
@@ -455,8 +457,8 @@ export default function Sync() {
       {syncStatus?.pipelines_cached && syncStatus.pipelines_cached.length > 0 && (
         <div className="cache-status-card">
           <h3>
-            Gecachte Pipelines (Pre-Heated)
-            <InfoIcon content="Diese Pipelines wurden beim Sync bereits vorgewärmt (pre-heated) für schnellere Ausführung" />
+            {t('sync.cachedPipelines')}
+            <InfoIcon content={t('sync.cachedPipelinesTooltip')} />
           </h3>
           <div className="cached-pipelines">
             {syncStatus.pipelines_cached.map((pipeline) => (
@@ -472,9 +474,9 @@ export default function Sync() {
 
       {activeTab === 'settings' && (
         <div className="sync-settings-card">
-          <h3>Sync-Einstellungen</h3>
+          <h3>{t('sync.syncSettings')}</h3>
           {settingsLoading ? (
-            <div>Lade Einstellungen...</div>
+            <div>{t('sync.loadingSettings')}</div>
           ) : (
             <div className="settings-form">
               <div className="form-group">
@@ -487,8 +489,8 @@ export default function Sync() {
                     }
                     disabled={isReadonly}
                   />
-                  Automatisches Sync aktivieren
-                  <InfoIcon content="Wenn aktiviert, wird automatisch in regelmäßigen Abständen synchronisiert" />
+                  {t('sync.autoSyncEnable')}
+                  <InfoIcon content={t('sync.saveSettingsNote')} />
                 </label>
               </div>
               <div className="form-group">
@@ -517,12 +519,12 @@ export default function Sync() {
                     disabled={updateSettingsMutation.isPending}
                     className="save-button"
                   >
-                    {updateSettingsMutation.isPending ? 'Speichert...' : 'Einstellungen speichern'}
+                    {updateSettingsMutation.isPending ? t('common.saving') : t('sync.saveSettings')}
                   </button>
                 </div>
               )}
               <p className="settings-note">
-                Hinweis: Einstellungen werden nur für die laufende Instanz gespeichert.
+                {t('sync.saveSettingsNote')}
                 Für persistente Änderungen die .env-Datei bearbeiten.
               </p>
             </div>
@@ -540,7 +542,7 @@ export default function Sync() {
                   <div className="log-header">
                     <span className="log-timestamp">
                       {log.timestamp
-                        ? new Date(log.timestamp).toLocaleString('de-DE')
+                        ? new Date(log.timestamp).toLocaleString(formatLocale)
                         : '-'}
                     </span>
                     <span className={`log-status log-${log.status || 'unknown'}`}>
@@ -558,7 +560,7 @@ export default function Sync() {
                   )}
                   {log.pipelines_cached && log.pipelines_cached.length > 0 && (
                     <div className="log-details">
-                      Gecachte Pipelines: {log.pipelines_cached.join(', ')}
+                      {t('sync.cachedPipelinesLabel')} {log.pipelines_cached.join(', ')}
                     </div>
                   )}
                 </div>
@@ -721,7 +723,7 @@ export default function Sync() {
                       disabled={saveRepoConfigMutation.isPending}
                       className="btn btn-primary"
                     >
-                      {saveRepoConfigMutation.isPending ? 'Speichert...' : 'Speichern'}
+                      {saveRepoConfigMutation.isPending ? t('common.saving') : t('sync.save')}
                     </button>
                     <Tooltip content="Testet die Verbindung (git ls-remote)">
                       <button
@@ -729,7 +731,7 @@ export default function Sync() {
                         disabled={testRepoConfigMutation.isPending}
                         className="btn btn-outlined"
                       >
-                        {testRepoConfigMutation.isPending ? 'Testet...' : 'Konfiguration testen'}
+                        {testRepoConfigMutation.isPending ? t('common.saving') : t('sync.testConfig')}
                       </button>
                     </Tooltip>
                     {repoConfig?.configured && (
@@ -762,7 +764,7 @@ export default function Sync() {
                       disabled={clearPipelinesMutation.isPending}
                       className="btn btn-outlined"
                     >
-                      {clearPipelinesMutation.isPending ? 'Leert...' : 'Pipelines-Verzeichnis leeren'}
+                      {clearPipelinesMutation.isPending ? t('sync.clearing') : t('sync.clearPipelinesDir')}
                     </button>
                   </div>
                 )}

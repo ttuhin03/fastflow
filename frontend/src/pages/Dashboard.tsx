@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { useAuth } from '../contexts/AuthContext'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
@@ -34,6 +35,7 @@ interface SyncStatus {
 }
 
 export default function Dashboard() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { isReadonly } = useAuth()
   // Reduzierte Polling-Frequenz: weniger API-Last bei vielen Nutzern (Enterprise-tauglich)
@@ -86,17 +88,17 @@ export default function Dashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pipelines'] })
       queryClient.invalidateQueries({ queryKey: ['sync-status'] })
-      showSuccess('Git-Sync erfolgreich abgeschlossen')
+      showSuccess(t('dashboard.syncSuccess'))
     },
     onError: (error: any) => {
-      showError(`Fehler beim Git-Sync: ${error.response?.data?.detail || error.message}`)
+      showError(t('dashboard.syncError', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
 
   const handleSync = async () => {
     if (syncMutation.isPending) return
-    const confirmed = await showConfirm('Git-Sync ausführen? Dies kann einige Zeit dauern.')
+    const confirmed = await showConfirm(t('dashboard.syncConfirm'))
     if (confirmed) {
       syncMutation.mutate()
     }
@@ -106,7 +108,7 @@ export default function Dashboard() {
     return (
       <div className="loading-container">
         <div className="spinner"></div>
-        <p>Laden...</p>
+        <p>{t('common.loading')}</p>
       </div>
     )
   }
@@ -125,7 +127,7 @@ export default function Dashboard() {
             className="btn btn-primary sync-button"
           >
             <MdSync />
-            {syncMutation.isPending ? 'Sync läuft...' : 'Git Sync'}
+            {syncMutation.isPending ? t('dashboard.syncRunning') : t('dashboard.gitSync')}
           </button>
         </div>
       )}
@@ -136,7 +138,7 @@ export default function Dashboard() {
             <MdViewList />
           </div>
           <div className="stat-content">
-            <h3 className="stat-label">Pipelines</h3>
+            <h3 className="stat-label">{t('nav.pipelines')}</h3>
             <p className="stat-value">{pipelines?.length || 0}</p>
           </div>
         </div>
@@ -146,7 +148,7 @@ export default function Dashboard() {
             <MdSchedule />
           </div>
           <div className="stat-content">
-            <h3 className="stat-label">Gesamt Runs</h3>
+            <h3 className="stat-label">{t('dashboard.totalRuns')}</h3>
             <p className="stat-value">{totalRuns}</p>
           </div>
         </div>
@@ -156,7 +158,7 @@ export default function Dashboard() {
             <MdCheckCircle />
           </div>
           <div className="stat-content">
-            <h3 className="stat-label">Erfolgreich</h3>
+            <h3 className="stat-label">{t('dashboard.successful')}</h3>
             <p className="stat-value success">{totalSuccessful}</p>
           </div>
         </div>
@@ -166,7 +168,7 @@ export default function Dashboard() {
             <MdCancel />
           </div>
           <div className="stat-content">
-            <h3 className="stat-label">Fehlgeschlagen</h3>
+            <h3 className="stat-label">{t('common.failed')}</h3>
             <p className="stat-value error">{totalFailed}</p>
           </div>
         </div>
@@ -174,7 +176,7 @@ export default function Dashboard() {
 
       {allPipelinesDailyStats && allPipelinesDailyStats.daily_stats && allPipelinesDailyStats.daily_stats.length > 0 && (
         <div className="dashboard-calendar-section">
-          <h3 className="section-title">Laufhistorie</h3>
+          <h3 className="section-title">{t('dashboard.runHistory')}</h3>
           <div className="dashboard-calendar-wrapper">
             <CalendarHeatmap dailyStats={allPipelinesDailyStats.daily_stats} days={365} showTitle={false} />
           </div>
@@ -182,28 +184,28 @@ export default function Dashboard() {
       )}
 
       <div className="storage-section">
-        <h3 className="section-title">Speicherplatz</h3>
+        <h3 className="section-title">{t('dashboard.storage')}</h3>
         <StorageStats />
       </div>
 
       <div className="pipelines-section">
-        <h3 className="section-title">Pipelines</h3>
+        <h3 className="section-title">{t('nav.pipelines')}</h3>
         {pipelines && pipelines.length > 0 ? (
           <div className="pipeline-grid">
             {pipelines.map((pipeline, index) => (
               <div key={pipeline.name} className="pipeline-card card" style={{ animationDelay: `${index * 0.05}s` }}>
                 <div className="pipeline-header">
                   <h4 className="pipeline-name">{pipeline.name}</h4>
-                  <Tooltip content="Aktiv: Pipeline kann ausgeführt werden | Inaktiv: Pipeline ist deaktiviert">
+                  <Tooltip content={t('dashboard.pipelineActiveTooltip')}>
                     <span className={`badge ${pipeline.enabled ? 'badge-success' : 'badge-secondary'}`}>
-                      {pipeline.enabled ? 'Aktiv' : 'Inaktiv'}
+                      {pipeline.enabled ? t('common.active') : t('common.inactive')}
                     </span>
                   </Tooltip>
                 </div>
                 <div className="pipeline-recent-runs">
                   <span className="recent-runs-label">
-                    Letzte Runs:
-                    <InfoIcon content="Zeigt die Status der letzten Runs (grün=erfolgreich, rot=fehlgeschlagen, gelb=läuft)" />
+                    {t('dashboard.lastRuns')}
+                    <InfoIcon content={t('dashboard.lastRunsTooltip')} />
                   </span>
                   <RunStatusCircles pipelineName={pipeline.name} />
                 </div>
@@ -212,7 +214,7 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="empty-state card">
-            <p>Keine Pipelines gefunden</p>
+            <p>{t('dashboard.noPipelines')}</p>
           </div>
         )}
       </div>

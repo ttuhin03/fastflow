@@ -1,9 +1,11 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import { showError, showSuccess } from '../utils/toast'
 import Tooltip from '../components/Tooltip'
+import { getFormatLocale } from '../utils/locale'
 import './Secrets.css'
 
 interface Secret {
@@ -22,6 +24,7 @@ interface SecretFromPipeline {
 }
 
 export default function Secrets() {
+  const { t } = useTranslation()
   const { isReadonly } = useAuth()
   const [showValues, setShowValues] = useState<Record<string, boolean>>({})
   const [encryptPlaintext, setEncryptPlaintext] = useState('')
@@ -50,10 +53,10 @@ export default function Secrets() {
     },
     onSuccess: (data) => {
       setEncryptResult(data.encrypted)
-      showSuccess('Wert verschlüsselt. In pipeline.json unter encrypted_env eintragen.')
+      showSuccess(t('secrets.encryptSuccess'))
     },
     onError: (error: any) => {
-      showError(`Verschlüsselung fehlgeschlagen: ${error.response?.data?.detail || error.message}`)
+      showError(t('secrets.encryptError', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
@@ -61,9 +64,9 @@ export default function Secrets() {
     if (!encryptResult) return
     try {
       await navigator.clipboard.writeText(encryptResult)
-      showSuccess('Verschlüsselten Wert in Zwischenablage kopiert')
+      showSuccess(t('secrets.copySuccess'))
     } catch {
-      showError('Kopieren fehlgeschlagen')
+      showError(t('secrets.copyError'))
     }
   }
 
@@ -72,26 +75,26 @@ export default function Secrets() {
   }
 
   if (isLoading) {
-    return <div>Laden...</div>
+    return <div>{t('common.loading')}</div>
   }
 
   return (
     <div className="secrets">
       <div className="secrets-header">
-        <h2>Secrets & Parameter</h2>
+        <h2>{t('secrets.title')}</h2>
       </div>
       <p className="secrets-readonly-hint">
-        Secrets kommen aus der Datenbank oder aus pipeline.json (<code>encrypted_env</code> / <code>default_env</code>). Unten siehst du beides: DB-Einträge und Keys, die in Pipelines verwendet werden.
+        {t('secrets.intro')}
       </p>
 
       {!isReadonly && (
         <div className="encrypt-for-pipeline-section card">
-          <h3 className="section-title">Für pipeline.json verschlüsseln</h3>
+          <h3 className="section-title">{t('secrets.encryptSection')}</h3>
           <p className="encrypt-hint">
-            Klartext eingeben, verschlüsseln lassen und den Ciphertext manuell in die pipeline.json unter <code>encrypted_env.&lt;KEY&gt;</code> eintragen.
+            {t('secrets.encryptHint')}
           </p>
           <div className="form-group">
-            <label htmlFor="encrypt-plaintext" className="form-label">Klartext</label>
+            <label htmlFor="encrypt-plaintext" className="form-label">{t('secrets.plaintext')}</label>
             <textarea
               id="encrypt-plaintext"
               className="form-input"
@@ -101,7 +104,7 @@ export default function Secrets() {
                 setEncryptResult(null)
               }}
               rows={3}
-              placeholder="Geheimer Wert, der verschlüsselt werden soll"
+              placeholder={t('secrets.placeholder')}
             />
           </div>
           <div className="form-actions">
@@ -111,12 +114,12 @@ export default function Secrets() {
               disabled={!encryptPlaintext || encryptForPipelineMutation.isPending}
               onClick={() => encryptForPipelineMutation.mutate(encryptPlaintext)}
             >
-              {encryptForPipelineMutation.isPending ? 'Verschlüsseln…' : 'Verschlüsseln'}
+              {encryptForPipelineMutation.isPending ? t('common.saving') : t('secrets.encrypt')}
             </button>
           </div>
           {encryptResult && (
             <div className="encrypt-result">
-              <label className="form-label">Verschlüsselter Wert (in pipeline.json eintragen)</label>
+              <label className="form-label">{t('secrets.encryptedValueLabel')}</label>
               <div className="encrypt-result-row">
                 <textarea
                   readOnly
@@ -125,11 +128,11 @@ export default function Secrets() {
                   className="form-input encrypt-result-value"
                 />
                 <button type="button" className="btn btn-secondary" onClick={handleCopyEncrypted}>
-                  Kopieren
+                  {t('secrets.copy')}
                 </button>
               </div>
               <p className="encrypt-result-hint">
-                In pipeline.json unter <code>encrypted_env</code> eintragen, z. B.: <code>&quot;KEY&quot;: &quot;&lt;Ciphertext hier&gt;&quot;</code>
+                {t('secrets.encryptResultHint')}
               </p>
             </div>
           )}
@@ -137,16 +140,16 @@ export default function Secrets() {
       )}
 
       <section className="secrets-db-section">
-        <h3 className="section-title">In Datenbank</h3>
+        <h3 className="section-title">{t('secrets.inDb')}</h3>
         {secrets && secrets.length > 0 ? (
           <table className="secrets-table">
             <thead>
               <tr>
-                <th>Key</th>
-                <th>Type</th>
-                <th>Value</th>
-                <th>Erstellt</th>
-                <th>Aktualisiert</th>
+                <th>{t('secrets.key')}</th>
+                <th>{t('secrets.type')}</th>
+                <th>{t('secrets.value')}</th>
+                <th>{t('secrets.createdAt')}</th>
+                <th>{t('secrets.updatedAt')}</th>
               </tr>
             </thead>
             <tbody>
@@ -155,10 +158,10 @@ export default function Secrets() {
                   <td>{secret.key}</td>
                   <td>
                     <Tooltip content={secret.is_parameter 
-                      ? "Nicht verschlüsselt, für Konfiguration"
-                      : "Verschlüsselt gespeichert"}>
+                      ? t('secrets.typeParameterTooltip')
+                      : t('secrets.typeSecretTooltip')}>
                       <span className={`type-badge ${secret.is_parameter ? 'parameter' : 'secret'}`}>
-                        {secret.is_parameter ? 'Parameter' : 'Secret'}
+                        {secret.is_parameter ? t('secrets.typeParameter') : t('secrets.typeSecret')}
                       </span>
                     </Tooltip>
                   </td>
@@ -169,39 +172,39 @@ export default function Secrets() {
                       ) : (
                         <span className="secret-value-hidden">••••••••</span>
                       )}
-                      <Tooltip content="Tippen, um den Wert anzuzeigen/zu verbergen">
+                      <Tooltip content={t('secrets.showHideTooltip')}>
                         <button
                           onClick={() => toggleShowValue(secret.key)}
                           className="toggle-button"
                         >
-                          {showValues[secret.key] ? 'Verbergen' : 'Anzeigen'}
+                          {showValues[secret.key] ? t('secrets.hide') : t('secrets.show')}
                         </button>
                       </Tooltip>
                     </div>
                   </td>
-                  <td>{new Date(secret.created_at).toLocaleString('de-DE')}</td>
-                  <td>{new Date(secret.updated_at).toLocaleString('de-DE')}</td>
+                  <td>{new Date(secret.created_at).toLocaleString(getFormatLocale())}</td>
+                  <td>{new Date(secret.updated_at).toLocaleString(getFormatLocale())}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         ) : (
-          <p className="no-secrets">Keine Einträge in der Datenbank</p>
+          <p className="no-secrets">{t('secrets.noEntriesDb')}</p>
         )}
       </section>
 
       <section className="secrets-pipelines-section">
-        <h3 className="section-title">In pipeline.json verwendet</h3>
+        <h3 className="section-title">{t('secrets.inPipelineJson')}</h3>
         <p className="secrets-pipelines-hint">
-          Env-Keys aus <code>encrypted_env</code> und <code>default_env</code> aller Pipelines (Werte werden hier nicht angezeigt).
+          {t('secrets.envKeysFromPipelines')}
         </p>
         {fromPipelines && fromPipelines.length > 0 ? (
           <table className="secrets-table">
             <thead>
               <tr>
-                <th>Key</th>
-                <th>Pipeline</th>
-                <th>Quelle</th>
+                <th>{t('secrets.key')}</th>
+                <th>{t('secrets.pipeline')}</th>
+                <th>{t('secrets.source')}</th>
               </tr>
             </thead>
             <tbody>
@@ -211,7 +214,7 @@ export default function Secrets() {
                   <td>
                     {row.pipeline}
                     {row.run_config_id && (
-                      <span className="run-config-badge" title="Run-Konfiguration (schedules[].id)">
+                      <span className="run-config-badge" title={t('secrets.runConfigBadgeTitle')}>
                         {row.run_config_id}
                       </span>
                     )}
@@ -226,7 +229,7 @@ export default function Secrets() {
             </tbody>
           </table>
         ) : (
-          <p className="no-secrets">Keine Env-Keys in pipeline.json gefunden</p>
+          <p className="no-secrets">{t('secrets.noEntriesPipeline')}</p>
         )}
       </section>
     </div>

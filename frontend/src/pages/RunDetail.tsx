@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef, useLayoutEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
+import { getFormatLocale } from '../utils/locale'
 import { showError, showSuccess } from '../utils/toast'
 import { LineChart } from '../components/LineChart'
 import { RunEnvSection } from '../components/RunEnvSection'
@@ -54,6 +56,7 @@ interface CellLog {
 }
 
 export default function RunDetail() {
+  const { t } = useTranslation()
   const { runId } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -460,11 +463,11 @@ export default function RunDetail() {
   }
 
   if (isLoading) {
-    return <div>Laden...</div>
+    return <div>{t('common.loading')}</div>
   }
 
   if (!run) {
-    return <div>Run nicht gefunden</div>
+    return <div>{t('runs.notFound')}</div>
   }
 
   const isRunning = run.status === 'RUNNING' || run.status === 'PENDING'
@@ -473,7 +476,7 @@ export default function RunDetail() {
   return (
     <div className="run-detail">
       <div className="run-detail-header">
-        <h2>Run Details</h2>
+        <h2>{t('runDetail.title')}</h2>
         <div className="run-actions">
           {isRunning && (
             <button
@@ -481,7 +484,7 @@ export default function RunDetail() {
               disabled={cancelMutation.isPending}
               className="cancel-button"
             >
-              {cancelMutation.isPending ? 'Bricht ab...' : 'Abbrechen'}
+              {cancelMutation.isPending ? t('runs.cancelling') : t('runs.cancel')}
             </button>
           )}
           {isFailed && (
@@ -490,7 +493,7 @@ export default function RunDetail() {
               disabled={retryMutation.isPending}
               className="retry-button"
             >
-              {retryMutation.isPending ? 'Startet...' : 'Erneut starten'}
+              {retryMutation.isPending ? t('common.saving') : t('runDetail.retry')}
             </button>
           )}
         </div>
@@ -532,16 +535,16 @@ export default function RunDetail() {
           </div>
         )}
         <div className="info-row">
-          <span className="info-label">Gestartet:</span>
+          <span className="info-label">{t('runDetail.started')}:</span>
           <span className="info-value">
-            {new Date(run.started_at).toLocaleString('de-DE', { timeZone: 'UTC' })} UTC
+            {new Date(run.started_at).toLocaleString(getFormatLocale(), { timeZone: 'UTC' })} UTC
           </span>
         </div>
         {run.finished_at && (
           <div className="info-row">
-            <span className="info-label">Beendet:</span>
+            <span className="info-label">{t('runDetail.finished')}:</span>
             <span className="info-value">
-              {new Date(run.finished_at).toLocaleString('de-DE', { timeZone: 'UTC' })} UTC
+              {new Date(run.finished_at).toLocaleString(getFormatLocale(), { timeZone: 'UTC' })} UTC
             </span>
           </div>
         )}
@@ -595,28 +598,28 @@ export default function RunDetail() {
           className={activeTab === 'info' ? 'active' : ''}
           onClick={() => setActiveTab('info')}
         >
-          Info
+          {t('runDetail.info')}
         </button>
         <button
           data-tab="env"
           className={activeTab === 'env' ? 'active' : ''}
           onClick={() => setActiveTab('env')}
         >
-          Environment-Variablen
+          {t('runDetail.env')}
         </button>
         <button
           data-tab="logs"
           className={activeTab === 'logs' ? 'active' : ''}
           onClick={() => setActiveTab('logs')}
         >
-          Logs {logs.length > 0 && `(${logs.length})`}
+          {t('runDetail.logs')} {logs.length > 0 && `(${logs.length})`}
         </button>
         <button
           data-tab="metrics"
           className={activeTab === 'metrics' ? 'active' : ''}
           onClick={() => setActiveTab('metrics')}
         >
-          Metrics {metrics.length > 0 && `(${metrics.length})`}
+          {t('runDetail.metrics')} {metrics.length > 0 && `(${metrics.length})`}
         </button>
       </div>
 
@@ -625,7 +628,7 @@ export default function RunDetail() {
           <div className="logs-controls">
             <input
               type="text"
-              placeholder="Logs durchsuchen..."
+              placeholder={t('runDetail.searchLogs')}
               value={logSearch}
               onChange={(e) => setLogSearch(e.target.value)}
               className="log-search"
@@ -636,13 +639,13 @@ export default function RunDetail() {
                 checked={autoScroll}
                 onChange={(e) => setAutoScroll(e.target.checked)}
               />
-              Auto-Scroll
+              {t('runDetail.autoScroll')}
             </label>
             {isRunning && (
               <span className={`connection-status ${logConnectionStatus}`}>
-                {logConnectionStatus === 'connected' ? '✓ Verbunden' : 
-                 logConnectionStatus === 'reconnecting' ? '↻ Verbinde...' : 
-                 '✗ Getrennt'}
+                {logConnectionStatus === 'connected' ? `✓ ${t('runDetail.connected')}` : 
+                 logConnectionStatus === 'reconnecting' ? `↻ ${t('runDetail.reconnecting')}` : 
+                 `✗ ${t('runDetail.disconnected')}`}
               </span>
             )}
             {logsDownloadUrl ? (

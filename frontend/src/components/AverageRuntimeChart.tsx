@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import { getFormatLocale } from '../utils/locale'
 import './AverageRuntimeChart.css'
 
 interface Run {
@@ -66,7 +67,7 @@ export default function AverageRuntimeChart({ runs, days = 30 }: AverageRuntimeC
         const max = Math.max(...durations)
         
         return {
-          date: new Date(date).toLocaleDateString('de-DE', { month: 'short', day: 'numeric' }),
+          date: new Date(date).toLocaleDateString(getFormatLocale(), { month: 'short', day: 'numeric' }),
           dateFull: date,
           avgDuration: parseFloat(avg.toFixed(2)),
           minDuration: parseFloat(min.toFixed(2)),

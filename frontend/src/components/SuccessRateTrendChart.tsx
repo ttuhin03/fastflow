@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import { getFormatLocale } from '../utils/locale'
 import './SuccessRateTrendChart.css'
 
 interface DailyStat {
@@ -26,7 +27,7 @@ export default function SuccessRateTrendChart({ dailyStats, days = 30 }: Success
     const recentStats = sortedStats.slice(-days)
     
     return recentStats.map(stat => ({
-      date: new Date(stat.date).toLocaleDateString('de-DE', { month: 'short', day: 'numeric' }),
+      date: new Date(stat.date).toLocaleDateString(getFormatLocale(), { month: 'short', day: 'numeric' }),
       dateFull: stat.date,
       successRate: parseFloat(stat.success_rate.toFixed(1)),
       totalRuns: stat.total_runs,

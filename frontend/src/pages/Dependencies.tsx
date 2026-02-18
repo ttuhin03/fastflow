@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
@@ -33,6 +34,7 @@ interface PipelineDeps {
 }
 
 export default function Dependencies() {
+  const { t } = useTranslation()
   const { isReadonly } = useAuth()
   const [auditRequested, setAuditRequested] = useState(false)
   const [filterPipeline, setFilterPipeline] = useState<string>('')
@@ -108,7 +110,7 @@ export default function Dependencies() {
     return (
       <div className="dependencies-page">
         <div className="dependencies-header">
-          <h1>Abhängigkeiten</h1>
+          <h1>{t('dependencies.title')}</h1>
         </div>
         <div className="dependencies-filters card">
           <Skeleton width="100%" height="40px" />
@@ -122,19 +124,19 @@ export default function Dependencies() {
   }
 
   const subtitleText = auditRequested
-    ? 'Sicherheitsprüfung (pip-audit) wurde ausgeführt.'
+    ? t('dependencies.scanDone')
     : auditLast?.last_scan_at && auditLast?.results?.length
-      ? `Letzter Scan: ${new Date(auditLast.last_scan_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}. Ergebnisse unten.`
-      : 'Klicke auf „Sicherheitsprüfung ausführen“, um einen neuen CVE-Scan zu starten, oder sieh dir die letzten gespeicherten Ergebnisse unten an.'
+      ? t('dependencies.lastScan', { date: new Date(auditLast.last_scan_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) })
+      : t('dependencies.scanPromptOrResults')
 
   return (
     <div className="dependencies-page">
       <div className="dependencies-header">
-        <h1>Abhängigkeiten</h1>
+        <h1>{t('dependencies.title')}</h1>
         <p className="dependencies-subtitle">
-          Libraries und Versionen aller Pipelines mit requirements.txt.{' '}
+          {t('dependencies.intro')}{' '}
           {auditLastError && (
-            <span className="dependencies-subtitle-error">Letzte Scan-Ergebnisse konnten nicht geladen werden.</span>
+            <span className="dependencies-subtitle-error">{t('dependencies.lastScanError')}</span>
           )}
           {!auditLastError && subtitleText}
         </p>
@@ -143,13 +145,13 @@ export default function Dependencies() {
       <div className="dependencies-actions card">
         <div className="dependencies-filters">
           <label className="filter-group">
-            <span>Pipeline</span>
+            <span>{t('dependencies.pipeline')}</span>
             <select
               value={filterPipeline}
               onChange={(e) => setFilterPipeline(e.target.value)}
               className="filter-select"
             >
-              <option value="">Alle</option>
+              <option value="">{t('dependencies.all')}</option>
               {pipelineNames.map((n) => (
                 <option key={n} value={n}>{n}</option>
               ))}
@@ -161,13 +163,13 @@ export default function Dependencies() {
               checked={filterVulnsOnly}
               onChange={(e) => setFilterVulnsOnly(e.target.checked)}
             />
-            <span>Nur mit Schwachstellen</span>
+            <span>{t('dependencies.vulnsOnly')}</span>
           </label>
           <label className="filter-group search-box">
             <MdSearch size={18} />
             <input
               type="text"
-              placeholder="Paket suchen…"
+              placeholder={t('dependencies.searchPackage')}
               value={searchPackage}
               onChange={(e) => setSearchPackage(e.target.value)}
               className="filter-input"
@@ -182,7 +184,7 @@ export default function Dependencies() {
             disabled={isFetching || auditLastLoading}
           >
             <MdRefresh size={18} />
-            {isFetching || auditLastLoading ? 'Laden…' : 'Aktualisieren'}
+            {isFetching || auditLastLoading ? t('common.loading') : t('dependencies.update')}
           </button>
           <button
             type="button"
@@ -191,7 +193,7 @@ export default function Dependencies() {
             disabled={isReadonly || isFetching}
           >
             <MdSecurity size={18} />
-            Sicherheitsprüfung ausführen
+            {t('dependencies.runSecurityScan')}
           </button>
         </div>
       </div>
@@ -200,8 +202,8 @@ export default function Dependencies() {
         {filtered.length === 0 ? (
           <div className="dependencies-empty">
             {!displayData?.length
-              ? (auditLast?.results?.length ? 'Keine Einträge passen zu den Filtern.' : 'Keine Pipelines mit requirements.txt gefunden.')
-              : 'Keine Einträge passen zu den Filtern.'}
+              ? (auditLast?.results?.length ? t('dependencies.noEntries') : t('dependencies.noPipelinesWithRequirements'))
+              : t('dependencies.noEntries')}
           </div>
         ) : (
           <div className="dependencies-list">
@@ -219,14 +221,14 @@ export default function Dependencies() {
                     {expanded ? <MdExpandLess size={20} /> : <MdExpandMore size={20} />}
                     <span className="pipeline-deps-name">{d.pipeline}</span>
                     <span className="pipeline-deps-meta">
-                      {packages.length} Paket{packages.length !== 1 ? 'e' : ''}
+                      {packages.length === 1 ? t('dependencies.packagesCount', { count: 1 }) : t('dependencies.packagesCountPlural', { count: packages.length })}
                       {showAuditColumn && (
                         <>
                           {' · '}
                           {vulns.length > 0 ? (
-                            <span className="vuln-badge vuln-yes">{vulns.length} Schwachstelle{vulns.length !== 1 ? 'n' : ''}</span>
+                            <span className="vuln-badge vuln-yes">{vulns.length} {t('dependencies.vulnerabilities').toLowerCase()}</span>
                           ) : (
-                            <span className="vuln-badge vuln-no">Keine</span>
+                            <span className="vuln-badge vuln-no">{t('dependencies.vulnNone')}</span>
                           )}
                         </>
                       )}
@@ -240,9 +242,9 @@ export default function Dependencies() {
                       <table className="deps-table">
                         <thead>
                           <tr>
-                            <th>Paket</th>
-                            <th>Version</th>
-                            {showAuditColumn && <th>Schwachstellen</th>}
+                            <th>{t('dependencies.packageLabel')}</th>
+                            <th>{t('dependencies.versionLabel')}</th>
+                            {showAuditColumn && <th>{t('dependencies.vulnerabilities')}</th>}
                           </tr>
                         </thead>
                         <tbody>
@@ -282,7 +284,7 @@ export default function Dependencies() {
                       </table>
                       {showAuditColumn && vulns.length > 0 && (
                         <div className="vuln-summary">
-                          <strong>Gefundene Schwachstellen:</strong>
+                          <strong>{t('dependencies.foundVulns')}</strong>
                           <ul>
                             {vulns.map((v, i) => (
                               <li key={i}>

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { getFormatLocale } from '../utils/locale'
 import apiClient from '../api/client'
 import { showError, showSuccess, showConfirm } from '../utils/toast'
 import { MdEdit, MdDelete, MdBlock, MdEmail, MdClose, MdOpenInNew, MdCheck, MdCancel } from 'react-icons/md'
@@ -127,7 +128,7 @@ export default function Users() {
       setShowInviteForm(false)
       resetInviteForm()
       navigator.clipboard.writeText(data.link)
-      const until = new Date(data.expires_at).toLocaleString('de-DE')
+      const until = new Date(data.expires_at).toLocaleString(getFormatLocale())
       showSuccess(`Einladungslink erstellt und in Zwischenablage kopiert. Gültig bis ${until}.`)
     },
     onError: (error: any) => {
@@ -490,7 +491,7 @@ export default function Users() {
                     <td>{u.username}</td>
                     <td>{u.email || '–'}</td>
                     <td>{getProvider(u)}</td>
-                    <td>{new Date(u.created_at).toLocaleString('de-DE')}</td>
+                    <td>{new Date(u.created_at).toLocaleString(getFormatLocale())}</td>
                     {isAdmin && (
                       <td>
                         <div className="user-actions">
@@ -579,7 +580,7 @@ export default function Users() {
                         )}
                       </Tooltip>
                     </td>
-                    <td>{new Date(user.created_at).toLocaleDateString('de-DE')}</td>
+                    <td>{new Date(user.created_at).toLocaleDateString(getFormatLocale())}</td>
                     {isAdmin && (
                       <td>
                         <div className="user-actions">
@@ -649,8 +650,8 @@ export default function Users() {
                   <tr key={i.id}>
                     <td>{i.recipient_email}</td>
                     <td><span className={`badge badge-${normalizeRole(i.role)}`}>{normalizeRole(i.role)}</span></td>
-                    <td>{new Date(i.created_at).toLocaleString('de-DE')}</td>
-                    <td>{new Date(i.expires_at).toLocaleString('de-DE')}</td>
+                    <td>{new Date(i.created_at).toLocaleString(getFormatLocale())}</td>
+                    <td>{new Date(i.expires_at).toLocaleString(getFormatLocale())}</td>
                     <td>{i.is_used ? <span className="badge badge-success">Eingelöst</span> : <span className="badge">Offen</span>}</td>
                     {isAdmin && (
                       <td>

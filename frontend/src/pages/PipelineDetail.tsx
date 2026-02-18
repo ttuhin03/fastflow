@@ -1,9 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
+import { getFormatLocale } from '../utils/locale'
 import { showError, showSuccess, showConfirm } from '../utils/toast'
 import Tooltip from '../components/Tooltip'
 import InfoIcon from '../components/InfoIcon'
@@ -64,6 +66,7 @@ interface PipelineSourceFiles {
 }
 
 export default function PipelineDetail() {
+  const { t } = useTranslation()
   const { name } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -227,7 +230,7 @@ export default function PipelineDetail() {
   }
 
   if (pipelineLoading || statsLoading) {
-    return <div>Laden...</div>
+    return <div>{t('common.loading')}</div>
   }
 
   if (!pipeline) {
@@ -274,7 +277,7 @@ export default function PipelineDetail() {
             <div className="info-item">
               <span className="info-label">Letzter Cache-Warmup:</span>
               <span className="info-value">
-                {new Date(pipeline.last_cache_warmup).toLocaleString('de-DE')}
+                {new Date(pipeline.last_cache_warmup).toLocaleString(getFormatLocale())}
               </span>
               <InfoIcon content="Zeitpunkt des letzten Pre-Heating. Pipelines mit Cache starten schneller." />
             </div>
@@ -353,13 +356,13 @@ export default function PipelineDetail() {
               </div>
             )}
             <div className="limit-section">
-              <h4>Weitere Einstellungen</h4>
+              <h4>{t('pipelineDetail.moreSettings')}</h4>
               <div className="limit-items">
                 {pipeline.metadata.timeout && (
                   <div className="limit-item">
                     <span className="limit-label">
-                      Timeout:
-                      <InfoIcon content="Maximale Laufzeit in Sekunden. Pipeline wird beendet bei Überschreitung." />
+                      {t('pipelineDetail.timeout')}
+                      <InfoIcon content={t('pipelineDetail.timeoutInfo')} />
                     </span>
                     <span className="limit-value">{pipeline.metadata.timeout}s</span>
                   </div>
@@ -367,8 +370,8 @@ export default function PipelineDetail() {
                 {pipeline.metadata.retry_attempts !== undefined && (
                   <div className="limit-item">
                     <span className="limit-label">
-                      Retry-Versuche:
-                      <InfoIcon content="Anzahl der Wiederholungsversuche bei Fehlschlag" />
+                      {t('pipelineDetail.retryAttempts')}
+                      <InfoIcon content={t('pipelineDetail.retryAttemptsInfo')} />
                     </span>
                     <span className="limit-value">{pipeline.metadata.retry_attempts}</span>
                   </div>
@@ -376,8 +379,8 @@ export default function PipelineDetail() {
                 {pipeline.metadata.max_instances !== undefined && pipeline.metadata.max_instances > 0 && (
                   <div className="limit-item">
                     <span className="limit-label">
-                      Max. Instanzen:
-                      <InfoIcon content="Maximale Anzahl gleichzeitiger Runs dieser Pipeline" />
+                      {t('pipelineDetail.maxInstances')}
+                      <InfoIcon content={t('pipelineDetail.maxInstancesInfo')} />
                     </span>
                     <span className="limit-value">{pipeline.metadata.max_instances}</span>
                   </div>
@@ -391,39 +394,39 @@ export default function PipelineDetail() {
       {stats && (
         <div className="stats-card">
           <div className="stats-header">
-            <h3>Statistiken</h3>
+            <h3>{t('pipelineDetail.statistics')}</h3>
             {!isReadonly && (
-              <Tooltip content="Setzt alle Statistiken dieser Pipeline zurück. Läufe und Daten bleiben erhalten.">
+              <Tooltip content={t('pipelineDetail.resetStatsTooltip')}>
                 <button
                   onClick={handleResetStats}
                   disabled={resetStatsMutation.isPending}
                   className="reset-button"
                 >
-                  {resetStatsMutation.isPending ? 'Zurücksetzen...' : 'Statistiken zurücksetzen'}
+                  {resetStatsMutation.isPending ? t('pipelineDetail.resetting') : t('pipelineDetail.resetStats')}
                 </button>
               </Tooltip>
             )}
           </div>
           <div className="stats-grid">
             <div className="stat-box">
-              <span className="stat-label">Gesamt Runs</span>
+              <span className="stat-label">{t('pipelineDetail.totalRuns')}</span>
               <span className="stat-value">{stats.total_runs}</span>
             </div>
             <div className="stat-box success">
-              <span className="stat-label">Erfolgreich</span>
+              <span className="stat-label">{t('pipelineDetail.successful')}</span>
               <span className="stat-value">{stats.successful_runs}</span>
             </div>
             <div className="stat-box error">
-              <span className="stat-label">Fehlgeschlagen</span>
+              <span className="stat-label">{t('pipelineDetail.failed')}</span>
               <span className="stat-value">{stats.failed_runs}</span>
             </div>
             <div className="stat-box">
-              <span className="stat-label">Erfolgsrate</span>
+              <span className="stat-label">{t('pipelineDetail.successRate')}</span>
               <span className="stat-value">{stats.success_rate.toFixed(1)}%</span>
             </div>
             {stats.webhook_runs > 0 && (
               <div className="stat-box">
-                <span className="stat-label">Webhook Runs</span>
+                <span className="stat-label">{t('pipelineDetail.webhookRuns')}</span>
                 <span className="stat-value">{stats.webhook_runs}</span>
               </div>
             )}
@@ -432,7 +435,7 @@ export default function PipelineDetail() {
       )}
 
       <div className="webhook-card">
-        <h3>Webhooks</h3>
+        <h3>{t('pipelineDetail.webhooks')}</h3>
         {(() => {
           const hasPipelineKey = !!pipeline?.metadata?.webhook_key
           const scheduleWebhooks = (pipeline?.metadata?.schedules ?? []).filter(
@@ -442,9 +445,9 @@ export default function PipelineDetail() {
           if (!hasAnyWebhook) {
             return (
               <div className="webhook-disabled">
-                <p>Webhooks sind für diese Pipeline deaktiviert.</p>
+                <p>{t('pipelineDetail.webhooksDisabled')}</p>
                 <p style={{ fontSize: '0.85rem', color: '#888', marginTop: '0.5rem' }}>
-                  Um Webhooks zu aktivieren, fügen Sie <code>webhook_key</code> in die <code>pipeline.json</code> (oder pro Eintrag in <code>schedules[]</code>) im Repository hinzu.
+                  {t('pipelineDetail.webhooksEnableHint')}
                 </p>
               </div>
             )
@@ -454,26 +457,26 @@ export default function PipelineDetail() {
           return (
             <div className="webhook-enabled">
               <div className="webhook-status" style={{ marginBottom: '0.75rem' }}>
-                <span className="status-badge enabled">Aktiviert</span>
+                <span className="status-badge enabled">{t('pipelineDetail.webhooksEnabled')}</span>
                 <span className="info-hint" style={{ fontSize: '0.75rem', color: '#888', marginLeft: '0.5rem' }}>
-                  (Konfiguriert in pipeline.json)
+                  {t('pipelineDetail.webhooksConfiguredIn')}
                 </span>
               </div>
               {hasPipelineKey && (
                 <div className="webhook-url-section" style={{ marginBottom: '1rem' }}>
                   <label className="webhook-url-label">
-                    Pipeline (Standard):
-                    <InfoIcon content="Triggert einen Run mit der Standard-Konfiguration (ohne Schedule-spezifische Env/Limits)" />
+                    {t('pipelineDetail.pipelineStandard')}
+                    <InfoIcon content={t('pipelineDetail.webhookStandardInfo')} />
                   </label>
                   <div className="webhook-url-container">
                     <code className="webhook-url">
                       {typeof window !== 'undefined' && `${window.location.origin}/api/webhooks/${name}/${pipeline!.metadata.webhook_key}`}
                     </code>
-                    <Tooltip content="Webhook-URL in Zwischenablage kopieren">
+                    <Tooltip content={t('pipelineDetail.copyWebhookUrl')}>
                       <button
                         onClick={() => handleCopyWebhookUrl(pipeline!.metadata.webhook_key!)}
                         className="copy-button"
-                        title="URL kopieren"
+                        title={t('pipelineDetail.copyUrl')}
                       >
                         📋
                       </button>
@@ -481,7 +484,7 @@ export default function PipelineDetail() {
                   </div>
                   {runCountFor('') > 0 && (
                     <div className="webhook-stats">
-                      <span className="webhook-stat-label">Trigger:</span>
+                      <span className="webhook-stat-label">{t('pipelineDetail.trigger')}</span>
                       <span className="webhook-stat-value">{runCountFor('')}</span>
                     </div>
                   )}
@@ -490,18 +493,18 @@ export default function PipelineDetail() {
               {scheduleWebhooks.map((s) => (
                 <div key={s.id!} className="webhook-url-section" style={{ marginBottom: '1rem' }}>
                   <label className="webhook-url-label">
-                    Schedule „{s.id}“:
-                    <InfoIcon content={`Triggert einen Run mit der Run-Konfiguration „${s.id}“ (Env/Limits aus schedules[]).`} />
+                    {t('pipelineDetail.scheduleLabel', { id: s.id })}
+                    <InfoIcon content={t('pipelineDetail.webhookRunConfigInfo', { id: s.id })} />
                   </label>
                   <div className="webhook-url-container">
                     <code className="webhook-url">
                       {typeof window !== 'undefined' && `${window.location.origin}/api/webhooks/${name}/${s.webhook_key}`}
                     </code>
-                    <Tooltip content="Webhook-URL in Zwischenablage kopieren">
+                    <Tooltip content={t('pipelineDetail.copyWebhookUrl')}>
                       <button
                         onClick={() => handleCopyWebhookUrl(s.webhook_key)}
                         className="copy-button"
-                        title="URL kopieren"
+                        title={t('pipelineDetail.copyUrl')}
                       >
                         📋
                       </button>
@@ -509,7 +512,7 @@ export default function PipelineDetail() {
                   </div>
                   {runCountFor(s.id!) > 0 && (
                     <div className="webhook-stats">
-                      <span className="webhook-stat-label">Trigger:</span>
+                      <span className="webhook-stat-label">{t('pipelineDetail.trigger')}</span>
                       <span className="webhook-stat-value">{runCountFor(s.id!)}</span>
                     </div>
                   )}
@@ -517,7 +520,7 @@ export default function PipelineDetail() {
               ))}
               {stats && stats.webhook_runs > 0 && (
                 <div className="webhook-stats" style={{ marginTop: '0.5rem' }}>
-                  <span className="webhook-stat-label">Webhook-Trigger gesamt:</span>
+                  <span className="webhook-stat-label">{t('pipelineDetail.webhookTriggerTotal')}</span>
                   <span className="webhook-stat-value">{stats.webhook_runs}</span>
                 </div>
               )}
@@ -528,48 +531,48 @@ export default function PipelineDetail() {
 
       <div className="downstream-triggers-card">
         <h3>
-          Pipeline-Chaining (Downstream-Trigger)
-          <InfoIcon content="Wenn diese Pipeline fertig ist, können andere Pipelines automatisch gestartet werden. Konfigurierbar in pipeline.json oder per UI." />
+          {t('pipelineDetail.downstreamChaining')}
+          <InfoIcon content={t('pipelineDetail.downstreamTooltip')} />
         </h3>
         {downstreamTriggers && downstreamTriggers.length > 0 ? (
           <div className="downstream-triggers-list">
             <table className="downstream-triggers-table">
               <thead>
                 <tr>
-                  <th>Downstream-Pipeline</th>
-                  <th>Schedule</th>
-                  <th>Bei Erfolg</th>
-                  <th>Bei Fehler</th>
-                  <th>Quelle</th>
+                  <th>{t('pipelineDetail.downstreamPipeline')}</th>
+                  <th>{t('pipelineDetail.schedule')}</th>
+                  <th>{t('pipelineDetail.onSuccess')}</th>
+                  <th>{t('pipelineDetail.onFailure')}</th>
+                  <th>{t('pipelineDetail.source')}</th>
                   {!isReadonly && <th></th>}
                 </tr>
               </thead>
               <tbody>
-                {downstreamTriggers.map((t) => (
-                  <tr key={t.id || `json-${t.downstream_pipeline}-${t.run_config_id ?? ''}`}>
-                    <td>{t.downstream_pipeline}</td>
-                    <td>{t.run_config_id ?? '–'}</td>
-                    <td>{t.on_success ? '✓' : '–'}</td>
-                    <td>{t.on_failure ? '✓' : '–'}</td>
+                {downstreamTriggers.map((tr) => (
+                  <tr key={tr.id || `json-${tr.downstream_pipeline}-${tr.run_config_id ?? ''}`}>
+                    <td>{tr.downstream_pipeline}</td>
+                    <td>{tr.run_config_id ?? '–'}</td>
+                    <td>{tr.on_success ? '✓' : '–'}</td>
+                    <td>{tr.on_failure ? '✓' : '–'}</td>
                     <td>
-                      <span className={`source-badge source-${t.source}`}>
-                        {t.source === 'pipeline_json' ? 'pipeline.json' : 'UI'}
+                      <span className={`source-badge source-${tr.source}`}>
+                        {tr.source === 'pipeline_json' ? t('pipelineDetail.sourcePipelineJson') : t('pipelineDetail.sourceUi')}
                       </span>
                     </td>
                     {!isReadonly && (
                       <td>
-                        {t.source === 'api' && t.id ? (
+                        {tr.source === 'api' && tr.id ? (
                           <button
                             type="button"
                             className="delete-trigger-button"
-                            onClick={() => deleteDownstreamTriggerMutation.mutate(t.id!)}
+                            onClick={() => deleteDownstreamTriggerMutation.mutate(tr.id!)}
                             disabled={deleteDownstreamTriggerMutation.isPending}
                           >
-                            Entfernen
+                            {t('pipelineDetail.remove')}
                           </button>
                         ) : (
                           <span className="info-hint" style={{ fontSize: '0.75rem', color: '#888' }}>
-                            In pipeline.json bearbeiten
+                            {t('pipelineDetail.editInPipelineJson')}
                           </span>
                         )}
                       </td>
@@ -581,12 +584,12 @@ export default function PipelineDetail() {
           </div>
         ) : (
           <p style={{ fontSize: '0.9rem', color: '#888' }}>
-            Keine Downstream-Trigger konfiguriert. Wenn diese Pipeline fertig ist, wird keine weitere Pipeline automatisch gestartet.
+            {t('pipelineDetail.noDownstreamTriggered')}
           </p>
         )}
         {!isReadonly && allPipelines && (
           <div className="add-downstream-trigger">
-            <h4>Trigger hinzufügen (UI)</h4>
+            <h4>{t('pipelineDetail.addTrigger')}</h4>
             <div className="add-trigger-form">
               <select
                 value={newTriggerPipeline}
@@ -596,7 +599,7 @@ export default function PipelineDetail() {
                 }}
                 className="trigger-select"
               >
-                <option value="">Pipeline wählen…</option>
+                <option value="">{t('pipelineDetail.selectPipeline')}</option>
                 {allPipelines
                   .filter((p) => p.name !== name)
                   .map((p) => (
@@ -610,9 +613,9 @@ export default function PipelineDetail() {
                   value={newTriggerRunConfigId}
                   onChange={(e) => setNewTriggerRunConfigId(e.target.value)}
                   className="trigger-select"
-                  title="Schedule der Downstream-Pipeline (optional)"
+                  title={t('pipelineDetail.scheduleDownstreamTitle')}
                 >
-                  <option value="">Standard</option>
+                  <option value="">{t('pipelineDetail.standard')}</option>
                   {availableSchedules.map((s) => (
                     <option key={s.id!} value={s.id!}>
                       {s.id}
@@ -626,7 +629,7 @@ export default function PipelineDetail() {
                   checked={newTriggerOnSuccess}
                   onChange={(e) => setNewTriggerOnSuccess(e.target.checked)}
                 />
-                Bei Erfolg starten
+                {t('pipelineDetail.startOnSuccess')}
               </label>
               <label className="trigger-checkbox">
                 <input
@@ -634,7 +637,7 @@ export default function PipelineDetail() {
                   checked={newTriggerOnFailure}
                   onChange={(e) => setNewTriggerOnFailure(e.target.checked)}
                 />
-                Bei Fehler starten
+                {t('pipelineDetail.startOnFailure')}
               </label>
               <button
                 type="button"
@@ -642,11 +645,11 @@ export default function PipelineDetail() {
                 onClick={handleAddDownstreamTrigger}
                 disabled={!newTriggerPipeline.trim() || createDownstreamTriggerMutation.isPending}
               >
-                {createDownstreamTriggerMutation.isPending ? 'Hinzufügen…' : 'Hinzufügen'}
+                {createDownstreamTriggerMutation.isPending ? t('pipelineDetail.adding') : t('pipelineDetail.add')}
               </button>
             </div>
             <p style={{ fontSize: '0.75rem', color: '#888', marginTop: '0.5rem' }}>
-              Alternativ: <code>downstream_triggers</code> in <code>pipeline.json</code> setzen.
+              {t('pipelineDetail.downstreamAltHint')}
             </p>
           </div>
         )}
@@ -666,16 +669,16 @@ export default function PipelineDetail() {
 
       {runs && runs.length > 0 && (
         <div className="runs-card">
-          <h3>Letzte Runs</h3>
+          <h3>{t('pipelineDetail.lastRuns')}</h3>
           <table className="runs-table">
             <thead>
               <tr>
-                <th>ID</th>
-                <th>Status</th>
-                <th>Gestartet</th>
-                <th>Beendet</th>
-                <th>Exit Code</th>
-                <th>Aktionen</th>
+                <th>{t('pipelineDetail.id')}</th>
+                <th>{t('pipelineDetail.status')}</th>
+                <th>{t('pipelineDetail.started')}</th>
+                <th>{t('pipelineDetail.finished')}</th>
+                <th>{t('pipelineDetail.exitCode')}</th>
+                <th>{t('pipelineDetail.actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -687,10 +690,10 @@ export default function PipelineDetail() {
                       {run.status}
                     </span>
                   </td>
-                  <td>{new Date(run.started_at).toLocaleString('de-DE', { timeZone: 'UTC' })} UTC</td>
+                  <td>{new Date(run.started_at).toLocaleString(getFormatLocale(), { timeZone: 'UTC' })} UTC</td>
                   <td>
                     {run.finished_at
-                      ? `${new Date(run.finished_at).toLocaleString('de-DE', { timeZone: 'UTC' })} UTC`
+                      ? `${new Date(run.finished_at).toLocaleString(getFormatLocale(), { timeZone: 'UTC' })} UTC`
                       : '-'}
                   </td>
                   <td>
@@ -707,7 +710,7 @@ export default function PipelineDetail() {
                       onClick={() => navigate(`/runs/${run.id}`)}
                       className="view-button"
                     >
-                      Details
+                      {t('pipelineDetail.details')}
                     </button>
                   </td>
                 </tr>
@@ -718,30 +721,30 @@ export default function PipelineDetail() {
       )}
 
       <div className="source-files-card">
-        <h3>Quelldateien</h3>
+        <h3>{t('pipelineDetail.sourceFiles')}</h3>
         <div className="tabs">
           <button
             className={`tab ${activeTab === 'python' ? 'active' : ''}`}
             onClick={() => setActiveTab('python')}
           >
-            Python (main.py)
+            {t('pipelineDetail.tabPython')}
           </button>
           <button
             className={`tab ${activeTab === 'requirements' ? 'active' : ''}`}
             onClick={() => setActiveTab('requirements')}
           >
-            Requirements
+            {t('pipelineDetail.tabRequirements')}
           </button>
           <button
             className={`tab ${activeTab === 'json' ? 'active' : ''}`}
             onClick={() => setActiveTab('json')}
           >
-            JSON (pipeline.json)
+            {t('pipelineDetail.tabJson')}
           </button>
         </div>
         <div className="tab-content">
           {sourceFilesLoading ? (
-            <div className="code-loading">Laden...</div>
+            <div className="code-loading">{t('pipelineDetail.codeLoading')}</div>
           ) : (
             <>
               {activeTab === 'python' && (
@@ -749,7 +752,7 @@ export default function PipelineDetail() {
                   {sourceFiles?.main_py ? (
                     <pre className="code-block"><code>{sourceFiles.main_py}</code></pre>
                   ) : (
-                    <div className="code-empty">main.py nicht gefunden</div>
+                    <div className="code-empty">{t('pipelineDetail.mainPyNotFound')}</div>
                   )}
                 </div>
               )}
@@ -758,7 +761,7 @@ export default function PipelineDetail() {
                   {sourceFiles?.requirements_txt ? (
                     <pre className="code-block"><code>{sourceFiles.requirements_txt}</code></pre>
                   ) : (
-                    <div className="code-empty">requirements.txt nicht gefunden</div>
+                    <div className="code-empty">{t('pipelineDetail.requirementsNotFound')}</div>
                   )}
                 </div>
               )}
@@ -773,7 +776,7 @@ export default function PipelineDetail() {
                       }
                     })()}</code></pre>
                   ) : (
-                    <div className="code-empty">pipeline.json nicht gefunden</div>
+                    <div className="code-empty">{t('pipelineDetail.pipelineJsonNotFound')}</div>
                   )}
                 </div>
               )}

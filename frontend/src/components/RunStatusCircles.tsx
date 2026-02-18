@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
+import { getFormatLocale } from '../utils/locale'
 import {
   MdCheckCircle,
   MdCancel,
@@ -73,7 +74,7 @@ export default function RunStatusCircles({ pipelineName }: RunStatusCirclesProps
 
   const getTooltipText = (run: Run | null) => {
     if (!run) return 'Kein Run'
-    const date = new Date(run.started_at).toLocaleString('de-DE')
+    const date = new Date(run.started_at).toLocaleString(getFormatLocale())
     const duration = run.finished_at
       ? `${Math.round((new Date(run.finished_at).getTime() - new Date(run.started_at).getTime()) / 1000)}s`
       : 'Läuft...'

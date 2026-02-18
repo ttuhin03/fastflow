@@ -1,4 +1,5 @@
 import { useRef, useState, useLayoutEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
@@ -35,6 +36,7 @@ interface Pipeline {
 }
 
 export default function Pipelines() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { isReadonly } = useAuth()
@@ -46,12 +48,12 @@ export default function Pipelines() {
     setSearchParams(np, { replace: true })
   }
 
-  const sectionItems: { id: PipelinesSection; label: string; icon: React.ReactNode }[] = [
-    { id: 'pipelines', label: 'Pipelines', icon: <MdAccountTree /> },
-    { id: 'runs', label: 'Runs', icon: <MdPlayArrow /> },
-    { id: 'scheduler', label: 'Scheduler', icon: <MdSchedule /> },
-    { id: 'secrets', label: 'Secrets', icon: <MdLock /> },
-    { id: 'dependencies', label: 'Abhängigkeiten', icon: <MdExtension /> },
+  const sectionItems: { id: PipelinesSection; labelKey: string; icon: React.ReactNode }[] = [
+    { id: 'pipelines', labelKey: 'nav.pipelines', icon: <MdAccountTree /> },
+    { id: 'runs', labelKey: 'pipelines.sectionRuns', icon: <MdPlayArrow /> },
+    { id: 'scheduler', labelKey: 'pipelines.sectionScheduler', icon: <MdSchedule /> },
+    { id: 'secrets', labelKey: 'pipelines.sectionSecrets', icon: <MdLock /> },
+    { id: 'dependencies', labelKey: 'pipelines.sectionDependencies', icon: <MdExtension /> },
   ]
 
   const trayRef = useRef<HTMLDivElement>(null)
@@ -95,7 +97,7 @@ export default function Pipelines() {
     },
     onError: (error: any) => {
       setStartingPipeline(null)
-      showError(`Fehler beim Starten: ${error.response?.data?.detail || error.message}`)
+      showError(t('pipelines.startError', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
@@ -106,7 +108,7 @@ export default function Pipelines() {
   }
 
   const renderNav = () => (
-    <nav className="pipelines-nav" role="tablist" aria-label="Pipelines-Bereiche">
+    <nav className="pipelines-nav" role="tablist" aria-label={t('pipelines.sectionLabel')}>
       <div ref={trayRef} className="pipelines-nav-tray">
         <div
           className="pipelines-nav-indicator"
@@ -127,7 +129,7 @@ export default function Pipelines() {
             onClick={() => setSection(item.id)}
           >
             {item.icon}
-            <span>{item.label}</span>
+            <span>{t(item.labelKey)}</span>
           </button>
         ))}
       </div>
@@ -237,7 +239,7 @@ export default function Pipelines() {
                   className="btn btn-outlined details-button"
                 >
                   <MdInfo />
-                  Details
+                  {t('pipelines.details')}
                 </button>
               </div>
             </div>
@@ -245,7 +247,7 @@ export default function Pipelines() {
         </div>
       ) : (
         <div className="empty-state card">
-          <p>Keine Pipelines gefunden</p>
+          <p>{t('pipelines.noPipelines')}</p>
         </div>
       )}
     </div>

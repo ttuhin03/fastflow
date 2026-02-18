@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useLayoutEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
@@ -37,6 +38,7 @@ interface Settings {
 }
 
 export default function Settings() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { isReadonly, isAdmin } = useAuth()
   const [localSettings, setLocalSettings] = useState<Settings | null>(null)
@@ -51,13 +53,13 @@ export default function Settings() {
     setSearchParams(np, { replace: true })
   }
 
-  const sectionItems: { id: SettingsSection; label: string; icon: React.ReactNode }[] = [
-    { id: 'account', label: 'Mein Konto', icon: <MdPerson /> },
-    { id: 'system', label: 'System', icon: <MdStorage /> },
-    { id: 'pipeline', label: 'Pipeline & Runs', icon: <MdPlayCircle /> },
-    { id: 'notifications', label: 'Benachrichtigungen', icon: <MdNotifications /> },
-    { id: 'git-sync', label: 'Git Sync', icon: <MdSync /> },
-    ...(isAdmin ? [{ id: 'nutzer' as const, label: 'Nutzer', icon: <MdPeople /> }] : []),
+  const sectionItems: { id: SettingsSection; labelKey: string; icon: React.ReactNode }[] = [
+    { id: 'account', labelKey: 'settingsSections.account', icon: <MdPerson /> },
+    { id: 'system', labelKey: 'settingsSections.system', icon: <MdStorage /> },
+    { id: 'pipeline', labelKey: 'settingsSections.pipeline', icon: <MdPlayCircle /> },
+    { id: 'notifications', labelKey: 'settingsSections.notifications', icon: <MdNotifications /> },
+    { id: 'git-sync', labelKey: 'settingsSections.gitSync', icon: <MdSync /> },
+    ...(isAdmin ? [{ id: 'nutzer' as const, labelKey: 'settingsSections.nutzer', icon: <MdPeople /> }] : []),
   ]
 
   const trayRef = useRef<HTMLDivElement>(null)
@@ -107,12 +109,12 @@ export default function Settings() {
     if (linked === 'google' || linked === 'github' || linked === 'microsoft' || linked === 'custom') {
       const msg =
         linked === 'google'
-          ? 'Google-Konto verknüpft.'
+          ? t('settings.linkedGoogle')
           : linked === 'github'
-            ? 'GitHub-Konto verknüpft.'
+            ? t('settings.linkedGithub')
             : linked === 'microsoft'
-              ? 'Microsoft-Konto verknüpft.'
-              : 'Custom-Konto verknüpft.'
+              ? t('settings.linkedMicrosoft')
+              : t('settings.linkedCustom')
       showSuccess(msg)
       const np = new URLSearchParams(searchParams)
       np.delete('linked')
@@ -159,11 +161,11 @@ export default function Settings() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings-system'] })
-      showSuccess('System-Konfiguration gespeichert.')
+      showSuccess(t('settings.systemConfigSaved'))
     },
     onError: (err: unknown) => {
       const e = err as { response?: { data?: { detail?: string }; status?: number }; message?: string }
-      showError(e?.response?.data?.detail || e?.message || 'Speichern fehlgeschlagen.')
+      showError(e?.response?.data?.detail || e?.message || t('settings.saveFailed'))
     },
   })
 
@@ -173,11 +175,11 @@ export default function Settings() {
       return response.data
     },
     onSuccess: (data) => {
-      showSuccess(data.message || 'Einstellungen aktualisiert (Neustart erforderlich)')
+      showSuccess(data.message || t('settings.saved'))
       queryClient.invalidateQueries({ queryKey: ['settings'] })
     },
     onError: (error: any) => {
-      showError(`Fehler beim Aktualisieren: ${error.response?.data?.detail || error.message}`)
+      showError(t('settings.updateError', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
@@ -240,7 +242,7 @@ export default function Settings() {
       queryClient.invalidateQueries({ queryKey: ['settings', 'backup-failures'] })
     },
     onError: (error: any) => {
-      showError(`Fehler beim Cleanup: ${error.response?.data?.detail || error.message}`)
+      showError(t('settings.cleanupError', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
@@ -250,10 +252,10 @@ export default function Settings() {
       return response.data
     },
     onSuccess: (data) => {
-      showSuccess(data.message || 'Test-E-Mail erfolgreich gesendet')
+      showSuccess(data.message || t('settings.testEmailSuccess'))
     },
     onError: (error: any) => {
-      showError(`Fehler beim Senden der Test-E-Mail: ${error.response?.data?.detail || error.message}`)
+      showError(t('settings.testEmailError', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
@@ -263,10 +265,10 @@ export default function Settings() {
       return response.data
     },
     onSuccess: (data) => {
-      showSuccess(data.message || 'Test-Teams-Nachricht erfolgreich gesendet')
+      showSuccess(data.message || t('settings.testTeamsSuccess'))
     },
     onError: (error: any) => {
-      showError(`Fehler beim Senden der Test-Teams-Nachricht: ${error.response?.data?.detail || error.message}`)
+      showError(t('settings.testTeamsError', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
@@ -342,7 +344,7 @@ export default function Settings() {
         description: 'Test-Button: Frontend Error-Tracking. Nur in DEV sichtbar.',
       }
     )
-    showSuccess('Test-Exception an PostHog gesendet (Frontend). In PostHog prüfen.')
+    showSuccess(t('settings.posthogFrontendSuccess'))
   }
 
   const triggerTestExceptionBackendMutation = useMutation({
@@ -351,11 +353,11 @@ export default function Settings() {
       return r.data as { message?: string }
     },
     onSuccess: (d) => {
-      showSuccess(d?.message || 'Test-Exception an PostHog gesendet (Backend).')
+      showSuccess(d?.message || t('settings.posthogBackendSuccess'))
     },
     onError: (err: unknown) => {
       const e = err as { response?: { data?: { detail?: string }; status?: number }; message?: string }
-      showError(e?.response?.data?.detail || e?.message || 'Backend-Test fehlgeschlagen.')
+      showError(e?.response?.data?.detail || e?.message || t('settings.backendTestFailed'))
     },
   })
 
@@ -363,7 +365,7 @@ export default function Settings() {
     return (
       <div className="loading-container">
         <div className="spinner"></div>
-        <p>Laden...</p>
+        <p>{t('common.loading')}</p>
       </div>
     )
   }
@@ -371,7 +373,7 @@ export default function Settings() {
   const currentSettings = localSettings || settings
 
   const renderNav = () => (
-    <nav className="settings-nav" role="tablist" aria-label="Einstellungsbereiche">
+    <nav className="settings-nav" role="tablist" aria-label={t('settings.navAriaSettings')}>
       <div ref={trayRef} className="settings-nav-tray">
         <div
           className="settings-nav-indicator"
@@ -392,7 +394,7 @@ export default function Settings() {
             onClick={() => setSection(item.id)}
           >
             {item.icon}
-            <span>{item.label}</span>
+            <span>{t(item.labelKey)}</span>
           </button>
         ))}
       </div>
@@ -428,73 +430,73 @@ export default function Settings() {
         {section === 'account' && (
           <div className="settings">
             <div className="settings-header card">
-              <h2>Mein Konto</h2>
+              <h2>{t('settingsSections.account')}</h2>
               <p className="settings-info">
                 <MdInfo />
-                Einstellungen werden aktuell nur aus Environment-Variablen geladen.
-                Änderungen erfordern einen Neustart der Anwendung.
+                {t('settings.envOnly')}
+                {t('settings.accountRestartNote')}
               </p>
             </div>
 
             <div className="settings-section card">
-              <h3 className="section-title">Verknüpfte Konten</h3>
+              <h3 className="section-title">{t('settings.linkedAccounts')}</h3>
         <p className="setting-hint" style={{ marginBottom: '1rem' }}>
-          Verknüpfe Konten, um mit mehreren Providern einzuloggen. E-Mail kann je Provider abweichen; Verknüpfung funktioniert über „Jetzt verbinden“.
+          {t('settings.linkAccountsHint')}
         </p>
         <div className="accounts-list" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
           <div className="account-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid var(--color-border)' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <strong>GitHub</strong>
-              {me?.has_github ? <MdCheck style={{ color: 'var(--color-success)' }} aria-label="Verknüpft" /> : null}
+              {me?.has_github ? <MdCheck style={{ color: 'var(--color-success)' }} aria-label={t('settings.linked')} /> : null}
             </span>
             {me?.has_github ? (
-              <span style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>Verknüpft</span>
+              <span style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>{t('settings.linked')}</span>
             ) : (
               <a href={`${getApiOrigin()}/api/auth/link/github`} className="btn btn-outlined" style={{ fontSize: '0.875rem', padding: '0.25rem 0.5rem' }}>
                 <MdLink style={{ marginRight: '0.25rem' }} />
-                Jetzt verbinden
+                {t('settings.connectNow')}
               </a>
             )}
           </div>
           <div className="account-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <strong>Google</strong>
-              {me?.has_google ? <MdCheck style={{ color: 'var(--color-success)' }} aria-label="Verknüpft" /> : null}
+              {me?.has_google ? <MdCheck style={{ color: 'var(--color-success)' }} aria-label={t('settings.linked')} /> : null}
             </span>
             {me?.has_google ? (
-              <span style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>Verknüpft</span>
+              <span style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>{t('settings.linked')}</span>
             ) : (
               <a href={`${getApiOrigin()}/api/auth/link/google`} className="btn btn-outlined" style={{ fontSize: '0.875rem', padding: '0.25rem 0.5rem' }}>
                 <MdLink style={{ marginRight: '0.25rem' }} />
-                Jetzt verbinden
+                {t('settings.connectNow')}
               </a>
             )}
           </div>
           <div className="account-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <strong>Microsoft</strong>
-              {me?.has_microsoft ? <MdCheck style={{ color: 'var(--color-success)' }} aria-label="Verknüpft" /> : null}
+              {me?.has_microsoft ? <MdCheck style={{ color: 'var(--color-success)' }} aria-label={t('settings.linked')} /> : null}
             </span>
             {me?.has_microsoft ? (
-              <span style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>Verknüpft</span>
+              <span style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>{t('settings.linked')}</span>
             ) : (
               <a href={`${getApiOrigin()}/api/auth/link/microsoft`} className="btn btn-outlined" style={{ fontSize: '0.875rem', padding: '0.25rem 0.5rem' }}>
                 <MdLink style={{ marginRight: '0.25rem' }} />
-                Jetzt verbinden
+                {t('settings.connectNow')}
               </a>
             )}
           </div>
           <div className="account-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <strong>Custom</strong>
-              {me?.has_custom ? <MdCheck style={{ color: 'var(--color-success)' }} aria-label="Verknüpft" /> : null}
+              {me?.has_custom ? <MdCheck style={{ color: 'var(--color-success)' }} aria-label={t('settings.linked')} /> : null}
             </span>
             {me?.has_custom ? (
-              <span style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>Verknüpft</span>
+              <span style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>{t('settings.linked')}</span>
             ) : (
               <a href={`${getApiOrigin()}/api/auth/link/custom`} className="btn btn-outlined" style={{ fontSize: '0.875rem', padding: '0.25rem 0.5rem' }}>
                 <MdLink style={{ marginRight: '0.25rem' }} />
-                Jetzt verbinden
+                {t('settings.connectNow')}
               </a>
             )}
           </div>
@@ -506,20 +508,20 @@ export default function Settings() {
         {section === 'system' && (
           <div className="settings">
       <div className="settings-section card executor-info-card">
-        <h3 className="section-title">Pipeline-Executor</h3>
+        <h3 className="section-title">{t('settings.executor')}</h3>
         <p className="setting-hint" style={{ marginBottom: 0 }}>
           {health?.pipeline_executor === 'kubernetes' ? (
-            <>Aktiv: <strong className="executor-kubernetes">Kubernetes (Jobs)</strong> – Pipeline-Runs laufen als K8s-Jobs.</>
+            <>{t('settings.executorK8s')}</>
           ) : (
-            <>Aktiv: <strong className="executor-docker">Docker (Socket-Proxy)</strong> – Pipeline-Runs laufen als Docker-Container.</>
+            <>{t('settings.executorDocker')}</>
           )}
         </p>
       </div>
       {isAdmin && (
         <div className="settings-section card">
           <h3 className="section-title">
-            Global Privacy & Telemetry
-            <InfoIcon content="Phase 1: Fehlerberichte. Phase 2: Nutzungsstatistiken (Product Analytics). Session Recording (Replay) wird ausdrücklich nicht verwendet." />
+            {t('settings.telemetryTitle')}
+            <InfoIcon content={t('settings.telemetryInfo')} />
           </h3>
           <div className="settings-telemetry-toggles">
             <label className="settings-telemetry-toggle">
@@ -529,7 +531,7 @@ export default function Settings() {
                 disabled={updateSystemSettingsMutation.isPending}
                 onChange={(e) => updateSystemSettingsMutation.mutate({ enable_telemetry: e.target.checked })}
               />
-              Nutzungsstatistiken (Product Analytics, anonym). Kein Session Recording.
+              {t('settings.telemetryToggle')}
             </label>
             <label className="settings-telemetry-toggle">
               <input
@@ -538,11 +540,11 @@ export default function Settings() {
                 disabled={updateSystemSettingsMutation.isPending}
                 onChange={(e) => updateSystemSettingsMutation.mutate({ enable_error_reporting: e.target.checked })}
               />
-              Fehlerberichte (PostHog Error-Tracking)
+              {t('settings.errorReportingToggle')}
             </label>
           </div>
           <p className="settings-telemetry-note">
-            Session Recording (Bildschirmaufzeichnung / Replay) wird ausdrücklich nicht verwendet.
+            {t('settings.noSessionRecording')}
           </p>
         </div>
       )}
@@ -550,8 +552,8 @@ export default function Settings() {
       {isAdmin && (
         <div className="settings-section card">
           <h3 className="section-title">
-            Abhängigkeiten – automatische Sicherheitsprüfung
-            <InfoIcon content="Täglich (pip-audit) werden alle Pipelines mit requirements.txt auf bekannte Schwachstellen (CVE) geprüft. Bei Fund: E-Mail und/oder Teams (wie unter Benachrichtigungen konfiguriert)." />
+            {t('settings.dependencyAuditTitle')}
+            <InfoIcon content={t('settings.dependencyAuditInfo')} />
           </h3>
           <div className="settings-telemetry-toggles">
             <label className="settings-telemetry-toggle">
@@ -563,14 +565,14 @@ export default function Settings() {
                   updateSystemSettingsMutation.mutate({ dependency_audit_enabled: e.target.checked })
                 }
               />
-              Automatische Sicherheitsprüfung (täglich in der Nacht)
+              {t('settings.dependencyAuditToggle')}
             </label>
           </div>
           <div className="setting-item" style={{ marginTop: '0.75rem' }}>
             <label htmlFor="dependency_audit_cron" className="setting-label">
-              Zeitpunkt (Cron)
-              <span className="setting-hint">(z. B. 0 3 * * * = täglich 3:00 Uhr)</span>
-              <InfoIcon content="Cron mit 5 Feldern: Minute Stunde Tag Monat Wochentag. Standard: 0 3 * * * (täglich 3:00 Uhr)." />
+              {t('settings.cronLabel')}
+              <span className="setting-hint">{t('settings.cronHint')}</span>
+              <InfoIcon content={t('settings.cronInfo')} />
             </label>
             <input
               id="dependency_audit_cron"
@@ -595,14 +597,13 @@ export default function Settings() {
             />
           </div>
           <p className="settings-telemetry-note">
-            Bei gefundenen Schwachstellen werden E-Mail und/oder Microsoft Teams (wie unter
-            Benachrichtigungen konfiguriert) benachrichtigt.
+            {t('settings.dependencyNotifyNote')}
           </p>
         </div>
       )}
 
       <div className="storage-section-settings">
-        <h3 className="section-title">Speicherplatz-Statistiken</h3>
+        <h3 className="section-title">{t('settings.storageStats')}</h3>
         <StorageStats />
       </div>
 
@@ -612,9 +613,9 @@ export default function Settings() {
 
       {health?.environment === 'development' && (
         <div className="settings-section card" style={{ marginTop: '1rem' }}>
-          <h3 className="section-title">Entwicklung</h3>
+          <h3 className="section-title">{t('settings.development')}</h3>
           <p className="setting-hint" style={{ marginBottom: '0.75rem' }}>
-            Sichtbar, wenn in der .env <code>ENVIRONMENT=development</code>. Sendet Test-Exceptions an PostHog. Auswählen: Backend oder Frontend.
+            {t('settings.devHint')}
           </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
             <button
@@ -622,7 +623,7 @@ export default function Settings() {
               onClick={handleTestFrontendException}
               className="btn btn-outlined"
             >
-              Test-Exception (Frontend) senden
+              {t('settings.testExceptionFrontend')}
             </button>
             <button
               type="button"
@@ -630,7 +631,7 @@ export default function Settings() {
               disabled={triggerTestExceptionBackendMutation.isPending}
               className="btn btn-outlined"
             >
-              {triggerTestExceptionBackendMutation.isPending ? 'Sende…' : 'Test-Exception (Backend) senden'}
+              {triggerTestExceptionBackendMutation.isPending ? t('settings.sending') : t('settings.testExceptionBackend')}
             </button>
           </div>
         </div>
@@ -643,19 +644,19 @@ export default function Settings() {
         {!currentSettings ? (
           <div className="loading-container">
             <div className="spinner"></div>
-            <p>Einstellungen werden geladen...</p>
+            <p>{t('settings.loading')}</p>
           </div>
         ) : (
         <div className="settings-sections">
           {/* Log Retention Settings */}
           <div className="settings-section card">
-            <h3 className="section-title">Log Retention</h3>
+            <h3 className="section-title">{t('settings.logRetention')}</h3>
             <div className="settings-grid">
               <div className="setting-item">
                 <label htmlFor="log_retention_runs" className="setting-label">
-                  Maximale Runs pro Pipeline
-                  <span className="setting-hint">(None = unbegrenzt)</span>
-                  <InfoIcon content="Maximale Anzahl Runs, die pro Pipeline behalten werden. Ältere werden gelöscht." />
+                  {t('settings.maxRunsPerPipeline')}
+                  <span className="setting-hint">{t('settings.noneUnlimited')}</span>
+                  <InfoIcon content={t('settings.maxRunsInfo')} />
                 </label>
                 <input
                   id="log_retention_runs"
@@ -664,16 +665,16 @@ export default function Settings() {
                   className="form-input"
                   value={currentSettings.log_retention_runs || ''}
                   onChange={(e) => handleInputChange('log_retention_runs', e.target.value)}
-                  placeholder="Unbegrenzt"
+                  placeholder={t('settings.noneUnlimited')}
                   disabled={isReadonly}
                 />
               </div>
 
               <div className="setting-item">
                 <label htmlFor="log_retention_days" className="setting-label">
-                  Maximale Alter in Tagen
-                  <span className="setting-hint">(None = unbegrenzt)</span>
-                  <InfoIcon content="Runs älter als X Tage werden automatisch gelöscht" />
+                  {t('settings.maxAgeDays')}
+                  <span className="setting-hint">{t('settings.noneUnlimited')}</span>
+                  <InfoIcon content={t('settings.maxAgeInfo')} />
                 </label>
                 <input
                   id="log_retention_days"
@@ -682,16 +683,16 @@ export default function Settings() {
                   className="form-input"
                   value={currentSettings.log_retention_days || ''}
                   onChange={(e) => handleInputChange('log_retention_days', e.target.value)}
-                  placeholder="Unbegrenzt"
+                  placeholder={t('settings.noneUnlimited')}
                   disabled={isReadonly}
                 />
               </div>
 
               <div className="setting-item">
                 <label htmlFor="log_max_size_mb" className="setting-label">
-                  Maximale Log-Größe (MB)
-                  <span className="setting-hint">(None = unbegrenzt)</span>
-                  <InfoIcon content="Log-Dateien größer als X MB werden gekürzt oder gelöscht" />
+                  {t('settings.maxLogSizeMb')}
+                  <span className="setting-hint">{t('settings.noneUnlimited')}</span>
+                  <InfoIcon content={t('settings.maxLogSizeInfo')} />
                 </label>
                 <input
                   id="log_max_size_mb"
@@ -700,30 +701,30 @@ export default function Settings() {
                   className="form-input"
                   value={currentSettings.log_max_size_mb || ''}
                   onChange={(e) => handleInputChange('log_max_size_mb', e.target.value)}
-                  placeholder="Unbegrenzt"
+                  placeholder={t('settings.noneUnlimited')}
                   disabled={isReadonly}
                 />
               </div>
             </div>
             <div className="backup-last-run">
-              <span className="setting-label">Letztes S3-Backup</span>
+              <span className="setting-label">{t('settings.lastS3Backup')}</span>
               <span className="backup-last-run-value">
                 {backupStatus?.last_backup_at
-                  ? new Date(backupStatus.last_backup_at).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })
+                  ? new Date(backupStatus.last_backup_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
                   : '–'}
               </span>
-              <InfoIcon content="Zeitpunkt des letzten erfolgreichen Uploads von Logs nach S3/MinIO (wird beim Neustart zurückgesetzt)." />
+              <InfoIcon content={t('settings.lastBackupInfo')} />
             </div>
           </div>
 
           {/* Runtime Settings */}
           <div className="settings-section card">
-            <h3 className="section-title">Runtime-Einstellungen</h3>
+            <h3 className="section-title">{t('settings.runtimeSettings')}</h3>
             <div className="settings-grid">
               <div className="setting-item">
                 <label htmlFor="max_concurrent_runs" className="setting-label">
-                  Maximale gleichzeitige Runs
-                  <InfoIcon content="Wie viele Pipelines gleichzeitig ausgeführt werden können" />
+                  {t('settings.maxConcurrentRuns')}
+                  <InfoIcon content={t('settings.concurrentRunsTooltip')} />
                 </label>
                 <input
                   id="max_concurrent_runs"
@@ -738,9 +739,9 @@ export default function Settings() {
 
               <div className="setting-item">
                 <label htmlFor="container_timeout" className="setting-label">
-                  Container Timeout (Sekunden)
-                  <span className="setting-hint">(None = unbegrenzt)</span>
-                  <InfoIcon content="Maximale Laufzeit eines Containers in Sekunden. None = unbegrenzt." />
+                  {t('settings.containerTimeout')}
+                  <span className="setting-hint">{t('settings.noneUnlimited')}</span>
+                  <InfoIcon content={t('settings.containerTimeoutInfo')} />
                 </label>
                 <input
                   id="container_timeout"
@@ -749,15 +750,15 @@ export default function Settings() {
                   className="form-input"
                   value={currentSettings.container_timeout || ''}
                   onChange={(e) => handleInputChange('container_timeout', e.target.value)}
-                  placeholder="Unbegrenzt"
+                  placeholder={t('settings.noneUnlimited')}
                   disabled={isReadonly}
                 />
               </div>
 
               <div className="setting-item">
                 <label htmlFor="retry_attempts" className="setting-label">
-                  Retry-Versuche
-                  <InfoIcon content="Anzahl automatischer Wiederholungsversuche bei Fehlschlag" />
+                  {t('settings.retryAttempts')}
+                  <InfoIcon content={t('settings.retryAttemptsInfo')} />
                 </label>
                 <input
                   id="retry_attempts"
@@ -775,7 +776,7 @@ export default function Settings() {
           {/* Actions */}
           {!isReadonly && (
             <div className="settings-actions card">
-              <h3 className="section-title">Aktionen</h3>
+              <h3 className="section-title">{t('settings.actions')}</h3>
               <div className="actions-grid">
                 <button
                   onClick={handleSave}
@@ -783,25 +784,25 @@ export default function Settings() {
                   className="btn btn-primary"
                 >
                   <MdSave />
-                  Einstellungen speichern
+                  {t('settings.saveButton')}
                 </button>
-                <Tooltip content="Führt sofortiges Cleanup durch: Löscht alte Logs gemäß Retention-Regeln, bereinigt verwaiste Docker-Container. Kann nicht rückgängig gemacht werden.">
+                <Tooltip content={t('settings.forceFlushTooltip')}>
                   <button
                     onClick={handleForceCleanup}
                     disabled={forceCleanupMutation.isPending}
                     className="btn btn-warning"
                   >
                     <MdRefresh />
-                    {forceCleanupMutation.isPending ? 'Cleanup läuft...' : 'Force Flush (Cleanup)'}
+                    {forceCleanupMutation.isPending ? t('common.saving') : t('settings.forceFlush')}
                   </button>
                 </Tooltip>
               </div>
               <div className="warning-box">
                 <MdWarning />
                 <p>
-                  <strong>Hinweis:</strong> Einstellungen werden aktuell nur aus Environment-Variablen geladen.
-                  Um Einstellungen dauerhaft zu ändern, bearbeiten Sie die .env-Datei oder setzen Sie
-                  Environment-Variablen. Ein Neustart der Anwendung ist erforderlich.
+                  <strong>{t('settings.note')}</strong> {t('settings.envOnly')}
+                  {t('settings.envHint')}
+                  {t('settings.envVarRestart')}
                 </p>
               </div>
             </div>
@@ -816,7 +817,7 @@ export default function Settings() {
         {!currentSettings ? (
           <div className="loading-container">
             <div className="spinner"></div>
-            <p>Einstellungen werden geladen...</p>
+            <p>{t('settings.loading')}</p>
           </div>
         ) : (
           <>
@@ -824,7 +825,7 @@ export default function Settings() {
           <div className="settings-section card">
             <h3 className="section-title">
               <MdEmail />
-              E-Mail-Benachrichtigungen
+              {t('settings.emailNotifications')}
             </h3>
             <div className="settings-grid">
               <div className="setting-item">
@@ -836,13 +837,13 @@ export default function Settings() {
                     className="checkbox-input"
                     disabled={isReadonly}
                   />
-                  <span>E-Mail-Benachrichtigungen aktivieren</span>
+                  <span>{t('settings.enableEmail')}</span>
                 </label>
               </div>
 
               <div className="setting-item">
                 <label htmlFor="smtp_host" className="setting-label">
-                  SMTP Host
+                  {t('settings.smtpHost')}
                 </label>
                 <input
                   id="smtp_host"
@@ -857,7 +858,7 @@ export default function Settings() {
 
               <div className="setting-item">
                 <label htmlFor="smtp_port" className="setting-label">
-                  SMTP Port
+                  {t('settings.smtpPort')}
                 </label>
                 <input
                   id="smtp_port"
@@ -874,7 +875,7 @@ export default function Settings() {
 
               <div className="setting-item">
                 <label htmlFor="smtp_user" className="setting-label">
-                  SMTP Benutzername
+                  {t('settings.smtpUser')}
                 </label>
                 <input
                   id="smtp_user"
@@ -889,23 +890,23 @@ export default function Settings() {
 
               <div className="setting-item">
                 <label htmlFor="smtp_password" className="setting-label">
-                  SMTP Passwort
-                  <span className="setting-hint">(über Environment-Variable SMTP_PASSWORD setzen)</span>
-                  <InfoIcon content="Passwort muss über Environment-Variable SMTP_PASSWORD gesetzt werden" />
+                  {t('settings.smtpPassword')}
+                  <span className="setting-hint">{t('settings.smtpPasswordHint')}</span>
+                  <InfoIcon content={t('settings.smtpPasswordTitle')} />
                 </label>
                 <input
                   id="smtp_password"
                   type="password"
                   className="form-input"
-                  placeholder="Wird nicht angezeigt - über .env setzen"
+                  placeholder={t('settings.smtpPasswordPlaceholder')}
                   disabled={true}
-                  title="SMTP-Passwort muss über Environment-Variable SMTP_PASSWORD gesetzt werden"
+                  title={t('settings.smtpPasswordTitle')}
                 />
               </div>
 
               <div className="setting-item">
                 <label htmlFor="smtp_from" className="setting-label">
-                  Absender-E-Mail
+                  {t('settings.smtpFrom')}
                 </label>
                 <input
                   id="smtp_from"
@@ -920,8 +921,8 @@ export default function Settings() {
 
               <div className="setting-item full-width">
                 <label htmlFor="email_recipients" className="setting-label">
-                  Empfänger (komma-separiert)
-                  <InfoIcon content="Komma-separierte Liste von E-Mail-Adressen für Benachrichtigungen" />
+                  {t('settings.recipients')}
+                  <InfoIcon content={t('settings.recipientsHint')} />
                 </label>
                 <textarea
                   id="email_recipients"
@@ -942,7 +943,7 @@ export default function Settings() {
                     className="btn btn-primary"
                   >
                   <MdEmail />
-                  {testEmailMutation.isPending ? 'Sende...' : 'Test-E-Mail senden'}
+                  {testEmailMutation.isPending ? t('settings.sendingLabel') : t('settings.testEmailSend')}
                   </button>
                 )}
               </div>
@@ -953,7 +954,7 @@ export default function Settings() {
           <div className="settings-section card">
             <h3 className="section-title">
               <MdGroup />
-              Microsoft Teams-Benachrichtigungen
+              {t('settings.teamsNotifications')}
             </h3>
             <div className="settings-grid">
               <div className="setting-item">
@@ -965,15 +966,15 @@ export default function Settings() {
                     className="checkbox-input"
                     disabled={isReadonly}
                   />
-                  <span>Teams-Benachrichtigungen aktivieren</span>
+                  <span>{t('settings.enableTeams')}</span>
                 </label>
               </div>
 
               <div className="setting-item full-width">
                 <label htmlFor="teams_webhook_url" className="setting-label">
-                  Teams Webhook-URL
-                  <span className="setting-hint">(aus Teams-Kanal Connectors)</span>
-                  <InfoIcon content="Webhook-URL aus Teams-Kanal Connectors. Wird für Benachrichtigungen verwendet." />
+                  {t('settings.teamsWebhookUrl')}
+                  <span className="setting-hint">{t('settings.teamsWebhookHint')}</span>
+                  <InfoIcon content={t('settings.recipientsHint')} />
                 </label>
                 <input
                   id="teams_webhook_url"
@@ -994,7 +995,7 @@ export default function Settings() {
                     className="btn btn-primary"
                   >
                     <MdGroup />
-                    {testTeamsMutation.isPending ? 'Sende...' : 'Test-Teams-Nachricht senden'}
+                    {testTeamsMutation.isPending ? t('settings.sendingLabel') : t('settings.testTeamsSend')}
                   </button>
                 )}
               </div>
@@ -1011,60 +1012,59 @@ export default function Settings() {
         <div className="modal-overlay" onClick={() => setShowCleanupInfo(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Force Flush (Cleanup) - Was wird geflusht?</h3>
+              <h3>{t('settings.forceFlushModalTitle')}</h3>
               <button
                 className="modal-close"
                 onClick={() => setShowCleanupInfo(false)}
-                aria-label="Schließen"
+                aria-label={t('settings.close')}
               >
                 ×
               </button>
             </div>
             <div className="modal-body">
               <div className="cleanup-info-section">
-                <h4>📁 Log-Cleanup</h4>
+                <h4>📁 {t('settings.logCleanup')}</h4>
                 <p className="cleanup-description">
-                  Bereinigt Log-Dateien, Metrics-Dateien und Datenbank-Einträge
+                  {t('settings.cleanupLogDesc')}
                 </p>
                 <ul className="cleanup-actions">
                   {currentSettings.log_retention_runs ? (
                     <li>
-                      Löscht älteste Runs pro Pipeline (max. {currentSettings.log_retention_runs} Runs pro Pipeline behalten)
+                      {t('settings.cleanupDeleteOldest', { count: currentSettings.log_retention_runs })}
                     </li>
                   ) : null}
                   {currentSettings.log_retention_days ? (
                     <li>
-                      Löscht Runs älter als {currentSettings.log_retention_days} Tage
+                      {t('settings.cleanupDeleteOlderThan', { days: currentSettings.log_retention_days })}
                     </li>
                   ) : null}
                   {currentSettings.log_max_size_mb ? (
                     <li>
-                      Kürzt oder löscht Log-Dateien größer als {currentSettings.log_max_size_mb} MB
+                      {t('settings.cleanupTruncateLogs', { mb: currentSettings.log_max_size_mb })}
                     </li>
                   ) : null}
                   {!currentSettings.log_retention_runs && !currentSettings.log_retention_days && !currentSettings.log_max_size_mb && (
-                    <li className="cleanup-disabled">Keine Log-Cleanup-Regeln konfiguriert</li>
+                    <li className="cleanup-disabled">{t('settings.noLogCleanupConfigured')}</li>
                   )}
                 </ul>
               </div>
 
               <div className="cleanup-info-section">
-                <h4>🐳 Docker-Cleanup</h4>
+                <h4>🐳 {t('settings.dockerCleanup')}</h4>
                 <p className="cleanup-description">
-                  Bereinigt verwaiste Docker-Container und Volumes
+                  {t('settings.cleanupDockerDesc')}
                 </p>
                 <ul className="cleanup-actions">
-                  <li>Löscht verwaiste Container mit Label 'fastflow-run-id' (ohne zugehörigen DB-Eintrag)</li>
-                  <li>Löscht beendete Container mit Label 'fastflow-run-id'</li>
-                  <li>Löscht verwaiste Volumes mit Label 'fastflow-run-id'</li>
+                  <li>{t('settings.cleanupOrphanContainers')}</li>
+                  <li>{t('settings.cleanupFinishedContainers')}</li>
+                  <li>{t('settings.cleanupOrphanVolumes')}</li>
                 </ul>
               </div>
 
               <div className="cleanup-warning">
                 <MdWarning />
                 <p>
-                  <strong>Warnung:</strong> Diese Aktion kann nicht rückgängig gemacht werden.
-                  Alle gelöschten Daten gehen unwiderruflich verloren.
+                  {t('settings.cleanupWarning')}
                 </p>
               </div>
             </div>
@@ -1073,7 +1073,7 @@ export default function Settings() {
                 className="btn btn-secondary"
                 onClick={() => setShowCleanupInfo(false)}
               >
-                Abbrechen
+                {t('common.cancel')}
               </button>
               <button
                 className="btn btn-warning"
@@ -1081,7 +1081,7 @@ export default function Settings() {
                 disabled={forceCleanupMutation.isPending}
               >
                 <MdRefresh />
-                {forceCleanupMutation.isPending ? 'Cleanup läuft...' : 'Cleanup durchführen'}
+                {forceCleanupMutation.isPending ? t('settings.cleanupRunning') : t('settings.cleanupExecute')}
               </button>
             </div>
           </div>

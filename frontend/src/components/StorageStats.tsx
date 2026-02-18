@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
 import { MdStorage, MdDescription, MdDataUsage, MdArchive, MdFolder } from 'react-icons/md'
 import './StorageStats.css'
 
-interface StorageStats {
+interface StorageStatsData {
   log_files_count: number
   log_files_size_mb: number
   total_disk_space_gb: number
@@ -22,8 +23,9 @@ interface StorageStats {
 }
 
 export default function StorageStats() {
+  const { t } = useTranslation()
   const storageInterval = useRefetchInterval(30000)
-  const { data: stats, isLoading } = useQuery<StorageStats>({
+  const { data: stats, isLoading } = useQuery<StorageStatsData>({
     queryKey: ['storage-stats'],
     queryFn: async () => {
       const response = await apiClient.get('/settings/storage')
@@ -36,7 +38,7 @@ export default function StorageStats() {
     return (
       <div className="storage-stats loading">
         <div className="spinner"></div>
-        <p>Laden...</p>
+        <p>{t('common.loading')}</p>
       </div>
     )
   }
@@ -44,7 +46,7 @@ export default function StorageStats() {
   if (!stats) {
     return (
       <div className="storage-stats error">
-        <p>Speicherplatz-Statistiken konnten nicht geladen werden</p>
+        <p>{t('storage.loadError')}</p>
       </div>
     )
   }
@@ -123,7 +125,7 @@ export default function StorageStats() {
                 />
               </div>
               <p className="stat-detail">
-                {stats.inode_free.toLocaleString()} frei von {stats.inode_total.toLocaleString()} Inodes
+                {stats.inode_free.toLocaleString()} {t('storage.freiVon')} {stats.inode_total.toLocaleString()} Inodes
               </p>
             </div>
           </div>
