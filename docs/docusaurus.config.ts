@@ -13,10 +13,7 @@ const config: Config = {
     mermaid: true,
   },
 
-  // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
-  future: {
-    v4: true, // Improve compatibility with the upcoming Docusaurus v4
-  },
+  future: { v4: true },
 
   url: 'https://ttuhin03.github.io',
   baseUrl: (process.env.BASE_URL as string) || '/',
@@ -39,7 +36,7 @@ const config: Config = {
           sidebarPath: './sidebars.ts',
           editUrl: 'https://github.com/ttuhin03/fastflow/tree/main/docs/',
         },
-        blog: false, // erstmal deaktiviert
+        blog: false, // deaktiviert – bei Aktivierung: Blog-Ordner anlegen
         theme: {
           customCss: './src/css/custom.css',
         },
@@ -49,15 +46,11 @@ const config: Config = {
 
   themes: [
     '@docusaurus/theme-mermaid',
-    [
-      require.resolve('@easyops-cn/docusaurus-search-local'),
-      {
-        hashed: true,
-        language: ['de'],
-        indexDocs: true,
-        indexBlog: false,
-      },
-    ],
+    // Disabled: causes "Cannot read properties of undefined (reading 'date')" build error
+    // [
+    //   require.resolve('@easyops-cn/docusaurus-search-local'),
+    //   { hashed: true, language: ['de'], indexDocs: true, indexBlog: false },
+    // ],
   ],
 
   themeConfig: {

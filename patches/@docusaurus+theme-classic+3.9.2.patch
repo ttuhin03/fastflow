@@ -1,0 +1,98 @@
+diff --git a/node_modules/@docusaurus/theme-classic/lib/theme/BlogArchivePage/index.js b/node_modules/@docusaurus/theme-classic/lib/theme/BlogArchivePage/index.js
+index ecaec65..0760721 100644
+--- a/node_modules/@docusaurus/theme-classic/lib/theme/BlogArchivePage/index.js
++++ b/node_modules/@docusaurus/theme-classic/lib/theme/BlogArchivePage/index.js
+@@ -25,13 +25,13 @@ function Year({year, posts}) {
+         {year}
+       </Heading>
+       <ul>
+-        {posts.map((post) => (
++        {posts.map((post) => (post?.metadata?.date ? (
+           <li key={post.metadata.date}>
+             <Link to={post.metadata.permalink}>
+               {formatDate(post.metadata.date)} - {post.metadata.title}
+             </Link>
+           </li>
+-        ))}
++        ) : null))}
+       </ul>
+     </>
+   );
+@@ -52,8 +52,11 @@ function YearsSection({years}) {
+   );
+ }
+ function listPostsByYears(blogPosts) {
+-  const postsByYear = blogPosts.reduce((posts, post) => {
+-    const year = post.metadata.date.split('-')[0];
++  const safe = (blogPosts ?? []).filter((p) => p?.metadata?.date);
++  const postsByYear = safe.reduce((posts, post) => {
++    const dateVal = post?.metadata?.date;
++    const year = typeof dateVal === 'string' ? dateVal.split('-')[0] : (dateVal && !isNaN(dateVal.getTime()) ? String(dateVal.getFullYear()) : null);
++    if (!year) return posts;
+     const yearPosts = posts.get(year) ?? [];
+     return posts.set(year, [post, ...yearPosts]);
+   }, new Map());
+@@ -73,7 +76,7 @@ export default function BlogArchive({archive}) {
+     message: 'Archive',
+     description: 'The page & hero description of the blog archive page',
+   });
+-  const years = listPostsByYears(archive.blogPosts);
++  const years = listPostsByYears(archive?.blogPosts ?? []);
+   return (
+     <>
+       <PageMetadata title={title} description={description} />
+diff --git a/node_modules/@docusaurus/theme-classic/src/theme/BlogArchivePage/index.tsx b/node_modules/@docusaurus/theme-classic/src/theme/BlogArchivePage/index.tsx
+index 4a3f0d3..390ddb5 100644
+--- a/node_modules/@docusaurus/theme-classic/src/theme/BlogArchivePage/index.tsx
++++ b/node_modules/@docusaurus/theme-classic/src/theme/BlogArchivePage/index.tsx
+@@ -35,13 +35,15 @@ function Year({year, posts}: YearProp) {
+         {year}
+       </Heading>
+       <ul>
+-        {posts.map((post) => (
+-          <li key={post.metadata.date}>
+-            <Link to={post.metadata.permalink}>
+-              {formatDate(post.metadata.date)} - {post.metadata.title}
+-            </Link>
+-          </li>
+-        ))}
++        {posts.map((post) =>
++          post?.metadata?.date ? (
++            <li key={post.metadata.date}>
++              <Link to={post.metadata.permalink}>
++                {formatDate(post.metadata.date)} - {post.metadata.title}
++              </Link>
++            </li>
++          ) : null,
++        )}
+       </ul>
+     </>
+   );
+@@ -64,8 +66,16 @@ function YearsSection({years}: {years: YearProp[]}) {
+ }
+ 
+ function listPostsByYears(blogPosts: readonly ArchiveBlogPost[]): YearProp[] {
+-  const postsByYear = blogPosts.reduce((posts, post) => {
+-    const year = post.metadata.date.split('-')[0]!;
++  const safe = (blogPosts ?? []).filter((p) => p?.metadata?.date);
++  const postsByYear = safe.reduce((posts, post) => {
++    const dateVal = post?.metadata?.date;
++    const year =
++      typeof dateVal === 'string'
++        ? dateVal.split('-')[0]
++        : dateVal && !isNaN(dateVal.getTime())
++          ? String(dateVal.getFullYear())
++          : null;
++    if (!year) return posts;
+     const yearPosts = posts.get(year) ?? [];
+     return posts.set(year, [post, ...yearPosts]);
+   }, new Map<string, ArchiveBlogPost[]>());
+@@ -87,7 +97,7 @@ export default function BlogArchive({archive}: Props): ReactNode {
+     message: 'Archive',
+     description: 'The page & hero description of the blog archive page',
+   });
+-  const years = listPostsByYears(archive.blogPosts);
++  const years = listPostsByYears(archive?.blogPosts ?? []);
+   return (
+     <>
+       <PageMetadata title={title} description={description} />
