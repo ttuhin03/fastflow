@@ -1,8 +1,7 @@
 # Docusaurus-Build-Fix („reading 'date'“)
 
-**Status: Behoben.** Der Docs-Build läuft mit den Patches in `patches/` plus folgenden manuellen Anpassungen in `node_modules` (falls nach `npm install` der Build wieder fehlschlägt, diese erneut anwenden oder `npx patch-package` mit vollen Rechten ausführen, um die Patches zu aktualisieren):
+**Status: Behoben.** Der Docs-Build nutzt Docusaurus **3.9.2-canary-6508** (Canary). Damit entfällt die Fehlermeldung `Cannot read properties of undefined (reading 'date')` ohne lokale Patches.
 
-- **@docusaurus/plugin-content-blog** `lib/client/structuredDataUtils.js`: In `getBlogPost` Guard `if (!metadata?.date) return null` und `.filter(Boolean)` nach dem Map; in `useBlogPostStructuredData` früher Return mit `if (!metadata?.date)`.
-- **@docusaurus/theme-classic** `lib/theme/BlogPostItem/Header/Info/index.js` und `lib/theme/BlogPostPage/Metadata/index.js`: `if (!metadata?.date) return null` vor der Destrukturierung von `metadata`.
+Ursache war das bekannte Docusaurus-3.9.x-Problem: Structured-Data/SEO-Logik erwartet teils ein `date`-Feld (Blog), während Docs nur `lastUpdatedAt` haben; bei Kategorie-/Tag-Seiten oder geteilten Metadaten-Utilities führte das zum Absturz. Die Canary-Version behebt diesen Edge-Case.
 
-Ursache war das bekannte Docusaurus-3.9.x-Problem: Structured-Data/SEO-Logik erwartet teils ein `date`-Feld (Blog), während Docs nur `lastUpdatedAt` haben; bei Kategorie-/Tag-Seiten oder geteilten Metadaten-Utilities führt das zu `Cannot read properties of undefined (reading 'date')`.
+**Falls wieder auf stabile 3.9.2 gewechselt wird:** Dann wären die früheren Patches in `patches/` (plus `patch-package` im Root) wieder nötig, sofern Docusaurus 3.10+ noch nicht verfügbar ist.

@@ -16,10 +16,7 @@
   },
   "scripts": {
     "docs:dev": "npm run start --workspace=docs",
-    "docs:build": "npm run build --workspace=docs",
-    "postinstall": "patch-package"
+    "docs:build": "npm run build --workspace=docs"
   },
-  "devDependencies": {
-    "patch-package": "^8.0.0"
-  }
+  "devDependencies": {}
 }
