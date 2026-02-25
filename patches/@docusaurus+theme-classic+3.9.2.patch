@@ -41,6 +41,30 @@ index ecaec65..0760721 100644
    return (
      <>
        <PageMetadata title={title} description={description} />
+diff --git a/node_modules/@docusaurus/theme-classic/lib/theme/BlogPostItem/Header/Info/index.js b/node_modules/@docusaurus/theme-classic/lib/theme/BlogPostItem/Header/Info/index.js
+index f384821..b3e504d 100644
+--- a/node_modules/@docusaurus/theme-classic/lib/theme/BlogPostItem/Header/Info/index.js
++++ b/node_modules/@docusaurus/theme-classic/lib/theme/BlogPostItem/Header/Info/index.js
+@@ -42,6 +42,7 @@ function Spacer() {
+ }
+ export default function BlogPostItemHeaderInfo({className}) {
+   const {metadata} = useBlogPost();
++  if (!metadata?.date) return null;
+   const {date, readingTime} = metadata;
+   const dateTimeFormat = useDateTimeFormat({
+     day: 'numeric',
+diff --git a/node_modules/@docusaurus/theme-classic/lib/theme/BlogPostPage/Metadata/index.js b/node_modules/@docusaurus/theme-classic/lib/theme/BlogPostPage/Metadata/index.js
+index 9a6f6cd..dbdf298 100644
+--- a/node_modules/@docusaurus/theme-classic/lib/theme/BlogPostPage/Metadata/index.js
++++ b/node_modules/@docusaurus/theme-classic/lib/theme/BlogPostPage/Metadata/index.js
+@@ -9,6 +9,7 @@ import {PageMetadata} from '@docusaurus/theme-common';
+ import {useBlogPost} from '@docusaurus/plugin-content-blog/client';
+ export default function BlogPostPageMetadata() {
+   const {assets, metadata} = useBlogPost();
++  if (!metadata?.date) return null;
+   const {title, description, date, tags, authors, frontMatter} = metadata;
+   const {keywords} = frontMatter;
+   const image = assets.image ?? frontMatter.image;
 diff --git a/node_modules/@docusaurus/theme-classic/src/theme/BlogArchivePage/index.tsx b/node_modules/@docusaurus/theme-classic/src/theme/BlogArchivePage/index.tsx
 index 4a3f0d3..390ddb5 100644
 --- a/node_modules/@docusaurus/theme-classic/src/theme/BlogArchivePage/index.tsx

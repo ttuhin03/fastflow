@@ -15,6 +15,35 @@ index 87bd2dd..ab3d1a0 100644
      });
      // "as" is safe here
      // see https://github.com/microsoft/TypeScript/pull/56805#issuecomment-2196526425
+diff --git a/node_modules/@docusaurus/plugin-content-blog/lib/client/structuredDataUtils.js b/node_modules/@docusaurus/plugin-content-blog/lib/client/structuredDataUtils.js
+index a10ee0b..7e78589 100644
+--- a/node_modules/@docusaurus/plugin-content-blog/lib/client/structuredDataUtils.js
++++ b/node_modules/@docusaurus/plugin-content-blog/lib/client/structuredDataUtils.js
+@@ -10,7 +10,8 @@ import { useBlogMetadata } from '@docusaurus/plugin-content-blog/client';
+ import { useBlogPost } from './contexts';
+ const convertDate = (dateMs) => new Date(dateMs).toISOString();
+ function getBlogPost(blogPostContent, siteConfig, withBaseUrl) {
+-    const { assets, frontMatter, metadata } = blogPostContent;
++    const { assets, frontMatter, metadata } = blogPostContent ?? {};
++    if (!metadata?.date) return null;
+     const { date, title, description, lastUpdatedAt } = metadata;
+     const image = assets.image ?? frontMatter.image;
+     const keywords = frontMatter.keywords ?? [];
+@@ -62,12 +63,13 @@ export function useBlogListPageStructuredData(props) {
+         mainEntityOfPage: url,
+         headline: blogTitle,
+         description: blogDescription,
+-        blogPost: props.items.map((blogItem) => getBlogPost(blogItem.content, siteConfig, withBaseUrl)),
++        blogPost: props.items.map((blogItem) => getBlogPost(blogItem.content, siteConfig, withBaseUrl)).filter(Boolean),
+     };
+ }
+ export function useBlogPostStructuredData() {
+     const blogMetadata = useBlogMetadata();
+     const { assets, metadata } = useBlogPost();
++    if (!metadata?.date) return { '@context': 'https://schema.org', '@type': 'BlogPosting' };
+     const { siteConfig } = useDocusaurusContext();
+     const { withBaseUrl } = useBaseUrlUtils();
+     const { date, title, description, frontMatter, lastUpdatedAt } = metadata;
 diff --git a/node_modules/@docusaurus/plugin-content-blog/lib/props.js b/node_modules/@docusaurus/plugin-content-blog/lib/props.js
 index c61f3be..5dd8e01 100644
 --- a/node_modules/@docusaurus/plugin-content-blog/lib/props.js

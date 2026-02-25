@@ -35,8 +35,9 @@ const config: Config = {
         docs: {
           sidebarPath: './sidebars.ts',
           editUrl: 'https://github.com/ttuhin03/fastflow/tree/main/docs/',
+          showLastUpdateTime: false,
         },
-        blog: false, // deaktiviert – bei Aktivierung: Blog-Ordner anlegen
+        blog: false,
         theme: {
           customCss: './src/css/custom.css',
         },

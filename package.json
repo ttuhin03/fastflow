@@ -20,6 +20,6 @@
     "postinstall": "patch-package"
   },
   "devDependencies": {
-    "patch-package": "^8.0.1"
+    "patch-package": "^8.0.0"
   }
 }
