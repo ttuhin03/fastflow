@@ -32,8 +32,6 @@ FROM node:20-slim AS docs-builder
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY docs/package.json ./docs/
-# Patches für Docusaurus .date-Bug (Blog/Theme) – werden von postinstall angewendet
-COPY patches/ ./patches/
 RUN npm ci --workspace=docs
 COPY docs/ ./docs/
 # baseUrl /doku/ (nicht /docs – kollidiert mit FastAPI Swagger)
