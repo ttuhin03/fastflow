@@ -54,6 +54,7 @@ export default function Settings() {
   const [showCleanupInfo, setShowCleanupInfo] = useState(false)
   const [localDependencyAuditCron, setLocalDependencyAuditCron] = useState<string | null>(null)
   const [generatedKey, setGeneratedKey] = useState<{ key: string; id: number; label?: string | null } | null>(null)
+  const [newKeyLabel, setNewKeyLabel] = useState('')
 
   const [searchParams, setSearchParams] = useSearchParams()
   const section = (searchParams.get('section') as SettingsSection) || 'account'
@@ -285,14 +286,15 @@ export default function Settings() {
   const createNotificationKeyMutation = useMutation<
       { key: string; id: number; label?: string | null; created_at: string },
       unknown,
-      void
+      string | undefined
     >({
-    mutationFn: async () => {
-      const r = await apiClient.post('/settings/notification-api/keys', {})
+    mutationFn: async (label) => {
+      const r = await apiClient.post('/settings/notification-api/keys', label ? { label: label.trim() } : {})
       return r.data as { key: string; id: number; label?: string | null; created_at: string }
     },
     onSuccess: (data) => {
       setGeneratedKey({ key: data.key, id: data.id, label: data.label })
+      setNewKeyLabel('')
       queryClient.invalidateQueries({ queryKey: ['settings'] })
       showSuccess(t('settings.notificationApiKeyCreated'))
     },
@@ -1122,11 +1124,23 @@ export default function Settings() {
                     </table>
                   )}
                   {!isReadonly && (
-                    <div style={{ marginTop: 8 }}>
+                    <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+                      <label htmlFor="new-key-label" className="setting-label" style={{ marginRight: 4 }}>
+                        {t('settings.notificationApiKeyLabel')} (optional)
+                      </label>
+                      <input
+                        id="new-key-label"
+                        type="text"
+                        className="form-input"
+                        style={{ maxWidth: 240 }}
+                        value={newKeyLabel}
+                        onChange={(e) => setNewKeyLabel(e.target.value)}
+                        placeholder={t('settings.notificationApiKeyLabelPlaceholder')}
+                      />
                       <button
                         type="button"
                         className="btn btn-primary"
-                        onClick={() => createNotificationKeyMutation.mutate()}
+                        onClick={() => createNotificationKeyMutation.mutate(newKeyLabel.trim() || undefined)}
                         disabled={createNotificationKeyMutation.isPending}
                       >
                         <MdKey /> {t('settings.generateKey')}
@@ -1148,7 +1162,7 @@ export default function Settings() {
                       </button>
                     </div>
                     <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: 12 }} onClick={() => setGeneratedKey(null)}>
-                      {t('common.close')}
+                      {t('settings.close')}
                     </button>
                   </div>
                 )}

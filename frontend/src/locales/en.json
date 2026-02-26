@@ -206,6 +206,7 @@
     "notificationApiKeys": "API keys",
     "notificationApiKeysEmpty": "No keys yet. Create a key to use in scripts (header: X-Notification-Key).",
     "notificationApiKeyLabel": "Label",
+    "notificationApiKeyLabelPlaceholder": "e.g. CI job",
     "notificationApiKeyCreatedAt": "Created",
     "generateKey": "Generate key",
     "removeKey": "Remove",
