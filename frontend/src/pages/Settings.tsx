@@ -282,9 +282,13 @@ export default function Settings() {
     },
   })
 
-  const createNotificationKeyMutation = useMutation({
-    mutationFn: async (label?: string) => {
-      const r = await apiClient.post('/settings/notification-api/keys', label != null ? { label: label.trim() || undefined } : {})
+  const createNotificationKeyMutation = useMutation<
+      { key: string; id: number; label?: string | null; created_at: string },
+      unknown,
+      void
+    >({
+    mutationFn: async () => {
+      const r = await apiClient.post('/settings/notification-api/keys', {})
       return r.data as { key: string; id: number; label?: string | null; created_at: string }
     },
     onSuccess: (data) => {
