@@ -106,12 +106,26 @@ async def sync_status(
 ) -> Dict[str, Any]:
     """
     Gibt Git-Status anzeigen.
-    Enthält auch repo_configured (ob Repository-URL gesetzt ist).
+    Enthält auch repo_configured, last_sync (letzter Sync-Zeitpunkt) und status (success/failed) aus Sync-Log.
     """
     try:
         status_info = await get_sync_status()
         repo_public = get_sync_repo_config_public(session)
         status_info["repo_configured"] = repo_public.get("configured", False)
+        if status_info.get("current_branch"):
+            status_info["branch"] = status_info["current_branch"]
+        logs = await get_sync_logs(limit=30)
+        for entry in logs:
+            ev = entry.get("event")
+            if ev == "sync_completed":
+                status_info["last_sync"] = entry.get("timestamp")
+                status_info["status"] = "success"
+                break
+            if ev == "sync_failed":
+                status_info["last_sync"] = entry.get("timestamp")
+                status_info["status"] = "failed"
+                status_info["last_sync_error"] = entry.get("error")
+                break
         return status_info
     except Exception as e:
         logger.exception("Fehler beim Abrufen des Git-Status")

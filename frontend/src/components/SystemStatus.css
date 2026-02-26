@@ -1,0 +1,58 @@
+.system-status {
+  padding: var(--spacing-md);
+}
+
+.system-status.loading,
+.system-status.error {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  color: var(--color-text-secondary);
+}
+
+.system-status.has-errors .system-status-item.error {
+  background-color: rgba(244, 67, 54, 0.08);
+  border-color: rgba(244, 67, 54, 0.3);
+}
+
+.system-status-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+}
+
+.system-status-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  font-size: var(--font-size-sm);
+}
+
+.system-status-item.ok {
+  border-color: rgba(76, 175, 80, 0.4);
+  background-color: rgba(76, 175, 80, 0.06);
+}
+
+.system-status-item .system-status-icon {
+  display: flex;
+  font-size: 1.1rem;
+}
+
+.system-status-item.ok .system-status-icon {
+  color: var(--color-success, #4caf50);
+}
+
+.system-status-item.error .system-status-icon {
+  color: var(--color-error);
+}
+
+.system-status-detail {
+  color: var(--color-text-secondary);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

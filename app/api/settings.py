@@ -414,6 +414,42 @@ async def trigger_test_exception_backend(
     return {"message": "Test-Exception an PostHog gesendet (Backend). In PostHog prüfen."}
 
 
+@router.get("/system-status", response_model=Dict[str, Any])
+async def get_system_status(
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    Gibt Readiness-Checks für die UI zurück (DB, Docker/K8s, UV-Cache, Disk, Inodes).
+    Gleiche Logik wie GET /api/ready, aber auth-pflichtig und immer 200.
+    """
+    from app.core.readiness import run_readiness_checks
+    checks, ok = run_readiness_checks()
+    return {
+        "status": "ready" if ok else "not_ready",
+        "checks": checks,
+        "version": config.VERSION,
+    }
+
+
+@router.get("/concurrency", response_model=Dict[str, Any])
+async def get_concurrency(
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    Gibt Concurrency-Status zurück: aktive Runs, Limit, Auslastung, Executor-Typ.
+    """
+    from app.executor import _running_containers
+    limit = config.MAX_CONCURRENT_RUNS
+    active = len(_running_containers)
+    utilization = (active / limit) if limit > 0 else 0.0
+    return {
+        "active_runs": active,
+        "concurrency_limit": limit,
+        "utilization": round(utilization, 4),
+        "executor": config.PIPELINE_EXECUTOR,
+    }
+
+
 @router.get("/storage", response_model=Dict[str, Any])
 async def get_storage_stats(
     session: Session = Depends(get_session),

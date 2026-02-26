@@ -908,3 +908,46 @@ async def get_all_pipelines_daily_stats(
         session, start_dt, end_dt, pipeline_name=None, include_run_ids=False
     )
     return DailyStatsResponse(daily_stats=daily_stats)
+
+
+@router.get("/summary-stats", response_model=Dict[str, Any])
+async def get_summary_stats(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    Aggregierte Run-Statistiken für die letzten 24 Stunden und 7 Tage.
+    Für proaktive Anzeige (Fehlertrend, Success Rate) im Dashboard.
+    """
+    now = datetime.now(timezone.utc)
+    end_7d = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+    start_7d = (now - timedelta(days=7)).replace(hour=0, minute=0, second=0, microsecond=0)
+    daily_7d = _get_daily_stats_from_db(
+        session, start_7d, end_7d, pipeline_name=None, include_run_ids=False
+    )
+    total_7d = sum(s.total_runs for s in daily_7d)
+    successful_7d = sum(s.successful_runs for s in daily_7d)
+    failed_7d = sum(s.failed_runs for s in daily_7d)
+    success_rate_7d = (successful_7d / total_7d * 100.0) if total_7d > 0 else 100.0
+    # Letzte 24h: heute + ggf. gestern (falls wir kurz nach Mitternacht sind)
+    start_24h = (now - timedelta(hours=24)).replace(minute=0, second=0, microsecond=0)
+    daily_24h = _get_daily_stats_from_db(
+        session, start_24h, end_7d, pipeline_name=None, include_run_ids=False
+    )
+    total_24h = sum(s.total_runs for s in daily_24h)
+    successful_24h = sum(s.successful_runs for s in daily_24h)
+    failed_24h = sum(s.failed_runs for s in daily_24h)
+    return {
+        "last_24h": {
+            "total_runs": total_24h,
+            "successful_runs": successful_24h,
+            "failed_runs": failed_24h,
+            "success_rate_pct": (successful_24h / total_24h * 100.0) if total_24h > 0 else 100.0,
+        },
+        "last_7d": {
+            "total_runs": total_7d,
+            "successful_runs": successful_7d,
+            "failed_runs": failed_7d,
+            "success_rate_pct": round(success_rate_7d, 2),
+        },
+    }

@@ -10,6 +10,10 @@ import InfoIcon from '../components/InfoIcon'
 import RunStatusCircles from '../components/RunStatusCircles'
 import StorageStats from '../components/StorageStats'
 import CalendarHeatmap from '../components/CalendarHeatmap'
+import WarningsBox from '../components/WarningsBox'
+import SystemStatus from '../components/SystemStatus'
+import ConcurrencyStatus from '../components/ConcurrencyStatus'
+import SummaryStatsCard from '../components/SummaryStatsCard'
 import './Dashboard.css'
 
 interface Pipeline {
@@ -132,6 +136,8 @@ export default function Dashboard() {
         </div>
       )}
 
+      <WarningsBox />
+
       <div className="stats-grid">
         <div className="stat-card card">
           <div className="stat-icon pipelines">
@@ -172,6 +178,16 @@ export default function Dashboard() {
             <p className="stat-value error">{totalFailed}</p>
           </div>
         </div>
+      </div>
+
+      <div className="dashboard-system-section">
+        <h3 className="section-title">{t('dashboard.systemStatus', 'System-Status')}</h3>
+        <SystemStatus />
+      </div>
+
+      <div className="dashboard-overview-grid">
+        <ConcurrencyStatus />
+        <SummaryStatsCard />
       </div>
 
       {allPipelinesDailyStats && allPipelinesDailyStats.daily_stats && allPipelinesDailyStats.daily_stats.length > 0 && (

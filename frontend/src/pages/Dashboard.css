@@ -175,6 +175,23 @@
   margin-bottom: 0;
 }
 
+/* System Status Section */
+.dashboard-system-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.dashboard-system-section .section-title {
+  margin-bottom: 0;
+}
+
+.dashboard-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--spacing-lg);
+}
+
 /* Storage Section */
 .storage-section {
   display: flex;
