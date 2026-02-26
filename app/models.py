@@ -492,6 +492,22 @@ class OrchestratorSettings(SQLModel, table=True):
     # Teams
     teams_enabled: Optional[bool] = Field(default=None)
     teams_webhook_url: Optional[str] = Field(default=None)
+    # Notification API (Skripte: E-Mail/Teams per Key)
+    notification_api_enabled: Optional[bool] = Field(default=None)
+    notification_api_rate_limit_per_minute: Optional[int] = Field(default=None)
+
+
+class NotificationApiKey(SQLModel, table=True):
+    """
+    API-Keys für die Benachrichtigungs-API (Skripte).
+    Key wird gehashed gespeichert; Klartext nur einmal bei Erzeugung zurückgegeben.
+    """
+    __tablename__ = "notification_api_keys"
+
+    id: int = Field(primary_key=True)
+    key_hash: str = Field(index=True, description="SHA-256-Hash des Keys (constant-time Vergleich)")
+    label: Optional[str] = Field(default=None, description="Optionale Bezeichnung z.B. CI Job")
+    created_at: datetime = Field(default_factory=_utc_now)
 
 
 class Session(SQLModel, table=True):

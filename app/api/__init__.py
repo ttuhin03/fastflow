@@ -9,6 +9,7 @@ from app.api import (
     auth,
     logs,
     metrics,
+    notifications,
     pipelines,
     runs,
     scheduler,
@@ -33,5 +34,6 @@ ROUTERS = [
     auth.router,
     users.router,
     webhooks.router,
+    notifications.router,
     version.router,
 ]

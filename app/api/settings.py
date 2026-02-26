@@ -7,18 +7,22 @@ Dieses Modul enthält alle REST-API-Endpoints für System-Einstellungen:
 - Log-Dateien-Statistiken
 """
 
-import os
-import shutil
+import hashlib
 import logging
+import os
+import secrets as secrets_module
+import shutil
 import psutil
 from pathlib import Path
 from typing import Optional, Dict, Any, List
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.core.database import get_session, database_url, engine
 from app.core.config import config
+from app.models import NotificationApiKey
 from app.services.cleanup import cleanup_logs, cleanup_docker_resources
 from app.services.s3_backup import get_backup_failures, get_last_backup_timestamp
 from app.models import PipelineRun, RunStatus, User
@@ -69,6 +73,13 @@ async def get_telemetry_status(
     )
 
 
+class NotificationApiKeyItem(BaseModel):
+    """Ein Eintrag in der Liste der Notification-API-Keys (ohne Klartext-Key)."""
+    id: int
+    label: Optional[str] = None
+    created_at: str
+
+
 class SettingsResponse(BaseModel):
     """Response-Model für System-Einstellungen."""
     log_retention_runs: Optional[int]
@@ -87,6 +98,9 @@ class SettingsResponse(BaseModel):
     email_recipients: List[str]
     teams_enabled: bool
     teams_webhook_url: Optional[str]
+    notification_api_enabled: bool = False
+    notification_api_rate_limit_per_minute: int = 30
+    notification_api_keys: List[NotificationApiKeyItem] = []
 
 
 class SystemSettingsResponse(BaseModel):
@@ -126,11 +140,14 @@ class SettingsUpdate(BaseModel):
     email_recipients: Optional[str] = None  # Komma-separiert als String
     teams_enabled: Optional[bool] = None
     teams_webhook_url: Optional[str] = None
+    notification_api_enabled: Optional[bool] = None
+    notification_api_rate_limit_per_minute: Optional[int] = None
 
 
 @router.get("", response_model=SettingsResponse)
 async def get_settings(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
 ) -> SettingsResponse:
     """
     Gibt die aktuellen System-Einstellungen zurück.
@@ -138,6 +155,16 @@ async def get_settings(
     Returns:
         SettingsResponse: Aktuelle Konfigurationswerte
     """
+    keys_list: List[NotificationApiKeyItem] = []
+    try:
+        for row in session.exec(select(NotificationApiKey).order_by(NotificationApiKey.id.desc())).all():
+            keys_list.append(NotificationApiKeyItem(
+                id=row.id,
+                label=row.label,
+                created_at=row.created_at.isoformat() if row.created_at else "",
+            ))
+    except Exception as e:
+        logger.debug("notification_api_keys not yet available: %s", e)
     return SettingsResponse(
         log_retention_runs=config.LOG_RETENTION_RUNS,
         log_retention_days=config.LOG_RETENTION_DAYS,
@@ -155,6 +182,9 @@ async def get_settings(
         email_recipients=config.EMAIL_RECIPIENTS,
         teams_enabled=config.TEAMS_ENABLED,
         teams_webhook_url=config.TEAMS_WEBHOOK_URL,
+        notification_api_enabled=getattr(config, "NOTIFICATION_API_ENABLED", False),
+        notification_api_rate_limit_per_minute=getattr(config, "NOTIFICATION_API_RATE_LIMIT_PER_MINUTE", 30),
+        notification_api_keys=keys_list,
     )
 
 
@@ -203,6 +233,10 @@ async def update_settings(
         row.teams_enabled = settings.teams_enabled
     if settings.teams_webhook_url is not None:
         row.teams_webhook_url = settings.teams_webhook_url
+    if settings.notification_api_enabled is not None:
+        row.notification_api_enabled = settings.notification_api_enabled
+    if settings.notification_api_rate_limit_per_minute is not None:
+        row.notification_api_rate_limit_per_minute = settings.notification_api_rate_limit_per_minute
     session.add(row)
     session.commit()
     session.refresh(row)
@@ -210,6 +244,58 @@ async def update_settings(
     return {
         "message": "Einstellungen wurden gespeichert und sind sofort aktiv."
     }
+
+
+class CreateNotificationApiKeyRequest(BaseModel):
+    """Optionales Label für einen neuen Notification-API-Key."""
+    label: Optional[str] = None
+
+
+class CreateNotificationApiKeyResponse(BaseModel):
+    """Response nach Key-Erzeugung: Klartext-Key nur einmal zurückgeben."""
+    key: str
+    id: int
+    label: Optional[str] = None
+    created_at: str
+
+
+@router.post("/notification-api/keys", response_model=CreateNotificationApiKeyResponse, status_code=status.HTTP_201_CREATED)
+async def create_notification_api_key(
+    body: Optional[CreateNotificationApiKeyRequest] = None,
+    current_user: User = Depends(require_write),
+    session: Session = Depends(get_session),
+) -> CreateNotificationApiKeyResponse:
+    """Erzeugt einen neuen API-Key für die Benachrichtigungs-API. Der Klartext-Key wird nur einmal zurückgegeben."""
+    plain_key = secrets_module.token_urlsafe(32)
+    key_hash = hashlib.sha256(plain_key.encode("utf-8")).hexdigest()
+    label = (body.label if body else None) or None
+    if label is not None:
+        label = label.strip() or None
+    row = NotificationApiKey(key_hash=key_hash, label=label)
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return CreateNotificationApiKeyResponse(
+        key=plain_key,
+        id=row.id,
+        label=row.label,
+        created_at=row.created_at.isoformat() if row.created_at else "",
+    )
+
+
+@router.delete("/notification-api/keys/{key_id}", status_code=status.HTTP_200_OK)
+async def delete_notification_api_key(
+    key_id: int,
+    current_user: User = Depends(require_write),
+    session: Session = Depends(get_session),
+) -> Dict[str, str]:
+    """Entfernt einen Notification-API-Key."""
+    row = session.get(NotificationApiKey, key_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Key nicht gefunden")
+    session.delete(row)
+    session.commit()
+    return {"message": "Key entfernt"}
 
 
 @router.get("/system", response_model=SystemSettingsResponse)

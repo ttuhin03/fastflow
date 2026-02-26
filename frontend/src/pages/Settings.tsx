@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
-import { MdSave, MdRefresh, MdInfo, MdWarning, MdEmail, MdGroup, MdLink, MdCheck, MdPerson, MdSync, MdStorage, MdPlayCircle, MdNotifications, MdPeople } from 'react-icons/md'
+import { MdSave, MdRefresh, MdInfo, MdWarning, MdEmail, MdGroup, MdLink, MdCheck, MdPerson, MdSync, MdStorage, MdPlayCircle, MdNotifications, MdPeople, MdKey, MdContentCopy, MdDelete } from 'react-icons/md'
 import { showError, showSuccess } from '../utils/toast'
 import { captureException } from '../utils/posthog'
 import { getApiOrigin } from '../config'
@@ -17,6 +17,12 @@ import Users from './Users'
 import './Settings.css'
 
 export type SettingsSection = 'account' | 'system' | 'pipeline' | 'notifications' | 'git-sync' | 'nutzer'
+
+interface NotificationApiKeyItem {
+  id: number
+  label: string | null
+  created_at: string
+}
 
 interface Settings {
   log_retention_runs: number | null
@@ -35,6 +41,9 @@ interface Settings {
   email_recipients: string[]
   teams_enabled: boolean
   teams_webhook_url: string | null
+  notification_api_enabled?: boolean
+  notification_api_rate_limit_per_minute?: number
+  notification_api_keys?: NotificationApiKeyItem[]
 }
 
 export default function Settings() {
@@ -44,6 +53,7 @@ export default function Settings() {
   const [localSettings, setLocalSettings] = useState<Settings | null>(null)
   const [showCleanupInfo, setShowCleanupInfo] = useState(false)
   const [localDependencyAuditCron, setLocalDependencyAuditCron] = useState<string | null>(null)
+  const [generatedKey, setGeneratedKey] = useState<{ key: string; id: number; label?: string | null } | null>(null)
 
   const [searchParams, setSearchParams] = useSearchParams()
   const section = (searchParams.get('section') as SettingsSection) || 'account'
@@ -272,13 +282,46 @@ export default function Settings() {
     },
   })
 
+  const createNotificationKeyMutation = useMutation({
+    mutationFn: async (label?: string) => {
+      const r = await apiClient.post('/settings/notification-api/keys', label != null ? { label: label.trim() || undefined } : {})
+      return r.data as { key: string; id: number; label?: string | null; created_at: string }
+    },
+    onSuccess: (data) => {
+      setGeneratedKey({ key: data.key, id: data.id, label: data.label })
+      queryClient.invalidateQueries({ queryKey: ['settings'] })
+      showSuccess(t('settings.notificationApiKeyCreated'))
+    },
+    onError: (error: any) => {
+      showError(error.response?.data?.detail || error.message || t('settings.notificationApiKeyCreateError'))
+    },
+  })
+
+  const deleteNotificationKeyMutation = useMutation({
+    mutationFn: async (keyId: number) => {
+      await apiClient.delete(`/settings/notification-api/keys/${keyId}`)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] })
+      showSuccess(t('settings.notificationApiKeyDeleted'))
+    },
+    onError: (error: any) => {
+      showError(error.response?.data?.detail || error.message || t('settings.notificationApiKeyDeleteError'))
+    },
+  })
+
   const handleInputChange = (field: keyof Settings, value: string | number | boolean | null) => {
     if (!settings) return
     
     let processedValue: number | boolean | null | string | string[]
     
-    if (field === 'auto_sync_enabled' || field === 'email_enabled' || field === 'teams_enabled') {
+    if (field === 'auto_sync_enabled' || field === 'email_enabled' || field === 'teams_enabled' || field === 'notification_api_enabled') {
       processedValue = typeof value === 'boolean' ? value : value === 'true'
+    } else if (field === 'notification_api_rate_limit_per_minute') {
+      processedValue = typeof value === 'number' ? value : (typeof value === 'string' && value !== '' ? parseInt(String(value), 10) : 30)
+      if (typeof processedValue === 'number' && (isNaN(processedValue) || processedValue < 1 || processedValue > 300)) {
+        processedValue = 30
+      }
     } else if (field === 'email_recipients') {
       // Komma-separierte Liste verarbeiten
       if (typeof value === 'string') {
@@ -311,9 +354,9 @@ export default function Settings() {
 
   const handleSave = () => {
     if (!localSettings) return
-    // Konvertiere email_recipients Array zu komma-separiertem String für API
-    const { email_recipients, ...restSettings } = localSettings
-    const settingsToSave: Partial<Omit<Settings, 'email_recipients'>> & { email_recipients?: string } = {
+    // Konvertiere email_recipients Array zu komma-separiertem String für API; notification_api_keys nicht mitsenden
+    const { email_recipients, notification_api_keys: _keys, ...restSettings } = localSettings
+    const settingsToSave: Partial<Omit<Settings, 'email_recipients' | 'notification_api_keys'>> & { email_recipients?: string } = {
       ...restSettings,
       email_recipients: Array.isArray(email_recipients)
         ? email_recipients.join(', ')
@@ -997,6 +1040,113 @@ export default function Settings() {
                     <MdGroup />
                     {testTeamsMutation.isPending ? t('settings.sendingLabel') : t('settings.testTeamsSend')}
                   </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Notification API (Skripte) */}
+          <div className="settings-section card">
+            <h3 className="section-title">
+              <MdKey />
+              {t('settings.notificationApiTitle')}
+            </h3>
+            <p className="setting-hint" style={{ marginBottom: '1rem' }}>{t('settings.notificationApiHint')}</p>
+            <div className="settings-grid">
+              <div className="setting-item">
+                <label className="setting-label checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={currentSettings.notification_api_enabled ?? false}
+                    onChange={(e) => handleInputChange('notification_api_enabled', e.target.checked)}
+                    className="checkbox-input"
+                    disabled={isReadonly}
+                  />
+                  <span>{t('settings.notificationApiEnabled')}</span>
+                </label>
+              </div>
+              <div className="setting-item">
+                <label htmlFor="notification_api_rate_limit" className="setting-label">
+                  {t('settings.notificationApiRateLimit')}
+                </label>
+                <input
+                  id="notification_api_rate_limit"
+                  type="number"
+                  min={1}
+                  max={300}
+                  className="form-input"
+                  value={currentSettings.notification_api_rate_limit_per_minute ?? 30}
+                  onChange={(e) => handleInputChange('notification_api_rate_limit_per_minute', e.target.value)}
+                  disabled={isReadonly || !(currentSettings.notification_api_enabled ?? false)}
+                />
+              </div>
+              <div className="setting-item full-width">
+                <label className="setting-label">{t('settings.notificationApiKeys')}</label>
+                <div className="settings-grid" style={{ marginTop: 8 }}>
+                  {(currentSettings.notification_api_keys ?? []).length === 0 ? (
+                    <p className="setting-hint">{t('settings.notificationApiKeysEmpty')}</p>
+                  ) : (
+                    <table className="settings-table" style={{ width: '100%' }}>
+                      <thead>
+                        <tr>
+                          <th>{t('settings.notificationApiKeyLabel')}</th>
+                          <th>{t('settings.notificationApiKeyCreatedAt')}</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(currentSettings.notification_api_keys ?? []).map((k) => (
+                          <tr key={k.id}>
+                            <td>{k.label || '–'}</td>
+                            <td>{k.created_at ? new Date(k.created_at).toLocaleString() : '–'}</td>
+                            <td>
+                              {!isReadonly && (
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-sm"
+                                  onClick={() => deleteNotificationKeyMutation.mutate(k.id)}
+                                  disabled={deleteNotificationKeyMutation.isPending}
+                                  aria-label={t('settings.removeKey')}
+                                >
+                                  <MdDelete /> {t('settings.removeKey')}
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                  {!isReadonly && (
+                    <div style={{ marginTop: 8 }}>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={() => createNotificationKeyMutation.mutate()}
+                        disabled={createNotificationKeyMutation.isPending}
+                      >
+                        <MdKey /> {t('settings.generateKey')}
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {generatedKey && (
+                  <div className="card" style={{ marginTop: 12, padding: 16, background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
+                    <p className="setting-hint" style={{ marginBottom: 8 }}>{t('settings.keyGeneratedOnce')}</p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <code style={{ flex: 1, minWidth: 200, wordBreak: 'break-all' }}>{generatedKey.key}</code>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => { navigator.clipboard.writeText(generatedKey.key); showSuccess(t('settings.copied')); }}
+                      >
+                        <MdContentCopy /> {t('settings.copy')}
+                      </button>
+                    </div>
+                    <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: 12 }} onClick={() => setGeneratedKey(null)}>
+                      {t('common.close')}
+                    </button>
+                  </div>
                 )}
               </div>
             </div>

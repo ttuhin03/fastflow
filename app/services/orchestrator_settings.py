@@ -83,6 +83,10 @@ def apply_orchestrator_settings_to_config(settings: OrchestratorSettings) -> Non
     if getattr(settings, "pipelines_subdir", None) is not None:
         if not config.PIPELINES_SUBDIR or not str(config.PIPELINES_SUBDIR).strip():
             config.PIPELINES_SUBDIR = settings.pipelines_subdir
+    if getattr(settings, "notification_api_enabled", None) is not None:
+        config.NOTIFICATION_API_ENABLED = settings.notification_api_enabled
+    if getattr(settings, "notification_api_rate_limit_per_minute", None) is not None:
+        config.NOTIFICATION_API_RATE_LIMIT_PER_MINUTE = settings.notification_api_rate_limit_per_minute
 
 
 def _parse_email_recipients(value: Optional[str]) -> List[str]:

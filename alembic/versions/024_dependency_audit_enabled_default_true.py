@@ -17,20 +17,25 @@ depends_on = None
 
 def upgrade() -> None:
     op.execute(
-        sa.text("UPDATE system_settings SET dependency_audit_enabled = true WHERE id = 1")
+        sa.text("UPDATE system_settings SET dependency_audit_enabled = 1 WHERE id = 1")
     )
-    op.alter_column(
-        "system_settings",
-        "dependency_audit_enabled",
-        existing_type=sa.Boolean(),
-        server_default=sa.true(),
-    )
+    # SQLite does not support ALTER COLUMN ... SET DEFAULT; skip on SQLite
+    conn = op.get_bind()
+    if conn.dialect.name != "sqlite":
+        op.alter_column(
+            "system_settings",
+            "dependency_audit_enabled",
+            existing_type=sa.Boolean(),
+            server_default=sa.true(),
+        )
 
 
 def downgrade() -> None:
-    op.alter_column(
-        "system_settings",
-        "dependency_audit_enabled",
-        existing_type=sa.Boolean(),
-        server_default=sa.false(),
-    )
+    conn = op.get_bind()
+    if conn.dialect.name != "sqlite":
+        op.alter_column(
+            "system_settings",
+            "dependency_audit_enabled",
+            existing_type=sa.Boolean(),
+            server_default=sa.false(),
+        )

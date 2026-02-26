@@ -330,6 +330,64 @@ async def send_teams_notification(run: PipelineRun, status: RunStatus) -> None:
         raise
 
 
+async def send_custom_email(subject: str, body: str, recipients: Optional[List[str]] = None) -> None:
+    """
+    Sendet eine E-Mail mit beliebigem Betreff und Inhalt (z.B. für Skripte über die Notification-API).
+    Wenn recipients leer/None: config.EMAIL_RECIPIENTS verwenden.
+    """
+    if not config.EMAIL_ENABLED or not config.SMTP_HOST or not config.SMTP_FROM:
+        logger.warning("E-Mail nicht gesendet: Konfiguration unvollständig")
+        return
+    to_list = recipients if recipients else config.EMAIL_RECIPIENTS
+    if not to_list:
+        logger.warning("E-Mail nicht gesendet: keine Empfänger")
+        return
+    message = MIMEMultipart("alternative")
+    message["From"] = config.SMTP_FROM
+    message["To"] = ", ".join(to_list)
+    message["Subject"] = subject
+    message.attach(MIMEText(body, "plain"))
+    try:
+        smtp = aiosmtplib.SMTP(
+            hostname=config.SMTP_HOST,
+            port=config.SMTP_PORT,
+            use_tls=config.SMTP_PORT == 587,
+        )
+        await smtp.connect()
+        if config.SMTP_USER and config.SMTP_PASSWORD:
+            await smtp.login(config.SMTP_USER, config.SMTP_PASSWORD)
+        await smtp.send_message(message)
+        await smtp.quit()
+        logger.info("Custom E-Mail gesendet an %s", ", ".join(to_list))
+    except Exception as e:
+        logger.error("Fehler beim Senden der Custom-E-Mail: %s", e, exc_info=True)
+        raise
+
+
+async def send_custom_teams(title: str, body: str) -> None:
+    """
+    Sendet eine Microsoft Teams-Nachricht mit beliebigem Titel und Inhalt (z.B. für Skripte).
+    """
+    if not config.TEAMS_ENABLED or not config.TEAMS_WEBHOOK_URL:
+        logger.warning("Teams-Nachricht nicht gesendet: Webhook nicht konfiguriert")
+        return
+    card = {
+        "@type": "MessageCard",
+        "@context": "https://schema.org/extensions",
+        "summary": title,
+        "themeColor": "0078D4",
+        "title": title,
+        "sections": [{"activityTitle": title, "text": body, "markdown": True}],
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            await client.post(config.TEAMS_WEBHOOK_URL, json=card, headers={"Content-Type": "application/json"})
+        logger.info("Custom Teams-Nachricht gesendet: %s", title)
+    except Exception as e:
+        logger.error("Fehler beim Senden der Custom-Teams-Nachricht: %s", e, exc_info=True)
+        raise
+
+
 def _is_daemon_pipeline(run: PipelineRun) -> bool:
     """Prüft ob die Pipeline ein Dauerläufer ist (timeout: 0 oder restart_on_crash)."""
     try:

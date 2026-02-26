@@ -511,10 +511,15 @@ class Config:
     TEAMS_WEBHOOK_URL: Optional[str] = os.getenv("TEAMS_WEBHOOK_URL")
     """
     Microsoft Teams-Webhook-URL für Benachrichtigungen.
-    
     Webhook-URL kann in Teams-Kanal über "Connectors" erstellt werden.
     Format: https://outlook.office.com/webhook/...
     """
+
+    # Notification API (Skripte: POST /api/notifications/send mit Key)
+    NOTIFICATION_API_ENABLED: bool = False
+    """Benachrichtigungs-API für Skripte aktiv (E-Mail/Teams per Key). Wird aus DB (OrchestratorSettings) überschrieben."""
+    NOTIFICATION_API_RATE_LIMIT_PER_MINUTE: int = 30
+    """Rate-Limit für /api/notifications/send (Anfragen pro Minute). Wird aus DB überschrieben."""
 
     # PostHog (Phase 1: Error-Tracking; Phase 2: Session Replay, Product Analytics, Survey)
     # Host fest auf EU; API-Key derzeit fest. Steuerung nur über SystemSettings.enable_error_reporting.
