@@ -69,6 +69,8 @@ def _consume_rate_limit(client_id: str) -> None:
 
 
 def _hash_key(key: str) -> str:
+    """Hash for storage/lookup only. Key is high-entropy (e.g. token_urlsafe(32));
+    SHA-256 is appropriate here. Not for password hashing (use bcrypt/Argon2)."""
     return hashlib.sha256(key.encode("utf-8")).hexdigest()
 
 
