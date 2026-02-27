@@ -15,9 +15,17 @@ from sqlmodel import Session, select, func
 
 from app.core.database import get_session
 from app.models import PipelineRun, RunStatus, User, RunCellLog
-from app.executor import cancel_run, check_container_health
+from app.executor import cancel_run, check_container_health, run_pipeline
 from app.auth import get_current_user, require_write
 from app.schemas.runs import RunsResponse
+
+# Terminal-Statuses: Run kann nur in diesen Zuständen erneut gestartet werden (Retry)
+_RETRY_ALLOWED_STATUSES = {
+    RunStatus.SUCCESS,
+    RunStatus.FAILED,
+    RunStatus.INTERRUPTED,
+    RunStatus.WARNING,
+}
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
@@ -283,6 +291,64 @@ async def cancel_run_endpoint(
     return {
         "message": f"Run {run_id} wurde erfolgreich abgebrochen"
     }
+
+
+@router.post("/{run_id}/retry", response_model=Dict[str, Any])
+async def retry_run(
+    run_id: UUID,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_write),
+) -> Dict[str, Any]:
+    """
+    Startet einen neuen Run mit denselben Parametern und Env-Variablen wie der angegebene Run.
+
+    Nur zulässig für beendete Runs (SUCCESS, FAILED, INTERRUPTED, WARNING).
+    Der neue Run wird mit triggered_by="manual" gestartet.
+
+    Returns:
+        Run-Informationen des neuen Runs (id, pipeline_name, status, started_at, log_file).
+    """
+    run = session.get(PipelineRun, run_id)
+    if run is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Run nicht gefunden: {run_id}",
+        )
+    if run.status not in _RETRY_ALLOWED_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Retry nur für beendete Runs möglich (aktueller Status: {run.status.value})",
+        )
+    env_vars = run.env_vars or {}
+    parameters = run.parameters or {}
+    try:
+        new_run = await run_pipeline(
+            name=run.pipeline_name,
+            env_vars=env_vars,
+            parameters=parameters,
+            session=session,
+            triggered_by="manual",
+            run_config_id=run.run_config_id,
+        )
+        return {
+            "id": str(new_run.id),
+            "pipeline_name": new_run.pipeline_name,
+            "status": new_run.status.value,
+            "started_at": new_run.started_at.isoformat(),
+            "log_file": new_run.log_file,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=str(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Fehler beim erneuten Start: {str(e)}",
+        )
 
 
 @router.get("/{run_id}/health", response_model=Dict[str, Any])

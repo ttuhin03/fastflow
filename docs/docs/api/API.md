@@ -263,6 +263,27 @@ Bricht einen laufenden Run ab.
 - `400`: Run ist bereits beendet
 - `404`: Run nicht gefunden
 
+### `POST /api/runs/{run_id}/retry`
+
+Startet einen neuen Run mit denselben Parametern und Env-Variablen wie der angegebene Run. Nur für beendete Runs (SUCCESS, FAILED, INTERRUPTED, WARNING) zulässig. Der neue Run wird mit `triggered_by="manual"` gestartet.
+
+**Response:**
+```json
+{
+  "id": "660e8400-e29b-41d4-a716-446655440001",
+  "pipeline_name": "data_sync",
+  "status": "PENDING",
+  "started_at": "2025-02-27T12:00:00.000000+00:00",
+  "log_file": "./logs/data_sync_2025-02-27T12:00:00.000000.log"
+}
+```
+
+**Fehler:**
+- `400`: Run ist nicht beendet (nur PENDING/RUNNING)
+- `404`: Run nicht gefunden oder Pipeline nicht vorhanden
+- `429`: Concurrency-Limit erreicht
+- `500`: Fehler beim Start
+
 ### `GET /api/runs/{run_id}/health`
 
 Gibt Container-Health-Status für einen Run zurück.
