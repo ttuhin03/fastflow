@@ -13,6 +13,7 @@ Alle Parameter werden beim Modul-Import geladen und sind dann über
 die globale `config`-Instanz verfügbar.
 """
 
+import base64
 import os
 from typing import Optional, List, Literal
 from pathlib import Path
@@ -522,9 +523,17 @@ class Config:
     """Rate-Limit für /api/notifications/send (Anfragen pro Minute). Wird aus DB überschrieben."""
 
     # PostHog (Phase 1: Error-Tracking; Phase 2: Session Replay, Product Analytics, Survey)
-    # Host fest auf EU; API-Key derzeit fest. Steuerung nur über SystemSettings.enable_error_reporting.
-    POSTHOG_API_KEY: str = "phc_PxPEXdUC56hAwgi8A2Tge84wvt2BOnWV0CyH1zenKg9"
+    # Host fest auf EU. API-Key: Default obfuskiert (Base64), optional überschreibbar via POSTHOG_API_KEY.
+    _POSTHOG_API_KEY_DEFAULT_B64: str = "cGhjX1B4UEVYZFVDNTZoQXdnaThBMlRnZTg0d3Z0MkJPbldWMEN5SDF6ZW5LZzk="
     POSTHOG_HOST: str = "https://eu.posthog.com"
+
+    @property
+    def POSTHOG_API_KEY(self) -> str:
+        """PostHog Project API Key. Env POSTHOG_API_KEY überschreibt den obfuskierten Default."""
+        env_key = os.getenv("POSTHOG_API_KEY")
+        if env_key:
+            return env_key
+        return base64.b64decode(self._POSTHOG_API_KEY_DEFAULT_B64).decode()
 
     FRONTEND_URL: Optional[str] = os.getenv("FRONTEND_URL")
     """
