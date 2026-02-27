@@ -6,6 +6,7 @@ Run-Management, Log-Streaming, Git-Sync, Scheduler und Authentication.
 """
 
 from app.api import (
+    audit,
     auth,
     logs,
     metrics,
@@ -23,6 +24,7 @@ from app.api import (
 
 # Alle API-Router für zentrale Registrierung in main.py (prefix="/api")
 ROUTERS = [
+    audit.router,
     pipelines.router,
     runs.router,
     logs.router,

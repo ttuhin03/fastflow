@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlmodel import Session, select
 
 from app.auth import get_current_user, require_admin, delete_all_user_sessions
+from app.services.audit import log_audit
 from app.core.config import config
 from app.core.database import get_session
 from app.models import User, UserRole, UserStatus, Invitation
@@ -184,7 +185,7 @@ async def invite_user(
     )
     session.add(inv)
     session.commit()
-
+    log_audit(session, "user_invite", "invite", None, {"email": request.email}, current_user)
     frontend = (config.FRONTEND_URL or config.BASE_URL or "http://localhost:8000").rstrip("/")
     link = f"{frontend}/invite?token={token}"
     logger.info(f"Admin '{current_user.username}' hat Einladung für '{request.email}' erstellt")
@@ -204,6 +205,7 @@ async def delete_invite(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Einladung nicht gefunden")
     session.delete(inv)
     session.commit()
+    log_audit(session, "invite_delete", "invite", str(invitation_id), None, current_user)
     logger.info(f"Admin '{current_user.username}' hat Einladung {invitation_id} widerrufen")
     return {"message": "Einladung wurde widerrufen"}
 
@@ -276,6 +278,7 @@ async def approve_user(
     user.role = role
     session.add(user)
     session.commit()
+    log_audit(session, "user_approve", "user", str(user_id), {"role": role.value}, current_user)
     session.refresh(user)
     logger.info("Admin %s hat Beitrittsanfrage von %s freigegeben (role=%s)", current_user.username, user.username, role.value)
     # Optional: E-Mail an Nutzer bei Freigabe
@@ -320,6 +323,7 @@ async def reject_user(
     user.blocked = True
     session.add(user)
     session.commit()
+    log_audit(session, "user_reject", "user", str(user_id), None, current_user)
     session.refresh(user)
     logger.info("Admin %s hat Beitrittsanfrage von %s abgelehnt", current_user.username, user.username)
     return UserResponse(

@@ -522,6 +522,22 @@ class NotificationApiKey(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utc_now)
 
 
+class AuditLogEntry(SQLModel, table=True):
+    """
+    Audit-Log: Wer hat wann welche Aktion ausgeführt (Compliance, Nachvollziehbarkeit).
+    """
+    __tablename__ = "audit_log"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True, description="Eindeutige Eintrags-ID")
+    created_at: datetime = Field(default_factory=_utc_now, description="Zeitpunkt der Aktion (UTC)")
+    user_id: Optional[UUID] = Field(default=None, foreign_key="users.id", index=True, description="User der die Aktion ausgeführt hat")
+    username: str = Field(default="", description="Benutzername zum Zeitpunkt der Aktion (Snapshot)")
+    action: str = Field(index=True, description="Aktion z.B. run_start, run_cancel, pipeline_stats_reset, user_invite, settings_update")
+    resource_type: str = Field(index=True, description="Betroffene Ressource: pipeline, run, user, settings, secret, invite")
+    resource_id: Optional[str] = Field(default=None, index=True, description="ID der betroffenen Ressource (z.B. Run-ID, Pipeline-Name)")
+    details: Optional[Dict[str, Any]] = Field(default=None, sa_column=Column(JSON), description="Zusätzliche Daten (z.B. new_run_id)")
+
+
 class Session(SQLModel, table=True):
     """
     Session-Model.

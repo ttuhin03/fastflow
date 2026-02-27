@@ -24,6 +24,7 @@ from app.models import DownstreamTrigger, Pipeline, PipelineDailyStat, PipelineR
 from app.executor import run_pipeline
 from app.services.pipeline_discovery import discover_pipelines, get_pipeline as get_discovered_pipeline
 from app.auth import require_write, get_current_user
+from app.services.audit import log_audit
 from app.middleware.rate_limiting import limiter
 from app.core.config import config
 from app.core import dependencies as deps_module
@@ -393,8 +394,8 @@ async def get_pipeline_dependencies(
 async def start_pipeline(
     name: str,
     request: RunPipelineRequest,
-    current_user = Depends(require_write),
-    session: Session = Depends(get_session)
+    current_user: User = Depends(require_write),
+    session: Session = Depends(get_session),
 ) -> Dict[str, Any]:
     """
     Startet eine Pipeline manuell mit optionalen Parametern.
@@ -419,7 +420,11 @@ async def start_pipeline(
             session=session,
             triggered_by="manual"
         )
-        
+        log_audit(
+            session, "run_start", "pipeline", name,
+            details={"run_id": str(run.id)},
+            user=current_user,
+        )
         return {
             "id": str(run.id),
             "pipeline_name": run.pipeline_name,
@@ -579,8 +584,8 @@ async def get_pipeline_stats(
 @router.post("/{name}/stats/reset", response_model=Dict[str, str])
 async def reset_pipeline_stats(
     name: str,
-    current_user = Depends(require_write),
-    session: Session = Depends(get_session)
+    current_user: User = Depends(require_write),
+    session: Session = Depends(get_session),
 ) -> Dict[str, str]:
     """
     Setzt Pipeline-Statistiken zurück (total_runs, successful_runs, failed_runs auf 0).
@@ -625,7 +630,7 @@ async def reset_pipeline_stats(
     
     session.add(pipeline)
     session.commit()
-    
+    log_audit(session, "pipeline_stats_reset", "pipeline", name, None, current_user)
     return {
         "message": f"Statistiken für Pipeline '{name}' wurden zurückgesetzt"
     }

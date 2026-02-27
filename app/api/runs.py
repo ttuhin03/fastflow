@@ -18,6 +18,7 @@ from app.models import PipelineRun, RunStatus, User, RunCellLog
 from app.executor import cancel_run, check_container_health, run_pipeline
 from app.auth import get_current_user, require_write
 from app.schemas.runs import RunsResponse
+from app.services.audit import log_audit
 
 # Terminal-Statuses: Run kann nur in diesen Zuständen erneut gestartet werden (Retry)
 _RETRY_ALLOWED_STATUSES = {
@@ -293,7 +294,7 @@ async def cancel_run_endpoint(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Fehler beim Abbrechen des Runs: {run_id}"
         )
-    
+    log_audit(session, "run_cancel", "run", str(run_id), None, current_user)
     return {
         "message": f"Run {run_id} wurde erfolgreich abgebrochen"
     }
@@ -335,6 +336,11 @@ async def retry_run(
             session=session,
             triggered_by="manual",
             run_config_id=run.run_config_id,
+        )
+        log_audit(
+            session, "run_retry", "run", str(run_id),
+            details={"new_run_id": str(new_run.id)},
+            user=current_user,
         )
         return {
             "id": str(new_run.id),

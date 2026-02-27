@@ -19,6 +19,7 @@
     "dashboard": "Dashboard",
     "pipelines": "Pipelines",
     "settings": "Settings",
+    "audit": "Audit log",
     "menu": "Menu",
     "pendingInvites": "Pending invites",
     "backendOnline": "Backend online",
@@ -423,6 +424,23 @@
     "saveFailed": "Save failed."
   },
   "versionInfo": {},
+  "audit": {
+    "title": "Audit log",
+    "description": "Log of all relevant actions (visible to admins only).",
+    "action": "Action",
+    "resourceType": "Resource type",
+    "resourceId": "Resource ID",
+    "details": "Details",
+    "time": "Time",
+    "user": "User",
+    "since": "Since (date/time)",
+    "loadError": "Failed to load audit log",
+    "noEntries": "No entries found.",
+    "pagination": "Entries {{from}}–{{to}} of {{total}}",
+    "page": "Page {{page}} of {{total}}",
+    "prev": "Previous",
+    "next": "Next"
+  },
   "runDetail": {
     "title": "Run details",
     "retry": "Retry",

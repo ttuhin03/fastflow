@@ -16,6 +16,7 @@ import {
   MdClose,
   MdCode,
   MdMenuBook,
+  MdHistory,
 } from 'react-icons/md'
 import NotificationCenter from './NotificationCenter'
 import Tooltip from './Tooltip'
@@ -30,15 +31,15 @@ interface NavItem {
   icon: React.ReactNode
 }
 
-const navItems: NavItem[] = [
-  { path: '/', labelKey: 'nav.dashboard', icon: <MdDashboard /> },
-  { path: '/pipelines', labelKey: 'nav.pipelines', icon: <MdAccountTree /> },
-  { path: '/settings', labelKey: 'nav.settings', icon: <MdSettings /> },
-]
-
 export default function Layout() {
   const { t } = useTranslation()
-  const { logout } = useAuth()
+  const { logout, isAdmin } = useAuth()
+  const navItems: NavItem[] = [
+    { path: '/', labelKey: 'nav.dashboard', icon: <MdDashboard /> },
+    { path: '/pipelines', labelKey: 'nav.pipelines', icon: <MdAccountTree /> },
+    { path: '/settings', labelKey: 'nav.settings', icon: <MdSettings /> },
+    ...(isAdmin ? [{ path: '/audit', labelKey: 'nav.audit', icon: <MdHistory /> }] : []),
+  ]
   const navigate = useNavigate()
   const location = useLocation()
   const [backendStatus, setBackendStatus] = useState<'online' | 'offline' | 'checking'>('checking')

@@ -17,6 +17,7 @@ const Pipelines = lazy(() => import('./pages/Pipelines'))
 const PipelineDetail = lazy(() => import('./pages/PipelineDetail'))
 const RunDetail = lazy(() => import('./pages/RunDetail'))
 const Settings = lazy(() => import('./pages/Settings'))
+const Audit = lazy(() => import('./pages/Audit'))
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { NotificationProvider } from './contexts/NotificationContext'
 import { useRunNotifications } from './hooks/useRunNotifications'
@@ -91,6 +92,7 @@ function AppRoutes() {
         <Route path="dependencies" element={<Navigate to="/pipelines?section=dependencies" replace />} />
         <Route path="settings" element={<Settings />} />
         <Route path="users" element={<Navigate to="/settings?section=nutzer" replace />} />
+        <Route path="audit" element={<Audit />} />
       </Route>
     </Routes>
     </Suspense>

@@ -1,0 +1,134 @@
+.audit-page {
+  padding: var(--spacing-lg);
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.audit-title {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--spacing-xs);
+}
+
+.audit-description {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--spacing-lg);
+}
+
+.audit-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+  padding: var(--spacing-md);
+}
+
+.audit-filter-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.audit-filter-row label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  min-width: 80px;
+}
+
+.audit-input {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+.audit-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.audit-table-container {
+  overflow-x: auto;
+  margin-bottom: var(--spacing-md);
+}
+
+.audit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.audit-table th,
+.audit-table td {
+  padding: var(--spacing-sm) var(--spacing-md);
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.audit-table th {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.audit-time {
+  white-space: nowrap;
+}
+
+.audit-action-badge {
+  font-size: 0.8em;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-variant);
+  color: var(--color-text-primary);
+}
+
+.audit-resource-id {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.audit-details pre {
+  margin: 0;
+  font-size: 0.75rem;
+  max-width: 280px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.audit-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+}
+
+.audit-pagination-info {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.audit-pagination-buttons {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.audit-page-num {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.audit-loading,
+.audit-error,
+.audit-empty {
+  padding: var(--spacing-xl);
+  text-align: center;
+  color: var(--color-text-secondary);
+}

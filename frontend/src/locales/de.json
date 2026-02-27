@@ -19,6 +19,7 @@
     "dashboard": "Dashboard",
     "pipelines": "Pipelines",
     "settings": "Einstellungen",
+    "audit": "Audit-Log",
     "menu": "Menü",
     "pendingInvites": "Offene Beitrittsanfragen",
     "backendOnline": "Backend online",
@@ -422,6 +423,23 @@
     "saveFailed": "Speichern fehlgeschlagen."
   },
   "versionInfo": {},
+  "audit": {
+    "title": "Audit-Log",
+    "description": "Protokoll aller relevanten Aktionen (nur für Admins sichtbar).",
+    "action": "Aktion",
+    "resourceType": "Ressourcentyp",
+    "resourceId": "Ressourcen-ID",
+    "details": "Details",
+    "time": "Zeit",
+    "user": "Benutzer",
+    "since": "Seit (Datum/Zeit)",
+    "loadError": "Audit-Log konnte nicht geladen werden",
+    "noEntries": "Keine Einträge gefunden.",
+    "pagination": "Einträge {{from}}–{{to}} von {{total}}",
+    "page": "Seite {{page}} von {{total}}",
+    "prev": "Zurück",
+    "next": "Weiter"
+  },
   "runDetail": {
     "title": "Run Details",
     "retry": "Wiederholen",

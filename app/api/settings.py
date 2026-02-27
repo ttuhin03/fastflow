@@ -37,6 +37,7 @@ from app.services.orchestrator_settings import (
     apply_orchestrator_settings_to_config,
 )
 from app.services.secrets import encrypt
+from app.services.audit import log_audit
 from app.services.dependency_audit import get_last_dependency_audit
 from sqlmodel import text
 
@@ -191,8 +192,8 @@ async def get_settings(
 @router.put("", response_model=Dict[str, str])
 async def update_settings(
     settings: SettingsUpdate,
-    current_user = Depends(require_write),
-    session: Session = Depends(get_session)
+    current_user: User = Depends(require_write),
+    session: Session = Depends(get_session),
 ) -> Dict[str, str]:
     """
     Aktualisiert System-Einstellungen und speichert sie in der Datenbank.
@@ -241,6 +242,7 @@ async def update_settings(
     session.commit()
     session.refresh(row)
     apply_orchestrator_settings_to_config(row)
+    log_audit(session, "settings_update", "settings", None, None, current_user)
     return {
         "message": "Einstellungen wurden gespeichert und sind sofort aktiv."
     }
@@ -275,6 +277,7 @@ async def create_notification_api_key(
     session.add(row)
     session.commit()
     session.refresh(row)
+    log_audit(session, "notification_key_create", "settings", None, {"label": label}, current_user)
     return CreateNotificationApiKeyResponse(
         key=plain_key,
         id=row.id,
@@ -295,6 +298,7 @@ async def delete_notification_api_key(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Key nicht gefunden")
     session.delete(row)
     session.commit()
+    log_audit(session, "notification_key_delete", "settings", str(key_id), None, current_user)
     return {"message": "Key entfernt"}
 
 
@@ -362,6 +366,7 @@ async def update_system_settings_endpoint(
     session.add(ss)
     session.commit()
     session.refresh(ss)
+    log_audit(session, "system_settings_update", "settings", None, None, current_user)
     if ss.enable_error_reporting is False:
         shutdown_posthog()
     # Dependency-Audit-Job neu planen (Cron/Enabled geändert)
@@ -839,7 +844,11 @@ async def force_cleanup(
         
         if not summary:
             summary.append("Keine Ressourcen zum Bereinigen gefunden")
-        
+        log_audit(
+            session, "cleanup_force", "settings", None,
+            details={"summary": summary, "log_stats": log_stats},
+            user=current_user,
+        )
         return {
             "status": "success",
             "message": "Cleanup erfolgreich abgeschlossen",
