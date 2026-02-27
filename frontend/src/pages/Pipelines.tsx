@@ -47,6 +47,7 @@ export default function Pipelines() {
     np.set('section', s)
     setSearchParams(np, { replace: true })
   }
+  const [tagsFilter, setTagsFilter] = useState('')
 
   const sectionItems: { id: PipelinesSection; labelKey: string; icon: React.ReactNode }[] = [
     { id: 'pipelines', labelKey: 'nav.pipelines', icon: <MdAccountTree /> },
@@ -70,10 +71,13 @@ export default function Pipelines() {
   }, [section])
 
   const pipelinesInterval = useRefetchInterval(5000)
+  const tagsParam = tagsFilter.trim() || undefined
   const { data: pipelines, isLoading } = useQuery<Pipeline[]>({
-    queryKey: ['pipelines'],
+    queryKey: ['pipelines', tagsParam],
     queryFn: async () => {
-      const response = await apiClient.get('/pipelines')
+      const response = await apiClient.get('/pipelines', {
+        params: tagsParam ? { tags: tagsParam } : {},
+      })
       return response.data
     },
     refetchInterval: pipelinesInterval,
@@ -209,6 +213,19 @@ export default function Pipelines() {
       {renderNav()}
       <div className="pipelines-content">
     <div className="pipelines">
+      <div className="pipelines-filter-row">
+        <label htmlFor="pipelines-tags-filter" className="pipelines-filter-label">
+          {t('pipelines.filterByTags')}:
+        </label>
+        <input
+          id="pipelines-tags-filter"
+          type="text"
+          value={tagsFilter}
+          onChange={(e) => setTagsFilter(e.target.value)}
+          placeholder={t('pipelines.filterByTagsPlaceholder')}
+          className="pipelines-tags-input"
+        />
+      </div>
       {pipelines && pipelines.length > 0 ? (
         <div className="pipelines-grid">
           {pipelines.map((pipeline, index) => (

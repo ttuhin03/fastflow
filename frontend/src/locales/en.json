@@ -85,7 +85,9 @@
     "sectionLabel": "Pipeline sections",
     "noPipelines": "No pipelines found",
     "details": "Details",
-    "startError": "Error starting: {{detail}}"
+    "startError": "Error starting: {{detail}}",
+    "filterByTags": "Filter by tags",
+    "filterByTagsPlaceholder": "e.g. production, experiment"
   },
   "runs": {
     "notFound": "Run not found",
@@ -434,7 +436,10 @@
     "reconnecting": "Reconnecting…",
     "disconnected": "Disconnected",
     "started": "Started",
-    "finished": "Finished"
+    "finished": "Finished",
+    "gitSha": "Git commit",
+    "gitBranch": "Git branch",
+    "gitCommitMessage": "Commit message"
   },
   "settingsSections": {
     "account": "My account",

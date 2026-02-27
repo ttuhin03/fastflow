@@ -102,6 +102,13 @@
   font-size: var(--font-size-xs);
 }
 
+.run-commit .commit-sha {
+  font-family: 'Courier New', monospace;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  cursor: help;
+}
+
 /* Status */
 .status-cell {
   display: flex;

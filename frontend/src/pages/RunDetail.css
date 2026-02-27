@@ -118,6 +118,11 @@
   color: white;
 }
 
+.info-value-mono {
+  font-family: ui-monospace, monospace;
+  font-size: 0.9em;
+}
+
 .status {
   padding: 0.25rem 0.75rem;
   border-radius: var(--radius-sm);

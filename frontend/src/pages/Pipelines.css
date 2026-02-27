@@ -135,6 +135,36 @@
   }
 }
 
+.pipelines-filter-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+.pipelines-filter-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+.pipelines-tags-input {
+  flex: 1;
+  max-width: 320px;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+.pipelines-tags-input::placeholder {
+  color: var(--color-text-muted);
+}
+.pipelines-tags-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-primary-alpha);
+}
+
 .pipelines-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));

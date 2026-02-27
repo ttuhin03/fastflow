@@ -26,6 +26,9 @@ interface Run {
   error_type?: string | null  // "pipeline_error" oder "infrastructure_error"
   error_message?: string | null
   cell_logs?: CellLog[]
+  git_sha?: string | null
+  git_branch?: string | null
+  git_commit_message?: string | null
 }
 
 interface Pipeline {
@@ -198,13 +201,10 @@ export default function RunDetail() {
 
   const retryMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiClient.post(`/pipelines/${run?.pipeline_name}/run`, {
-        env_vars: run?.env_vars || {},
-        parameters: run?.parameters || {},
-      })
+      const response = await apiClient.post(`/runs/${runId}/retry`)
       return response.data
     },
-    onSuccess: (data) => {
+    onSuccess: (data: { id: string }) => {
       queryClient.invalidateQueries({ queryKey: ['runs'] })
       queryClient.invalidateQueries({ queryKey: ['all-pipelines-daily-stats'] })
       queryClient.invalidateQueries({ queryKey: ['pipeline-daily-stats'] })
@@ -471,7 +471,7 @@ export default function RunDetail() {
   }
 
   const isRunning = run.status === 'RUNNING' || run.status === 'PENDING'
-  const isFailed = run.status === 'FAILED'
+  const canRetry = ['SUCCESS', 'FAILED', 'INTERRUPTED', 'WARNING'].includes(run.status)
 
   return (
     <div className="run-detail">
@@ -487,7 +487,7 @@ export default function RunDetail() {
               {cancelMutation.isPending ? t('runs.cancelling') : t('runs.cancel')}
             </button>
           )}
-          {isFailed && (
+          {canRetry && (
             <button
               onClick={() => retryMutation.mutate()}
               disabled={retryMutation.isPending}
@@ -571,6 +571,32 @@ export default function RunDetail() {
             <span className="info-label">Setup Dauer:</span>
             <span className="info-value">{run.setup_duration.toFixed(2)}s</span>
           </div>
+        )}
+        {(run.git_sha || run.git_branch) && (
+          <>
+            {run.git_sha && (
+              <div className="info-row">
+                <span className="info-label">{t('runDetail.gitSha')}:</span>
+                <span className="info-value info-value-mono" title={run.git_sha}>
+                  {run.git_sha.slice(0, 7)}
+                </span>
+              </div>
+            )}
+            {run.git_branch && (
+              <div className="info-row">
+                <span className="info-label">{t('runDetail.gitBranch')}:</span>
+                <span className="info-value">{run.git_branch}</span>
+              </div>
+            )}
+            {run.git_commit_message && (
+              <div className="info-row">
+                <span className="info-label">{t('runDetail.gitCommitMessage')}:</span>
+                <span className="info-value" title={run.git_commit_message}>
+                  {run.git_commit_message.length > 60 ? `${run.git_commit_message.slice(0, 60)}…` : run.git_commit_message}
+                </span>
+              </div>
+            )}
+          </>
         )}
         {health && (
           <div className="info-row">

@@ -19,6 +19,8 @@ interface Run {
   exit_code: number | null
   error_type?: string | null  // "pipeline_error" oder "infrastructure_error"
   error_message?: string | null
+  git_sha?: string | null
+  git_branch?: string | null
 }
 
 interface RunsResponse {
@@ -261,6 +263,7 @@ export default function Runs() {
                 <tr>
                   <th>ID</th>
                   <th>Pipeline</th>
+                  <th>Commit</th>
                   <th>Status</th>
                   <th>Gestartet</th>
                   <th>Dauer</th>
@@ -273,6 +276,15 @@ export default function Runs() {
                   <tr key={run.id} style={{ animationDelay: `${index * 0.03}s` }}>
                     <td className="run-id">{run.id.substring(0, 8)}...</td>
                     <td>{run.pipeline_name}</td>
+                    <td className="run-commit">
+                      {run.git_sha ? (
+                        <Tooltip content={`${run.git_sha}${run.git_branch ? ` (${run.git_branch})` : ''}`}>
+                          <span className="commit-sha">{run.git_sha.slice(0, 7)}</span>
+                        </Tooltip>
+                      ) : (
+                        '-'
+                      )}
+                    </td>
                     <td>
                       <Tooltip content={
                         run.status === 'SUCCESS' ? '✓ SUCCESS: Run erfolgreich abgeschlossen' :
@@ -348,6 +360,14 @@ export default function Runs() {
                     <span className="run-card-label">Pipeline:</span>
                     <span className="run-card-value">{run.pipeline_name}</span>
                   </div>
+                  {run.git_sha && (
+                    <div className="run-card-row">
+                      <span className="run-card-label">Commit:</span>
+                      <Tooltip content={`${run.git_sha}${run.git_branch ? ` (${run.git_branch})` : ''}`}>
+                        <span className="run-card-value commit-sha">{run.git_sha.slice(0, 7)}</span>
+                      </Tooltip>
+                    </div>
+                  )}
                   <div className="run-card-row">
                     <span className="run-card-label">Gestartet:</span>
                     <span className="run-card-value">{new Date(run.started_at).toLocaleString(getFormatLocale())}</span>
