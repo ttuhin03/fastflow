@@ -82,6 +82,31 @@ def _run_git_command(cmd: list, cwd: Path, env: Optional[Dict[str, str]] = None)
         return (-1, "", str(e))
 
 
+def get_current_git_info(pipelines_dir: Path) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """
+    Liest aktuellen Git-HEAD im Pipeline-Repo (SHA, Branch, Commit-Message).
+
+    Wird beim Anlegen eines Pipeline-Runs aufgerufen, um die Version zu speichern.
+    Returns (git_sha, git_branch, git_commit_message); bei Fehlern (None, None, None).
+    """
+    if not (pipelines_dir / ".git").exists():
+        return (None, None, None)
+    try:
+        sha_cmd = ["git", "rev-parse", "HEAD"]
+        exit_code, stdout, _ = _run_git_command(sha_cmd, pipelines_dir)
+        git_sha = stdout.strip() if exit_code == 0 and stdout.strip() else None
+        branch_cmd = ["git", "rev-parse", "--abbrev-ref", "HEAD"]
+        exit_code, stdout, _ = _run_git_command(branch_cmd, pipelines_dir)
+        git_branch = stdout.strip() if exit_code == 0 and stdout.strip() else None
+        msg_cmd = ["git", "log", "-1", "--format=%s", "HEAD"]
+        exit_code, stdout, _ = _run_git_command(msg_cmd, pipelines_dir)
+        git_commit_message = stdout.strip() if exit_code == 0 and stdout.strip() else None
+        return (git_sha, git_branch, git_commit_message)
+    except Exception as e:
+        logger.debug("get_current_git_info: %s", e)
+        return (None, None, None)
+
+
 def _build_auth_url(repo_url: str, token: Optional[str]) -> str:
     """Baut HTTPS-URL mit Token für Clone/Pull (x-access-token für GitHub-kompatibel)."""
     if not token or not repo_url.strip():

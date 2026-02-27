@@ -402,7 +402,10 @@ async def start_pipeline(
             "pipeline_name": run.pipeline_name,
             "status": run.status.value,
             "started_at": run.started_at.isoformat(),
-            "log_file": run.log_file
+            "log_file": run.log_file,
+            "git_sha": run.git_sha,
+            "git_branch": run.git_branch,
+            "git_commit_message": run.git_commit_message,
         }
         
     except ValueError as e:
@@ -472,7 +475,9 @@ async def get_pipeline_runs(
             "finished_at": run.finished_at.isoformat() if run.finished_at else None,
             "exit_code": run.exit_code,
             "log_file": run.log_file,
-            "metrics_file": run.metrics_file
+            "metrics_file": run.metrics_file,
+            "git_sha": run.git_sha,
+            "git_branch": run.git_branch,
         })
     
     return runs_response

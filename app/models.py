@@ -173,6 +173,18 @@ class PipelineRun(SQLModel, table=True):
         index=True,
         description="Run-Konfiguration aus pipeline.json schedules (z.B. prod, staging)"
     )
+    git_sha: Optional[str] = Field(
+        default=None,
+        description="Git-Commit-SHA (HEAD) des Pipeline-Repos zum Startzeitpunkt (Reproduzierbarkeit)"
+    )
+    git_branch: Optional[str] = Field(
+        default=None,
+        description="Git-Branch des Pipeline-Repos zum Startzeitpunkt"
+    )
+    git_commit_message: Optional[str] = Field(
+        default=None,
+        description="Erste Zeile der Git-Commit-Message zum Startzeitpunkt"
+    )
 
 
 class RunCellLog(SQLModel, table=True):

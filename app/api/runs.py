@@ -128,7 +128,10 @@ async def get_runs(
             "uv_version": run.uv_version,
             "setup_duration": run.setup_duration,
             "error_type": error_type,  # "pipeline_error" oder "infrastructure_error"
-            "error_message": error_message
+            "error_message": error_message,
+            "git_sha": run.git_sha,
+            "git_branch": run.git_branch,
+            "git_commit_message": run.git_commit_message,
         })
     
     page = (offset // limit) + 1 if limit > 0 else 1
@@ -205,6 +208,9 @@ async def get_run_details(
         "error_message": error_message,
         "setup_duration": run.setup_duration,
         "cell_logs": cell_logs_data,
+        "git_sha": run.git_sha,
+        "git_branch": run.git_branch,
+        "git_commit_message": run.git_commit_message,
     }
 
 
@@ -336,6 +342,9 @@ async def retry_run(
             "status": new_run.status.value,
             "started_at": new_run.started_at.isoformat(),
             "log_file": new_run.log_file,
+            "git_sha": new_run.git_sha,
+            "git_branch": new_run.git_branch,
+            "git_commit_message": new_run.git_commit_message,
         }
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

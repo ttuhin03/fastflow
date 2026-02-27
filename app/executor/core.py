@@ -46,6 +46,7 @@ from app.services.pipeline_discovery import DiscoveredPipeline, get_pipeline
 from app.services.downstream_triggers import get_downstream_pipelines_to_trigger
 from app.resilience.retry_strategy import wait_for_retry
 from app.core.database import get_session
+from app.git_sync.sync import get_current_git_info
 
 logger = logging.getLogger(__name__)
 
@@ -417,6 +418,11 @@ async def run_pipeline(
         merged_env_vars.update(env_vars)
         merged_env_vars.update(parameters)
         
+        # Git-HEAD im Pipeline-Repo auslesen (für Reproduzierbarkeit)
+        git_sha, git_branch, git_commit_message = await asyncio.to_thread(
+            get_current_git_info, config.PIPELINES_DIR
+        )
+        
         # PipelineRun-Datensatz erstellen
         run = PipelineRun(
             pipeline_name=name,
@@ -425,7 +431,10 @@ async def run_pipeline(
             env_vars=merged_env_vars,
             parameters=parameters,
             triggered_by=triggered_by,
-            run_config_id=run_config_id
+            run_config_id=run_config_id,
+            git_sha=git_sha,
+            git_branch=git_branch,
+            git_commit_message=git_commit_message,
         )
         
         session.add(run)
