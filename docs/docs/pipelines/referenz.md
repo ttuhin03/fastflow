@@ -69,11 +69,13 @@ Optionale Metadaten-Datei für Resource-Limits, Timeout, Retries, Beschreibung, 
 
 | Feld | Typ | Beschreibung |
 |------|-----|--------------|
-| `timeout` | Integer, optional | Timeout in Sekunden (überschreibt globales `CONTAINER_TIMEOUT`). |
+| `timeout` | Integer, optional | Timeout in Sekunden (überschreibt globales `CONTAINER_TIMEOUT`). `0` = kein Timeout (z.B. für Dauerläufer). Pro Schedule kann in `schedules[].timeout` ein eigener Wert gesetzt werden. |
 | `retry_attempts` | Integer, optional | Anzahl Retries bei Fehlern (überschreibt globales `RETRY_ATTEMPTS`). **Hinweis:** Bei Notebook-Pipelines werden **Pipeline-Level-Retries** nicht ausgeführt; es gelten nur die [Zellen-Retries](/docs/pipelines/notebook-pipelines#zellen-retries-das-cells-array) in `cells` bzw. Zellen-Metadaten. |
 | `retry_strategy` | Object, optional | Wartezeit-Strategie zwischen Retries. Siehe [Retry-Strategien](#retry-strategien). Gilt nur für Skript-Pipelines. |
 | `enabled` | Boolean, optional | Pipeline aktiviert/deaktiviert (Standard: `true`). |
 | `python_version` | String, optional | Python-Version für `uv run --python` – **beliebig pro Pipeline** (z.B. `"3.10"`, `"3.11"`, `"3.12"`). Jede Pipeline kann eine andere Version nutzen. Fehlt: `DEFAULT_PYTHON_VERSION` (Standard 3.11). |
+
+**Beispiel im Pipeline-Template:** Die Pipeline **`timeout_example`** im [fastflow-pipeline-template](https://github.com/ttuhin03/fastflow-pipeline-template) demonstriert Timeout pro Pipeline: In `pipeline.json` ist `"timeout": 10` gesetzt, das Skript läuft 25 Sekunden – der Run wird nach 10 Sekunden mit Status **INTERRUPTED** beendet.
 
 ### Notebook-Pipelines: Zellen-Retries (`cells`)
 

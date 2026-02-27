@@ -102,6 +102,7 @@ Fast-Flow nutzt **keine** eigenen Docker-Images pro Pipeline, sondern JIT-Contai
 | **Laufzeit-Test** | Verzögerung (z.B. `time.sleep(20)`) zum Prüfen von Status/Logs | `main.py`, ggf. `pipeline.json` (timeout) |
 | **Retry-Demo** | Zufälliger Erfolg/Fehler zur Erprobung von `retry_attempts`/`retry_strategy` | `main.py`, `pipeline.json` |
 | **Ressourcen-Limits** | OOM- oder CPU-Test mit `mem_hard_limit`/`cpu_hard_limit` | `main.py` (z.B. Speicher allokieren), `pipeline.json` |
+| **Timeout-Demo** | Timeout pro Pipeline testen: Run wird nach X Sekunden mit INTERRUPTED beendet. Siehe [pipeline.json Referenz – timeout](/docs/pipelines/referenz#pipeline-konfiguration). | `main.py`, `pipeline.json` mit `timeout` (im Template: **`timeout_example`**) |
 | **Verschiedene Python-Versionen** | Jede Pipeline mit eigener Version (z.B. A mit 3.11, B mit 3.12) | `main.py`, `pipeline.json` mit `python_version` |
 | **Notebook-Pipeline** | Jupyter-Notebook Zelle für Zelle, Zellen-Retries, Logs pro Zelle. Siehe [Notebook-Pipelines](/docs/pipelines/notebook-pipelines). | `main.ipynb`, `pipeline.json` (`type: "notebook"`, optional `cells`) |
 
