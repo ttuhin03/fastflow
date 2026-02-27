@@ -228,13 +228,27 @@ def _get_daily_stats_from_db(
     return result
 
 
+def _parse_tags_filter(tags_param: Optional[str]) -> Optional[set]:
+    """Parst komma-getrennte Tags zu einem Set; leeres/None -> None (kein Filter)."""
+    if not tags_param or not tags_param.strip():
+        return None
+    return {t.strip() for t in tags_param.split(",") if t.strip()}
+
+
 @router.get("", response_model=List[PipelineResponse])
 async def get_pipelines(
+    tags: Optional[str] = Query(
+        None,
+        description="Komma-getrennte Tags; nur Pipelines zurückgeben, die mindestens einen dieser Tags haben (z.B. tags=production,experiment)",
+    ),
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ) -> List[PipelineResponse]:
     """
     Gibt eine Liste aller verfügbaren Pipelines zurück (via Discovery, inkl. Statistiken).
+
+    Optional: Mit `tags` nur Pipelines anzeigen, die mindestens einen der angegebenen Tags
+    in ihrer pipeline.json (metadata.tags) haben.
     
     Returns:
         Liste aller entdeckten Pipelines mit Statistiken aus der Datenbank
@@ -247,6 +261,15 @@ async def get_pipelines(
         discovered_pipelines = await asyncio.to_thread(discover_pipelines)
         if not discovered_pipelines:
             return []
+
+        tag_filter = _parse_tags_filter(tags)
+        if tag_filter is not None:
+            discovered_pipelines = [
+                d for d in discovered_pipelines
+                if getattr(d.metadata, "tags", None) and set(d.metadata.tags) & tag_filter
+            ]
+            if not discovered_pipelines:
+                return []
 
         # Batch-Query: Alle Pipeline-Metadaten in einem DB-Roundtrip abrufen
         names = [d.name for d in discovered_pipelines]

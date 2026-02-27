@@ -47,6 +47,9 @@ Prüft den Status der Anwendung.
 
 Gibt eine Liste aller verfügbaren Pipelines zurück.
 
+**Query-Parameter:**
+- `tags` (optional): Komma-getrennte Tags; es werden nur Pipelines zurückgegeben, die **mindestens einen** dieser Tags in ihrer `pipeline.json` (`metadata.tags`) haben. Beispiel: `?tags=production,experiment`
+
 **Response:**
 ```json
 [
