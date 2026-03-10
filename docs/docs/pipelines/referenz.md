@@ -163,11 +163,20 @@ Wenn du **pro Pipeline mehrere** geplante Runs mit unterschiedlichen Cron/Interv
 
 | Feld | Typ | Beschreibung |
 |------|-----|--------------|
-| `downstream_triggers` | Array, optional | Liste von Downstream-Pipelines, die nach Abschluss dieser Pipeline automatisch gestartet werden. Jeder Eintrag: `{"pipeline": "name", "on_success": true, "on_failure": false, "run_config_id": "prod"}`. `on_success` (Standard: `true`) = bei erfolgreichem Abschluss starten; `on_failure` (Standard: `false`) = bei Fehlschlag starten. `run_config_id` (optional) = Schedule der Downstream-Pipeline (`schedules[].id`); wenn die Downstream-Pipeline mehrere Schedules hat, wird damit die gewünschte Run-Konfiguration ausgewählt. Ohne Angabe = Top-Level/default Config. |
+| `downstream_triggers` | Array, optional | Liste von Downstream-Pipelines, die nach Abschluss dieser Pipeline automatisch gestartet werden. Jeder Eintrag: `{"pipeline": "name", "on_success": true, "on_failure": false, "on_route": null, "run_config_id": "prod"}`. Felder: `on_success` (Standard: `true`), `on_failure` (Standard: `false`), `on_route` (optional, siehe unten), `run_config_id` (optional). |
 
-Triggert aus `pipeline.json` und aus der UI (API) werden zusammengeführt. Runs werden mit `triggered_by="downstream"` gestartet.
+Trigger aus `pipeline.json` und aus der UI (API) werden zusammengeführt. Runs werden mit `triggered_by="downstream"` gestartet.
 
-**Beispiel:**
+**Trigger-Felder im Überblick:**
+
+| Feld | Standard | Beschreibung |
+|------|----------|--------------|
+| `on_success` | `true` | Startet Downstream wenn diese Pipeline mit Exit-Code 0 endet |
+| `on_failure` | `false` | Startet Downstream wenn diese Pipeline mit Exit-Code ≠ 0 endet |
+| `on_route` | `null` | Startet Downstream nur wenn die Pipeline genau diesen Route-String in `FASTFLOW_ROUTE_FILE` schreibt (nur bei Erfolg) |
+| `run_config_id` | `null` | Schedule-ID der Downstream-Pipeline (`schedules[].id`); ohne Angabe = Default-Config |
+
+**Beispiel (klassisch):**
 
 ```json
 {
@@ -178,6 +187,45 @@ Triggert aus `pipeline.json` und aus der UI (API) werden zusammengeführt. Runs 
   ]
 }
 ```
+
+**Beispiel (route-basiertes Routing):**
+
+Mit `on_route` kann die Pipeline im Code steuern, welche Downstream-Pipeline als nächstes startet – ohne den Exit-Code zu missbrauchen:
+
+```json
+{
+  "description": "Routing je nach Datenlage",
+  "downstream_triggers": [
+    { "pipeline": "handler_full",    "on_route": "full",    "on_success": false },
+    { "pipeline": "handler_partial", "on_route": "partial", "on_success": false },
+    { "pipeline": "handler_error",   "on_failure": true,    "on_success": false }
+  ]
+}
+```
+
+```python
+# main.py
+import os, sys
+
+def set_route(label: str) -> None:
+    """Schreibt einen Route-String in FASTFLOW_ROUTE_FILE."""
+    route_file = os.environ.get("FASTFLOW_ROUTE_FILE")
+    if route_file:
+        open(route_file, "w").write(label)
+
+if got_full_data:
+    set_route("full")
+    sys.exit(0)   # Exit-Code bleibt 0 → handler_full startet
+elif got_partial:
+    set_route("partial")
+    sys.exit(0)   # Exit-Code bleibt 0 → handler_partial startet
+else:
+    sys.exit(1)   # Echter Fehler → handler_error startet
+```
+
+Fastflow setzt `FASTFLOW_ROUTE_FILE` als Env-Variable mit dem Pfad zu einer beschreibbaren Datei. Nach dem Container-Exit liest der Executor die Datei und entscheidet damit, welche Downstream-Trigger mit `on_route` feuern.
+
+> **Warum nicht Exit-Codes?** Exit-Codes wie `1`, `2` haben Standardbedeutungen (Fehler) und können von Libraries oder dem OS gesetzt werden. Route-Labels sind explizit und interferieren nicht mit der Fehlerbehandlung.
 
 **Beispiel (Cron/Intervall):**
 

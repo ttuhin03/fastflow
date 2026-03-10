@@ -16,21 +16,47 @@ from app.services.pipeline_discovery import get_pipeline
 logger = logging.getLogger(__name__)
 
 
+def _matches(
+    on_success_flag: bool,
+    on_failure_flag: bool,
+    on_route: Optional[str],
+    is_success: bool,
+    route: Optional[str],
+) -> bool:
+    """
+    OR-Logik: Trigger feuert wenn irgendeine Bedingung zutrifft.
+
+    on_route hat Sonderverhalten: Wenn gesetzt, matcht es nur bei SUCCESS und
+    wenn die Route übereinstimmt. Ein on_route-Trigger feuert NICHT als
+    Fallback via on_success wenn die Route nicht matcht.
+    """
+    if on_route is not None:
+        # on_route ist gesetzt → nur feuern wenn SUCCESS + Route stimmt überein
+        return is_success and route is not None and route == on_route
+    if is_success and on_success_flag:
+        return True
+    if not is_success and on_failure_flag:
+        return True
+    return False
+
+
 def get_downstream_pipelines_to_trigger(
     upstream_pipeline_name: str,
     on_success: bool,
     session: Session,
+    route: Optional[str] = None,
 ) -> List[Tuple[str, Optional[str]]]:
     """
     Gibt die Pipelines zurück, die getriggert werden sollen (Name, run_config_id).
 
-    Kombiniert Triggert aus pipeline.json und aus der DB.
+    Kombiniert Trigger aus pipeline.json und aus der DB.
     Dedupliziert nach (pipeline_name, run_config_id).
 
     Args:
         upstream_pipeline_name: Name der Upstream-Pipeline (die gerade fertig wurde)
         on_success: True wenn Upstream erfolgreich war, False bei Fehlschlag
         session: SQLModel Session
+        route: Optionaler Route-String aus FASTFLOW_ROUTE_FILE (nur bei SUCCESS relevant)
 
     Returns:
         Liste von (pipeline_name, run_config_id) ohne Duplikate
@@ -54,23 +80,30 @@ def get_downstream_pipelines_to_trigger(
     upstream = get_pipeline(upstream_pipeline_name)
     if upstream and getattr(upstream.metadata, "downstream_triggers", None):
         for t in upstream.metadata.downstream_triggers:
-            trigger_on_success = t.get("on_success", True)
-            trigger_on_failure = t.get("on_failure", False)
-            if on_success and trigger_on_success:
-                add(t["pipeline"], t.get("run_config_id"))
-            elif not on_success and trigger_on_failure:
+            on_route_json = t.get("on_route") or None
+            if _matches(
+                t.get("on_success", True),
+                t.get("on_failure", False),
+                on_route_json,
+                on_success,
+                route,
+            ):
                 add(t["pipeline"], t.get("run_config_id"))
 
     # 2. Aus DB (DownstreamTrigger)
     stmt = (
         select(DownstreamTrigger)
         .where(DownstreamTrigger.upstream_pipeline == upstream_pipeline_name)
-        .where(DownstreamTrigger.enabled == True)
+        .where(DownstreamTrigger.enabled == True)  # noqa: E712
     )
     for trigger in session.exec(stmt).all():
-        if on_success and trigger.on_success:
-            add(trigger.downstream_pipeline, trigger.run_config_id)
-        elif not on_success and trigger.on_failure:
+        if _matches(
+            trigger.on_success,
+            trigger.on_failure,
+            trigger.on_route or None,
+            on_success,
+            route,
+        ):
             add(trigger.downstream_pipeline, trigger.run_config_id)
 
     return sorted(pipelines_to_trigger, key=lambda x: (x[0], x[1] or ""))

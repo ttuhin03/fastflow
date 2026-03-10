@@ -290,6 +290,11 @@ class DownstreamTrigger(SQLModel, table=True):
         default=False,
         description="Pipeline B starten wenn A fehlschlägt",
     )
+    on_route: Optional[str] = Field(
+        default=None,
+        max_length=128,
+        description="Trigger wenn Pipeline diesen Route-String in FASTFLOW_ROUTE_FILE schreibt (nur bei SUCCESS).",
+    )
     run_config_id: Optional[str] = Field(
         default=None,
         description="Run-Konfiguration der Downstream-Pipeline (schedules[].id)",

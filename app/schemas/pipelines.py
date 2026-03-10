@@ -87,6 +87,7 @@ class DownstreamTriggerResponse(BaseModel):
     downstream_pipeline: str
     on_success: bool
     on_failure: bool
+    on_route: Optional[str] = None  # Route-String aus FASTFLOW_ROUTE_FILE
     run_config_id: Optional[str] = None  # Schedule der Downstream-Pipeline (schedules[].id)
     source: str  # "pipeline_json" oder "api"
 
@@ -96,7 +97,17 @@ class DownstreamTriggerCreate(BaseModel):
     downstream_pipeline: str
     on_success: bool = True
     on_failure: bool = False
+    on_route: Optional[str] = None  # Route-String aus FASTFLOW_ROUTE_FILE
     run_config_id: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_on_route(self) -> "DownstreamTriggerCreate":
+        if self.on_route is not None:
+            if not self.on_route.strip():
+                raise ValueError("on_route darf nicht leer sein")
+            if len(self.on_route) > 128:
+                raise ValueError("on_route darf maximal 128 Zeichen haben")
+        return self
 
 
 class PipelineGraphEdge(BaseModel):

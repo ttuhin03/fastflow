@@ -494,6 +494,7 @@ async def _run_container_task(
     container = None
     log_file_path = None
     metrics_file_path = None
+    route_host_path: Optional[Path] = None
     
     # Session für diese Task erstellen
     session_gen = get_session()
@@ -590,12 +591,23 @@ async def _run_container_task(
             client, str(config.UV_PYTHON_INSTALL_DIR), config.UV_PYTHON_INSTALL_HOST_DIR
         )
         
+        # Route-File für FASTFLOW_ROUTE_FILE: liegt in LOGS_DIR/routes/{run_id}.route
+        # Der Host-Pfad wird via _get_host_path_for_volume aufgelöst (analog zu PIPELINES_DIR)
+        logs_host_path = _get_host_path_for_volume(
+            client, str(config.LOGS_DIR), config.LOGS_HOST_DIR
+        )
+        routes_dir = Path(logs_host_path) / "routes"
+        routes_dir.mkdir(parents=True, exist_ok=True)
+        route_host_path = routes_dir / f"{run_id}.route"
+        route_host_path.touch()  # Muss vor dem Docker-Mount existieren
+
         # Basis-Env für uv (Cache + Python-Install); env_vars/Secrets können überschreiben
         # UV_LINK_MODE=copy verhindert Probleme mit Hardlinks in Docker-Volumes
         base_env = {
             "UV_CACHE_DIR": "/root/.cache/uv",
             "UV_PYTHON_INSTALL_DIR": "/cache/uv_python",
             "UV_LINK_MODE": "copy",
+            "FASTFLOW_ROUTE_FILE": "/tmp/.fastflow_route",
         }
         container_env = {**base_env, **env_vars}
         
@@ -605,6 +617,7 @@ async def _run_container_task(
             pipeline_host_path: {"bind": "/app", "mode": "rw"},
             uv_cache_host_path: {"bind": "/root/.cache/uv", "mode": "rw"},
             uv_python_host_path: {"bind": "/cache/uv_python", "mode": "rw"},
+            str(route_host_path): {"bind": "/tmp/.fastflow_route", "mode": "rw"},
         }
         if pipeline.get_entry_type() == "notebook":
             runners_host_path = _get_host_path_for_volume(
@@ -816,7 +829,18 @@ async def _run_container_task(
         
         # Exit-Code extrahieren
         exit_code_value = exit_code.get("StatusCode", -1) if isinstance(exit_code, dict) else exit_code
-        
+
+        # Route-File lesen (sofort nach Exit, bevor Cleanup greifen könnte)
+        _route: Optional[str] = None
+        try:
+            if route_host_path.exists():
+                content = route_host_path.read_text(encoding="utf-8").strip()
+                if content:
+                    _route = content
+                route_host_path.unlink(missing_ok=True)
+        except Exception as _route_err:
+            logger.debug("Route-File konnte nicht gelesen werden für Run %s: %s", run_id, _route_err)
+
         # OOM Detection: Prüfe container.attrs["State"]["OOMKilled"] und exit_code 137
         oom_killed = False
         if container:
@@ -892,7 +916,7 @@ async def _run_container_task(
 
         # Downstream-Trigger bei Erfolg (Pipeline-Chaining)
         if exit_code_value == 0:
-            await _trigger_downstream_pipelines(pipeline.name, success=True, session=session)
+            await _trigger_downstream_pipelines(pipeline.name, success=True, session=session, route=_route)
         
         # Retry-Logik: Prüfe ob Retry nötig ist (nur für Script-Pipelines; Notebooks haben Zellen-Retry im selben Run)
         if exit_code_value != 0:
@@ -1088,6 +1112,13 @@ async def _run_container_task(
                     "Container muss ggf. manuell entfernt werden: docker rm -f %s",
                     run_id, container_id, e, container_id,
                 )
+
+        # Route-File aufräumen (falls noch nicht geschehen)
+        try:
+            if route_host_path is not None and route_host_path.exists():
+                route_host_path.unlink(missing_ok=True)
+        except Exception:
+            pass
         
         # Container aus Tracking entfernen
         async with _concurrency_lock:
@@ -1885,21 +1916,23 @@ async def _trigger_downstream_pipelines(
     upstream_pipeline_name: str,
     success: bool,
     session: Session,
+    route: Optional[str] = None,
 ) -> None:
     """
     Triggert Downstream-Pipelines nach Abschluss einer Upstream-Pipeline.
 
-    Kombiniert Triggert aus pipeline.json und DB. Startet jeden Downstream-Run
+    Kombiniert Trigger aus pipeline.json und DB. Startet jeden Downstream-Run
     mit triggered_by="downstream".
 
     Args:
         upstream_pipeline_name: Name der Upstream-Pipeline
         success: True wenn Upstream erfolgreich, False bei Fehlschlag
         session: SQLModel Session
+        route: Optionaler Route-String aus FASTFLOW_ROUTE_FILE (nur bei SUCCESS)
     """
     try:
         pipelines_to_trigger = get_downstream_pipelines_to_trigger(
-            upstream_pipeline_name, on_success=success, session=session
+            upstream_pipeline_name, on_success=success, session=session, route=route
         )
         for downstream_name, run_config_id in pipelines_to_trigger:
             try:

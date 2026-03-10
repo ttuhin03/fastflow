@@ -92,6 +92,14 @@ class Config:
     
     LOGS_DIR: Path = Path(os.getenv("LOGS_DIR", "./logs")).resolve()
     """Verzeichnis für persistente Log-Dateien aller Pipeline-Runs."""
+
+    LOGS_HOST_DIR: Optional[str] = os.getenv("LOGS_HOST_DIR")
+    """
+    Host-Pfad für das Logs-Verzeichnis (für Docker Volume-Mounts).
+
+    Wenn nicht gesetzt, wird LOGS_DIR verwendet. Muss gesetzt werden,
+    wenn der Code in einem Docker-Container läuft, um den Host-Pfad zu verwenden.
+    """
     
     DATA_DIR: Path = Path(os.getenv("DATA_DIR", "./data")).resolve()
     """Verzeichnis für Datenbank und persistente Daten."""

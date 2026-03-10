@@ -60,6 +60,7 @@ def get_pipelines_graph(session: Session) -> Dict[str, Any]:
                 "to": dst,
                 "on_success": t.get("on_success", True),
                 "on_failure": t.get("on_failure", False),
+                "on_route": t.get("on_route") or None,
                 "run_config_id": run_config_id,
                 "source": "pipeline_json",
             })
@@ -80,6 +81,7 @@ def get_pipelines_graph(session: Session) -> Dict[str, Any]:
                 "to": trigger.downstream_pipeline,
                 "on_success": trigger.on_success,
                 "on_failure": trigger.on_failure,
+                "on_route": trigger.on_route or None,
                 "run_config_id": run_config_id,
                 "source": "api",
             })

@@ -824,6 +824,7 @@ async def get_downstream_triggers(
                 downstream_pipeline=t["pipeline"],
                 on_success=t.get("on_success", True),
                 on_failure=t.get("on_failure", False),
+                on_route=t.get("on_route") or None,
                 run_config_id=rcid,
                 source="pipeline_json",
             )
@@ -844,6 +845,7 @@ async def get_downstream_triggers(
                     downstream_pipeline=trigger.downstream_pipeline,
                     on_success=trigger.on_success,
                     on_failure=trigger.on_failure,
+                    on_route=trigger.on_route or None,
                     run_config_id=rcid,
                     source="api",
                 )
@@ -900,6 +902,7 @@ async def create_downstream_trigger(
         downstream_pipeline=body.downstream_pipeline,
         on_success=body.on_success,
         on_failure=body.on_failure,
+        on_route=body.on_route or None,
         run_config_id=run_config_id,
     )
     session.add(trigger)
@@ -910,6 +913,7 @@ async def create_downstream_trigger(
         downstream_pipeline=trigger.downstream_pipeline,
         on_success=trigger.on_success,
         on_failure=trigger.on_failure,
+        on_route=trigger.on_route or None,
         run_config_id=trigger.run_config_id,
         source="api",
     )

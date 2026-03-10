@@ -55,6 +55,7 @@ interface DownstreamTriggerItem {
   downstream_pipeline: string
   on_success: boolean
   on_failure: boolean
+  on_route?: string | null
   run_config_id?: string | null
   source: 'pipeline_json' | 'api'
 }
@@ -174,7 +175,7 @@ export default function PipelineDetail() {
   })
 
   const createDownstreamTriggerMutation = useMutation({
-    mutationFn: async (body: { downstream_pipeline: string; on_success: boolean; on_failure: boolean; run_config_id?: string | null }) => {
+    mutationFn: async (body: { downstream_pipeline: string; on_success: boolean; on_failure: boolean; on_route?: string | null; run_config_id?: string | null }) => {
       const response = await apiClient.post(`/pipelines/${name}/downstream-triggers`, body)
       return response.data
     },
@@ -203,6 +204,7 @@ export default function PipelineDetail() {
   const [newTriggerPipeline, setNewTriggerPipeline] = useState('')
   const [newTriggerOnSuccess, setNewTriggerOnSuccess] = useState(true)
   const [newTriggerOnFailure, setNewTriggerOnFailure] = useState(false)
+  const [newTriggerOnRoute, setNewTriggerOnRoute] = useState('')
   const [newTriggerRunConfigId, setNewTriggerRunConfigId] = useState<string>('')
 
   const handleAddDownstreamTrigger = () => {
@@ -211,11 +213,13 @@ export default function PipelineDetail() {
       downstream_pipeline: newTriggerPipeline.trim(),
       on_success: newTriggerOnSuccess,
       on_failure: newTriggerOnFailure,
+      on_route: newTriggerOnRoute.trim() || null,
       run_config_id: newTriggerRunConfigId || null,
     })
     setNewTriggerPipeline('')
     setNewTriggerOnSuccess(true)
     setNewTriggerOnFailure(false)
+    setNewTriggerOnRoute('')
     setNewTriggerRunConfigId('')
   }
 
@@ -543,6 +547,10 @@ export default function PipelineDetail() {
                   <th>{t('pipelineDetail.schedule')}</th>
                   <th>{t('pipelineDetail.onSuccess')}</th>
                   <th>{t('pipelineDetail.onFailure')}</th>
+                  <th>
+                    {t('pipelineDetail.onRoute')}
+                    <InfoIcon content={t('pipelineDetail.onRouteTooltip')} />
+                  </th>
                   <th>{t('pipelineDetail.source')}</th>
                   {!isReadonly && <th></th>}
                 </tr>
@@ -554,6 +562,13 @@ export default function PipelineDetail() {
                     <td>{tr.run_config_id ?? '–'}</td>
                     <td>{tr.on_success ? '✓' : '–'}</td>
                     <td>{tr.on_failure ? '✓' : '–'}</td>
+                    <td>
+                      {tr.on_route ? (
+                        <code style={{ fontSize: '0.8rem', background: 'var(--bg-secondary, #f4f4f4)', padding: '0.1rem 0.35rem', borderRadius: '3px' }}>
+                          {tr.on_route}
+                        </code>
+                      ) : '–'}
+                    </td>
                     <td>
                       <span className={`source-badge source-${tr.source}`}>
                         {tr.source === 'pipeline_json' ? t('pipelineDetail.sourcePipelineJson') : t('pipelineDetail.sourceUi')}
@@ -639,6 +654,15 @@ export default function PipelineDetail() {
                 />
                 {t('pipelineDetail.startOnFailure')}
               </label>
+              <input
+                type="text"
+                value={newTriggerOnRoute}
+                onChange={(e) => setNewTriggerOnRoute(e.target.value)}
+                placeholder={t('pipelineDetail.onRoutePlaceholder')}
+                className="trigger-route-input"
+                maxLength={128}
+                title={t('pipelineDetail.onRouteTooltip')}
+              />
               <button
                 type="button"
                 className="add-trigger-button"

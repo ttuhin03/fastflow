@@ -367,7 +367,10 @@
     "mainPyNotFound": "main.py not found",
     "requirementsNotFound": "requirements.txt not found",
     "pipelineJsonNotFound": "pipeline.json not found",
-    "scheduleDownstreamTitle": "Schedule of downstream pipeline (optional)"
+    "scheduleDownstreamTitle": "Schedule of downstream pipeline (optional)",
+    "onRoute": "On route",
+    "onRouteTooltip": "Start this downstream pipeline only when the upstream pipeline writes this specific route string to FASTFLOW_ROUTE_FILE (set_route('...') in your code). Exit code stays 0. Leave empty to use on_success / on_failure instead.",
+    "onRoutePlaceholder": "Route label (optional, e.g. \"partial\")"
   },
   "users": {
     "title": "Users",
