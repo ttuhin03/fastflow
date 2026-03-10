@@ -5,6 +5,7 @@ POST /api/notifications/send – Sendet E-Mail und/oder Teams-Benachrichtigungen
 Für Skripte/CI; Keys werden in den Einstellungen erzeugt und verwaltet.
 """
 
+import asyncio
 import hashlib
 import logging
 import secrets as secrets_module
@@ -30,6 +31,7 @@ router = APIRouter(prefix="/notifications", tags=["notifications"])
 # In-Memory Rate-Limit: client_id -> list of request timestamps (last minute)
 _notification_rate_limit_store: Dict[str, List[float]] = defaultdict(list)
 _notification_rate_limit_cleanup_last = 0.0
+_notification_rate_limit_lock: asyncio.Lock = asyncio.Lock()
 
 
 def _get_client_id(request: Request) -> str:
@@ -52,21 +54,22 @@ def _check_notification_rate_limit() -> None:
                 del _notification_rate_limit_store[key]
 
 
-def _consume_rate_limit(client_id: str) -> None:
-    """Record request and raise 429 if over limit."""
-    _check_notification_rate_limit()
-    limit = getattr(config, "NOTIFICATION_API_RATE_LIMIT_PER_MINUTE", 30) or 30
-    now = time.time()
-    window_start = now - 60
-    times = _notification_rate_limit_store[client_id]
-    times = [t for t in times if t > window_start]
-    if len(times) >= limit:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Rate-Limit überschritten (max {limit} Anfragen pro Minute)",
-        )
-    times.append(now)
-    _notification_rate_limit_store[client_id] = times
+async def _consume_rate_limit(client_id: str) -> None:
+    """Record request and raise 429 if over limit. Lock ensures atomic check-and-append."""
+    async with _notification_rate_limit_lock:
+        _check_notification_rate_limit()
+        limit = getattr(config, "NOTIFICATION_API_RATE_LIMIT_PER_MINUTE", 30) or 30
+        now = time.time()
+        window_start = now - 60
+        times = _notification_rate_limit_store[client_id]
+        times = [t for t in times if t > window_start]
+        if len(times) >= limit:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Rate-Limit überschritten (max {limit} Anfragen pro Minute)",
+            )
+        times.append(now)
+        _notification_rate_limit_store[client_id] = times
 
 
 def _hash_key(key: str) -> str:
@@ -122,7 +125,7 @@ async def send_notification(
             detail="Ungültiger oder fehlender API-Key (Header: X-Notification-Key)",
         )
     client_id = _get_client_id(request)
-    _consume_rate_limit(client_id)
+    await _consume_rate_limit(client_id)
 
     channels = body.channels if body.channels is not None else ["email", "teams"]
     send_email = "email" in channels and config.EMAIL_ENABLED

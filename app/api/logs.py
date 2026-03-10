@@ -254,7 +254,10 @@ async def stream_run_logs(
             )
         except OSError as e:
             logger.error(f"Fehler bei Pfad-Validierung für Log-Datei: {e}")
-            # Nicht weiterwerfen, da wir im Fallback sind
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Fehler beim Validieren des Log-Pfads",
+            )
         if log_file_path.exists():
             try:
                 # OOM-Schutz: Dateigröße prüfen vor dem Lesen
