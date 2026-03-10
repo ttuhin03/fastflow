@@ -188,7 +188,7 @@ export default function Scheduler() {
                 {expandedJob === job.id && (
                   <tr className="job-details-row">
                     <td colSpan={9}>
-                      <JobDetails jobId={job.id} />
+                      <JobDetails jobId={job.id} triggerType={job.trigger_type} />
                     </td>
                   </tr>
                 )}
@@ -203,9 +203,11 @@ export default function Scheduler() {
   )
 }
 
-function JobDetails({ jobId }: { jobId: string }) {
+function JobDetails({ jobId, triggerType }: { jobId: string; triggerType: Job['trigger_type'] }) {
   const { t } = useTranslation()
-  const { data: runs, isLoading } = useQuery({
+  const formatLocale = getFormatLocale()
+
+  const { data: runs, isLoading: runsLoading } = useQuery({
     queryKey: ['job-runs', jobId],
     queryFn: async () => {
       const response = await apiClient.get(`/scheduler/jobs/${jobId}/runs?limit=10`)
@@ -213,12 +215,41 @@ function JobDetails({ jobId }: { jobId: string }) {
     },
   })
 
-  if (isLoading) {
+  const { data: nextRunsData, isLoading: nextRunsLoading } = useQuery<{ next_runs: string[] }>({
+    queryKey: ['job-next-runs', jobId],
+    queryFn: async () => {
+      const response = await apiClient.get(`/scheduler/jobs/${jobId}/next-runs?count=5`)
+      return response.data
+    },
+    enabled: triggerType !== 'DATE',
+  })
+
+  if (runsLoading) {
     return <div>{t('schedulerExtra.loadHistory')}</div>
   }
 
   return (
     <div className="job-details">
+      {triggerType !== 'DATE' && (
+        <div className="next-runs-section">
+          <h4>{t('schedulerExtra.nextRuns')}</h4>
+          {nextRunsLoading ? (
+            <p className="no-data">{t('schedulerExtra.loadNextRuns')}</p>
+          ) : nextRunsData && nextRunsData.next_runs.length > 0 ? (
+            <ol className="next-runs-list">
+              {nextRunsData.next_runs.map((ts) => (
+                <li key={ts}>
+                  <span className="next-run-index-dot" />
+                  {new Date(ts).toLocaleString(formatLocale)}
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="no-data">{t('schedulerExtra.noNextRuns')}</p>
+          )}
+        </div>
+      )}
+
       <h4>{t('schedulerExtra.lastRuns')}</h4>
       {runs && runs.length > 0 ? (
         <table className="job-runs-table">
@@ -241,10 +272,10 @@ function JobDetails({ jobId }: { jobId: string }) {
                     {run.status}
                   </span>
                 </td>
-                <td>{new Date(run.started_at).toLocaleString(getFormatLocale())}</td>
+                <td>{new Date(run.started_at).toLocaleString(formatLocale)}</td>
                 <td>
                   {run.finished_at
-                    ? new Date(run.finished_at).toLocaleString(getFormatLocale())
+                    ? new Date(run.finished_at).toLocaleString(formatLocale)
                     : '-'}
                 </td>
                 <td>
@@ -266,7 +297,7 @@ function JobDetails({ jobId }: { jobId: string }) {
           </tbody>
         </table>
       ) : (
-        <p>Keine Runs für diesen Job</p>
+        <p className="no-data">{t('schedulerExtra.noRuns')}</p>
       )}
     </div>
   )

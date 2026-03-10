@@ -538,6 +538,10 @@
     "exitCode": "Exit code",
     "details": "Details",
     "loadHistory": "Loading history...",
-    "noJobsFound": "No jobs found"
+    "noJobsFound": "No jobs found",
+    "noRuns": "No runs yet for this job",
+    "nextRuns": "Next scheduled runs",
+    "loadNextRuns": "Loading next runs...",
+    "noNextRuns": "No upcoming runs"
   }
 }

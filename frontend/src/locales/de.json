@@ -537,6 +537,10 @@
     "exitCode": "Exit Code",
     "details": "Details",
     "loadHistory": "Lade Historie...",
-    "noJobsFound": "Keine Jobs gefunden"
+    "noJobsFound": "Keine Jobs gefunden",
+    "noRuns": "Noch keine Runs für diesen Job",
+    "nextRuns": "Nächste geplante Läufe",
+    "loadNextRuns": "Lade nächste Läufe...",
+    "noNextRuns": "Keine geplanten Läufe"
   }
 }
