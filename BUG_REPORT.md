@@ -1,132 +1,113 @@
 # FastFlow: Potentielle Bugs & Probleme
 
-> Automatisierte Code-Analyse — erstellt am 2026-03-10
+> Automatisierte Code-Analyse — erstellt am 2026-03-10, manuell verifiziert
 > Drei parallele Analysen: Executor/Core, API/Security, Services/Scheduler
 
 ---
 
 ## KRITISCH
 
-### 1. Race Condition: Pipeline-Cache ohne Lock
-**Datei:** `app/services/pipeline_discovery.py` (Zeilen 448–731)
-- `_pipeline_cache` und `_cache_timestamp` sind globale Variablen **ohne** Mutex/Lock
-- Gleichzeitige Aufrufe von `discover_pipelines()` und `invalidate_cache()` können inkonsistente Pipeline-Listen erzeugen
-- Besonders kritisch bei Git-Sync + laufenden Runs
+### 1. Race Condition: Pipeline-Cache ohne Lock ✅ behoben
+**Datei:** `app/services/pipeline_discovery.py`
+- `_pipeline_cache` und `_cache_timestamp` waren globale Variablen ohne `threading.Lock`
+- **Behoben:** `_cache_lock = threading.Lock()` schützt jetzt alle Lese-/Schreibzugriffe
 
-### 2. Race Condition: Git-Sync Lock zu früh freigegeben
-**Datei:** `app/git_sync/sync.py` (Zeilen 473–518)
-- `async with _sync_lock:` wird freigegeben **bevor** `invalidate_cache()`, Scheduler-Sync und Pre-Heating aufgerufen werden
-- Zwischen Lock-Release und Cache-Invalidierung können Runs mit veralteten Pipeline-Daten starten
+### ~~2. Race Condition: Git-Sync Lock zu früh freigegeben~~ *(kein echtes Problem)*
+**Datei:** `app/git_sync/sync.py`
+- `invalidate_cache()`, Scheduler-Sync und Pre-Heating laufen nachweislich **innerhalb** des `async with _sync_lock:` Blocks (Zeilen 518–534)
 
 ### ~~3. IDOR: Fehlende Berechtigungsprüfung bei Log-Downloads~~ *(kein echtes Problem)*
-**Datei:** `app/api/logs.py` (Zeilen 63–77)
-- Ursprünglich als IDOR eingestuft, aber nicht zutreffend: In FastFlow gibt es kein Ownership-Konzept für Runs — Pipelines und ihre Runs sind geteilte Ressourcen
-- Alle authentifizierten User mit `require_read` haben ohnehin Zugriff auf alle Runs und Logs
-- Kein Handlungsbedarf
+**Datei:** `app/api/logs.py`
+- In FastFlow gibt es kein Ownership-Konzept für Runs — alle authentifizierten User haben ohnehin Zugriff auf alle Runs und Logs
 
-### 4. Race Condition: Scheduler-Doppelausführung bei Multi-Instance
-**Datei:** `app/services/scheduler.py` (Zeilen 55–61, 135–166)
-- Grace-Period-Mechanismus ist pro-Instanz lokal (`_scheduler_started_at`)
-- Bei Rolling Restarts oder mehreren Instanzen können Jobs mehrfach parallel ausgeführt werden
-- APSchedulers SQLAlchemyJobStore verhindert dies nicht automatisch
+### ~~4. Race Condition: Scheduler-Doppelausführung bei Multi-Instance~~ *(Architektur-Limitierung)*
+**Datei:** `app/services/scheduler.py`
+- FastFlow ist auf Single-Instance ausgelegt; kein Horizontal Scaling in der Doku vorgesehen
+- Grace-Period-Mechanismus deckt den typischen Restart-Fall ab
 
 ---
 
 ## HOCH
 
 ### ~~5. SSH-Key-Datei: Berechtigungen zu spät gesetzt (TOCTOU)~~ *(kein echtes Problem)*
-**Datei:** `app/git_sync/sync.py` (Zeilen 36–64)
-- Ursprünglich als TOCTOU eingestuft, aber `tempfile.mkstemp()` in Python 3 erstellt Dateien intern via `os.open(..., 0o600)` — die Berechtigungen sind von der ersten Nanosekunde an `rw-------`, noch bevor der Key-Inhalt geschrieben wird
-- Das anschließende `key_path.chmod(0o600)` ist redundant, aber harmlos
-- Kein Handlungsbedarf
+**Datei:** `app/git_sync/sync.py`
+- `tempfile.mkstemp()` erstellt Dateien intern via `os.open(..., 0o600)` — Berechtigungen sind von der ersten Nanosekunde korrekt
 
-### 6. JWT Token-Typ wird nicht validiert
-**Datei:** `app/auth/auth.py` (Zeilen 88–112)
-- `verify_token()` prüft **nicht** `payload.get("type")`
-- Ein Log-Download-Token (`type: "log_download"`) könnte zur allgemeinen Authentifizierung missbraucht werden
+### ~~6. JWT Token-Typ wird nicht validiert~~ *(kein echtes Problem)*
+**Datei:** `app/auth/auth.py`
+- `get_current_user` prüft nach `verify_token()` zusätzlich `get_session_by_token()` gegen die DB
+- Log-Download-Tokens werden nie in der `SessionModel`-Tabelle gespeichert → kein Missbrauch möglich
 
-### 7. Fehlende Rate-Limiting auf Log-Download-Endpoint
+### ~~7. Fehlende Rate-Limiting auf Log-Download-Endpoint~~ *(kein echtes Problem)*
 **Datei:** `app/api/logs.py`
-- `GET /{run_id}/logs/download-url` hat **kein** `@limiter.limit()`-Decorator
-- Andere sensible Endpoints sind geschützt (`/dependencies`: 15/min, `/webhooks/...`: 30/min)
-- Erlaubt Enumeration aller Run-IDs ohne Gegenwehr
+- Globales `default_limits=["200/minute"]` gilt für alle API-Routen inkl. diesem Endpoint
 
 ### 8. SMTP-Verbindung wird bei Exception nicht geschlossen
 **Datei:** `app/services/notifications.py` (Zeilen 260–270)
-- `smtp.connect()` wird aufgerufen, aber ohne `async with`-Context-Manager
-- Bei Exception zwischen `connect()` und `quit()` bleibt die Verbindung offen (Connection Leak)
-- Fix: `async with aiosmtplib.SMTP(...) as smtp:` verwenden
+- `smtp.connect()` ohne `async with`-Context-Manager, kein `try/finally` um `smtp.quit()`
+- Bei Exception zwischen `login()` und `quit()` bleibt die Verbindung offen
+- **Fix:** `async with aiosmtplib.SMTP(...) as smtp:` verwenden
 
-### 9. Benachrichtigungen: Fire-and-Forget ohne Fehlerbehandlung
-**Datei:** `app/services/notifications.py` (Zeile 197)
-- `asyncio.create_task(_send_notifications_async(...))` wird nicht awaited
-- Fehlschläge (SMTP-Timeout, Teams-Webhook down) gehen lautlos verloren
-- Kein Retry-Mechanismus für transiente Fehler
+### ~~9. Benachrichtigungen: Fire-and-Forget ohne Fehlerbehandlung~~ *(kein echtes Problem)*
+**Datei:** `app/services/notifications.py`
+- Intentionales Design (Kommentar: "nicht blockierend")
+- `_send_notifications_async` loggt alle Fehler — nichts geht wirklich lautlos verloren
 
 ---
 
 ## MITTEL
 
-### 10. Session-Generator wird nicht geschlossen (Resource Leak)
+### ~~10. Session-Generator wird nicht geschlossen~~ *(kein echtes Problem)*
 **Dateien:** `app/startup.py`, `app/services/scheduler.py`, `app/services/cleanup.py`
-- Muster: `session_gen = get_session(); session = next(session_gen)` — Generator wird nie mit `.close()` beendet
-- Kumulativer Datenbankressourcen-Leak über die Laufzeit
+- In allen Call-Sites wird `session.close()` im `finally`-Block aufgerufen, was die Verbindung sofort an den Pool zurückgibt
+- CPython GC finalisiert den Generator danach deterministisch
 
 ### 11. S3-Backup-Fehler hinterlässt verwaiste Runs
 **Datei:** `app/services/cleanup.py` (Zeilen 147–164, 197–217)
-- Bei S3-Fehler: `continue` überspringt Löschung → Run und Log-Dateien bleiben dauerhaft bestehen
-- Notification via `asyncio.create_task` (fire-and-forget) → kann ebenfalls verloren gehen
+- Bei dauerhaftem S3-Fehler: `continue` überspringt Löschung → Runs und Log-Dateien akkumulieren unbegrenzt
+- Kein Maximal-Alter oder manuelle Override-Möglichkeit im Fehlerfall
 
-### 12. Log-Datei Race Condition in Cleanup
+### 12. Log-Datei Race Condition in Cleanup *(trivial)*
 **Datei:** `app/services/cleanup.py` (Zeilen 241–275)
-- `log_file_path.exists()` → danach `log_file_path.stat().st_size`
-- Zwischen beiden Calls kann die Datei von einem anderen Prozess gelöscht werden → `FileNotFoundError`
+- `log_file_path.exists()` → `log_file_path.stat().st_size` — theoretisches TOCTOU
+- Praktisch unbedenklich: wird vom `except Exception` auf Zeile 278 abgefangen; schlimmstfall: Run beim nächsten Cleanup-Lauf erneut versucht
 
-### 13. Dependency-Audit: File-basierter Cache ohne Lock
-**Datei:** `app/services/dependency_audit.py` (Zeilen 58–69, 100–105)
-- `_save_audit_to_file()` öffnet die Datei im Write-Mode **ohne** File-Lock
-- Gleichzeitige Writes überschreiben sich gegenseitig
+### ~~13. Dependency-Audit: File-basierter Cache ohne Lock~~ *(kein echtes Problem)*
+**Datei:** `app/services/dependency_audit.py`
+- APScheduler führt Jobs mit gleicher ID niemals gleichzeitig aus (`max_instances=1` by default)
+- Startup-Audit + geplanter Audit zur exakt gleichen Zeit wäre das einzige Szenario — und das Ergebnis wären identische Daten
 
 ### 14. Fehlende Validierung: start_date ≤ end_date im Scheduler
-**Dateien:** `app/api/scheduler.py` (Zeilen 181–182), `app/services/scheduler.py` (Zeilen 619–622)
-- Ungültige Datumsbereiche (start > end) werden akzeptiert und erst von APScheduler zur Laufzeit abgelehnt
+**Dateien:** `app/api/scheduler.py` (Zeilen 181–182), `app/services/scheduler.py`
+- APScheduler akzeptiert ungültige Datumsbereiche ohne Fehler — der Job wird nie ausgeführt, ohne Hinweis für den User
 
-### 15. X-Forwarded-For Rate-Limit Bypass
-**Datei:** `app/middleware/rate_limiting.py` (Zeilen 27–45)
-- Bei `PROXY_HEADERS_TRUSTED=True` ohne tatsächlichen Proxy kann Angreifer den Header fälschen
-- Rate-Limit wird effektiv umgangen
+### ~~15. X-Forwarded-For Rate-Limit Bypass~~ *(Konfigurationsrisiko, kein Code-Bug)*
+**Datei:** `app/middleware/rate_limiting.py`
+- Der Code ist korrekt und gut dokumentiert — `PROXY_HEADERS_TRUSTED=True` ohne tatsächlichen Proxy ist ein Ops-Fehler
 
 ---
 
 ## NIEDRIG
 
-### 16. Container-Cleanup unterdrückt Exceptions
-**Datei:** `app/executor/core.py` (Zeilen 1080–1085)
-- Fehler beim Docker-Container-Löschen werden ignoriert (`pass`-equivalent)
-- Verwaiste Container akkumulieren sich über Zeit
+### 16. Container-Cleanup: fehlende Container-ID im Warning ✅ behoben
+**Datei:** `app/executor/core.py`
+- **Behoben:** Warning-Meldung enthält jetzt Container-ID und `docker rm -f <id>` Befehl
 
-### 17. CRON-Validierung unvollständig
+### 17. CRON-Validierung unvollständig ✅ behoben
 **Dateien:** `app/services/scheduler.py`, `app/services/dependency_audit.py`
-- Nur die Anzahl der Parts (5) wird geprüft, nicht die Wertebereiche
-- `"0 99 * * *"` (ungültige Stunde) wird durchgelassen → APScheduler-Fehler erst zur Laufzeit
+- **Behoben:** `_validate_cron_parts()` prüft Wertebereiche vor Übergabe an APScheduler
 
-### 18. Downstream-Trigger prüft Pipeline-Existenz nicht
-**Datei:** `app/services/downstream_triggers.py` (Zeilen 48–68)
-- Wenn eine in `pipeline.json` referenzierte Pipeline nicht existiert, schlägt der Trigger mit vager Fehlermeldung fehl
+### 18. Downstream-Trigger prüft Pipeline-Existenz nicht ✅ behoben
+**Datei:** `app/services/downstream_triggers.py`
+- **Behoben:** Existenzprüfung via `get_pipeline()` in der `add()`-Funktion
 
 ---
 
-## Empfohlene Fix-Reihenfolge
+## Verbleibende echte Probleme
 
-| Priorität | Bug | Aufwand |
-|-----------|-----|---------|
-| 1 | IDOR Log-Download (#3) | Klein |
-| 2 | SSH-Key TOCTOU (#5) | Klein |
-| 3 | JWT Token-Typ-Validierung (#6) | Klein |
-| 4 | Rate-Limit auf Log-Endpoints (#7) | Klein |
-| 5 | SMTP Context-Manager (#8) | Klein |
-| 6 | CRON-Validierung verbessern (#17) | Klein |
-| 7 | Pipeline-Cache Lock (#1) | Mittel |
-| 8 | Git-Sync Lock-Scope erweitern (#2) | Mittel |
-| 9 | Session-Generator schließen (#10) | Mittel |
-| 10 | Scheduler Multi-Instance Grace Period (#4) | Groß |
+| # | Problem | Aufwand |
+|---|---------|---------|
+| 8 | SMTP Connection Leak in notifications.py | Klein |
+| 11 | S3-Backup-Fehler → verwaiste Runs | Mittel |
+| 12 | Log-Datei Race Condition in Cleanup | Trivial |
+| 14 | start_date > end_date im Scheduler (stiller Fehler) | Klein |
