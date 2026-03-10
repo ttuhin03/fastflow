@@ -258,16 +258,14 @@ async def send_email_notification(run: PipelineRun, status: RunStatus) -> None:
         
         # E-Mail senden (mit Retry bei Netzwerkfehlern)
         async def _send_smtp():
-            smtp = aiosmtplib.SMTP(
+            async with aiosmtplib.SMTP(
                 hostname=config.SMTP_HOST,
                 port=config.SMTP_PORT,
-                use_tls=config.SMTP_PORT == 587
-            )
-            await smtp.connect()
-            if config.SMTP_USER and config.SMTP_PASSWORD:
-                await smtp.login(config.SMTP_USER, config.SMTP_PASSWORD)
-            await smtp.send_message(message)
-            await smtp.quit()
+                use_tls=config.SMTP_PORT == 587,
+            ) as smtp:
+                if config.SMTP_USER and config.SMTP_PASSWORD:
+                    await smtp.login(config.SMTP_USER, config.SMTP_PASSWORD)
+                await smtp.send_message(message)
 
         await with_retry_async(
             _send_smtp,

@@ -146,17 +146,26 @@ async def _cleanup_by_retention_runs(session: Session, max_runs: int) -> int:
             ).all()
             
             # Runs löschen (Logs, Metrics und DB-Einträge)
+            skipped_backup_failures = 0
             for run in old_runs:
                 ok, err = await _s3_backup.upload_run_logs(run)
                 if not ok:
                     append_backup_failure(str(run.id), run.pipeline_name, err or "Unbekannt")
                     asyncio.create_task(notify_s3_backup_failed(run, err or "Unbekannt"))
+                    skipped_backup_failures += 1
                     continue
                 await _delete_run_files(run)
                 # Datenbank-Eintrag löschen
                 session.delete(run)
                 deleted_count += 1
-            
+
+            if skipped_backup_failures > 0:
+                logger.warning(
+                    "Pipeline %s: %d Run(s) konnten wegen S3-Backup-Fehler nicht gelöscht werden "
+                    "und akkumulieren sich. Prüfe S3-Konfiguration oder deaktiviere S3-Backup.",
+                    pipeline.pipeline_name, skipped_backup_failures,
+                )
+
             session.commit()
             logger.debug(
                 f"Pipeline {pipeline.pipeline_name}: "
@@ -195,17 +204,26 @@ async def _cleanup_by_retention_days(session: Session, max_days: int) -> int:
         ).all()
         
         # Runs löschen (Logs, Metrics und DB-Einträge)
+        skipped_backup_failures = 0
         for run in old_runs:
             ok, err = await _s3_backup.upload_run_logs(run)
             if not ok:
                 append_backup_failure(str(run.id), run.pipeline_name, err or "Unbekannt")
                 asyncio.create_task(notify_s3_backup_failed(run, err or "Unbekannt"))
+                skipped_backup_failures += 1
                 continue
             await _delete_run_files(run)
             # Datenbank-Eintrag löschen
             session.delete(run)
             deleted_count += 1
-        
+
+        if skipped_backup_failures > 0:
+            logger.warning(
+                "%d Run(s) konnten wegen S3-Backup-Fehler nicht gelöscht werden "
+                "und akkumulieren sich. Prüfe S3-Konfiguration oder deaktiviere S3-Backup.",
+                skipped_backup_failures,
+            )
+
         session.commit()
         logger.debug(f"{deleted_count} Runs gelöscht (älter als {max_days} Tage)")
         
@@ -240,14 +258,14 @@ async def _cleanup_oversized_logs(session: Session, max_size_mb: int) -> int:
         
         for run in runs:
             log_file_path = Path(run.log_file)
-            
-            if not log_file_path.exists():
-                # Log-Datei existiert nicht mehr, DB-Eintrag bereinigen
+
+            try:
+                file_size = log_file_path.stat().st_size
+            except FileNotFoundError:
+                # Log-Datei existiert nicht mehr (ggf. zwischen exists()-Check und stat() gelöscht)
                 run.log_file = None
                 session.add(run)
                 continue
-            
-            file_size = log_file_path.stat().st_size
             
             if file_size > max_size_bytes:
                 # Log-Datei kürzen (behalte letzte 50% oder löschen wenn zu groß)
