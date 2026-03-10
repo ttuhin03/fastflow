@@ -34,11 +34,11 @@
 
 ## HOCH
 
-### 5. SSH-Key-Datei: Berechtigungen zu spät gesetzt (TOCTOU)
+### ~~5. SSH-Key-Datei: Berechtigungen zu spät gesetzt (TOCTOU)~~ *(kein echtes Problem)*
 **Datei:** `app/git_sync/sync.py` (Zeilen 36–64)
-- `os.mkstemp()` erstellt die Datei → Inhalt wird geschrieben → Datei geschlossen → **erst dann** `chmod 0o600`
-- Zeitfenster, in dem der SSH-Key von anderen Prozessen lesbar ist
-- Fix: `os.open()` mit `O_CREAT | O_WRONLY` und `mode=0o600` verwenden
+- Ursprünglich als TOCTOU eingestuft, aber `tempfile.mkstemp()` in Python 3 erstellt Dateien intern via `os.open(..., 0o600)` — die Berechtigungen sind von der ersten Nanosekunde an `rw-------`, noch bevor der Key-Inhalt geschrieben wird
+- Das anschließende `key_path.chmod(0o600)` ist redundant, aber harmlos
+- Kein Handlungsbedarf
 
 ### 6. JWT Token-Typ wird nicht validiert
 **Datei:** `app/auth/auth.py` (Zeilen 88–112)
