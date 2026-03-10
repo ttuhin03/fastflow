@@ -17,7 +17,7 @@ from app.core.database import get_session
 from app.core.errors import get_500_detail
 from app.git_sync import sync_pipelines, get_sync_status, get_sync_logs, test_sync_repo_config, clear_pipelines_directory
 from app.core.config import config
-from app.auth import require_write, get_current_user
+from app.auth import require_write, require_admin, get_current_user
 from app.middleware.rate_limiting import limiter
 from app.models import User
 from app.services.git_sync_repo_config import (
@@ -393,12 +393,12 @@ async def test_repo_config(
 
 @router.post("/clear-pipelines", response_model=Dict[str, Any])
 async def clear_pipelines(
-    current_user: User = Depends(require_write),
+    current_user: User = Depends(require_admin),
 ) -> Dict[str, Any]:
     """
     Leert das Pipelines-Verzeichnis vollständig (inkl. .git).
     Danach kann ein neues Repository per Sync geklont werden.
-    Erfordert Schreibrechte.
+    Erfordert Admin-Rechte.
     """
     try:
         ok, message = clear_pipelines_directory()

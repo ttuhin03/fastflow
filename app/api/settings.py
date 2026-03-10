@@ -69,8 +69,8 @@ async def get_telemetry_status(
         logger.debug("telemetry-status: SystemSettings nicht lesbar, enable_error_reporting=false: %s", e)
     return TelemetryStatusResponse(
         enable_error_reporting=enable,
-        posthog_api_key=config.POSTHOG_API_KEY,
-        posthog_host=config.POSTHOG_HOST,
+        posthog_api_key=config.POSTHOG_API_KEY if enable else "",
+        posthog_host=config.POSTHOG_HOST if enable else "",
     )
 
 
