@@ -23,6 +23,7 @@ from app.services.scheduler import (
     get_all_jobs,
     get_job,
     get_job_details,
+    get_next_run_times,
     get_scheduler,
     _parse_schedule_datetime,
 )
@@ -231,6 +232,45 @@ async def update_job_by_id(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Fehler beim Aktualisieren des Jobs: {str(e)}"
         )
+
+
+@router.get("/jobs/{job_id}/next-runs")
+async def get_job_next_runs(
+    job_id: UUID,
+    count: int = Query(5, ge=1, le=20, description="Anzahl der zurückzugebenden Zeitpunkte"),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> Dict[str, Any]:
+    """
+    Gibt die nächsten N geplanten Ausführungszeitpunkte für einen Job zurück.
+
+    Args:
+        job_id: Job-ID
+        count: Anzahl der Zeitpunkte (Standard: 5, Max: 20)
+
+    Returns:
+        `{ "next_runs": ["2025-03-01T09:00:00+00:00", ...] }`
+
+    Raises:
+        HTTPException 404: Job nicht gefunden
+        HTTPException 400: Trigger ungültig
+    """
+    job = get_job(job_id, session)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job nicht gefunden: {job_id}",
+        )
+    try:
+        times = get_next_run_times(job_id, count=count, session=session)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Fehler beim Berechnen der nächsten Läufe: {str(e)}",
+        )
+    return {"next_runs": [t.isoformat() for t in times]}
 
 
 @router.get("/jobs/{job_id}/runs", response_model=List[Dict[str, Any]])

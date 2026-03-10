@@ -97,3 +97,21 @@ class DownstreamTriggerCreate(BaseModel):
     on_success: bool = True
     on_failure: bool = False
     run_config_id: Optional[str] = None
+
+
+class PipelineGraphEdge(BaseModel):
+    """Eine Kante im Pipeline-Graphen."""
+    from_pipeline: str
+    to_pipeline: str
+    on_success: bool
+    on_failure: bool
+    run_config_id: Optional[str] = None
+    source: str  # "pipeline_json" oder "api"
+
+
+class PipelineGraphResponse(BaseModel):
+    """Response-Model für den Pipeline-Abhängigkeitsgraphen."""
+    nodes: List[str]
+    edges: List[Dict[str, Any]]
+    has_cycles: bool
+    cycles: List[List[str]]

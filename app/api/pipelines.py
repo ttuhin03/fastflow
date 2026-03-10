@@ -37,6 +37,7 @@ from app.schemas.pipelines import (
     PipelineSourceFilesResponse,
     DownstreamTriggerResponse,
     DownstreamTriggerCreate,
+    PipelineGraphResponse,
 )
 
 router = APIRouter(prefix="/pipelines", tags=["pipelines"])
@@ -361,6 +362,40 @@ async def get_pipelines_dependencies(
             for p, pkgs in zip(pipelines, packages_list)
         ]
     return result
+
+
+@router.get("/graph", response_model=PipelineGraphResponse)
+async def get_pipelines_graph(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> PipelineGraphResponse:
+    """
+    Gibt den gerichteten Pipeline-Abhängigkeitsgraphen zurück.
+
+    Kombiniert Downstream-Trigger aus pipeline.json und der Datenbank.
+    Erkennt Zyklen und markiert sie in der Response – erlaubt zyklische
+    Graphen explizit (kein Fehler bei Zyklen, nur Markierung).
+
+    Returns:
+        nodes: Alle Pipeline-Namen (inkl. referenzierter, nicht-entdeckter)
+        edges: Alle Kanten mit from, to, on_success, on_failure, run_config_id, source
+        has_cycles: True wenn mindestens ein Zyklus existiert
+        cycles: Liste der gefundenen Zyklen (je ein Pfad, erster == letzter Knoten)
+    """
+    from app.services.graph import get_pipelines_graph as _get_graph
+    try:
+        graph = await asyncio.to_thread(_get_graph, session)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Fehler beim Berechnen des Pipeline-Graphen: {str(e)}",
+        )
+    return PipelineGraphResponse(
+        nodes=graph["nodes"],
+        edges=graph["edges"],
+        has_cycles=graph["has_cycles"],
+        cycles=graph["cycles"],
+    )
 
 
 @router.get("/{name}/dependencies", response_model=Dict[str, Any])

@@ -1103,6 +1103,60 @@ def sync_scheduler_jobs_from_pipeline_json(session: Optional[Session] = None) ->
             session.close()
 
 
+def get_next_run_times(
+    job_id: UUID,
+    count: int = 5,
+    session: Optional[Session] = None,
+) -> List[datetime]:
+    """
+    Berechnet die nächsten N geplanten Ausführungszeitpunkte für einen Job.
+
+    Args:
+        job_id: Job-ID
+        count: Anzahl der zu berechnenden Zeitpunkte (Standard: 5)
+        session: SQLModel Session (optional)
+
+    Returns:
+        Liste von UTC-datetime-Objekten mit den nächsten Ausführungszeiten.
+        Für DATE-Trigger wird maximal ein Zeitpunkt zurückgegeben.
+
+    Raises:
+        ValueError: Wenn Job nicht gefunden oder Trigger ungültig ist
+    """
+    job = get_job(job_id, session)
+    if job is None:
+        raise ValueError(f"Job nicht gefunden: {job_id}")
+
+    trigger = _create_trigger(
+        job.trigger_type,
+        job.trigger_value,
+        start_date=getattr(job, "start_date", None),
+        end_date=getattr(job, "end_date", None),
+    )
+    if trigger is None:
+        raise ValueError(f"Ungültiger Trigger für Job {job_id}: {job.trigger_type} = {job.trigger_value}")
+
+    # DATE-Trigger: nur einen einzigen Zeitpunkt
+    if job.trigger_type == TriggerType.DATE:
+        now = datetime.now(timezone.utc)
+        next_fire = trigger.get_next_fire_time(None, now)
+        return [next_fire] if next_fire is not None else []
+
+    results: List[datetime] = []
+    now = datetime.now(timezone.utc)
+    previous: Optional[datetime] = None
+    for _ in range(count):
+        next_fire = trigger.get_next_fire_time(previous, now)
+        if next_fire is None:
+            break
+        results.append(next_fire)
+        previous = next_fire
+        # now vorwärts setzen, damit get_next_fire_time nicht denselben Zeitpunkt liefert
+        now = next_fire
+
+    return results
+
+
 def get_scheduler() -> Optional[BackgroundScheduler]:
     """
     Gibt die globale Scheduler-Instanz zurück.
