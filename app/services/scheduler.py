@@ -286,6 +286,33 @@ def _add_job_to_scheduler(job: ScheduledJob) -> None:
         logger.error(f"Fehler beim Hinzufügen von Job {job.id} zum Scheduler: {e}")
 
 
+_CRON_FIELD_RANGES = [
+    ("Minute", 0, 59),
+    ("Stunde", 0, 23),
+    ("Tag", 1, 31),
+    ("Monat", 1, 12),
+    ("Wochentag", 0, 6),
+]
+
+
+def _validate_cron_parts(parts: list) -> Optional[str]:
+    """
+    Prüft numerische Felder einer 5-teiligen Cron-Expression auf Wertebereiche.
+    Wildcard-Ausdrücke (*, */n, n-m, n,m) werden an APScheduler durchgereicht.
+
+    Returns:
+        Fehlermeldung als String oder None wenn gültig.
+    """
+    for part, (name, min_val, max_val) in zip(parts, _CRON_FIELD_RANGES):
+        try:
+            val = int(part)
+            if not (min_val <= val <= max_val):
+                return f"{name} '{part}' außerhalb des gültigen Bereichs ({min_val}–{max_val})"
+        except ValueError:
+            pass  # Komplexe Ausdrücke (*, */n, n-m) werden von APScheduler validiert
+    return None
+
+
 def _create_trigger(
     trigger_type: TriggerType,
     trigger_value: str,
@@ -320,7 +347,12 @@ def _create_trigger(
             if len(parts) != 5:
                 logger.error(f"Ungültige Cron-Expression: {trigger_value} (erwartet 5 Teile)")
                 return None
-            
+
+            range_error = _validate_cron_parts(parts)
+            if range_error:
+                logger.error(f"Ungültige Cron-Expression '{trigger_value}': {range_error}")
+                return None
+
             return CronTrigger(
                 minute=parts[0],
                 hour=parts[1],

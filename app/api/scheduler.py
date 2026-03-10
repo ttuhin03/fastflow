@@ -180,6 +180,13 @@ async def update_job_by_id(
     
     start_dt = _parse_schedule_datetime(job_data.start_date, end_of_day=False) if job_data.start_date else None
     end_dt = _parse_schedule_datetime(job_data.end_date, end_of_day=True) if job_data.end_date else None
+
+    if start_dt and end_dt and start_dt >= end_dt:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="start_date muss vor end_date liegen",
+        )
+
     set_fields = job_data.model_dump(exclude_unset=True)
     update_kwargs = dict(
         job_id=job_id,

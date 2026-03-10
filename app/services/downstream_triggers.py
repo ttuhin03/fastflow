@@ -41,6 +41,12 @@ def get_downstream_pipelines_to_trigger(
     def add(pipeline_name: str, run_config_id: Optional[str]) -> None:
         key = (pipeline_name, run_config_id or None)
         if key not in seen:
+            if get_pipeline(pipeline_name) is None:
+                logger.warning(
+                    "Downstream-Trigger: Pipeline '%s' existiert nicht und wird übersprungen.",
+                    pipeline_name,
+                )
+                return
             seen.add(key)
             pipelines_to_trigger.append((pipeline_name, run_config_id or None))
 

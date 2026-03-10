@@ -192,9 +192,19 @@ def schedule_dependency_audit_job() -> None:
         # Cron-Format: minute hour day month day_of_week (5 Felder)
         parts = cron_expr.strip().split()
         if len(parts) != 5:
-            logger.warning("Dependency-Audit Cron ungültig (erwarte 5 Felder): %s", cron_expr)
+            logger.warning("Dependency-Audit Cron ungültig (erwarte 5 Felder): %s – Fallback auf '0 3 * * *'", cron_expr)
             cron_expr = "0 3 * * *"
             parts = cron_expr.split()
+        else:
+            from app.services.scheduler import _validate_cron_parts
+            range_error = _validate_cron_parts(parts)
+            if range_error:
+                logger.warning(
+                    "Dependency-Audit Cron ungültig (%s): %s – Fallback auf '0 3 * * *'",
+                    range_error, cron_expr,
+                )
+                cron_expr = "0 3 * * *"
+                parts = cron_expr.split()
 
         trigger = CronTrigger(
             minute=parts[0],

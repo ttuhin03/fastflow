@@ -1082,7 +1082,12 @@ async def _run_container_task(
                     lambda: container.remove(force=True)
                 )
             except Exception as e:
-                logger.warning(f"Fehler beim Container-Cleanup für Run {run_id}: {e}")
+                container_id = getattr(container, "id", "unbekannt")
+                logger.warning(
+                    "Fehler beim Container-Cleanup für Run %s (Container-ID: %.12s): %s. "
+                    "Container muss ggf. manuell entfernt werden: docker rm -f %s",
+                    run_id, container_id, e, container_id,
+                )
         
         # Container aus Tracking entfernen
         async with _concurrency_lock:
