@@ -18,11 +18,11 @@
 - `async with _sync_lock:` wird freigegeben **bevor** `invalidate_cache()`, Scheduler-Sync und Pre-Heating aufgerufen werden
 - Zwischen Lock-Release und Cache-Invalidierung können Runs mit veralteten Pipeline-Daten starten
 
-### 3. IDOR: Fehlende Berechtigungsprüfung bei Log-Downloads
+### ~~3. IDOR: Fehlende Berechtigungsprüfung bei Log-Downloads~~ *(kein echtes Problem)*
 **Datei:** `app/api/logs.py` (Zeilen 63–77)
-- `get_logs_download_url` erstellt ein Download-Token für jede `run_id`, ohne zu prüfen, ob der anfragende User Zugriff auf diesen Run hat
-- Jeder authentifizierte User kann Logs von beliebigen Runs anderer User herunterladen
-- Angriffsszenario: Run-IDs durchnummerieren → alle Logs lesen
+- Ursprünglich als IDOR eingestuft, aber nicht zutreffend: In FastFlow gibt es kein Ownership-Konzept für Runs — Pipelines und ihre Runs sind geteilte Ressourcen
+- Alle authentifizierten User mit `require_read` haben ohnehin Zugriff auf alle Runs und Logs
+- Kein Handlungsbedarf
 
 ### 4. Race Condition: Scheduler-Doppelausführung bei Multi-Instance
 **Datei:** `app/services/scheduler.py` (Zeilen 55–61, 135–166)
