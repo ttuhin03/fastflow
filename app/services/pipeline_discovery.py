@@ -9,6 +9,7 @@ Dieses Modul scannt das Pipelines-Verzeichnis und erkennt verfügbare Pipelines:
 """
 
 import json
+import threading
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timezone
@@ -423,6 +424,7 @@ class DiscoveredPipeline:
 # Cache für Pipeline-Liste
 _pipeline_cache: Optional[List[DiscoveredPipeline]] = None
 _cache_timestamp: Optional[datetime] = None
+_cache_lock = threading.Lock()  # Schützt _pipeline_cache und _cache_timestamp vor parallelen Zugriffen
 
 
 def discover_pipelines(force_refresh: bool = False) -> List[DiscoveredPipeline]:
@@ -448,12 +450,13 @@ def discover_pipelines(force_refresh: bool = False) -> List[DiscoveredPipeline]:
     global _pipeline_cache, _cache_timestamp
 
     # Cache verwenden wenn vorhanden, nicht erzwungen und TTL nicht abgelaufen
-    if not force_refresh and _pipeline_cache is not None and _cache_timestamp is not None:
-        ttl = config.PIPELINE_CACHE_TTL_SECONDS
-        if ttl > 0:
-            elapsed = (datetime.now(timezone.utc) - _cache_timestamp).total_seconds()
-            if elapsed < ttl:
-                return _pipeline_cache
+    with _cache_lock:
+        if not force_refresh and _pipeline_cache is not None and _cache_timestamp is not None:
+            ttl = config.PIPELINE_CACHE_TTL_SECONDS
+            if ttl > 0:
+                elapsed = (datetime.now(timezone.utc) - _cache_timestamp).total_seconds()
+                if elapsed < ttl:
+                    return _pipeline_cache
     
     pipelines_dir = config.PIPELINES_DIR
     subdir = (config.PIPELINES_SUBDIR or "").strip().strip("/")
@@ -516,9 +519,10 @@ def discover_pipelines(force_refresh: bool = False) -> List[DiscoveredPipeline]:
         discovered.append(pipeline)
     
     # Cache aktualisieren
-    _pipeline_cache = discovered
-    _cache_timestamp = datetime.now(timezone.utc)
-    
+    with _cache_lock:
+        _pipeline_cache = discovered
+        _cache_timestamp = datetime.now(timezone.utc)
+
     return discovered
 
 
@@ -726,9 +730,10 @@ def invalidate_cache() -> None:
     Wird nach Git-Sync aufgerufen, um sicherzustellen, dass neue oder
     geänderte Pipelines erkannt werden.
     """
-    global _pipeline_cache, _cache_timestamp
-    _pipeline_cache = None
-    _cache_timestamp = None
+    with _cache_lock:
+        global _pipeline_cache, _cache_timestamp
+        _pipeline_cache = None
+        _cache_timestamp = None
 
 
 def set_pipeline_webhook_key(name: str, webhook_key: Optional[str]) -> None:
