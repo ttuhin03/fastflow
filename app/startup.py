@@ -355,6 +355,21 @@ async def run_startup_tasks() -> None:
     if not config.TESTING:
         await _run_step("Scheduler-Jobs aus pipeline.json", False, sync_json_schedules, "Scheduler-Jobs aus pipeline.json synchronisiert")
 
+    def schedule_oauth_state_cleanup():
+        from app.auth.github_oauth import cleanup_expired_states
+        from app.services.scheduler import get_scheduler
+        scheduler = get_scheduler()
+        if scheduler is not None:
+            scheduler.add_job(
+                cleanup_expired_states,
+                "interval",
+                minutes=5,
+                id="oauth_state_cleanup",
+                replace_existing=True,
+            )
+    if not config.TESTING:
+        await _run_step("OAuth-State-Cleanup-Job", False, schedule_oauth_state_cleanup, "OAuth-State-Cleanup alle 5 Minuten geplant")
+
     def init_cleanup():
         from app.services.cleanup import init_docker_client_for_cleanup, schedule_cleanup_job
         init_docker_client_for_cleanup()

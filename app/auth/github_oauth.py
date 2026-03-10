@@ -11,8 +11,11 @@ from typing import Dict, Optional
 from datetime import datetime, timedelta, timezone
 
 # In-Memory State Storage (für Production sollte Redis verwendet werden)
+# Hinweis: In Multi-Worker/K8s-Deployments teilen Instanzen diesen Store nicht —
+# OAuth funktioniert nur wenn Authorize und Callback dieselbe Instanz treffen.
 _oauth_states: Dict[str, Dict] = {}
 _STATE_TTL = 3600  # 1 Stunde (GitHub Manifest Flow muss innerhalb 1 Stunde abgeschlossen werden)
+_MAX_OAUTH_STATES = 500
 
 
 def generate_oauth_state() -> str:
@@ -33,6 +36,13 @@ def store_oauth_state(state: str, data: Dict) -> None:
         state: OAuth State Token
         data: Dictionary mit State-Daten (z.B. user_id, timestamp)
     """
+    if len(_oauth_states) >= _MAX_OAUTH_STATES:
+        # Erst abgelaufene Einträge entfernen
+        cleanup_expired_states()
+        # Falls immer noch voll: ältesten Eintrag entfernen (FIFO)
+        if len(_oauth_states) >= _MAX_OAUTH_STATES:
+            oldest = min(_oauth_states, key=lambda k: _oauth_states[k]["created_at"])
+            del _oauth_states[oldest]
     _oauth_states[state] = {
         **data,
         "expires_at": datetime.now(timezone.utc) + timedelta(seconds=_STATE_TTL),

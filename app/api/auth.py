@@ -7,9 +7,11 @@ Dieses Modul enthält alle REST-API-Endpoints für Authentication:
 """
 
 import logging
-from typing import Optional
+import secrets
+import time
+from typing import Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
@@ -50,6 +52,20 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 security = HTTPBearer(auto_error=False)
 
+# One-Time-Code-Store für sicheren Token-Exchange nach OAuth-Callback.
+# Jeder Code ist 60 Sekunden gültig und kann nur einmal eingelöst werden.
+_auth_codes: Dict[str, Dict] = {}
+_AUTH_CODE_TTL = 60
+_MAX_AUTH_CODES = 200
+
+
+def _cleanup_auth_codes() -> None:
+    """Entfernt abgelaufene Auth-Codes aus dem In-Memory-Store."""
+    now = time.time()
+    expired = [c for c, v in _auth_codes.items() if now > v["expires_at"]]
+    for c in expired:
+        del _auth_codes[c]
+
 
 class LoginResponse(BaseModel):
     """Response-Model für Token-basierte Responses (z.B. Refresh)."""
@@ -64,8 +80,20 @@ class LogoutResponse(BaseModel):
 
 
 def _redirect_with_token(token: str) -> RedirectResponse:
+    """Erzeugt einen einmalig nutzbaren Code und leitet das Frontend zum Exchange-Endpoint."""
+    _cleanup_auth_codes()
+    if len(_auth_codes) >= _MAX_AUTH_CODES:
+        # FIFO: ältesten Code entfernen
+        oldest = min(_auth_codes, key=lambda k: _auth_codes[k]["created_at"])
+        del _auth_codes[oldest]
+    code = secrets.token_urlsafe(32)
+    _auth_codes[code] = {
+        "token": token,
+        "expires_at": time.time() + _AUTH_CODE_TTL,
+        "created_at": time.time(),
+    }
     frontend = (config.FRONTEND_URL or config.BASE_URL or "http://localhost:8000").rstrip("/")
-    return RedirectResponse(url=f"{frontend}/auth/callback#token={token}", status_code=302)
+    return RedirectResponse(url=f"{frontend}/auth/callback?code={code}", status_code=302)
 
 
 def _redirect_to_settings_linked(provider: str) -> RedirectResponse:
@@ -587,6 +615,29 @@ async def refresh_token(
         access_token=new_access_token,
         token_type="bearer",
         username=user.username
+    )
+
+
+@router.get("/exchange", response_model=LoginResponse)
+@limiter.limit("20/minute")
+async def exchange_auth_code(
+    request: Request,
+    code: str = Query(..., description="Einmaliger Auth-Code aus dem OAuth-Callback"),
+) -> LoginResponse:
+    """
+    Tauscht einen einmaligen Auth-Code gegen ein JWT-Access-Token ein.
+    Der Code ist 60 Sekunden gültig und kann nur einmal verwendet werden.
+    """
+    entry = _auth_codes.pop(code, None)
+    if entry is None or time.time() > entry["expires_at"]:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Ungültiger oder abgelaufener Auth-Code",
+        )
+    return LoginResponse(
+        access_token=entry["token"],
+        token_type="bearer",
+        username="",
     )
 
 
