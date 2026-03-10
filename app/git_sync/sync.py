@@ -38,6 +38,7 @@ def _ssh_key_env(deploy_key: str):
     """Erstellt eine temporäre Key-Datei und liefert ein Env-Dict mit GIT_SSH_COMMAND. Löscht die Datei danach."""
     fd = None
     key_path = None
+    kh_path = None
     try:
         fd, path = tempfile.mkstemp(prefix="fastflow_deploy_key_", suffix=".key")
         key_content = deploy_key.encode() if isinstance(deploy_key, str) else deploy_key
@@ -47,9 +48,23 @@ def _ssh_key_env(deploy_key: str):
         key_path = Path(path)
         key_path.chmod(0o600)
         env = os.environ.copy()
-        env["GIT_SSH_COMMAND"] = (
-            f"ssh -i {key_path} -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null"
-        )
+        if config.GIT_SSH_KNOWN_HOSTS:
+            fd2, kh = tempfile.mkstemp(prefix="fastflow_known_hosts_")
+            kh_content = config.GIT_SSH_KNOWN_HOSTS.encode() if isinstance(config.GIT_SSH_KNOWN_HOSTS, str) else config.GIT_SSH_KNOWN_HOSTS
+            os.write(fd2, kh_content)
+            os.close(fd2)
+            kh_path = Path(kh)
+            env["GIT_SSH_COMMAND"] = (
+                f"ssh -i {key_path} -o StrictHostKeyChecking=yes -o UserKnownHostsFile={kh_path}"
+            )
+        else:
+            logger.warning(
+                "GIT_SSH_KNOWN_HOSTS nicht gesetzt — SSH-Host-Key wird nicht verifiziert "
+                "(MITM-Risiko beim ersten Connect). Setze GIT_SSH_KNOWN_HOSTS für sichere Verbindungen."
+            )
+            env["GIT_SSH_COMMAND"] = (
+                f"ssh -i {key_path} -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null"
+            )
         yield env
     finally:
         if fd is not None:
@@ -60,6 +75,11 @@ def _ssh_key_env(deploy_key: str):
         if key_path is not None and key_path.exists():
             try:
                 key_path.unlink()
+            except OSError:
+                pass
+        if kh_path is not None and kh_path.exists():
+            try:
+                kh_path.unlink()
             except OSError:
                 pass
 

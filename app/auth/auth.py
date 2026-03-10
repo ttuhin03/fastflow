@@ -308,18 +308,6 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # Fix: Korrigiere alte lowercase enum-Werte zu UPPERCASE (für Migration)
-    if hasattr(user, 'role') and user.role:
-        role_str = str(user.role) if not isinstance(user.role, str) else user.role
-        if role_str in ['readonly', 'write', 'admin']:
-            # Konvertiere lowercase zu UPPERCASE
-            role_mapping = {'readonly': UserRole.READONLY, 'write': UserRole.WRITE, 'admin': UserRole.ADMIN}
-            user.role = role_mapping[role_str]
-            db_session.add(user)
-            db_session.commit()
-            db_session.refresh(user)
-            logger.info(f"Rolle für Benutzer '{username}' von '{role_str}' zu '{user.role.value}' korrigiert")
-    
     # Prüfe ob Benutzer blockiert ist
     if user.blocked:
         raise HTTPException(

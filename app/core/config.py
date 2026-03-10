@@ -260,6 +260,15 @@ class Config:
     Alternative zu GIT_SYNC_TOKEN. Env hat Vorrang vor DB. Sensibel – als Secret setzen.
     """
 
+    GIT_SSH_KNOWN_HOSTS: Optional[str] = os.getenv("GIT_SSH_KNOWN_HOSTS")
+    """
+    Inhalt einer known_hosts-Datei für SSH-Git-Operationen.
+    Wenn gesetzt, wird StrictHostKeyChecking=yes verwendet und der Host-Key verifiziert.
+    Wenn nicht gesetzt, wird StrictHostKeyChecking=accept-new verwendet (MITM-Risiko beim ersten Connect).
+    Beispiel: 'github.com ssh-ed25519 AAAAC3Nza...'
+    Kann mit 'ssh-keyscan github.com' generiert werden.
+    """
+
     AUTO_SYNC_ENABLED: bool = os.getenv("AUTO_SYNC_ENABLED", "false").lower() == "true"
     """
     Aktiviert automatisches Git-Sync.
