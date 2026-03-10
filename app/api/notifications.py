@@ -18,6 +18,7 @@ from sqlmodel import Session, select
 
 from app.core.config import config
 from app.core.database import get_session
+from app.core.errors import get_500_detail
 from app.middleware.rate_limiting import get_client_identifier
 from app.models import NotificationApiKey
 from app.services.notifications import send_custom_email, send_custom_teams
@@ -151,7 +152,7 @@ async def send_notification(
         logger.exception("Notification API send failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Fehler beim Senden: {str(e)}",
+            detail=f"Fehler beim Senden: {get_500_detail(e)}",
         ) from e
 
     return NotificationSendResponse(
