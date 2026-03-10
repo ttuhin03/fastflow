@@ -41,11 +41,11 @@ def _check_notification_rate_limit() -> None:
     """Raises HTTPException 429 if rate limit exceeded."""
     global _notification_rate_limit_cleanup_last
     limit = getattr(config, "NOTIFICATION_API_RATE_LIMIT_PER_MINUTE", 30) or 30
-    now = time.monotonic()
+    now = time.time()
     # Gelegentlich alte Einträge aufräumen
     if now - _notification_rate_limit_cleanup_last > 60:
         _notification_rate_limit_cleanup_last = now
-        cutoff = time.time() - 60
+        cutoff = now - 60
         for key in list(_notification_rate_limit_store.keys()):
             _notification_rate_limit_store[key] = [t for t in _notification_rate_limit_store[key] if t > cutoff]
             if not _notification_rate_limit_store[key]:

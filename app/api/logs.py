@@ -124,18 +124,17 @@ async def get_run_logs(
     try:
         logs_dir_abs = config.LOGS_DIR.resolve()
         log_file_path_abs = log_file_path.resolve()
-        
-        # Prüfe dass log_file_path innerhalb logs_dir liegt
-        if not str(log_file_path_abs).startswith(str(logs_dir_abs)):
-            logger.warning(
-                f"Path Traversal-Versuch erkannt bei Log-Zugriff: "
-                f"Run {run_id}, Pfad {run.log_file} -> {log_file_path_abs}"
-            )
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Zugriff auf Log-Datei verweigert"
-            )
-    except (ValueError, OSError) as e:
+        log_file_path_abs.relative_to(logs_dir_abs)
+    except ValueError:
+        logger.warning(
+            f"Path Traversal-Versuch erkannt bei Log-Zugriff: "
+            f"Run {run_id}, Pfad {run.log_file} -> {log_file_path_abs}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Zugriff auf Log-Datei verweigert"
+        )
+    except OSError as e:
         logger.error(f"Fehler bei Pfad-Validierung für Log-Datei: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -243,17 +242,17 @@ async def stream_run_logs(
         try:
             logs_dir_abs = config.LOGS_DIR.resolve()
             log_file_path_abs = log_file_path.resolve()
-            
-            if not str(log_file_path_abs).startswith(str(logs_dir_abs)):
-                logger.warning(
-                    f"Path Traversal-Versuch erkannt bei Log-Stream: "
-                    f"Run {run_id}, Pfad {run.log_file} -> {log_file_path_abs}"
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Zugriff auf Log-Datei verweigert"
-                )
-        except (ValueError, OSError) as e:
+            log_file_path_abs.relative_to(logs_dir_abs)
+        except ValueError:
+            logger.warning(
+                f"Path Traversal-Versuch erkannt bei Log-Stream: "
+                f"Run {run_id}, Pfad {run.log_file} -> {log_file_path_abs}"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Zugriff auf Log-Datei verweigert"
+            )
+        except OSError as e:
             logger.error(f"Fehler bei Pfad-Validierung für Log-Datei: {e}")
             # Nicht weiterwerfen, da wir im Fallback sind
         if log_file_path.exists():
