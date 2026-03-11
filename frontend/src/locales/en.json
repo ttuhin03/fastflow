@@ -426,6 +426,43 @@
     "success": "Settings saved.",
     "saveFailed": "Save failed."
   },
+  "warnings": {
+    "title": "Stability notices",
+    "diskLow": "Low disk space: only {{gb}} GB free",
+    "inodeLow": "Inode usage high: {{pct}}%",
+    "gitSyncFailed": "Last Git sync failed",
+    "gitSyncStale": "No successful Git sync for over {{hours}} hours",
+    "concurrencyFull": "Concurrency limit reached – runs waiting",
+    "successRateLow": "Success rate (7 days) below {{threshold}}%: {{rate}}%",
+    "systemProblem": "{{label}}: Problem",
+    "systemLabels": {
+      "database": "Database",
+      "docker": "Docker",
+      "kubernetes": "Kubernetes",
+      "uv_cache": "UV cache",
+      "disk": "Disk space",
+      "inodes": "Inodes"
+    }
+  },
+  "systemStatus": {
+    "loading": "Loading system status…",
+    "error": "Failed to load system status."
+  },
+  "runNotifications": {
+    "pipelineFailed": "Pipeline failed",
+    "pipelineFailedMsg": "Pipeline \"{{name}}\" failed{{exitCode}}",
+    "exitCode": " (exit code: {{code}})",
+    "pipelineSuccessAfterRetry": "Pipeline succeeded after retry",
+    "pipelineSuccessAfterRetryMsg": "Pipeline \"{{name}}\" succeeded after previous failure",
+    "viewDetails": "View details"
+  },
+  "backupNotifications": {
+    "title": "S3 log backup failed",
+    "viewRun": "View run"
+  },
+  "api": {
+    "sessionExpired": "Your session has expired. Please sign in again."
+  },
   "versionInfo": {},
   "audit": {
     "title": "Audit log",

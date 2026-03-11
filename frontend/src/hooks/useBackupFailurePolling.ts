@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { useNotifications } from '../contexts/NotificationContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useRefetchInterval } from './useRefetchInterval'
@@ -30,6 +31,7 @@ function markSeen(key: string) {
  * eine UI-Benachrichtigung (NotificationCenter + Toast).
  */
 export function useBackupFailurePolling() {
+  const { t } = useTranslation()
   const { addNotification } = useNotifications()
   const { isAuthenticated } = useAuth()
   const backupInterval = useRefetchInterval(90 * 1000, 120 * 1000)
@@ -52,12 +54,12 @@ export function useBackupFailurePolling() {
       if (seen.includes(key)) continue
       addNotification({
         type: 'error',
-        title: 'S3 Log-Backup fehlgeschlagen',
+        title: t('backupNotifications.title'),
         message: `${f.pipeline_name} (Run ${f.run_id}): ${f.error_message}`,
         actionUrl: `/runs/${f.run_id}`,
-        actionLabel: 'Run anzeigen',
+        actionLabel: t('backupNotifications.viewRun'),
       })
       markSeen(key)
     }
-  }, [data, addNotification])
+  }, [data, addNotification, t])
 }

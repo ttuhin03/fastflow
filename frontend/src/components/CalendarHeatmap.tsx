@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { getFormatLocale } from '../utils/locale'
 import './CalendarHeatmap.css'
 
@@ -31,6 +32,7 @@ interface DayData {
 
 export default function CalendarHeatmap({ dailyStats, days = 365, showTitle = true }: CalendarHeatmapProps) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const formatLocale = getFormatLocale()
   const [hoveredDay, setHoveredDay] = useState<string | null>(null)
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 })
@@ -325,7 +327,7 @@ export default function CalendarHeatmap({ dailyStats, days = 365, showTitle = tr
                     className="tooltip-run-id-link"
                     onClick={(e) => {
                       e.preventDefault()
-                      window.location.href = `/runs/${runId}`
+                      navigate(`/runs/${runId}`)
                     }}
                   >
                     {runId.substring(0, 8)}...

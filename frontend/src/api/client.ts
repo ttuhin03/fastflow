@@ -1,6 +1,7 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios'
 import { showError } from '../utils/toast'
 import { getApiBaseUrl } from '../config'
+import i18n from '../i18n'
 
 const LOGIN_PATH = import.meta.env.VITE_LOGIN_PATH || '/login'
 
@@ -115,7 +116,7 @@ apiClient.interceptors.response.use(
 
           // Zeige benutzerfreundliche Nachricht wenn Session abgelaufen ist
           if (isSessionExpired && window.location.pathname !== LOGIN_PATH) {
-            showError('Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.')
+            showError(i18n.t('api.sessionExpired'))
           }
 
           // Nur redirecten wenn nicht bereits auf Login-Seite

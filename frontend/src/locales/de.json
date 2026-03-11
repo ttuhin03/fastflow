@@ -425,6 +425,43 @@
     "success": "Einstellungen gespeichert.",
     "saveFailed": "Speichern fehlgeschlagen."
   },
+  "warnings": {
+    "title": "Hinweise zur Stabilität",
+    "diskLow": "Wenig Speicherplatz: nur {{gb}} GB frei",
+    "inodeLow": "Inodes stark belegt: {{pct}}%",
+    "gitSyncFailed": "Letzter Git-Sync ist fehlgeschlagen",
+    "gitSyncStale": "Seit über {{hours}} Stunden kein erfolgreicher Git-Sync",
+    "concurrencyFull": "Concurrency-Limit erreicht – Runs warten",
+    "successRateLow": "Success Rate (7 Tage) unter {{threshold}}%: {{rate}}%",
+    "systemProblem": "{{label}}: Problem",
+    "systemLabels": {
+      "database": "Datenbank",
+      "docker": "Docker",
+      "kubernetes": "Kubernetes",
+      "uv_cache": "UV-Cache",
+      "disk": "Speicherplatz",
+      "inodes": "Inodes"
+    }
+  },
+  "systemStatus": {
+    "loading": "System-Status wird geladen…",
+    "error": "System-Status konnte nicht geladen werden."
+  },
+  "runNotifications": {
+    "pipelineFailed": "Pipeline fehlgeschlagen",
+    "pipelineFailedMsg": "Pipeline \"{{name}}\" ist fehlgeschlagen{{exitCode}}",
+    "exitCode": " (Exit-Code: {{code}})",
+    "pipelineSuccessAfterRetry": "Pipeline erfolgreich nach Retry",
+    "pipelineSuccessAfterRetryMsg": "Pipeline \"{{name}}\" war erfolgreich nach vorherigem Fehler",
+    "viewDetails": "Details anzeigen"
+  },
+  "backupNotifications": {
+    "title": "S3 Log-Backup fehlgeschlagen",
+    "viewRun": "Run anzeigen"
+  },
+  "api": {
+    "sessionExpired": "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an."
+  },
   "versionInfo": {},
   "audit": {
     "title": "Audit-Log",

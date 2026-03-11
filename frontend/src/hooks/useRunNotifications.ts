@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { useNotifications } from '../contexts/NotificationContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useRefetchInterval } from './useRefetchInterval'
@@ -19,6 +20,7 @@ interface Run {
  * Soft-Limit-Überschreitungen etc. Notifications anzuzeigen.
  */
 export function useRunNotifications() {
+  const { t } = useTranslation()
   const { addNotification } = useNotifications()
   const { isAuthenticated } = useAuth()
   const previousRunsRef = useRef<Map<string, string>>(new Map())
@@ -63,12 +65,15 @@ export function useRunNotifications() {
       if (previousStatus && previousStatus !== currentStatus) {
         // Run wurde fehlgeschlagen
         if (currentStatus === 'FAILED' && (previousStatus === 'RUNNING' || previousStatus === 'PENDING')) {
+          const exitCodeSuffix = run.exit_code !== null
+            ? t('runNotifications.exitCode', { code: run.exit_code })
+            : ''
           addNotification({
             type: 'error',
-            title: 'Pipeline fehlgeschlagen',
-            message: `Pipeline "${run.pipeline_name}" ist fehlgeschlagen${run.exit_code !== null ? ` (Exit-Code: ${run.exit_code})` : ''}`,
+            title: t('runNotifications.pipelineFailed'),
+            message: t('runNotifications.pipelineFailedMsg', { name: run.pipeline_name, exitCode: exitCodeSuffix }),
             actionUrl: `/runs/${run.id}`,
-            actionLabel: 'Details anzeigen',
+            actionLabel: t('runNotifications.viewDetails'),
           })
         }
 
@@ -76,10 +81,10 @@ export function useRunNotifications() {
         if (currentStatus === 'SUCCESS' && previousStatus === 'FAILED') {
           addNotification({
             type: 'success',
-            title: 'Pipeline erfolgreich nach Retry',
-            message: `Pipeline "${run.pipeline_name}" war erfolgreich nach vorherigem Fehler`,
+            title: t('runNotifications.pipelineSuccessAfterRetry'),
+            message: t('runNotifications.pipelineSuccessAfterRetryMsg', { name: run.pipeline_name }),
             actionUrl: `/runs/${run.id}`,
-            actionLabel: 'Details anzeigen',
+            actionLabel: t('runNotifications.viewDetails'),
           })
         }
       }
@@ -90,5 +95,5 @@ export function useRunNotifications() {
 
     // Alte Runs werden automatisch durch Map-Größen-Limit behandelt
     // (Map wird bei jedem neuen Run aktualisiert)
-  }, [runsData, recentRuns, addNotification])
+  }, [runsData, recentRuns, addNotification, t])
 }

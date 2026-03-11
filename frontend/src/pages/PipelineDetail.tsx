@@ -259,7 +259,7 @@ export default function PipelineDetail() {
             {pipeline.enabled ? 'Aktiv' : 'Inaktiv'}
           </span>
           <InfoIcon content="Status wird in pipeline.json konfiguriert. 'Aktiv' bedeutet, dass die Pipeline ausgeführt werden kann." />
-          <span className="info-hint" style={{ fontSize: '0.75rem', color: '#888', marginLeft: '0.5rem' }}>
+          <span className="info-hint" style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginLeft: '0.5rem' }}>
             (Konfiguriert in pipeline.json)
           </span>
         </div>
@@ -450,7 +450,7 @@ export default function PipelineDetail() {
             return (
               <div className="webhook-disabled">
                 <p>{t('pipelineDetail.webhooksDisabled')}</p>
-                <p style={{ fontSize: '0.85rem', color: '#888', marginTop: '0.5rem' }}>
+                <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)', marginTop: '0.5rem' }}>
                   {t('pipelineDetail.webhooksEnableHint')}
                 </p>
               </div>
@@ -462,7 +462,7 @@ export default function PipelineDetail() {
             <div className="webhook-enabled">
               <div className="webhook-status" style={{ marginBottom: '0.75rem' }}>
                 <span className="status-badge enabled">{t('pipelineDetail.webhooksEnabled')}</span>
-                <span className="info-hint" style={{ fontSize: '0.75rem', color: '#888', marginLeft: '0.5rem' }}>
+                <span className="info-hint" style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginLeft: '0.5rem' }}>
                   {t('pipelineDetail.webhooksConfiguredIn')}
                 </span>
               </div>
@@ -586,7 +586,7 @@ export default function PipelineDetail() {
                             {t('pipelineDetail.remove')}
                           </button>
                         ) : (
-                          <span className="info-hint" style={{ fontSize: '0.75rem', color: '#888' }}>
+                          <span className="info-hint" style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
                             {t('pipelineDetail.editInPipelineJson')}
                           </span>
                         )}
@@ -598,7 +598,7 @@ export default function PipelineDetail() {
             </table>
           </div>
         ) : (
-          <p style={{ fontSize: '0.9rem', color: '#888' }}>
+          <p style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)' }}>
             {t('pipelineDetail.noDownstreamTriggered')}
           </p>
         )}
@@ -672,7 +672,7 @@ export default function PipelineDetail() {
                 {createDownstreamTriggerMutation.isPending ? t('pipelineDetail.adding') : t('pipelineDetail.add')}
               </button>
             </div>
-            <p style={{ fontSize: '0.75rem', color: '#888', marginTop: '0.5rem' }}>
+            <p style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginTop: '0.5rem' }}>
               {t('pipelineDetail.downstreamAltHint')}
             </p>
           </div>

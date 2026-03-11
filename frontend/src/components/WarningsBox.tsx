@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
 import { MdWarning } from 'react-icons/md'
@@ -34,6 +35,7 @@ const DISK_WARN_GB = 1
 const INODE_WARN_PCT = 90
 
 function useWarnings(): string[] {
+  const { t } = useTranslation()
   const interval = useRefetchInterval(30000)
   const refetch = { refetchInterval: interval }
 
@@ -70,41 +72,34 @@ function useWarnings(): string[] {
       ([k, v]) => k !== 'disk_free_gb' && k !== 'inode_total' && k !== 'inode_free' && v !== 'ok' && v !== 'n/a (nur Unix)'
     )
     failed.forEach(([key]) => {
-      const labels: Record<string, string> = {
-        database: 'Datenbank',
-        docker: 'Docker',
-        kubernetes: 'Kubernetes',
-        uv_cache: 'UV-Cache',
-        disk: 'Speicherplatz',
-        inodes: 'Inodes',
-      }
-      warnings.push(`${labels[key] || key}: Problem`)
+      const label = t(`warnings.systemLabels.${key}`, { defaultValue: key })
+      warnings.push(t('warnings.systemProblem', { label }))
     })
   }
 
   if (storage) {
     if (storage.free_disk_space_gb != null && storage.free_disk_space_gb < DISK_WARN_GB) {
-      warnings.push(`Wenig Speicherplatz: nur ${storage.free_disk_space_gb.toFixed(1)} GB frei`)
+      warnings.push(t('warnings.diskLow', { gb: storage.free_disk_space_gb.toFixed(1) }))
     }
     if (storage.inode_used_percent != null && storage.inode_used_percent > INODE_WARN_PCT) {
-      warnings.push(`Inodes stark belegt: ${storage.inode_used_percent.toFixed(0)}%`)
+      warnings.push(t('warnings.inodeLow', { pct: storage.inode_used_percent.toFixed(0) }))
     }
   }
 
   if (syncStatus) {
     if (syncStatus.status === 'failed') {
-      warnings.push('Letzter Git-Sync ist fehlgeschlagen')
+      warnings.push(t('warnings.gitSyncFailed'))
     } else if (syncStatus.last_sync) {
       const last = new Date(syncStatus.last_sync).getTime()
       const hours = (Date.now() - last) / (1000 * 60 * 60)
       if (hours > SYNC_STALE_HOURS) {
-        warnings.push(`Seit über ${Math.round(hours)} Stunden kein erfolgreicher Git-Sync`)
+        warnings.push(t('warnings.gitSyncStale', { hours: Math.round(hours) }))
       }
     }
   }
 
   if (concurrency != null && (concurrency.utilization ?? 0) >= 1) {
-    warnings.push('Concurrency-Limit erreicht – Runs warten')
+    warnings.push(t('warnings.concurrencyFull'))
   }
 
   if (
@@ -113,7 +108,10 @@ function useWarnings(): string[] {
     summaryStats.last_7d.success_rate_pct < SUCCESS_RATE_THRESHOLD
   ) {
     warnings.push(
-      `Success Rate (7 Tage) unter ${SUCCESS_RATE_THRESHOLD}%: ${summaryStats.last_7d.success_rate_pct.toFixed(1)}%`
+      t('warnings.successRateLow', {
+        threshold: SUCCESS_RATE_THRESHOLD,
+        rate: summaryStats.last_7d.success_rate_pct.toFixed(1),
+      })
     )
   }
 
@@ -121,6 +119,7 @@ function useWarnings(): string[] {
 }
 
 export default function WarningsBox() {
+  const { t } = useTranslation()
   const warnings = useWarnings()
 
   if (warnings.length === 0) return null
@@ -129,7 +128,7 @@ export default function WarningsBox() {
     <div className="warnings-box">
       <div className="warnings-box-header">
         <MdWarning className="warnings-box-icon" />
-        <h3 className="warnings-box-title">Hinweise zur Stabilität</h3>
+        <h3 className="warnings-box-title">{t('warnings.title')}</h3>
       </div>
       <ul className="warnings-box-list">
         {warnings.map((text, i) => (
