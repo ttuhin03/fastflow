@@ -288,7 +288,11 @@ async def stream_run_logs(
             except HTTPException:
                 raise
             except Exception:
-                pass
+                logger.exception("Fehler beim Lesen der Log-Datei für Run %s", run_id)
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Log-Datei konnte nicht gelesen werden: {log_file_path}"
+                )
 
         # Keine Queue und keine Datei: Run ist noch nicht gestartet
         raise HTTPException(

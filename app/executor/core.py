@@ -35,6 +35,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import docker
 from docker.errors import DockerException, APIError, ImageNotFound
+from sqlalchemy import text
 from sqlmodel import Session, select, update
 
 from app.analytics import track_pipeline_run_finished, track_pipeline_run_started
@@ -1890,23 +1891,30 @@ async def _update_pipeline_stats(
             session.execute(stmt)
 
         # Persistente Daily-Stats (Kalender bleibt nach Log/Run-Cleanup erhalten)
+        # Atomares Upsert: verhindert Race-Conditions bei parallelen Runs
         if run_date is not None:
-            daily = session.get(PipelineDailyStat, (pipeline_name, run_date))
-            if daily:
-                daily.total_runs += 1
-                daily.successful_runs += 1 if success else 0
-                daily.failed_runs += 0 if success else 1
-                session.add(daily)
-            else:
-                session.add(
-                    PipelineDailyStat(
-                        pipeline_name=pipeline_name,
-                        day=run_date,
-                        total_runs=1,
-                        successful_runs=1 if success else 0,
-                        failed_runs=0 if success else 1,
-                    )
-                )
+            success_inc = 1 if success else 0
+            failure_inc = 0 if success else 1
+            session.execute(
+                text(
+                    """
+                    INSERT INTO pipeline_daily_stats
+                        (pipeline_name, day, total_runs, successful_runs, failed_runs)
+                    VALUES
+                        (:name, :day, 1, :success_inc, :failure_inc)
+                    ON CONFLICT (pipeline_name, day) DO UPDATE SET
+                        total_runs      = pipeline_daily_stats.total_runs + 1,
+                        successful_runs = pipeline_daily_stats.successful_runs + :success_inc,
+                        failed_runs     = pipeline_daily_stats.failed_runs + :failure_inc
+                    """
+                ),
+                {
+                    "name": pipeline_name,
+                    "day": run_date,
+                    "success_inc": success_inc,
+                    "failure_inc": failure_inc,
+                },
+            )
         session.commit()
     except Exception as e:
         logger.error(f"Fehler beim Aktualisieren der Pipeline-Statistiken für {pipeline_name}: {e}")

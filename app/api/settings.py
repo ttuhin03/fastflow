@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from app.core.database import get_session, database_url, engine
@@ -127,7 +127,7 @@ class SettingsUpdate(BaseModel):
     log_retention_runs: Optional[int] = None
     log_retention_days: Optional[int] = None
     log_max_size_mb: Optional[int] = None
-    max_concurrent_runs: Optional[int] = None
+    max_concurrent_runs: Optional[int] = Field(default=None, ge=1)
     container_timeout: Optional[int] = None
     retry_attempts: Optional[int] = None
     auto_sync_enabled: Optional[bool] = None
@@ -192,7 +192,7 @@ async def get_settings(
 @router.put("", response_model=Dict[str, str])
 async def update_settings(
     settings: SettingsUpdate,
-    current_user: User = Depends(require_write),
+    current_user: User = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> Dict[str, str]:
     """
