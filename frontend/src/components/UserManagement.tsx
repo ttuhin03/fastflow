@@ -31,6 +31,8 @@ export default function UserManagement() {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [showInviteForm, setShowInviteForm] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [resetPasswordUserId, setResetPasswordUserId] = useState<string | null>(null)
+  const [resetPasswordValue, setResetPasswordValue] = useState('')
 
   // Form states
   const [formUsername, setFormUsername] = useState('')
@@ -236,14 +238,21 @@ export default function UserManagement() {
     })
   }
 
-  const handleResetPassword = async (userId: string) => {
-    // Für Passwort-Eingabe verwenden wir einen einfachen Prompt (kann später durch ein Modal ersetzt werden)
-    const newPassword = window.prompt('Neues Passwort eingeben:')
-    if (newPassword && newPassword.length >= 6) {
-      resetPasswordMutation.mutate({ userId, newPassword })
-    } else if (newPassword) {
+  const handleResetPassword = (userId: string) => {
+    setResetPasswordUserId(userId)
+    setResetPasswordValue('')
+  }
+
+  const handleResetPasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!resetPasswordUserId) return
+    if (resetPasswordValue.length < 6) {
       showError('Passwort muss mindestens 6 Zeichen lang sein')
+      return
     }
+    resetPasswordMutation.mutate({ userId: resetPasswordUserId, newPassword: resetPasswordValue })
+    setResetPasswordUserId(null)
+    setResetPasswordValue('')
   }
 
   const handleBlockUser = async (userId: string) => {
@@ -282,6 +291,60 @@ export default function UserManagement() {
         <MdPeople />
         <span>Nutzer</span>
       </button>
+
+      {resetPasswordUserId && (
+        <div
+          className="user-management-modal-overlay"
+          onClick={() => setResetPasswordUserId(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="reset-password-title"
+        >
+          <div
+            className="user-management-modal"
+            style={{ maxWidth: 400 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="user-management-header">
+              <h2 id="reset-password-title">Passwort zurücksetzen</h2>
+              <button
+                onClick={() => setResetPasswordUserId(null)}
+                className="close-btn"
+                aria-label="Schließen"
+              >
+                <MdClose />
+              </button>
+            </div>
+            <form onSubmit={handleResetPasswordSubmit} className="user-form">
+              <div className="form-group">
+                <label htmlFor="reset-password-input">Neues Passwort:</label>
+                <input
+                  id="reset-password-input"
+                  type="password"
+                  value={resetPasswordValue}
+                  onChange={(e) => setResetPasswordValue(e.target.value)}
+                  minLength={6}
+                  required
+                  autoFocus
+                  autoComplete="new-password"
+                />
+              </div>
+              <div className="form-actions">
+                <button type="submit" className="btn btn-success">
+                  Passwort setzen
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setResetPasswordUserId(null)}
+                  className="btn btn-secondary"
+                >
+                  Abbrechen
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {isOpen && (
         <div className="user-management-modal-overlay" onClick={() => setIsOpen(false)}>

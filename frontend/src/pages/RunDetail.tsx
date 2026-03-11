@@ -262,9 +262,10 @@ export default function RunDetail() {
             signal: ctrl.signal,
           })
           if (!res.ok) throw new Error(res.statusText)
+          if (!res.body) throw new Error('Log stream response body is null')
           setLogConnectionStatus('connected')
           setLogReconnectAttempts(0)
-          const reader = res.body!.getReader()
+          const reader = res.body.getReader()
           const dec = new TextDecoder()
           let buf = ''
           while (true) {
@@ -325,7 +326,8 @@ export default function RunDetail() {
     } else {
       loadHistoricalLogs()
     }
-  }, [runId, run, activeTab, logReconnectAttempts])
+  // run?.status statt run (Objekt-Referenz), um Stream-Reconnect bei jedem Poll zu verhindern
+  }, [runId, run?.status, activeTab, logReconnectAttempts])
 
   // Metrics-Streaming mit SSE via fetch (Authorization-Header, kein Token in URL)
   useEffect(() => {
@@ -363,9 +365,10 @@ export default function RunDetail() {
             signal: ctrl.signal,
           })
           if (!res.ok) throw new Error(res.statusText)
+          if (!res.body) throw new Error('Metrics stream response body is null')
           setMetricsConnectionStatus('connected')
           setMetricsReconnectAttempts(0)
-          const reader = res.body!.getReader()
+          const reader = res.body.getReader()
           const dec = new TextDecoder()
           let buf = ''
           while (true) {
@@ -421,7 +424,8 @@ export default function RunDetail() {
     } else if (run.metrics_file) {
       apiClient.get(`/runs/${runId}/metrics`).then((r) => setMetrics(r.data)).catch((e) => console.error('Fehler beim Laden der Metrics:', e))
     }
-  }, [runId, run, activeTab, metricsReconnectAttempts])
+  // run?.status + run?.metrics_file statt run (Objekt-Referenz), um Stream-Reconnect bei jedem Poll zu verhindern
+  }, [runId, run?.status, run?.metrics_file, activeTab, metricsReconnectAttempts])
 
   // Auto-Scroll für Logs
   useEffect(() => {

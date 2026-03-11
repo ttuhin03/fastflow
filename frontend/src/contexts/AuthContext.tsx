@@ -43,16 +43,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    // Prüfe ob Token vorhanden ist
-    // Verwende sessionStorage statt localStorage für besseren XSS-Schutz
-    // sessionStorage wird beim Schließen des Tabs/Browsers gelöscht
-    const storedToken = sessionStorage.getItem('auth_token')
-    if (storedToken) {
-      setToken(storedToken)
-      setIsAuthenticated(true)
-      fetchUserInfo()
+    const initAuth = async () => {
+      const storedToken = sessionStorage.getItem('auth_token')
+      if (storedToken) {
+        setToken(storedToken)
+        setIsAuthenticated(true)
+        await fetchUserInfo()
+      }
+      setLoading(false)
     }
-    setLoading(false)
+    initAuth()
   }, [])
 
   const logout = async () => {
