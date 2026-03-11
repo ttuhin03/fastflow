@@ -22,12 +22,15 @@ function getInitialLanguage(): string {
   return 'en'
 }
 
+const initialLng = getInitialLanguage()
+document.documentElement.lang = initialLng
+
 i18n.use(initReactI18next).init({
   resources: {
     de: { translation: de },
     en: { translation: en },
   },
-  lng: getInitialLanguage(),
+  lng: initialLng,
   fallbackLng: 'de',
   interpolation: {
     escapeValue: false,
@@ -35,6 +38,7 @@ i18n.use(initReactI18next).init({
 })
 
 i18n.on('languageChanged', (lng) => {
+  document.documentElement.lang = lng
   try {
     localStorage.setItem(STORAGE_KEY, lng)
   } catch {

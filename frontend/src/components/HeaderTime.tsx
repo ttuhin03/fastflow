@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import './HeaderTime.css'
 
 const STORAGE_KEY_VARIANT = 'headerTimeVariant'
@@ -27,6 +28,7 @@ function loadUtc(): boolean {
 }
 
 export default function HeaderTime() {
+    const { t } = useTranslation()
     const [isUtc, setIsUtc] = useState(loadUtc)
     const [time, setTime] = useState(new Date())
     const [variant, setVariant] = useState<Variant>(() => loadVariant())
@@ -78,7 +80,7 @@ export default function HeaderTime() {
                     <button
                         className={`header-time-toggle ${isUtc ? 'utc' : 'cet'}`}
                         onClick={toggleUtc}
-                        title="Zeitzone umschalten"
+                        title={t('headerTime.toggleTimezone')}
                     >
                         {isUtc ? 'UTC' : 'CET'}
                     </button>
@@ -94,8 +96,8 @@ export default function HeaderTime() {
                 type="button"
                 className="header-time-cycle"
                 onClick={cycleVariant}
-                title={variant === 'default' ? 'Dual: beide Zeitzonen anzeigen' : 'Standard: eine Zeitzone mit Umschalter'}
-                aria-label="Anzeige wechseln"
+                title={variant === 'default' ? t('headerTime.showDual') : t('headerTime.showStandard')}
+                aria-label={t('headerTime.switchDisplay')}
             >
                 ◐
             </button>

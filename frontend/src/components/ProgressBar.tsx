@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import './ProgressBar.css'
 
 interface ProgressBarProps {
@@ -7,6 +8,8 @@ interface ProgressBarProps {
 }
 
 export default function ProgressBar({ value, showLabel = true, className = '' }: ProgressBarProps) {
+  const { t } = useTranslation()
+
   const getColorClass = () => {
     if (value >= 80) return 'progress-high'
     if (value >= 50) return 'progress-medium'
@@ -19,7 +22,7 @@ export default function ProgressBar({ value, showLabel = true, className = '' }:
     <div className={`progress-bar-container ${className}`}>
       {showLabel && (
         <div className="progress-bar-label">
-          <span>Erfolgsrate:</span>
+          <span>{t('calendar.successRate')}</span>
           <span className="progress-bar-value">{value.toFixed(1)}%</span>
         </div>
       )}

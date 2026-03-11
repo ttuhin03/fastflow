@@ -62,7 +62,8 @@
     "googleNotConfigured": "Google not configured",
     "microsoftNotConfigured": "Microsoft not configured",
     "customNotConfigured": "Custom OAuth not configured",
-    "viewOnGitHub": "View on GitHub"
+    "viewOnGitHub": "View on GitHub",
+    "callbackError": "Authentication failed. Please try again."
   },
   "toast": {
     "ok": "OK",
@@ -462,6 +463,12 @@
   },
   "api": {
     "sessionExpired": "Your session has expired. Please sign in again."
+  },
+  "headerTime": {
+    "toggleTimezone": "Toggle timezone",
+    "showDual": "Dual: show both time zones",
+    "showStandard": "Default: one time zone with toggle",
+    "switchDisplay": "Switch display"
   },
   "versionInfo": {},
   "audit": {

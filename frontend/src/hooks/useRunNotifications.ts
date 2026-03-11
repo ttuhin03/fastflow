@@ -19,6 +19,8 @@ interface Run {
  * Wird automatisch in der App verwendet, um bei Pipeline-Fehlern, 
  * Soft-Limit-Überschreitungen etc. Notifications anzuzeigen.
  */
+const MAX_TRACKED_RUNS = 500
+
 export function useRunNotifications() {
   const { t } = useTranslation()
   const { addNotification } = useNotifications()
@@ -93,7 +95,11 @@ export function useRunNotifications() {
       previousRunsRef.current.set(run.id, currentStatus)
     })
 
-    // Alte Runs werden automatisch durch Map-Größen-Limit behandelt
-    // (Map wird bei jedem neuen Run aktualisiert)
+    // Älteste Einträge entfernen wenn Map zu groß wird (FIFO-Eviction)
+    while (previousRunsRef.current.size > MAX_TRACKED_RUNS) {
+      const firstKey = previousRunsRef.current.keys().next().value
+      if (firstKey !== undefined) previousRunsRef.current.delete(firstKey)
+      else break
+    }
   }, [runsData, recentRuns, addNotification, t])
 }

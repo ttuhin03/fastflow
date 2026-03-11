@@ -132,7 +132,8 @@ export default function Layout() {
   useEffect(() => {
     const activeItem = navItems.find((item) => isActive(item.path))
     document.title = activeItem ? `${t(activeItem.labelKey)} · ${t('appTitle')}` : t('appTitle')
-  }, [location.pathname, t])
+  // isAdmin bestimmt navItems, isActive hängt von location.pathname ab (bereits in deps)
+  }, [location.pathname, t, isAdmin])
 
   const handleLogout = async () => {
     await logout()

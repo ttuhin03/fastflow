@@ -119,9 +119,13 @@ export default function RunDetail() {
     queryKey: ['pipeline', run?.pipeline_name],
     queryFn: async () => {
       if (!run?.pipeline_name) return null
+      // Cached pipeline list reuse — avoids a /pipelines request when navigating from the list page
+      const cached = queryClient.getQueryData<Pipeline[]>(['pipelines'])
+      if (cached) {
+        return cached.find((p) => p.name === run.pipeline_name) ?? null
+      }
       const response = await apiClient.get('/pipelines')
-      const pipelines = response.data
-      return pipelines.find((p: any) => p.name === run.pipeline_name) || null
+      return response.data.find((p: Pipeline) => p.name === run.pipeline_name) ?? null
     },
     enabled: !!run?.pipeline_name,
   })
@@ -228,14 +232,13 @@ export default function RunDetail() {
     const MAX_RECONNECT_ATTEMPTS = 5
     const RECONNECT_DELAY = 3000
 
-    const loadHistoricalLogs = async () => {
+    const loadHistoricalLogs = async (signal: AbortSignal) => {
       try {
-        const response = await apiClient.get(`/runs/${runId}/logs?tail=1000`, { responseType: 'text' })
+        const response = await apiClient.get(`/runs/${runId}/logs?tail=1000`, { responseType: 'text', signal })
         const lines = response.data.split('\n').filter((line: string) => line.trim())
         setLogs(lines)
-      } catch (error) {
-        console.warn('Konnte historische Logs nicht laden:', error)
-        setLogs([])
+      } catch {
+        if (!signal.aborted) setLogs([])
       }
     }
 
@@ -324,7 +327,9 @@ export default function RunDetail() {
         logStreamAbortRef.current = null
       }
     } else {
-      loadHistoricalLogs()
+      const abortCtrl = new AbortController()
+      loadHistoricalLogs(abortCtrl.signal)
+      return () => abortCtrl.abort()
     }
   // run?.status statt run (Objekt-Referenz), um Stream-Reconnect bei jedem Poll zu verhindern
   }, [runId, run?.status, activeTab, logReconnectAttempts])
@@ -422,7 +427,11 @@ export default function RunDetail() {
         metricsStreamAbortRef.current = null
       }
     } else if (run.metrics_file) {
-      apiClient.get(`/runs/${runId}/metrics`).then((r) => setMetrics(r.data)).catch((e) => console.error('Fehler beim Laden der Metrics:', e))
+      const abortCtrl = new AbortController()
+      apiClient.get(`/runs/${runId}/metrics`, { signal: abortCtrl.signal })
+        .then((r) => setMetrics(r.data))
+        .catch(() => { /* Ignored: component unmounted or network error */ })
+      return () => abortCtrl.abort()
     }
   // run?.status + run?.metrics_file statt run (Objekt-Referenz), um Stream-Reconnect bei jedem Poll zu verhindern
   }, [runId, run?.status, run?.metrics_file, activeTab, metricsReconnectAttempts])

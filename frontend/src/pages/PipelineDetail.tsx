@@ -78,9 +78,13 @@ export default function PipelineDetail() {
   const { data: pipeline, isLoading: pipelineLoading } = useQuery<Pipeline>({
     queryKey: ['pipeline', name],
     queryFn: async () => {
+      // Cached pipeline list reuse — avoids a duplicate /pipelines request when navigating from the list page
+      const cached = queryClient.getQueryData<Pipeline[]>(['pipelines'])
+      if (cached) {
+        return cached.find((p) => p.name === name) ?? null
+      }
       const response = await apiClient.get('/pipelines')
-      const pipelines = response.data
-      return pipelines.find((p: Pipeline) => p.name === name)
+      return response.data.find((p: Pipeline) => p.name === name) ?? null
     },
     enabled: !!name,
   })

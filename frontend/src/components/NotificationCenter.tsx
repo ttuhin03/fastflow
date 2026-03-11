@@ -98,7 +98,15 @@ export default function NotificationCenter() {
                   <div
                     key={notification.id}
                     className={`notification-item ${notification.read ? 'read' : 'unread'} ${notification.type}`}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => !notification.read && markAsRead(notification.id)}
+                    onKeyDown={(e) => {
+                      if ((e.key === 'Enter' || e.key === ' ') && !notification.read) {
+                        e.preventDefault()
+                        markAsRead(notification.id)
+                      }
+                    }}
                   >
                     <div className="notification-item-icon">{getIcon(notification.type)}</div>
                     <div className="notification-item-content">
