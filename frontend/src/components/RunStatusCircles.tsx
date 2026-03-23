@@ -23,16 +23,21 @@ interface RunStatusCirclesProps {
   pipelineName: string
 }
 
-export default function RunStatusCircles({ pipelineName }: RunStatusCirclesProps) {
+function useRecentRunsPerPipeline(pipelineName: string) {
   const runsInterval = useRefetchInterval(5000)
-  const { data: runs, isLoading } = useQuery<Run[]>({
-    queryKey: ['pipeline-runs', pipelineName],
+  return useQuery<Run[]>({
+    queryKey: ['recent-runs-per-pipeline'],
     queryFn: async () => {
-      const response = await apiClient.get(`/pipelines/${pipelineName}/runs?limit=5`)
+      const response = await apiClient.get('/runs/recent-per-pipeline?limit_per_pipeline=5')
       return response.data
     },
     refetchInterval: runsInterval,
+    select: (data: any) => (data?.pipelines?.[pipelineName] ?? []) as Run[],
   })
+}
+
+export default function RunStatusCircles({ pipelineName }: RunStatusCirclesProps) {
+  const { data: runs, isLoading } = useRecentRunsPerPipeline(pipelineName)
 
   const getStatusIcon = (status: string) => {
     switch (status.toUpperCase()) {
@@ -81,7 +86,6 @@ export default function RunStatusCircles({ pipelineName }: RunStatusCirclesProps
     return `${run.status} - ${date} (${duration})`
   }
 
-  // Erstelle Array mit 5 Einträgen (füllt mit null wenn weniger Runs vorhanden)
   const displayRuns = Array.from({ length: 5 }, (_, i) => runs?.[i] || null)
 
   return (

@@ -45,6 +45,39 @@ def _parse_iso_datetime(value: str, param_name: str) -> datetime:
         )
 
 
+@router.get("/recent-per-pipeline", response_model=Dict[str, Any])
+async def get_recent_runs_per_pipeline(
+    limit_per_pipeline: int = Query(5, ge=1, le=10, description="Anzahl Runs pro Pipeline"),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    Gibt die letzten N Runs pro Pipeline zurück (Batch-Endpoint).
+
+    Vermeidet N+1-Polling, indem alle Pipelines in einer Anfrage abgedeckt werden.
+    """
+    from sqlalchemy import text as sa_text
+
+    all_runs = session.exec(
+        select(PipelineRun)
+        .order_by(PipelineRun.pipeline_name, PipelineRun.started_at.desc())
+    ).all()
+
+    grouped: Dict[str, list] = {}
+    for run in all_runs:
+        bucket = grouped.setdefault(run.pipeline_name, [])
+        if len(bucket) >= limit_per_pipeline:
+            continue
+        bucket.append({
+            "id": str(run.id),
+            "status": run.status.value,
+            "started_at": run.started_at.isoformat(),
+            "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+        })
+
+    return {"pipelines": grouped}
+
+
 @router.get("", response_model=RunsResponse)
 async def get_runs(
     pipeline_name: Optional[str] = Query(None, description="Filter nach Pipeline-Name"),

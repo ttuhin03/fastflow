@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useLayoutEffect } from 'react'
+import { useState, useEffect, useRef, useLayoutEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
@@ -453,8 +453,9 @@ export default function RunDetail() {
     URL.revokeObjectURL(url)
   }
 
-  const filteredLogs = logs.filter((log) =>
-    log.toLowerCase().includes(logSearch.toLowerCase())
+  const filteredLogs = useMemo(
+    () => logs.filter((log) => log.toLowerCase().includes(logSearch.toLowerCase())),
+    [logs, logSearch]
   )
 
   const getDuration = () => {

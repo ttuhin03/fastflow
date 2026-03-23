@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { getFormatLocale } from '../utils/locale'
@@ -35,7 +35,7 @@ export default function CalendarHeatmap({ dailyStats, days = 365, showTitle = tr
   const navigate = useNavigate()
   const formatLocale = getFormatLocale()
   const [hoveredDay, setHoveredDay] = useState<string | null>(null)
-  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 })
+  const tooltipRef = useRef<HTMLDivElement>(null)
 
   // Erstelle Map für schnellen Zugriff auf tägliche Statistiken
   const statsMap = useMemo(() => {
@@ -107,27 +107,22 @@ export default function CalendarHeatmap({ dailyStats, days = 365, showTitle = tr
     return `intensity-${Math.floor(runs / 2)}`
   }
 
-  const handleDayHover = (e: React.MouseEvent<HTMLDivElement>, dateStr: string) => {
-    setHoveredDay(dateStr)
-    // Position tooltip with offset, ensuring it doesn't go off-screen
+  const updateTooltipPosition = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!tooltipRef.current) return
     const offset = 15
-    const tooltipWidth = 250 // Approximate tooltip width
-    const tooltipHeight = 150 // Approximate tooltip height
-    
+    const tooltipWidth = 250
+    const tooltipHeight = 150
     let x = e.clientX + offset
     let y = e.clientY + offset
-    
-    // Adjust if tooltip would go off right edge
-    if (x + tooltipWidth > window.innerWidth) {
-      x = e.clientX - tooltipWidth - offset
-    }
-    
-    // Adjust if tooltip would go off bottom edge
-    if (y + tooltipHeight > window.innerHeight) {
-      y = e.clientY - tooltipHeight - offset
-    }
-    
-    setTooltipPosition({ x, y })
+    if (x + tooltipWidth > window.innerWidth) x = e.clientX - tooltipWidth - offset
+    if (y + tooltipHeight > window.innerHeight) y = e.clientY - tooltipHeight - offset
+    tooltipRef.current.style.left = `${x + 10}px`
+    tooltipRef.current.style.top = `${y + 10}px`
+  }, [])
+
+  const handleDayHover = (e: React.MouseEvent<HTMLDivElement>, dateStr: string) => {
+    setHoveredDay(dateStr)
+    updateTooltipPosition(e)
   }
 
   const handleDayLeave = () => {
@@ -253,24 +248,7 @@ export default function CalendarHeatmap({ dailyStats, days = 365, showTitle = tr
                       className={`calendar-day ${getDayIntensity(day)} ${isHovered ? 'hovered' : ''}`}
                       style={{ backgroundColor: color }}
                       onMouseEnter={(e) => handleDayHover(e, day.dateStr)}
-                      onMouseMove={(e) => {
-                        const offset = 15
-                        const tooltipWidth = 250
-                        const tooltipHeight = 150
-                        
-                        let x = e.clientX + offset
-                        let y = e.clientY + offset
-                        
-                        if (x + tooltipWidth > window.innerWidth) {
-                          x = e.clientX - tooltipWidth - offset
-                        }
-                        
-                        if (y + tooltipHeight > window.innerHeight) {
-                          y = e.clientY - tooltipHeight - offset
-                        }
-                        
-                        setTooltipPosition({ x, y })
-                      }}
+                      onMouseMove={updateTooltipPosition}}
                       onMouseLeave={handleDayLeave}
                       aria-label={`${day.dateStr}: ${t('calendar.runsSuccessfulFailed', { total: day.total_runs, successful: day.successful_runs, failed: day.failed_runs })}`}
                     />
@@ -284,11 +262,8 @@ export default function CalendarHeatmap({ dailyStats, days = 365, showTitle = tr
       
       {hoveredDayData && hoveredDay && (
         <div
+          ref={tooltipRef}
           className="calendar-tooltip"
-          style={{
-            left: `${tooltipPosition.x + 10}px`,
-            top: `${tooltipPosition.y + 10}px`
-          }}
         >
           <div className="tooltip-date">
             {new Date(hoveredDayData.dateStr).toLocaleDateString(formatLocale, {

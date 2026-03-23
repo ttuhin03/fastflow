@@ -89,7 +89,6 @@ export default function Runs() {
       })
       
       if (completedRuns.length > 0) {
-        // Invalidate daily-stats for all pipelines that had completed runs
         const pipelineNames = new Set(completedRuns.map(r => r.pipeline_name))
         queryClient.invalidateQueries({ queryKey: ['all-pipelines-daily-stats'] })
         queryClient.invalidateQueries({ queryKey: ['pipeline-daily-stats'] })
@@ -98,11 +97,6 @@ export default function Runs() {
           queryClient.invalidateQueries({ queryKey: ['pipeline-stats', name] })
         })
         queryClient.invalidateQueries({ queryKey: ['pipelines'] })
-        // Force immediate refetch
-        queryClient.refetchQueries({ queryKey: ['all-pipelines-daily-stats'] })
-        pipelineNames.forEach(name => {
-          queryClient.refetchQueries({ queryKey: ['pipeline-daily-stats', name] })
-        })
       }
       
       prevRunsRef.current = runs

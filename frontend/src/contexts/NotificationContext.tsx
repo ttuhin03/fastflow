@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react'
 import { showError as showErrorToast, showWarning as showWarningToast } from '../utils/toast'
 
 export interface Notification {
@@ -101,7 +101,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     setNotifications([])
   }, [])
 
-  const unreadCount = notifications.filter((n) => !n.read).length
+  const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications])
 
   return (
     <NotificationContext.Provider
