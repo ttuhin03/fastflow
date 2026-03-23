@@ -240,3 +240,5 @@ docs/node_modules/
 docs/build/
 node_modules/
 
+.cursor
+

@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import apiClient from '../api/client'
 import { showError } from '../utils/toast'
 
 export default function AuthCallback() {
@@ -15,12 +16,9 @@ export default function AuthCallback() {
       navigate('/login', { replace: true })
       return
     }
-    fetch(`/api/auth/exchange?code=${encodeURIComponent(code)}`)
+    apiClient.get(`/auth/exchange?code=${encodeURIComponent(code)}`)
       .then((res) => {
-        if (!res.ok) throw new Error('exchange_failed')
-        return res.json()
-      })
-      .then((data) => {
+        const data = res.data
         if (data.access_token) {
           sessionStorage.setItem('auth_token', data.access_token)
           window.location.replace('/')

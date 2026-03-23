@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { MdCode } from 'react-icons/md'
 import Tooltip from '../components/Tooltip'
+import apiClient from '../api/client'
 import { getApiOrigin } from '../config'
 import './Login.css'
 
@@ -20,9 +21,12 @@ export default function Login() {
   const { data: providers = {} } = useQuery<AuthProviders>({
     queryKey: ['auth/providers'],
     queryFn: async () => {
-      const r = await fetch('/api/auth/providers')
-      if (!r.ok) return {}
-      return r.json()
+      try {
+        const r = await apiClient.get('/auth/providers')
+        return r.data
+      } catch {
+        return {}
+      }
     },
     staleTime: 60_000,
   })

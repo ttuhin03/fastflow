@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
@@ -91,8 +91,8 @@ export default function Scheduler() {
           </thead>
           <tbody>
             {jobs.map((job) => (
-              <>
-                <tr key={job.id}>
+              <React.Fragment key={job.id}>
+                <tr>
                   <td>
                     {job.pipeline_name}
                     {job.run_config_id && (
@@ -192,7 +192,7 @@ export default function Scheduler() {
                     </td>
                   </tr>
                 )}
-              </>
+              </React.Fragment>
             ))}
           </tbody>
         </table>

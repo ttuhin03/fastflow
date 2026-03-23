@@ -291,7 +291,10 @@ async def get_current_user(
     if db_session_obj is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Ihre Sitzung ist nach {config.JWT_EXPIRATION_HOURS} Stunden abgelaufen. Bitte melden Sie sich erneut an.",
+            detail={
+                "message": f"Ihre Sitzung ist nach {config.JWT_EXPIRATION_HOURS} Stunden abgelaufen. Bitte melden Sie sich erneut an.",
+                "error_code": "SESSION_EXPIRED",
+            },
             headers={"WWW-Authenticate": "Bearer"},
         )
     

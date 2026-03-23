@@ -101,13 +101,9 @@ apiClient.interceptors.response.use(
           // Wiederhole ursprüngliche Request mit neuem Token
           return apiClient(originalRequest)
         } catch (refreshError: any) {
-          // Refresh fehlgeschlagen - prüfe ob Session abgelaufen ist
-          const errorDetail = refreshError?.response?.data?.detail || ''
-          const isSessionExpired =
-            errorDetail.includes('Session nicht gefunden') ||
-            errorDetail.includes('abgelaufen') ||
-            errorDetail.includes('nach 24 Stunden') ||
-            errorDetail.includes('Bitte melden Sie sich erneut an')
+          const detail = refreshError?.response?.data?.detail
+          const errorCode = typeof detail === 'object' ? detail?.error_code : undefined
+          const isSessionExpired = errorCode === 'SESSION_EXPIRED' || refreshError?.response?.status === 401
 
           // Refresh fehlgeschlagen - logge User aus
           processQueue(refreshError, null)

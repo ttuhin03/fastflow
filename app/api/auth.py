@@ -586,7 +586,10 @@ async def refresh_token(
     if db_session_obj is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Ihre Sitzung ist nach 24 Stunden abgelaufen. Bitte melden Sie sich erneut an.",
+            detail={
+                "message": "Ihre Sitzung ist nach 24 Stunden abgelaufen. Bitte melden Sie sich erneut an.",
+                "error_code": "SESSION_EXPIRED",
+            },
             headers={"WWW-Authenticate": "Bearer"},
         )
     

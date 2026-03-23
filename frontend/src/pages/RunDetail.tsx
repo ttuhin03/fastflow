@@ -300,7 +300,6 @@ export default function RunDetail() {
           if (logReconnectAttempts < MAX_RECONNECT_ATTEMPTS && isRunning) {
             reconnectTimeout = setTimeout(() => {
               setLogReconnectAttempts((prev) => prev + 1)
-              connectLogStream()
             }, RECONNECT_DELAY)
           }
         } catch (e: unknown) {
@@ -311,7 +310,6 @@ export default function RunDetail() {
           if (logReconnectAttempts < MAX_RECONNECT_ATTEMPTS && isRunning) {
             reconnectTimeout = setTimeout(() => {
               setLogReconnectAttempts((prev) => prev + 1)
-              connectLogStream()
             }, RECONNECT_DELAY)
           }
         }
@@ -319,7 +317,7 @@ export default function RunDetail() {
     }
 
     if (isRunning) {
-      setLogs([])
+      if (logReconnectAttempts === 0) setLogs([])
       connectLogStream()
       return () => {
         if (reconnectTimeout) clearTimeout(reconnectTimeout)
@@ -400,7 +398,6 @@ export default function RunDetail() {
           if (metricsReconnectAttempts < MAX_RECONNECT_ATTEMPTS && isRunning) {
             reconnectTimeout = setTimeout(() => {
               setMetricsReconnectAttempts((prev) => prev + 1)
-              connectMetricsStream()
             }, RECONNECT_DELAY)
           }
         } catch (e: unknown) {
@@ -411,7 +408,6 @@ export default function RunDetail() {
           if (metricsReconnectAttempts < MAX_RECONNECT_ATTEMPTS && isRunning) {
             reconnectTimeout = setTimeout(() => {
               setMetricsReconnectAttempts((prev) => prev + 1)
-              connectMetricsStream()
             }, RECONNECT_DELAY)
           }
         }
@@ -454,6 +450,7 @@ export default function RunDetail() {
     document.body.appendChild(link)
     link.click()
     link.remove()
+    URL.revokeObjectURL(url)
   }
 
   const filteredLogs = logs.filter((log) =>
