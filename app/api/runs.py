@@ -20,6 +20,19 @@ from app.auth import get_current_user, require_write
 from app.schemas.runs import RunsResponse
 from app.services.audit import log_audit
 
+_SAFE_ENV_PREFIX = "_fastflow_"
+
+
+def _mask_env_vars(env_vars: Optional[Dict[str, str]]) -> Optional[Dict[str, str]]:
+    """Maskiert alle env_vars-Werte außer internen _fastflow_*-Metadaten."""
+    if not env_vars:
+        return env_vars
+    return {
+        k: v if k.startswith(_SAFE_ENV_PREFIX) else "***"
+        for k, v in env_vars.items()
+    }
+
+
 # Terminal-Statuses: Run kann nur in diesen Zuständen erneut gestartet werden (Retry)
 _RETRY_ALLOWED_STATUSES = {
     RunStatus.SUCCESS,
@@ -221,7 +234,7 @@ async def get_run_details(
         "exit_code": run.exit_code,
         "log_file": run.log_file,
         "metrics_file": run.metrics_file,
-        "env_vars": run.env_vars,
+        "env_vars": _mask_env_vars(run.env_vars),
         "parameters": run.parameters,
         "uv_version": run.uv_version,
         "error_type": error_type,  # "pipeline_error" oder "infrastructure_error"
