@@ -125,6 +125,7 @@ class PipelineRun(SQLModel, table=True):
     )
     status: RunStatus = Field(
         default=RunStatus.PENDING,
+        index=True,
         description="Aktueller Status des Runs"
     )
     log_file: str = Field(
@@ -154,6 +155,7 @@ class PipelineRun(SQLModel, table=True):
     )
     started_at: datetime = Field(
         default_factory=_utc_now,
+        index=True,
         description="Start-Zeitpunkt (UTC)"
     )
     finished_at: Optional[datetime] = Field(
@@ -534,7 +536,7 @@ class AuditLogEntry(SQLModel, table=True):
     __tablename__ = "audit_log"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True, description="Eindeutige Eintrags-ID")
-    created_at: datetime = Field(default_factory=_utc_now, description="Zeitpunkt der Aktion (UTC)")
+    created_at: datetime = Field(default_factory=_utc_now, index=True, description="Zeitpunkt der Aktion (UTC)")
     user_id: Optional[UUID] = Field(default=None, foreign_key="users.id", index=True, description="User der die Aktion ausgeführt hat")
     username: str = Field(default="", description="Benutzername zum Zeitpunkt der Aktion (Snapshot)")
     action: str = Field(index=True, description="Aktion z.B. run_start, run_cancel, pipeline_stats_reset, user_invite, settings_update")

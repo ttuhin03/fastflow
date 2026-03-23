@@ -30,7 +30,7 @@ import time
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Dict, Optional, List, Any, AsyncGenerator
-from uuid import UUID
+from uuid import UUID, uuid4
 from concurrent.futures import ThreadPoolExecutor
 
 import docker
@@ -335,6 +335,9 @@ async def run_pipeline(
         close_session = False
     
     # Concurrency-Limit prüfen (Docker: laufende Container; K8s: RUNNING-Runs in DB)
+    # Für Docker: Platzhalter sofort registrieren, um Race Conditions zu verhindern.
+    run_id = uuid4()
+    _placeholder_registered = False
     async with _concurrency_lock:
         if config.PIPELINE_EXECUTOR == "kubernetes":
             from sqlmodel import select, func
@@ -355,6 +358,8 @@ async def run_pipeline(
                     f"Concurrency-Limit erreicht ({config.MAX_CONCURRENT_RUNS}). "
                     "Bitte warte bis ein Run abgeschlossen ist."
                 )
+            _running_containers[run_id] = None
+            _placeholder_registered = True
     
     try:
         # Pipeline-spezifisches max_instances-Limit prüfen
@@ -424,8 +429,9 @@ async def run_pipeline(
             get_current_git_info, config.PIPELINES_DIR
         )
         
-        # PipelineRun-Datensatz erstellen
+        # PipelineRun-Datensatz erstellen (run_id wurde vor dem Lock generiert)
         run = PipelineRun(
+            id=run_id,
             pipeline_name=name,
             status=RunStatus.PENDING,
             log_file=str(config.LOGS_DIR / f"{name}_{datetime.now(timezone.utc).isoformat()}.log"),
@@ -469,7 +475,12 @@ async def run_pipeline(
             )
         
         return run
-        
+
+    except Exception:
+        if _placeholder_registered:
+            async with _concurrency_lock:
+                _running_containers.pop(run_id, None)
+        raise
     finally:
         if close_session:
             session.close()
@@ -1129,9 +1140,13 @@ async def _run_container_task(
         _log_queues.pop(run_id, None)
         _metrics_queues.pop(run_id, None)
         
-        # Session schließen
+        # Session und Generator schließen
         try:
             session.close()
+        except Exception:
+            pass
+        try:
+            session_gen.close()
         except Exception:
             pass
 

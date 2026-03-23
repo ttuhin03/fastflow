@@ -34,7 +34,7 @@ export default function Secrets() {
     queryKey: ['secrets'],
     queryFn: async () => {
       const response = await apiClient.get('/secrets')
-      return response.data
+      return response.data.secrets ?? response.data
     },
   })
 

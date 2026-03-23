@@ -370,6 +370,29 @@ async def run_startup_tasks() -> None:
     if not config.TESTING:
         await _run_step("OAuth-State-Cleanup-Job", False, schedule_oauth_state_cleanup, "OAuth-State-Cleanup alle 5 Minuten geplant")
 
+    def schedule_session_cleanup():
+        from app.auth.auth import cleanup_expired_sessions
+        from app.core.database import get_session
+        from app.services.scheduler import get_scheduler
+        scheduler = get_scheduler()
+        if scheduler is not None:
+            def _run_session_cleanup():
+                session_gen = get_session()
+                session = next(session_gen)
+                try:
+                    cleanup_expired_sessions(session)
+                finally:
+                    session.close()
+            scheduler.add_job(
+                _run_session_cleanup,
+                "interval",
+                minutes=30,
+                id="session_cleanup",
+                replace_existing=True,
+            )
+    if not config.TESTING:
+        await _run_step("Session-Cleanup-Job", False, schedule_session_cleanup, "Session-Cleanup alle 30 Minuten geplant")
+
     def init_cleanup():
         from app.services.cleanup import init_docker_client_for_cleanup, schedule_cleanup_job
         init_docker_client_for_cleanup()

@@ -462,7 +462,7 @@ async def _cleanup_orphaned_containers() -> int:
                     try:
                         await asyncio.get_running_loop().run_in_executor(
                             None,
-                            lambda: container.remove(force=True)
+                            lambda c=container: c.remove(force=True)
                         )
                         deleted_count += 1
                     except Exception as e:
@@ -478,7 +478,7 @@ async def _cleanup_orphaned_containers() -> int:
                     try:
                         await asyncio.get_running_loop().run_in_executor(
                             None,
-                            lambda: container.remove(force=True)
+                            lambda c=container: c.remove(force=True)
                         )
                         deleted_count += 1
                     except Exception as e:
@@ -490,7 +490,7 @@ async def _cleanup_orphaned_containers() -> int:
                     try:
                         await asyncio.get_running_loop().run_in_executor(
                             None,
-                            lambda: container.remove(force=True)
+                            lambda c=container: c.remove(force=True)
                         )
                         deleted_count += 1
                     except Exception as e:
@@ -548,7 +548,7 @@ async def _cleanup_orphaned_volumes() -> int:
                     try:
                         await asyncio.get_running_loop().run_in_executor(
                             None,
-                            lambda: volume.remove()
+                            lambda v=volume: v.remove()
                         )
                         deleted_count += 1
                     except Exception as e:
@@ -564,7 +564,7 @@ async def _cleanup_orphaned_volumes() -> int:
                     try:
                         await asyncio.get_running_loop().run_in_executor(
                             None,
-                            lambda: volume.remove()
+                            lambda v=volume: v.remove()
                         )
                         deleted_count += 1
                     except Exception as e:
@@ -624,11 +624,15 @@ def run_cleanup_job_sync() -> Dict[str, Any]:
     Synchroner Wrapper für run_cleanup_job().
     
     Wird vom Scheduler aufgerufen (APScheduler benötigt synchrone Funktionen).
-    Führt asyncio.run() intern aus.
+    Dispatcht die Coroutine thread-safe in den laufenden FastAPI-Event-Loop.
     
     Returns:
         Dictionary mit kombinierten Cleanup-Statistiken
     """
+    from app.services.scheduler import _main_loop
+    if _main_loop is not None and _main_loop.is_running():
+        future = asyncio.run_coroutine_threadsafe(run_cleanup_job(), _main_loop)
+        return future.result(timeout=300)
     return asyncio.run(run_cleanup_job())
 
 

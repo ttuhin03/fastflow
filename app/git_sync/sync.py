@@ -628,6 +628,19 @@ def test_sync_repo_config(session: Session) -> Tuple[bool, str]:
     return (True, "Verbindung erfolgreich")
 
 
+def _strip_credentials_from_url(url: str) -> str:
+    """Entfernt eingebettete Credentials (user:token@) aus einer Git-Remote-URL."""
+    from urllib.parse import urlparse, urlunparse
+    try:
+        parsed = urlparse(url)
+        if parsed.username or parsed.password:
+            clean = parsed._replace(netloc=parsed.hostname + (f":{parsed.port}" if parsed.port else ""))
+            return urlunparse(clean)
+    except Exception:
+        pass
+    return url
+
+
 async def get_sync_status() -> Dict[str, Any]:
     """Gibt Git-Status-Informationen zurück."""
     pipelines_dir = config.PIPELINES_DIR
@@ -645,6 +658,8 @@ async def get_sync_status() -> Dict[str, Any]:
             _executor, lambda: _run_git_command(remote_url_cmd, pipelines_dir)
         )
         remote_url = stdout.strip() if exit_code == 0 else None
+        if remote_url:
+            remote_url = _strip_credentials_from_url(remote_url)
         last_commit_cmd = ["git", "log", "-1", "--format=%H|%s|%ai", "HEAD"]
         exit_code, stdout, stderr = await asyncio.get_running_loop().run_in_executor(
             _executor, lambda: _run_git_command(last_commit_cmd, pipelines_dir)

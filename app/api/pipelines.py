@@ -414,7 +414,7 @@ async def get_pipeline_dependencies(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Pipeline nicht gefunden: {name}"
         )
-    packages = deps_module.get_pipeline_packages(name)
+    packages = await asyncio.to_thread(deps_module.get_pipeline_packages, name)
     result: Dict[str, Any] = {"pipeline": name, "packages": packages}
     if discovered.has_requirements and audit:
         req_path = discovered.path / "requirements.txt"

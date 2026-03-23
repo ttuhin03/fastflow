@@ -22,6 +22,20 @@ from app.resilience.resilience import with_retry_async
 
 logger = logging.getLogger(__name__)
 
+
+def _create_smtp_client() -> aiosmtplib.SMTP:
+    """Erzeugt einen korrekt konfigurierten SMTP-Client.
+
+    Port 465 = implizites TLS (use_tls), Port 587 = STARTTLS (start_tls).
+    """
+    return aiosmtplib.SMTP(
+        hostname=config.SMTP_HOST,
+        port=config.SMTP_PORT,
+        use_tls=(config.SMTP_PORT == 465),
+        start_tls=(config.SMTP_PORT == 587),
+    )
+
+
 # Retry-Konfiguration für Benachrichtigungen
 _NOTIFY_RETRY_ATTEMPTS = 3
 _NOTIFY_RETRY_MIN_WAIT = 2.0
@@ -57,11 +71,7 @@ Bitte S3/MinIO-Konfiguration und -Erreichbarkeit prüfen. Der Run und die Dateie
             message["To"] = ", ".join(config.EMAIL_RECIPIENTS)
             message["Subject"] = subject
             message.attach(MIMEText(body, "plain"))
-            smtp = aiosmtplib.SMTP(
-                hostname=config.SMTP_HOST,
-                port=config.SMTP_PORT,
-                use_tls=config.SMTP_PORT == 587,
-            )
+            smtp = _create_smtp_client()
             await smtp.connect()
             if config.SMTP_USER and config.SMTP_PASSWORD:
                 await smtp.login(config.SMTP_USER, config.SMTP_PASSWORD)
@@ -134,11 +144,7 @@ Bitte prüfen Sie die Beitrittsanfragen unter: Users – Beitrittsanfragen.
         message["To"] = ", ".join(config.EMAIL_RECIPIENTS)
         message["Subject"] = subject
         message.attach(MIMEText(body, "plain"))
-        smtp = aiosmtplib.SMTP(
-            hostname=config.SMTP_HOST,
-            port=config.SMTP_PORT,
-            use_tls=config.SMTP_PORT == 587,
-        )
+        smtp = _create_smtp_client()
         await smtp.connect()
         if config.SMTP_USER and config.SMTP_PASSWORD:
             await smtp.login(config.SMTP_USER, config.SMTP_PASSWORD)
@@ -168,7 +174,7 @@ Ihre Beitrittsanfrage wurde freigegeben. Sie können sich jetzt anmelden:
         message["To"] = user.email
         message["Subject"] = subject
         message.attach(MIMEText(body, "plain"))
-        smtp = aiosmtplib.SMTP(hostname=config.SMTP_HOST, port=config.SMTP_PORT, use_tls=config.SMTP_PORT == 587)
+        smtp = _create_smtp_client()
         await smtp.connect()
         if config.SMTP_USER and config.SMTP_PASSWORD:
             await smtp.login(config.SMTP_USER, config.SMTP_PASSWORD)
@@ -258,11 +264,7 @@ async def send_email_notification(run: PipelineRun, status: RunStatus) -> None:
         
         # E-Mail senden (mit Retry bei Netzwerkfehlern)
         async def _send_smtp():
-            async with aiosmtplib.SMTP(
-                hostname=config.SMTP_HOST,
-                port=config.SMTP_PORT,
-                use_tls=config.SMTP_PORT == 587,
-            ) as smtp:
+            async with _create_smtp_client() as smtp:
                 if config.SMTP_USER and config.SMTP_PASSWORD:
                     await smtp.login(config.SMTP_USER, config.SMTP_PASSWORD)
                 await smtp.send_message(message)
@@ -346,11 +348,7 @@ async def send_custom_email(subject: str, body: str, recipients: Optional[List[s
     message["Subject"] = subject
     message.attach(MIMEText(body, "plain"))
     try:
-        smtp = aiosmtplib.SMTP(
-            hostname=config.SMTP_HOST,
-            port=config.SMTP_PORT,
-            use_tls=config.SMTP_PORT == 587,
-        )
+        smtp = _create_smtp_client()
         await smtp.connect()
         if config.SMTP_USER and config.SMTP_PASSWORD:
             await smtp.login(config.SMTP_USER, config.SMTP_PASSWORD)
@@ -631,11 +629,7 @@ async def send_soft_limit_notification(run: PipelineRun, resource_type: str, cur
                 msg["Subject"] = subject
                 msg.attach(MIMEText(message, "plain"))
                 
-                smtp = aiosmtplib.SMTP(
-                    hostname=config.SMTP_HOST,
-                    port=config.SMTP_PORT,
-                    use_tls=config.SMTP_PORT == 587
-                )
+                smtp = _create_smtp_client()
                 await smtp.connect()
                 if config.SMTP_USER and config.SMTP_PASSWORD:
                     await smtp.login(config.SMTP_USER, config.SMTP_PASSWORD)
@@ -701,11 +695,7 @@ async def send_scheduler_error_notification(pipeline_name: str, error_message: s
                 msg["Subject"] = subject
                 msg.attach(MIMEText(message, "plain"))
                 
-                smtp = aiosmtplib.SMTP(
-                    hostname=config.SMTP_HOST,
-                    port=config.SMTP_PORT,
-                    use_tls=config.SMTP_PORT == 587
-                )
+                smtp = _create_smtp_client()
                 await smtp.connect()
                 if config.SMTP_USER and config.SMTP_PASSWORD:
                     await smtp.login(config.SMTP_USER, config.SMTP_PASSWORD)
@@ -779,11 +769,7 @@ async def send_dependency_vuln_notification(
             message["To"] = ", ".join(config.EMAIL_RECIPIENTS)
             message["Subject"] = subject
             message.attach(MIMEText(body_text, "plain"))
-            smtp = aiosmtplib.SMTP(
-                hostname=config.SMTP_HOST,
-                port=config.SMTP_PORT,
-                use_tls=config.SMTP_PORT == 587,
-            )
+            smtp = _create_smtp_client()
             await smtp.connect()
             if config.SMTP_USER and config.SMTP_PASSWORD:
                 await smtp.login(config.SMTP_USER, config.SMTP_PASSWORD)

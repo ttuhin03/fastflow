@@ -71,35 +71,21 @@ async def get_runs(
     Returns:
         RunsResponse mit runs, total, page und page_size
     """
-    # Query für Filter bauen (ohne Pagination)
-    base_stmt = select(PipelineRun)
-    
-    # Filter anwenden
+    # Filter-Bedingungen sammeln (einmal definieren, für Query und Count verwenden)
+    filters = []
     if pipeline_name:
-        base_stmt = base_stmt.where(PipelineRun.pipeline_name == pipeline_name)
-    
+        filters.append(PipelineRun.pipeline_name == pipeline_name)
     if status_filter:
-        base_stmt = base_stmt.where(PipelineRun.status == status_filter)
-    
-    # Zeitraum-Filterung (einmal parsen, für base_stmt und count_stmt nutzen)
+        filters.append(PipelineRun.status == status_filter)
     start_dt = _parse_iso_datetime(start_date, "Startdatum") if start_date else None
     end_dt = _parse_iso_datetime(end_date, "Enddatum") if end_date else None
     if start_dt is not None:
-        base_stmt = base_stmt.where(PipelineRun.started_at >= start_dt)
+        filters.append(PipelineRun.started_at >= start_dt)
     if end_dt is not None:
-        base_stmt = base_stmt.where(PipelineRun.started_at <= end_dt)
-    
-    # Total count abrufen (mit gleichen Filtern)
-    count_stmt = select(func.count(PipelineRun.id))
-    if pipeline_name:
-        count_stmt = count_stmt.where(PipelineRun.pipeline_name == pipeline_name)
-    if status_filter:
-        count_stmt = count_stmt.where(PipelineRun.status == status_filter)
-    if start_dt is not None:
-        count_stmt = count_stmt.where(PipelineRun.started_at >= start_dt)
-    if end_dt is not None:
-        count_stmt = count_stmt.where(PipelineRun.started_at <= end_dt)
-    total = session.exec(count_stmt).one()
+        filters.append(PipelineRun.started_at <= end_dt)
+
+    base_stmt = select(PipelineRun).where(*filters) if filters else select(PipelineRun)
+    total = session.exec(select(func.count(PipelineRun.id)).where(*filters) if filters else select(func.count(PipelineRun.id))).one()
     
     # Query für Runs mit Pagination
     stmt = base_stmt.order_by(PipelineRun.started_at.desc()).limit(limit).offset(offset)

@@ -9,9 +9,9 @@ Anlegen/Aktualisieren/Löschen von Secrets erfolgt manuell (z. B. Datenbank oder
 """
 
 import asyncio
-from typing import List, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlmodel import Session, select
+from typing import List, Dict, Any, Optional
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlmodel import Session, select, func
 from pydantic import BaseModel, Field
 
 from app.core.database import get_session
@@ -62,28 +62,34 @@ async def encrypt_for_pipeline(
         ) from e
 
 
-@router.get("", response_model=List[Dict[str, Any]])
+@router.get("", response_model=Dict[str, Any])
 async def get_secrets(
+    limit: Optional[int] = Query(None, ge=1, le=500, description="Max. Anzahl Secrets (ohne Angabe: alle)"),
+    offset: int = Query(0, ge=0, description="Offset für Pagination"),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
-) -> List[Dict[str, Any]]:
+) -> Dict[str, Any]:
     """
-    Gibt alle Secrets zurück (Values entschlüsselt).
-    
-    Ruft alle Secrets aus der Datenbank ab und entschlüsselt die Werte
-    für die Rückgabe an den Client.
-    
+    Gibt Secrets zurück (Values entschlüsselt), optional mit Pagination.
+
+    Ohne limit-Parameter werden alle Secrets zurückgegeben (Rückwärtskompatibilität).
+
     Args:
+        limit: Max. Anzahl Secrets pro Seite (optional)
+        offset: Offset für Pagination
         session: SQLModel Session
-        
+
     Returns:
-        Liste aller Secrets mit entschlüsselten Werten
-        
+        Dict mit secrets-Liste und total-Count
+
     Raises:
         HTTPException: Wenn ein Fehler beim Abrufen oder Entschlüsseln auftritt
     """
     try:
+        total = session.exec(select(func.count(Secret.key))).one()
         statement = select(Secret)
+        if limit is not None:
+            statement = statement.limit(limit).offset(offset)
         secrets = session.exec(statement).all()
         
         result = []
@@ -110,7 +116,7 @@ async def get_secrets(
                 )
                 continue
         
-        return result
+        return {"secrets": result, "total": total}
         
     except Exception as e:
         logger.exception("Fehler beim Abrufen der Secrets")

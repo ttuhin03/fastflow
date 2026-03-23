@@ -496,13 +496,16 @@ def _job_executed_listener(event) -> None:
     """
     if event.exception:
         logger.error(f"Job {event.job_id} fehlgeschlagen: {event.exception}")
-        # Notification für Scheduler-Fehler (asynchron im Hintergrund)
         try:
-            import asyncio
             from app.services.notifications import send_scheduler_error_notification
-            # Versuche Pipeline-Name aus Job-ID zu extrahieren (falls Job-ID = Pipeline-Name)
             pipeline_name = event.job_id
-            asyncio.create_task(send_scheduler_error_notification(pipeline_name, str(event.exception)))
+            if _main_loop is not None and _main_loop.is_running():
+                asyncio.run_coroutine_threadsafe(
+                    send_scheduler_error_notification(pipeline_name, str(event.exception)),
+                    _main_loop,
+                )
+            else:
+                logger.warning("Event-Loop nicht verfügbar für Scheduler-Error-Notification")
         except Exception as notif_error:
             logger.error(f"Fehler beim Senden der Scheduler-Notification: {notif_error}")
     else:

@@ -37,6 +37,7 @@ async def lifespan(app: FastAPI):
     Lifecycle-Manager für FastAPI-App.
     Startup und Shutdown sind in app.startup ausgelagert.
     """
+    setup_signal_handlers()
     await run_startup_tasks()
     yield
     await run_shutdown_tasks()
@@ -183,10 +184,6 @@ async def static_cache_middleware(request: Request, call_next):
         response.headers["Cache-Control"] = "max-age=31536000, immutable"
     return response
 
-# Signal-Handler einrichten
-setup_signal_handlers()
-
-
 @app.get("/health")
 @app.get("/healthz")
 @app.get("/api/health")
@@ -216,7 +213,7 @@ async def readiness_check() -> JSONResponse:
     Für Kubernetes readinessProbe.
     """
     from app.core.readiness import run_readiness_checks
-    checks, ok = run_readiness_checks()
+    checks, ok = await asyncio.to_thread(run_readiness_checks)
     status = "not_ready" if not ok else "ready"
     status_code = 503 if not ok else 200
     return JSONResponse(
