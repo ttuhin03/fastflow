@@ -6,9 +6,12 @@ Benachrichtigungen werden bei Fehlern (FAILED, INTERRUPTED) gesendet.
 """
 
 import asyncio
+import ipaddress
 import logging
+import socket
 from datetime import datetime
 from typing import Optional, List
+from urllib.parse import urlparse
 from uuid import UUID
 
 import aiosmtplib
@@ -21,6 +24,61 @@ from app.models import PipelineRun, RunStatus, User
 from app.resilience.resilience import with_retry_async
 
 logger = logging.getLogger(__name__)
+
+_TEAMS_ALLOWED_DOMAINS = {
+    "webhook.office.com",
+    "outlook.office.com",
+    "outlook.office365.com",
+    "logic.azure.com",
+}
+
+
+def _validate_webhook_url(url: str) -> None:
+    """Validates a Teams webhook URL against SSRF.
+
+    Raises ValueError if the URL is unsafe (non-HTTPS, private IP, or
+    unknown host domain).
+    """
+    parsed = urlparse(url)
+    if parsed.scheme != "https":
+        raise ValueError(f"Webhook-URL muss HTTPS verwenden (erhalten: {parsed.scheme})")
+
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("Webhook-URL hat keinen gültigen Hostnamen")
+
+    domain_ok = any(
+        hostname == allowed or hostname.endswith("." + allowed)
+        for allowed in _TEAMS_ALLOWED_DOMAINS
+    )
+    if not domain_ok:
+        raise ValueError(
+            f"Webhook-Host '{hostname}' ist nicht in der Allowlist "
+            f"({', '.join(sorted(_TEAMS_ALLOWED_DOMAINS))})"
+        )
+
+    try:
+        resolved = socket.getaddrinfo(hostname, None, proto=socket.IPPROTO_TCP)
+        for _, _, _, _, sockaddr in resolved:
+            ip = ipaddress.ip_address(sockaddr[0])
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+                raise ValueError(
+                    f"Webhook-Host '{hostname}' löst zu privater IP {ip} auf"
+                )
+    except socket.gaierror:
+        raise ValueError(f"Webhook-Host '{hostname}' kann nicht aufgelöst werden")
+
+
+async def _post_teams_webhook(card: dict, *, headers: Optional[dict] = None) -> None:
+    """Posts a card payload to the configured Teams webhook after validation."""
+    url = config.TEAMS_WEBHOOK_URL
+    if not url:
+        return
+    _validate_webhook_url(url)
+    hdrs = headers or {"Content-Type": "application/json"}
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.post(url, json=card, headers=hdrs)
+        response.raise_for_status()
 
 
 def _create_smtp_client() -> aiosmtplib.SMTP:
@@ -102,8 +160,7 @@ Bitte S3/MinIO-Konfiguration und -Erreichbarkeit prüfen. Der Run und die Dateie
             }
             if run_url:
                 card["potentialAction"] = [{"@type": "OpenUri", "name": "Run anzeigen", "targets": [{"os": "default", "uri": run_url}]}]
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                await client.post(config.TEAMS_WEBHOOK_URL, json=card)
+            await _post_teams_webhook(card)
             logger.info("Teams (S3-Backup-Fehler) gesendet, Run %s", run.id)
         except Exception as e:
             logger.error("Fehler beim Senden der S3-Backup-Fehler-Teams-Nachricht für Run %s: %s", run.id, e, exc_info=True)
@@ -304,15 +361,8 @@ async def send_teams_notification(run: PipelineRun, status: RunStatus) -> None:
         # Teams Adaptive Card erstellen
         card = _create_teams_card(run, status)
         
-        # HTTP-Request an Teams-Webhook senden (mit Retry bei Netzwerkfehlern)
         async def _post_teams():
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.post(
-                    config.TEAMS_WEBHOOK_URL,
-                    json=card,
-                    headers={"Content-Type": "application/json"}
-                )
-                response.raise_for_status()
+            await _post_teams_webhook(card)
 
         await with_retry_async(
             _post_teams,
@@ -376,8 +426,7 @@ async def send_custom_teams(title: str, body: str) -> None:
         "sections": [{"activityTitle": title, "text": body, "markdown": True}],
     }
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            await client.post(config.TEAMS_WEBHOOK_URL, json=card, headers={"Content-Type": "application/json"})
+        await _post_teams_webhook(card)
         logger.info("Custom Teams-Nachricht gesendet: %s", title)
     except Exception as e:
         logger.error("Fehler beim Senden der Custom-Teams-Nachricht: %s", e, exc_info=True)
@@ -659,8 +708,7 @@ async def send_soft_limit_notification(run: PipelineRun, resource_type: str, cur
                         "markdown": True
                     }]
                 }
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    await client.post(config.TEAMS_WEBHOOK_URL, json=card)
+                await _post_teams_webhook(card)
             except Exception as e:
                 logger.error(f"Fehler beim Senden der Soft-Limit-Teams-Nachricht: {e}")
     except Exception as e:
@@ -722,8 +770,7 @@ async def send_scheduler_error_notification(pipeline_name: str, error_message: s
                         "markdown": True
                     }]
                 }
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    await client.post(config.TEAMS_WEBHOOK_URL, json=card)
+                await _post_teams_webhook(card)
             except Exception as e:
                 logger.error(f"Fehler beim Senden der Scheduler-Error-Teams-Nachricht: {e}")
     except Exception as e:
@@ -800,8 +847,7 @@ async def send_dependency_vuln_notification(
             }
             if deps_url:
                 card["potentialAction"] = [{"@type": "OpenUri", "name": "Abhängigkeiten anzeigen", "targets": [{"os": "default", "uri": deps_url}]}]
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                await client.post(config.TEAMS_WEBHOOK_URL, json=card)
+            await _post_teams_webhook(card)
             logger.info("Teams (Dependency-Audit Schwachstellen) gesendet")
         except Exception as e:
             logger.error("Fehler beim Senden der Dependency-Audit-Teams-Nachricht: %s", e, exc_info=True)

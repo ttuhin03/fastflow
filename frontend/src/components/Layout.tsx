@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useLayoutEffect } from 'react'
+import { useEffect, useState, useRef, useLayoutEffect, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -34,14 +34,14 @@ interface NavItem {
 export default function Layout() {
   const { t } = useTranslation()
   const { logout, isAdmin } = useAuth()
-  const navItems: NavItem[] = [
+  const navigate = useNavigate()
+  const location = useLocation()
+  const navItems = useMemo<NavItem[]>(() => [
     { path: '/', labelKey: 'nav.dashboard', icon: <MdDashboard /> },
     { path: '/pipelines', labelKey: 'nav.pipelines', icon: <MdAccountTree /> },
     { path: '/settings', labelKey: 'nav.settings', icon: <MdSettings /> },
     ...(isAdmin ? [{ path: '/audit', labelKey: 'nav.audit', icon: <MdHistory /> }] : []),
-  ]
-  const navigate = useNavigate()
-  const location = useLocation()
+  ], [isAdmin])
   const [backendStatus, setBackendStatus] = useState<'online' | 'offline' | 'checking'>('checking')
   const [healthPulse, setHealthPulse] = useState(false)
   const [clickedIcons, setClickedIcons] = useState<Set<string>>(new Set())
@@ -49,6 +49,12 @@ export default function Layout() {
   const previousStatusRef = useRef<'online' | 'offline' | 'checking'>('checking')
   const navRef = useRef<HTMLElement>(null)
   const [navIndicator, setNavIndicator] = useState({ top: 0, height: 0 })
+
+  const isActive = useCallback((path: string) => {
+    if (path === '/') return location.pathname === '/'
+    if (path === '/pipelines') return location.pathname.startsWith('/pipelines') || location.pathname.startsWith('/runs')
+    return location.pathname.startsWith(path)
+  }, [location.pathname])
 
   useLayoutEffect(() => {
     const nav = navRef.current
@@ -60,7 +66,7 @@ export default function Layout() {
     const nr = nav.getBoundingClientRect()
     const er = el.getBoundingClientRect()
     setNavIndicator({ top: er.top - nr.top, height: er.height })
-  }, [location.pathname])
+  }, [location.pathname, navItems, isActive])
 
   const healthInterval = useRefetchInterval(5000)
   const { data: health, isError, error, isFetching } = useQuery({
@@ -123,17 +129,10 @@ export default function Layout() {
     }
   }, [health, isError, error, isFetching])
 
-  const isActive = (path: string) => {
-    if (path === '/') return location.pathname === '/'
-    if (path === '/pipelines') return location.pathname.startsWith('/pipelines') || location.pathname.startsWith('/runs')
-    return location.pathname.startsWith(path)
-  }
-
   useEffect(() => {
     const activeItem = navItems.find((item) => isActive(item.path))
     document.title = activeItem ? `${t(activeItem.labelKey)} · ${t('appTitle')}` : t('appTitle')
-  // isAdmin bestimmt navItems, isActive hängt von location.pathname ab (bereits in deps)
-  }, [location.pathname, t, isAdmin])
+  }, [navItems, isActive, t])
 
   const handleLogout = async () => {
     await logout()

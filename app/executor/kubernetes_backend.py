@@ -310,7 +310,7 @@ async def run_container_task(
         template = client.V1PodTemplateSpec(
             metadata=client.V1ObjectMeta(
                 labels={
-                    "app": "fastflow-orchestrator",
+                    "app": "fastflow-runner",
                     JOB_LABEL_RUN_ID: str(run_id),
                     JOB_LABEL_PIPELINE: pipeline.name,
                 }
@@ -323,7 +323,7 @@ async def run_container_task(
             metadata=client.V1ObjectMeta(
                 name=job_name,
                 labels={
-                    "app": "fastflow-orchestrator",
+                    "app": "fastflow-runner",
                     JOB_LABEL_RUN_ID: str(run_id),
                     JOB_LABEL_PIPELINE: pipeline.name,
                 },
@@ -793,7 +793,7 @@ def get_kubernetes_system_metrics() -> Dict[str, Any]:
         namespace = app_config.KUBERNETES_NAMESPACE
         jobs = batch_api.list_namespaced_job(
             namespace=namespace,
-            label_selector="app=fastflow-orchestrator",
+            label_selector="app=fastflow-runner",
         )
         total_ram_mb = 0.0
         total_cpu_percent = 0.0

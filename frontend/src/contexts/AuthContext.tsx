@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import apiClient from '../api/client'
 import { showError } from '../utils/toast'
 
@@ -24,7 +24,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [userRole, setUserRole] = useState<'readonly' | 'write' | 'admin' | null>(null)
   const [is_setup_completed, setIsSetupCompleted] = useState(true)
 
-  const fetchUserInfo = async () => {
+  const fetchUserInfo = useCallback(async () => {
     try {
       const response = await apiClient.get('/auth/me')
       const role = response.data.role?.toLowerCase() as 'readonly' | 'write' | 'admin'
@@ -35,12 +35,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsAuthenticated(false)
       setToken(null)
       setIsSetupCompleted(true)
-      // Interceptor behandelt 401 (Redirect, Token-Entfernung). Bei anderen Fehlern Hinweis anzeigen.
       if (error?.response?.status !== 401) {
         showError('Sitzung konnte nicht geladen werden. Bitte erneut anmelden.')
       }
     }
-  }
+  }, [])
 
   useEffect(() => {
     const initAuth = async () => {
@@ -53,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
     }
     initAuth()
-  }, [])
+  }, [fetchUserInfo])
 
   const logout = async () => {
     try {

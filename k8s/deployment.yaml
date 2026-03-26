@@ -13,10 +13,12 @@ spec:
   selector:
     matchLabels:
       app: fastflow-orchestrator
+      component: api
   template:
     metadata:
       labels:
         app: fastflow-orchestrator
+        component: api
     spec:
       serviceAccountName: fastflow-executor
       initContainers:
