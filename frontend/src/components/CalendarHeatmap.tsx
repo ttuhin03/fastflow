@@ -248,7 +248,7 @@ export default function CalendarHeatmap({ dailyStats, days = 365, showTitle = tr
                       className={`calendar-day ${getDayIntensity(day)} ${isHovered ? 'hovered' : ''}`}
                       style={{ backgroundColor: color }}
                       onMouseEnter={(e) => handleDayHover(e, day.dateStr)}
-                      onMouseMove={updateTooltipPosition}}
+                      onMouseMove={updateTooltipPosition}
                       onMouseLeave={handleDayLeave}
                       aria-label={`${day.dateStr}: ${t('calendar.runsSuccessfulFailed', { total: day.total_runs, successful: day.successful_runs, failed: day.failed_runs })}`}
                     />
