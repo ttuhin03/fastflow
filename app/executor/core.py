@@ -24,6 +24,7 @@ Architektur:
 
 import asyncio
 import json
+from collections import OrderedDict
 import logging
 import os
 import time
@@ -72,8 +73,9 @@ _log_queues: Dict[UUID, asyncio.Queue] = {}
 # Metrics-Queues für SSE-Streaming (pro Run-ID)
 _metrics_queues: Dict[UUID, asyncio.Queue] = {}
 
-# Pre-Heating-Locks (pro Pipeline-Name)
-_pre_heating_locks: Dict[str, asyncio.Lock] = {}
+# Pre-Heating-Locks (pro Pipeline-Name, LRU-begrenzt gegen Memory-Leak)
+_PRE_HEATING_LOCKS_MAX = 256
+_pre_heating_locks: OrderedDict[str, asyncio.Lock] = OrderedDict()
 
 # Marker für setup_duration: wird vor main.py ausgegeben, in Logs/SSE herausgefiltert
 SETUP_READY_MARKER = "FASTFLOW_SETUP_READY"
@@ -281,8 +283,12 @@ def _get_pre_heating_lock(pipeline_name: str) -> asyncio.Lock:
     Returns:
         Lock für Pre-Heating-Operationen
     """
-    if pipeline_name not in _pre_heating_locks:
+    if pipeline_name in _pre_heating_locks:
+        _pre_heating_locks.move_to_end(pipeline_name)
+    else:
         _pre_heating_locks[pipeline_name] = asyncio.Lock()
+        if len(_pre_heating_locks) > _PRE_HEATING_LOCKS_MAX:
+            _pre_heating_locks.popitem(last=False)
     return _pre_heating_locks[pipeline_name]
 
 
