@@ -12,15 +12,88 @@
 
 @media (min-width: 900px) {
   .login-container {
+    align-items: stretch;
     justify-content: flex-end;
-    padding-right: clamp(1.5rem, 7vw, 5rem);
-    padding-left: clamp(1rem, 4vw, 2rem);
+    padding: 0;
+    padding-left: max(0px, env(safe-area-inset-left));
+  }
+
+  /* Volle Höhe rechts: ein Fläche, kein zweiter „Kasten“ (kein Doppel-Rahmen) */
+  .login-content {
+    max-width: 440px;
+    width: min(440px, 42vw);
+    min-height: 100dvh;
+    min-height: 100svh;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+    padding:
+      max(var(--spacing-xl), env(safe-area-inset-top))
+      clamp(1.75rem, 3vw, 2.25rem)
+      max(var(--spacing-lg), env(safe-area-inset-bottom))
+      clamp(1.75rem, 3vw, 2.25rem);
+    backdrop-filter: blur(20px) saturate(140%);
+    background: color-mix(in srgb, var(--color-surface) 72%, rgba(0, 0, 0, 0.35));
+    border-left: 1px solid color-mix(in srgb, var(--color-border) 35%, rgba(255, 255, 255, 0.06));
+    box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.04);
+  }
+
+  .login-footer .github-link {
+    background: color-mix(in srgb, var(--color-surface-variant) 35%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-border) 40%, transparent);
+    box-shadow: none;
+  }
+
+  @media (hover: hover) {
+    .login-footer .github-link:hover {
+      transform: none;
+      box-shadow: none;
+      background: color-mix(in srgb, var(--color-surface-variant) 55%, transparent);
+    }
+  }
+
+  .login-card {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 0;
+    padding: 0;
+    padding-left: 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+    animation: none;
+    backdrop-filter: none;
+    transition: none;
+  }
+
+  .login-card::before,
+  .login-card::after {
+    display: none;
+  }
+
+  @media (hover: hover) {
+    .login-card:hover {
+      transform: none;
+      box-shadow: none;
+      border-color: transparent;
+    }
+  }
+
+  .login-footer {
+    flex-shrink: 0;
+    margin-top: auto;
+    padding-top: var(--spacing-sm);
   }
 }
 
 @media (max-width: 899px) {
   .login-container {
     justify-content: center;
+    align-items: center;
     padding-left: var(--spacing-lg);
     padding-right: var(--spacing-lg);
   }
@@ -129,47 +202,84 @@
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 420px;
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xl);
 }
 
-.login-card {
-  width: 100%;
-  padding: var(--spacing-2xl);
-  padding-left: calc(var(--spacing-2xl) + 6px);
-  backdrop-filter: blur(28px) saturate(165%);
-  background: linear-gradient(
-    155deg,
-    color-mix(in srgb, var(--color-surface) 88%, white) 0%,
-    color-mix(in srgb, var(--color-surface) 96%, var(--color-background)) 100%
-  );
-  border: 1px solid color-mix(in srgb, var(--color-border) 55%, rgba(255, 255, 255, 0.1));
-  border-radius: var(--radius-lg) calc(var(--radius-lg) + 6px) var(--radius-lg) var(--radius-lg);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.07),
-    0 28px 56px rgba(0, 0, 0, 0.38),
-    0 0 0 1px rgba(0, 0, 0, 0.12),
-    0 0 90px rgb(from var(--color-primary) r g b / 0.09);
-  animation: cardFadeIn 0.6s cubic-bezier(0.22, 1, 0.36, 1);
-  position: relative;
-  overflow: hidden;
-  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.2s ease;
-}
+@media (max-width: 899px) {
+  .login-content {
+    max-width: 440px;
+    gap: var(--spacing-xl);
+  }
 
-.login-card::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 18%;
-  bottom: 18%;
-  width: 3px;
-  border-radius: 0 3px 3px 0;
-  background: linear-gradient(180deg, var(--color-primary), var(--color-primary-dark));
-  opacity: 0.88;
-  z-index: 0;
-  box-shadow: 0 0 20px rgb(from var(--color-primary) r g b / 0.35);
+  /* Eine klare „Card“ nur auf kleinen Screens */
+  .login-card {
+    width: 100%;
+    padding: var(--spacing-2xl);
+    padding-left: calc(var(--spacing-2xl) + 6px);
+    backdrop-filter: blur(28px) saturate(165%);
+    background: linear-gradient(
+      155deg,
+      color-mix(in srgb, var(--color-surface) 88%, white) 0%,
+      color-mix(in srgb, var(--color-surface) 96%, var(--color-background)) 100%
+    );
+    border: 1px solid color-mix(in srgb, var(--color-border) 55%, rgba(255, 255, 255, 0.1));
+    border-radius: var(--radius-lg) calc(var(--radius-lg) + 6px) var(--radius-lg) var(--radius-lg);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.07),
+      0 28px 56px rgba(0, 0, 0, 0.38),
+      0 0 0 1px rgba(0, 0, 0, 0.12),
+      0 0 90px rgb(from var(--color-primary) r g b / 0.09);
+    animation: cardFadeIn 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.2s ease;
+  }
+
+  .login-card::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 18%;
+    bottom: 18%;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: linear-gradient(180deg, var(--color-primary), var(--color-primary-dark));
+    opacity: 0.88;
+    z-index: 0;
+    box-shadow: 0 0 20px rgb(from var(--color-primary) r g b / 0.35);
+  }
+
+  .login-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgb(from var(--color-primary) r g b / 0.4) 20%,
+      rgb(from var(--color-primary-dark) r g b / 0.4) 50%,
+      rgb(from var(--color-primary) r g b / 0.4) 80%,
+      transparent 100%
+    );
+    opacity: 0.7;
+    animation: borderGlow 4s ease-in-out infinite;
+  }
+
+  @media (hover: hover) {
+    .login-card:hover {
+      transform: translateY(-4px);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.08),
+        0 32px 64px rgba(0, 0, 0, 0.4),
+        0 0 0 1px rgba(0, 0, 0, 0.08),
+        0 0 100px rgb(from var(--color-primary) r g b / 0.12);
+      border-color: color-mix(in srgb, var(--color-border) 70%, rgba(255, 255, 255, 0.1));
+    }
+  }
 }
 
 .login-card > .login-header,
@@ -178,43 +288,13 @@
   z-index: 1;
 }
 
-.login-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgb(from var(--color-primary) r g b / 0.4) 20%,
-    rgb(from var(--color-primary-dark) r g b / 0.4) 50%,
-    rgb(from var(--color-primary) r g b / 0.4) 80%,
-    transparent 100%
-  );
-  opacity: 0.7;
-  animation: borderGlow 4s ease-in-out infinite;
-}
-
 @keyframes borderGlow {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.5;
   }
   50% {
     opacity: 0.9;
-  }
-}
-
-@media (hover: hover) {
-  .login-card:hover {
-    transform: translateY(-4px);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.08),
-      0 32px 64px rgba(0, 0, 0, 0.4),
-      0 0 0 1px rgba(0, 0, 0, 0.08),
-      0 0 100px rgb(from var(--color-primary) r g b / 0.12);
-    border-color: color-mix(in srgb, var(--color-border) 70%, rgba(255, 255, 255, 0.1));
   }
 }
 

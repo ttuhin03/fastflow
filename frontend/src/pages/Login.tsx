@@ -193,7 +193,7 @@ export default function Login() {
       </div>
 
       <div className="login-content">
-        <div className="login-card card">
+        <div className="login-card">
           <div className="login-header">
             {providers.login_branding_logo_url ? (
               <div className="login-branding-logo-wrap">
