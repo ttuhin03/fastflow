@@ -2,6 +2,7 @@ import { useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { MdHourglassEmpty } from 'react-icons/md'
+import LoginAttributionFooter from '../components/LoginAttributionFooter'
 import './Login.css'
 import './RequestScreens.css'
 
@@ -67,12 +68,7 @@ export default function RequestSent() {
             </svg>
             <span>View on GitHub</span>
           </a>
-          <p className="login-footer-text">
-            Made with <span className="heart">❤️</span> by <strong>ttuhin03</strong>
-            <span style={{ marginLeft: '8px', opacity: 0.5, fontSize: '10px' }}>
-              v{__APP_VERSION__}
-            </span>
-          </p>
+          <LoginAttributionFooter />
         </div>
       </div>
     </div>

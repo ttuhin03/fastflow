@@ -243,8 +243,9 @@ export default function Pipelines() {
               <div className="pipeline-actions">
                 {!isReadonly && (
                   <button
+                    type="button"
                     onClick={() => handleStartPipeline(pipeline.name)}
-                    className="btn btn-success start-button"
+                    className="btn btn-success"
                     disabled={!pipeline.enabled || startingPipeline === pipeline.name}
                   >
                     <MdPlayArrow />
@@ -252,8 +253,9 @@ export default function Pipelines() {
                   </button>
                 )}
                 <button
+                  type="button"
                   onClick={() => navigate(`/pipelines/${pipeline.name}`)}
-                  className="btn btn-outlined details-button"
+                  className="btn btn-outlined"
                 >
                   <MdInfo />
                   {t('pipelines.details')}

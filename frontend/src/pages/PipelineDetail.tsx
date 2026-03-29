@@ -249,7 +249,7 @@ export default function PipelineDetail() {
     <div className="pipeline-detail">
       <div className="pipeline-detail-header">
         <h2>{pipeline.name}</h2>
-        <button onClick={() => navigate('/pipelines')} className="back-button">
+        <button type="button" onClick={() => navigate('/pipelines')} className="btn btn-ghost btn-sm">
           ← Zurück
         </button>
       </div>
@@ -406,9 +406,10 @@ export default function PipelineDetail() {
             {!isReadonly && (
               <Tooltip content={t('pipelineDetail.resetStatsTooltip')}>
                 <button
+                  type="button"
                   onClick={handleResetStats}
                   disabled={resetStatsMutation.isPending}
-                  className="reset-button"
+                  className="btn btn-warning btn-sm"
                 >
                   {resetStatsMutation.isPending ? t('pipelineDetail.resetting') : t('pipelineDetail.resetStats')}
                 </button>
@@ -482,8 +483,9 @@ export default function PipelineDetail() {
                     </code>
                     <Tooltip content={t('pipelineDetail.copyWebhookUrl')}>
                       <button
+                        type="button"
                         onClick={() => handleCopyWebhookUrl(pipeline!.metadata.webhook_key!)}
-                        className="copy-button"
+                        className="btn btn-secondary btn-sm webhook-url-copy"
                         title={t('pipelineDetail.copyUrl')}
                       >
                         📋
@@ -510,8 +512,9 @@ export default function PipelineDetail() {
                     </code>
                     <Tooltip content={t('pipelineDetail.copyWebhookUrl')}>
                       <button
+                        type="button"
                         onClick={() => handleCopyWebhookUrl(s.webhook_key)}
-                        className="copy-button"
+                        className="btn btn-secondary btn-sm webhook-url-copy"
                         title={t('pipelineDetail.copyUrl')}
                       >
                         📋
@@ -583,7 +586,7 @@ export default function PipelineDetail() {
                         {tr.source === 'api' && tr.id ? (
                           <button
                             type="button"
-                            className="delete-trigger-button"
+                            className="btn btn-error btn-sm"
                             onClick={() => deleteDownstreamTriggerMutation.mutate(tr.id!)}
                             disabled={deleteDownstreamTriggerMutation.isPending}
                           >
@@ -669,7 +672,7 @@ export default function PipelineDetail() {
               />
               <button
                 type="button"
-                className="add-trigger-button"
+                className="btn btn-success btn-sm"
                 onClick={handleAddDownstreamTrigger}
                 disabled={!newTriggerPipeline.trim() || createDownstreamTriggerMutation.isPending}
               >
@@ -735,8 +738,9 @@ export default function PipelineDetail() {
                   </td>
                   <td>
                     <button
+                      type="button"
                       onClick={() => navigate(`/runs/${run.id}`)}
-                      className="view-button"
+                      className="btn btn-outlined btn-sm"
                     >
                       {t('pipelineDetail.details')}
                     </button>
@@ -750,21 +754,24 @@ export default function PipelineDetail() {
 
       <div className="source-files-card">
         <h3>{t('pipelineDetail.sourceFiles')}</h3>
-        <div className="tabs">
+        <div className="tab-strip">
           <button
-            className={`tab ${activeTab === 'python' ? 'active' : ''}`}
+            type="button"
+            className={`tab-strip__tab${activeTab === 'python' ? ' active' : ''}`}
             onClick={() => setActiveTab('python')}
           >
             {t('pipelineDetail.tabPython')}
           </button>
           <button
-            className={`tab ${activeTab === 'requirements' ? 'active' : ''}`}
+            type="button"
+            className={`tab-strip__tab${activeTab === 'requirements' ? ' active' : ''}`}
             onClick={() => setActiveTab('requirements')}
           >
             {t('pipelineDetail.tabRequirements')}
           </button>
           <button
-            className={`tab ${activeTab === 'json' ? 'active' : ''}`}
+            type="button"
+            className={`tab-strip__tab${activeTab === 'json' ? ' active' : ''}`}
             onClick={() => setActiveTab('json')}
           >
             {t('pipelineDetail.tabJson')}

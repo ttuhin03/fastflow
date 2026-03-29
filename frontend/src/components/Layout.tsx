@@ -4,8 +4,8 @@ import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import { useAuth } from '../contexts/AuthContext'
+import { useUiPreferences } from '../contexts/UiPreferencesContext'
 import apiClient from '../api/client'
-import i18n from '../i18n'
 import {
   MdDashboard,
   MdAccountTree,
@@ -22,6 +22,7 @@ import NotificationCenter from './NotificationCenter'
 import Tooltip from './Tooltip'
 import VersionInfo from './VersionInfo'
 import HeaderTime from './HeaderTime'
+import HeaderLanguage from './HeaderLanguage'
 import SetupWizard from './SetupWizard'
 import './Layout.css'
 
@@ -34,6 +35,7 @@ interface NavItem {
 export default function Layout() {
   const { t } = useTranslation()
   const { logout, isAdmin } = useAuth()
+  const { showAttribution, showVersion } = useUiPreferences()
   const navigate = useNavigate()
   const location = useLocation()
   const navItems = useMemo<NavItem[]>(() => [
@@ -227,26 +229,6 @@ export default function Layout() {
           })}
         </nav>
 
-        <div className="sidebar-lang">
-          <button
-            type="button"
-            className={`lang-btn ${i18n.language?.startsWith('de') ? 'active' : ''}`}
-            onClick={() => i18n.changeLanguage('de')}
-            aria-label="Deutsch"
-          >
-            {t('language.de')}
-          </button>
-          <span className="lang-sep">|</span>
-          <button
-            type="button"
-            className={`lang-btn ${i18n.language?.startsWith('en') ? 'active' : ''}`}
-            onClick={() => i18n.changeLanguage('en')}
-            aria-label="English"
-          >
-            {t('language.en')}
-          </button>
-        </div>
-
         <div className="sidebar-footer">
           <div className={`backend-status ${backendStatus} ${healthPulse ? 'pulse' : ''}`} title={backendStatus === 'online' ? t('nav.backendOnline') : t('nav.backendOffline')}>
             <MdCircle className="status-dot-icon" />
@@ -282,12 +264,24 @@ export default function Layout() {
             <span>{t('nav.viewOnGitHub')}</span>
           </a>
 
-          <p className="sidebar-footer-text">
-            Made with <Tooltip content="Made with heart... and fueled by the healthy desire to never see a broken DAG again. Life is too short for over-engineering."><span className="heart">❤️</span></Tooltip> by <strong>ttuhin03</strong>
-            <span style={{ marginLeft: '8px', opacity: 0.5, fontSize: '10px' }}>
-              <VersionInfo variant="footer" />
-            </span>
-          </p>
+          {(showAttribution || showVersion) && (
+            <p className="sidebar-footer-text">
+              {showAttribution && (
+                <>
+                  Made with{' '}
+                  <Tooltip content="Made with heart... and fueled by the healthy desire to never see a broken DAG again. Life is too short for over-engineering.">
+                    <span className="heart">❤️</span>
+                  </Tooltip>{' '}
+                  by <strong>ttuhin03</strong>
+                </>
+              )}
+              {showVersion && (
+                <span style={{ marginLeft: showAttribution ? '8px' : 0, opacity: 0.5, fontSize: '10px' }}>
+                  <VersionInfo variant="footer" />
+                </span>
+              )}
+            </p>
+          )}
           <button onClick={handleLogout} className="logout-btn">
             <MdLogout />
             <span>{t('nav.logout')}</span>
@@ -302,9 +296,10 @@ export default function Layout() {
               {navItems.find(item => isActive(item.path)) ? t(navItems.find(item => isActive(item.path))!.labelKey) : t('nav.dashboard')}
             </h2>
             <div className="header-center">
-              <VersionInfo variant="banner" />
+              {showVersion ? <VersionInfo variant="banner" /> : null}
             </div>
             <div className="header-actions">
+              <HeaderLanguage />
               <HeaderTime />
               <NotificationCenter />
             </div>

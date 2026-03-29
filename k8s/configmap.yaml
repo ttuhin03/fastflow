@@ -94,6 +94,8 @@ data:
   # CUSTOM_OAUTH_CLAIM_EMAIL: "email"
   # CUSTOM_OAUTH_CLAIM_NAME: "name"
   # CUSTOM_OAUTH_NAME: "Custom"
+  # CUSTOM_OAUTH_ICON_URL: "https://..."
+  # LOGIN_BRANDING_LOGO_URL: "https://..."
 
   # E-Mail-Benachrichtigungen (nicht-sensible Teile)
   # EMAIL_ENABLED: "false"

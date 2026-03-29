@@ -174,8 +174,9 @@ export default function Secrets() {
                       )}
                       <Tooltip content={t('secrets.showHideTooltip')}>
                         <button
+                          type="button"
                           onClick={() => toggleShowValue(secret.key)}
-                          className="toggle-button"
+                          className="btn btn-ghost btn-sm"
                         >
                           {showValues[secret.key] ? t('secrets.hide') : t('secrets.show')}
                         </button>

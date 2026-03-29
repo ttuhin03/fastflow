@@ -9,7 +9,8 @@ Dieses Modul enthält alle REST-API-Endpoints für Authentication:
 import logging
 import secrets
 import time
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
@@ -134,13 +135,43 @@ def _providers_configured() -> dict[str, bool]:
     }
 
 
+def _safe_public_url(url: Optional[str]) -> Optional[str]:
+    """Nur http(s) mit Host, für sichere Nutzung als Bild-URL im Frontend."""
+    if not url or not isinstance(url, str):
+        return None
+    u = url.strip()
+    if not u:
+        return None
+    parsed = urlparse(u)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return None
+    return u
+
+
+def _auth_providers_public() -> dict[str, Any]:
+    """Provider-Flags plus optionales Login-Branding (öffentlicher Endpoint)."""
+    flags = _providers_configured()
+    out: dict[str, Any] = {**flags}
+    logo = _safe_public_url(getattr(config, "LOGIN_BRANDING_LOGO_URL", None))
+    if logo:
+        out["login_branding_logo_url"] = logo
+    if flags["custom"]:
+        name = (config.CUSTOM_OAUTH_NAME or "Custom").strip() or "Custom"
+        out["custom_display_name"] = name
+        icon = _safe_public_url(getattr(config, "CUSTOM_OAUTH_ICON_URL", None))
+        if icon:
+            out["custom_oauth_icon_url"] = icon
+    return out
+
+
 @router.get("/providers", response_model=dict)
-async def get_auth_providers() -> dict[str, bool]:
+async def get_auth_providers() -> dict[str, Any]:
     """
     Gibt zurück, welche OAuth-Provider konfiguriert sind.
     Öffentlich (kein Login), damit die Login-Seite Buttons ein-/ausblenden kann.
+    Optional: login_branding_logo_url, custom_display_name, custom_oauth_icon_url.
     """
-    return _providers_configured()
+    return _auth_providers_public()
 
 
 @router.get("/github/authorize")
@@ -507,7 +538,8 @@ async def link_custom(
     s = generate_oauth_state()
     store_oauth_state(s, {"purpose": "link_custom", "user_id": str(current_user.id)})
     url = get_custom_oauth_authorize_url(s)
-    if config.CUSTOM_OAUTH_AUTHORIZE_URL and not url.startswith(config.CUSTOM_OAUTH_AUTHORIZE_URL.split("?")[0]):
+    allowed_base = (config.CUSTOM_OAUTH_AUTHORIZE_URL or "").split("?")[0].strip()
+    if not allowed_base or not url.startswith(allowed_base):
         raise HTTPException(status_code=400, detail="Invalid redirect target")
     logger.info("OAuth: Link-Flow gestartet provider=custom user=%s", current_user.username)
     return RedirectResponse(url=url, status_code=302)

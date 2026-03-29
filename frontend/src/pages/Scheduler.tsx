@@ -161,8 +161,9 @@ export default function Scheduler() {
                     <div className="action-buttons">
                       <Tooltip content="Zeige letzte 10 Runs dieses Jobs">
                         <button
+                          type="button"
                           onClick={() => setExpandedJob(expandedJob === job.id ? null : job.id)}
-                          className="details-button"
+                          className="btn btn-ghost btn-sm"
                         >
                           {expandedJob === job.id ? 'Details ▲' : 'Details ▼'}
                         </button>
@@ -173,8 +174,9 @@ export default function Scheduler() {
                             ? "pipeline.json auf GitHub bearbeiten (Schedules dort anlegen/entfernen)"
                             : "GitHub-Repository nicht konfiguriert"}>
                             <button
+                              type="button"
                               onClick={() => handleEdit(job)}
-                              className="edit-button"
+                              className="btn btn-outlined btn-sm"
                               disabled={!job.pipeline_json_edit_url}
                             >
                               {t('scheduler.edit')}

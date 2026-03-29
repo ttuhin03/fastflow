@@ -20,6 +20,7 @@ const Settings = lazy(() => import('./pages/Settings'))
 const Audit = lazy(() => import('./pages/Audit'))
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { NotificationProvider } from './contexts/NotificationContext'
+import { UiPreferencesProvider } from './contexts/UiPreferencesContext'
 import { useRunNotifications } from './hooks/useRunNotifications'
 import { useBackupFailurePolling } from './hooks/useBackupFailurePolling'
 import './App.css'
@@ -104,6 +105,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <NotificationProvider>
+          <UiPreferencesProvider>
           <BrowserRouter>
             <AppRoutes />
             <Toaster
@@ -132,6 +134,7 @@ function App() {
             }}
           />
           </BrowserRouter>
+          </UiPreferencesProvider>
         </NotificationProvider>
       </AuthProvider>
     </QueryClientProvider>

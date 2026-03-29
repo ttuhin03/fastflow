@@ -15,39 +15,6 @@
   gap: 0.5rem;
 }
 
-.cancel-button,
-.retry-button {
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-size: 0.9rem;
-}
-
-.cancel-button {
-  background-color: #ef4444;
-  color: white;
-}
-
-.cancel-button:hover:not(:disabled) {
-  background-color: #da190b;
-}
-
-.retry-button {
-  background-color: #22c55e;
-  color: white;
-}
-
-.retry-button:hover:not(:disabled) {
-  background-color: #45a049;
-}
-
-.cancel-button:disabled,
-.retry-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
 /* Error Type Badges */
 .error-type-badge {
   display: inline-block;
@@ -209,47 +176,6 @@
   color: white;
 }
 
-.tabs {
-  position: relative;
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-  border-bottom: 2px solid #444;
-}
-
-.tabs-indicator {
-  position: absolute;
-  bottom: -2px;
-  height: 2px;
-  background-color: #646cff;
-  pointer-events: none;
-  z-index: 0;
-  transition: left 0.25s ease-out, width 0.25s ease-out;
-}
-
-.tabs button {
-  position: relative;
-  z-index: 1;
-  padding: 0.75rem 1.5rem;
-  background: none;
-  border: none;
-  color: #888;
-  cursor: pointer;
-  font-size: 1rem;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -2px;
-  transition: all 0.2s;
-}
-
-.tabs button:hover {
-  color: white;
-}
-
-.tabs button.active {
-  color: #646cff;
-  border-bottom-color: transparent;
-}
-
 .logs-container,
 .metrics-container {
   background-color: #2a2a2a;
@@ -288,25 +214,9 @@
   cursor: pointer;
 }
 
-.download-button {
-  padding: 0.5rem 1rem;
-  background-color: #646cff;
-  color: white;
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-size: 0.9rem;
-  text-decoration: none;
-  display: inline-block;
-}
-
-.download-button:hover {
-  background-color: #535bf2;
-}
-
-.download-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.logs-controls .btn.btn-sm,
+.metrics-controls .btn.btn-sm {
+  flex-shrink: 0;
 }
 
 .logs-viewer {

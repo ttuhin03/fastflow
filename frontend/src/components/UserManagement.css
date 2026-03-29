@@ -166,35 +166,6 @@
   gap: 8px;
 }
 
-.btn-icon {
-  background: none;
-  border: 1px solid #ddd;
-  padding: 6px 8px;
-  border-radius: 4px;
-  cursor: pointer;
-  color: #666;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-  font-size: 18px;
-}
-
-.btn-icon:hover {
-  background: #f0f0f0;
-  border-color: #999;
-}
-
-.btn-icon.btn-danger {
-  color: #dc3545;
-  border-color: #dc3545;
-}
-
-.btn-icon.btn-danger:hover {
-  background: #dc3545;
-  color: white;
-}
-
 .badge {
   display: inline-block;
   padding: 4px 8px;

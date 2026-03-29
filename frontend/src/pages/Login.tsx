@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { MdCode } from 'react-icons/md'
 import Tooltip from '../components/Tooltip'
+import LoginAttributionFooter from '../components/LoginAttributionFooter'
 import apiClient from '../api/client'
 import { getApiOrigin } from '../config'
 import './Login.css'
@@ -12,6 +13,9 @@ interface AuthProviders {
   google?: boolean
   microsoft?: boolean
   custom?: boolean
+  login_branding_logo_url?: string
+  custom_oauth_icon_url?: string
+  custom_display_name?: string
 }
 
 export default function Login() {
@@ -81,6 +85,17 @@ export default function Login() {
       <div className="login-content">
         <div className="login-card card">
           <div className="login-header">
+            {providers.login_branding_logo_url ? (
+              <div className="login-branding-logo-wrap">
+                <img
+                  src={providers.login_branding_logo_url}
+                  alt=""
+                  className="login-branding-logo"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </div>
+            ) : null}
             <div className="login-icon">
               <MdCode />
             </div>
@@ -144,9 +159,28 @@ export default function Login() {
                 onClick={handleCustomLogin}
                 disabled={providers.custom === false}
                 className={`login-btn login-btn-custom${providers.custom === false ? ' login-btn-unconfigured' : ''}`}
-                aria-label={providers.custom ? t('auth.signInCustom') : t('auth.customNotConfigured')}
+                aria-label={
+                  providers.custom
+                    ? t('auth.signInNamedProvider', {
+                        name: providers.custom_display_name || t('auth.customProviderFallback'),
+                      })
+                    : t('auth.customNotConfigured')
+                }
               >
-                {t('auth.signInCustom')}
+                {providers.custom_oauth_icon_url ? (
+                  <img
+                    src={providers.custom_oauth_icon_url}
+                    alt=""
+                    className="login-btn-custom-icon"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                ) : null}
+                {providers.custom
+                  ? t('auth.signInNamedProvider', {
+                      name: providers.custom_display_name || t('auth.customProviderFallback'),
+                    })
+                  : t('auth.signInCustom')}
               </button>
             )}
           </div>
@@ -165,12 +199,7 @@ export default function Login() {
             </svg>
             <span>{t('auth.viewOnGitHub')}</span>
           </a>
-          <p className="login-footer-text">
-            Made with <span className="heart">❤️</span> by <strong>ttuhin03</strong>
-            <span style={{ marginLeft: '8px', opacity: 0.5, fontSize: '10px' }}>
-              v{__APP_VERSION__}
-            </span>
-          </p>
+          <LoginAttributionFooter />
         </div>
       </div>
     </div>

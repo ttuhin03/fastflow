@@ -352,27 +352,31 @@ export default function Sync() {
     <div className="sync">
       <h2>Git Sync</h2>
 
-      <div className="sync-tabs">
+      <div className="tab-strip sync-page-tabs">
         <button
-          className={activeTab === 'status' ? 'active' : ''}
+          type="button"
+          className={`tab-strip__tab${activeTab === 'status' ? ' active' : ''}`}
           onClick={() => setActiveTab('status')}
         >
           {t('sync.status')}
         </button>
         <button
-          className={activeTab === 'settings' ? 'active' : ''}
+          type="button"
+          className={`tab-strip__tab${activeTab === 'settings' ? ' active' : ''}`}
           onClick={() => setActiveTab('settings')}
         >
           {t('sync.settings')}
         </button>
         <button
-          className={activeTab === 'logs' ? 'active' : ''}
+          type="button"
+          className={`tab-strip__tab${activeTab === 'logs' ? ' active' : ''}`}
           onClick={() => setActiveTab('logs')}
         >
           {t('sync.logs')}
         </button>
         <button
-          className={activeTab === 'repository' ? 'active' : ''}
+          type="button"
+          className={`tab-strip__tab${activeTab === 'repository' ? ' active' : ''}`}
           onClick={() => setActiveTab('repository')}
         >
           {t('sync.repository')}
@@ -444,9 +448,10 @@ export default function Sync() {
           </div>
           {!isReadonly && (
             <button
+              type="button"
               onClick={handleSync}
               disabled={syncMutation.isPending}
-              className="sync-button"
+              className="btn btn-primary sync-form-submit"
             >
               {syncMutation.isPending ? t('dashboard.syncRunning') : t('sync.runSync')}
             </button>
@@ -515,9 +520,10 @@ export default function Sync() {
               {!isReadonly && (
                 <div className="form-actions">
                   <button
+                    type="button"
                     onClick={handleSaveSettings}
                     disabled={updateSettingsMutation.isPending}
-                    className="save-button"
+                    className="btn btn-primary"
                   >
                     {updateSettingsMutation.isPending ? t('common.saving') : t('sync.saveSettings')}
                   </button>
@@ -662,7 +668,7 @@ export default function Sync() {
                         )}
                         <button
                           type="button"
-                          className="manual-key-toggle"
+                          className="btn btn-ghost btn-sm manual-key-toggle"
                           onClick={() => setShowManualDeployKey((v) => !v)}
                         >
                           {showManualDeployKey ? '− Manuellen Key ausblenden' : '+ Eigenen privaten Key manuell eintragen'}
@@ -736,9 +742,10 @@ export default function Sync() {
                     </Tooltip>
                     {repoConfig?.configured && (
                       <button
+                        type="button"
                         onClick={handleDeleteRepoConfig}
                         disabled={deleteRepoConfigMutation.isPending}
-                        className="btn btn-outlined delete-button"
+                        className="btn btn-error btn-sm"
                       >
                         {deleteRepoConfigMutation.isPending ? 'Löscht...' : 'Löschen'}
                       </button>

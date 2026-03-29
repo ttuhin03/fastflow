@@ -29,12 +29,15 @@
     "offline": "Offline",
     "docs": "Docs",
     "viewOnGitHub": "View on GitHub",
-    "logout": "Log out"
+    "logout": "Log out",
+    "languageSwitcher": "Language"
   },
   "appTitle": "Fast-Flow",
   "language": {
     "de": "DE",
-    "en": "EN"
+    "en": "EN",
+    "nativeDe": "Deutsch",
+    "nativeEn": "English"
   },
   "dashboard": {
     "gitSync": "Git Sync",
@@ -58,6 +61,8 @@
     "signInGoogle": "Sign in with Google",
     "signInMicrosoft": "Sign in with Microsoft",
     "signInCustom": "Sign in with Custom",
+    "signInNamedProvider": "Sign in with {{name}}",
+    "customProviderFallback": "Custom",
     "githubNotConfigured": "GitHub not configured",
     "googleNotConfigured": "Google not configured",
     "microsoftNotConfigured": "Microsoft not configured",
@@ -100,6 +105,12 @@
   },
   "settings": {
     "title": "Settings",
+    "uiDisplayTitle": "Display",
+    "uiDisplayHint": "These options are stored in this browser only.",
+    "showAttribution": "Show “Made with ❤️ …” credit",
+    "showAttributionHint": "Applies to the login page, info screens, and the sidebar.",
+    "showVersion": "Show version number",
+    "showVersionHint": "Applies to the login page, info screens, sidebar, and the header update banner.",
     "saving": "Save settings",
     "saved": "Settings updated (restart required)",
     "savedMessage": "Settings updated",
@@ -469,6 +480,14 @@
     "showDual": "Dual: show both time zones",
     "showStandard": "Default: one time zone with toggle",
     "switchDisplay": "Switch display"
+  },
+  "headerLanguage": {
+    "toggle": "Switch language",
+    "showDual": "Dual: show both languages",
+    "showStandard": "Default: one language with toggle",
+    "switchDisplay": "Switch display",
+    "selectDe": "Select German",
+    "selectEn": "Select English"
   },
   "versionInfo": {},
   "audit": {

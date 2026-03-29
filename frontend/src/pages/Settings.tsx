@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
+import { useUiPreferences } from '../contexts/UiPreferencesContext'
 import apiClient from '../api/client'
 import { MdSave, MdRefresh, MdInfo, MdWarning, MdEmail, MdGroup, MdLink, MdCheck, MdPerson, MdSync, MdStorage, MdPlayCircle, MdNotifications, MdPeople, MdKey, MdContentCopy, MdDelete } from 'react-icons/md'
 import { showError, showSuccess } from '../utils/toast'
@@ -16,12 +17,34 @@ import Sync from './Sync'
 import Users from './Users'
 import './Settings.css'
 
+/**
+ * Account-Linking triggert eine volle Browser-Navigation; der Browser sendet keinen Authorization-Header.
+ * Das Backend akzeptiert JWT per Query-Parameter (wie bei SSE), siehe get_current_user.
+ */
+function accountOAuthLinkUrl(path: '/link/github' | '/link/google' | '/link/microsoft' | '/link/custom'): string {
+  const base = `${getApiOrigin()}/api/auth${path}`
+  if (typeof window === 'undefined') return base
+  const token = sessionStorage.getItem('auth_token')
+  if (!token) return base
+  return `${base}?token=${encodeURIComponent(token)}`
+}
+
 export type SettingsSection = 'account' | 'system' | 'pipeline' | 'notifications' | 'git-sync' | 'nutzer'
 
 interface NotificationApiKeyItem {
   id: number
   label: string | null
   created_at: string
+}
+
+interface AuthProviders {
+  github?: boolean
+  google?: boolean
+  microsoft?: boolean
+  custom?: boolean
+  login_branding_logo_url?: string
+  custom_oauth_icon_url?: string
+  custom_display_name?: string
 }
 
 interface Settings {
@@ -50,6 +73,12 @@ export default function Settings() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { isReadonly, isAdmin } = useAuth()
+  const {
+    showAttribution,
+    showVersion,
+    setShowAttribution,
+    setShowVersion,
+  } = useUiPreferences()
   const [localSettings, setLocalSettings] = useState<Settings | null>(null)
   const [showCleanupInfo, setShowCleanupInfo] = useState(false)
   const [localDependencyAuditCron, setLocalDependencyAuditCron] = useState<string | null>(null)
@@ -113,6 +142,20 @@ export default function Settings() {
         avatar_url?: string
       }
     },
+  })
+
+  const { data: authProviders = {}, isLoading: authProvidersLoading } = useQuery<AuthProviders>({
+    queryKey: ['auth/providers'],
+    queryFn: async () => {
+      try {
+        const r = await apiClient.get('/auth/providers')
+        return r.data
+      } catch {
+        return {}
+      }
+    },
+    staleTime: 60_000,
+    enabled: section === 'account',
   })
 
   useEffect(() => {
@@ -488,65 +531,114 @@ export default function Settings() {
             </div>
 
             <div className="settings-section card">
+              <h3 className="section-title">{t('settings.uiDisplayTitle')}</h3>
+              <p className="setting-hint setting-hint--flush">{t('settings.uiDisplayHint')}</p>
+              <div className="settings-telemetry-toggles">
+                <label className="settings-telemetry-toggle">
+                  <input
+                    type="checkbox"
+                    checked={showAttribution}
+                    onChange={(e) => setShowAttribution(e.target.checked)}
+                  />
+                  {t('settings.showAttribution')}
+                </label>
+                <p className="setting-hint settings-ui-pref-hint">{t('settings.showAttributionHint')}</p>
+                <label className="settings-telemetry-toggle">
+                  <input
+                    type="checkbox"
+                    checked={showVersion}
+                    onChange={(e) => setShowVersion(e.target.checked)}
+                  />
+                  {t('settings.showVersion')}
+                </label>
+                <p className="setting-hint settings-ui-pref-hint">{t('settings.showVersionHint')}</p>
+              </div>
+            </div>
+
+            <div className="settings-section card">
               <h3 className="section-title">{t('settings.linkedAccounts')}</h3>
-        <p className="setting-hint" style={{ marginBottom: '1rem' }}>
+        <p className="setting-hint settings-linked-accounts-hint">
           {t('settings.linkAccountsHint')}
         </p>
-        <div className="accounts-list" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          <div className="account-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid var(--color-border)' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div className="settings-accounts-list">
+          <div className="settings-account-row">
+            <span className="settings-account-row__label">
               <strong>GitHub</strong>
-              {me?.has_github ? <MdCheck style={{ color: 'var(--color-success)' }} aria-label={t('settings.linked')} /> : null}
+              {me?.has_github ? <MdCheck className="icon-success" aria-label={t('settings.linked')} /> : null}
             </span>
             {me?.has_github ? (
-              <span style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>{t('settings.linked')}</span>
-            ) : (
-              <a href={`${getApiOrigin()}/api/auth/link/github`} className="btn btn-outlined" style={{ fontSize: '0.875rem', padding: '0.25rem 0.5rem' }}>
-                <MdLink style={{ marginRight: '0.25rem' }} />
+              <span className="settings-linked-badge">{t('settings.linked')}</span>
+            ) : authProvidersLoading ? (
+              <span className="settings-provider-status">{t('common.loading')}</span>
+            ) : authProviders.github ? (
+              <a href={accountOAuthLinkUrl('/link/github')} className="btn btn-outlined btn-sm">
+                <MdLink />
                 {t('settings.connectNow')}
               </a>
+            ) : (
+              <span className="settings-provider-status" title={t('auth.githubNotConfigured')}>
+                {t('auth.githubNotConfigured')}
+              </span>
             )}
           </div>
-          <div className="account-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div className="settings-account-row">
+            <span className="settings-account-row__label">
               <strong>Google</strong>
-              {me?.has_google ? <MdCheck style={{ color: 'var(--color-success)' }} aria-label={t('settings.linked')} /> : null}
+              {me?.has_google ? <MdCheck className="icon-success" aria-label={t('settings.linked')} /> : null}
             </span>
             {me?.has_google ? (
-              <span style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>{t('settings.linked')}</span>
-            ) : (
-              <a href={`${getApiOrigin()}/api/auth/link/google`} className="btn btn-outlined" style={{ fontSize: '0.875rem', padding: '0.25rem 0.5rem' }}>
-                <MdLink style={{ marginRight: '0.25rem' }} />
+              <span className="settings-linked-badge">{t('settings.linked')}</span>
+            ) : authProvidersLoading ? (
+              <span className="settings-provider-status">{t('common.loading')}</span>
+            ) : authProviders.google ? (
+              <a href={accountOAuthLinkUrl('/link/google')} className="btn btn-outlined btn-sm">
+                <MdLink />
                 {t('settings.connectNow')}
               </a>
+            ) : (
+              <span className="settings-provider-status" title={t('auth.googleNotConfigured')}>
+                {t('auth.googleNotConfigured')}
+              </span>
             )}
           </div>
-          <div className="account-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div className="settings-account-row">
+            <span className="settings-account-row__label">
               <strong>Microsoft</strong>
-              {me?.has_microsoft ? <MdCheck style={{ color: 'var(--color-success)' }} aria-label={t('settings.linked')} /> : null}
+              {me?.has_microsoft ? <MdCheck className="icon-success" aria-label={t('settings.linked')} /> : null}
             </span>
             {me?.has_microsoft ? (
-              <span style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>{t('settings.linked')}</span>
-            ) : (
-              <a href={`${getApiOrigin()}/api/auth/link/microsoft`} className="btn btn-outlined" style={{ fontSize: '0.875rem', padding: '0.25rem 0.5rem' }}>
-                <MdLink style={{ marginRight: '0.25rem' }} />
+              <span className="settings-linked-badge">{t('settings.linked')}</span>
+            ) : authProvidersLoading ? (
+              <span className="settings-provider-status">{t('common.loading')}</span>
+            ) : authProviders.microsoft ? (
+              <a href={accountOAuthLinkUrl('/link/microsoft')} className="btn btn-outlined btn-sm">
+                <MdLink />
                 {t('settings.connectNow')}
               </a>
+            ) : (
+              <span className="settings-provider-status" title={t('auth.microsoftNotConfigured')}>
+                {t('auth.microsoftNotConfigured')}
+              </span>
             )}
           </div>
-          <div className="account-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div className="settings-account-row">
+            <span className="settings-account-row__label">
               <strong>Custom</strong>
-              {me?.has_custom ? <MdCheck style={{ color: 'var(--color-success)' }} aria-label={t('settings.linked')} /> : null}
+              {me?.has_custom ? <MdCheck className="icon-success" aria-label={t('settings.linked')} /> : null}
             </span>
             {me?.has_custom ? (
-              <span style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>{t('settings.linked')}</span>
-            ) : (
-              <a href={`${getApiOrigin()}/api/auth/link/custom`} className="btn btn-outlined" style={{ fontSize: '0.875rem', padding: '0.25rem 0.5rem' }}>
-                <MdLink style={{ marginRight: '0.25rem' }} />
+              <span className="settings-linked-badge">{t('settings.linked')}</span>
+            ) : authProvidersLoading ? (
+              <span className="settings-provider-status">{t('common.loading')}</span>
+            ) : authProviders.custom ? (
+              <a href={accountOAuthLinkUrl('/link/custom')} className="btn btn-outlined btn-sm">
+                <MdLink />
                 {t('settings.connectNow')}
               </a>
+            ) : (
+              <span className="settings-provider-status" title={t('auth.customNotConfigured')}>
+                {t('auth.customNotConfigured')}
+              </span>
             )}
           </div>
         </div>
@@ -558,7 +650,7 @@ export default function Settings() {
           <div className="settings">
       <div className="settings-section card executor-info-card">
         <h3 className="section-title">{t('settings.executor')}</h3>
-        <p className="setting-hint" style={{ marginBottom: 0 }}>
+        <p className="setting-hint setting-hint--flush">
           {health?.pipeline_executor === 'kubernetes' ? (
             <>{t('settings.executorK8s')}</>
           ) : (
@@ -617,7 +709,7 @@ export default function Settings() {
               {t('settings.dependencyAuditToggle')}
             </label>
           </div>
-          <div className="setting-item" style={{ marginTop: '0.75rem' }}>
+          <div className="setting-item setting-item--offset-top">
             <label htmlFor="dependency_audit_cron" className="setting-label">
               {t('settings.cronLabel')}
               <span className="setting-hint">{t('settings.cronHint')}</span>
@@ -626,7 +718,7 @@ export default function Settings() {
             <input
               id="dependency_audit_cron"
               type="text"
-              className="form-input"
+              className="form-input form-input--cron"
               value={systemSettings?.dependency_audit_cron ?? '0 3 * * *'}
               onChange={(e) => setLocalDependencyAuditCron(e.target.value)}
               onBlur={() => {
@@ -642,7 +734,6 @@ export default function Settings() {
               }}
               placeholder="0 3 * * *"
               disabled={updateSystemSettingsMutation.isPending || isReadonly}
-              style={{ maxWidth: '12rem', fontFamily: 'monospace' }}
             />
           </div>
           <p className="settings-telemetry-note">
@@ -661,12 +752,12 @@ export default function Settings() {
       </div>
 
       {health?.environment === 'development' && (
-        <div className="settings-section card" style={{ marginTop: '1rem' }}>
+        <div className="settings-section card settings-section--dev">
           <h3 className="section-title">{t('settings.development')}</h3>
-          <p className="setting-hint" style={{ marginBottom: '0.75rem' }}>
+          <p className="setting-hint setting-hint--dev-intro">
             {t('settings.devHint')}
           </p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <div className="settings-dev-actions">
             <button
               type="button"
               onClick={handleTestFrontendException}
@@ -1057,7 +1148,7 @@ export default function Settings() {
               <MdKey />
               {t('settings.notificationApiTitle')}
             </h3>
-            <p className="setting-hint" style={{ marginBottom: '1rem' }}>{t('settings.notificationApiHint')}</p>
+            <p className="setting-hint setting-hint--spaced">{t('settings.notificationApiHint')}</p>
             <div className="settings-grid">
               <div className="setting-item">
                 <label className="setting-label checkbox-label">
@@ -1088,11 +1179,11 @@ export default function Settings() {
               </div>
               <div className="setting-item full-width">
                 <label className="setting-label">{t('settings.notificationApiKeys')}</label>
-                <div className="settings-grid" style={{ marginTop: 8 }}>
+                <div className="settings-grid settings-api-keys-nested">
                   {(currentSettings.notification_api_keys ?? []).length === 0 ? (
                     <p className="setting-hint">{t('settings.notificationApiKeysEmpty')}</p>
                   ) : (
-                    <table className="settings-table" style={{ width: '100%' }}>
+                    <table className="settings-table settings-table--full">
                       <thead>
                         <tr>
                           <th>{t('settings.notificationApiKeyLabel')}</th>
@@ -1124,15 +1215,14 @@ export default function Settings() {
                     </table>
                   )}
                   {!isReadonly && (
-                    <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-                      <label htmlFor="new-key-label" className="setting-label" style={{ marginRight: 4 }}>
+                    <div className="settings-new-key-row">
+                      <label htmlFor="new-key-label" className="setting-label">
                         {t('settings.notificationApiKeyLabel')} (optional)
                       </label>
                       <input
                         id="new-key-label"
                         type="text"
-                        className="form-input"
-                        style={{ maxWidth: 240 }}
+                        className="form-input form-input--key-label"
                         value={newKeyLabel}
                         onChange={(e) => setNewKeyLabel(e.target.value)}
                         placeholder={t('settings.notificationApiKeyLabelPlaceholder')}
@@ -1149,10 +1239,10 @@ export default function Settings() {
                   )}
                 </div>
                 {generatedKey && (
-                  <div className="card" style={{ marginTop: 12, padding: 16, background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
-                    <p className="setting-hint" style={{ marginBottom: 8 }}>{t('settings.keyGeneratedOnce')}</p>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                      <code style={{ flex: 1, minWidth: 200, wordBreak: 'break-all' }}>{generatedKey.key}</code>
+                  <div className="settings-generated-key-card">
+                    <p className="setting-hint">{t('settings.keyGeneratedOnce')}</p>
+                    <div className="settings-generated-key-row">
+                      <code className="settings-generated-key-code">{generatedKey.key}</code>
                       <button
                         type="button"
                         className="btn btn-secondary btn-sm"
@@ -1161,7 +1251,7 @@ export default function Settings() {
                         <MdContentCopy /> {t('settings.copy')}
                       </button>
                     </div>
-                    <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: 12 }} onClick={() => setGeneratedKey(null)}>
+                    <button type="button" className="btn btn-secondary btn-sm settings-dismiss-generated" onClick={() => setGeneratedKey(null)}>
                       {t('settings.close')}
                     </button>
                   </div>

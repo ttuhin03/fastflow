@@ -493,7 +493,7 @@ export default function RunDetail() {
             <button
               onClick={() => cancelMutation.mutate()}
               disabled={cancelMutation.isPending}
-              className="cancel-button"
+              className="btn btn-error"
             >
               {cancelMutation.isPending ? t('runs.cancelling') : t('runs.cancel')}
             </button>
@@ -502,7 +502,7 @@ export default function RunDetail() {
             <button
               onClick={() => retryMutation.mutate()}
               disabled={retryMutation.isPending}
-              className="retry-button"
+              className="btn btn-primary"
             >
               {retryMutation.isPending ? t('common.saving') : t('runDetail.retry')}
             </button>
@@ -624,36 +624,40 @@ export default function RunDetail() {
         )}
       </div>
 
-      <div ref={tabsRef} className="tabs">
+      <div ref={tabsRef} className="tab-strip tab-strip--indicator">
         <div
-          className="tabs-indicator"
+          className="tab-strip__indicator"
           style={{ left: tabIndicator.left, width: tabIndicator.width }}
           aria-hidden
         />
         <button
+          type="button"
           data-tab="info"
-          className={activeTab === 'info' ? 'active' : ''}
+          className={`tab-strip__tab${activeTab === 'info' ? ' active' : ''}`}
           onClick={() => setActiveTab('info')}
         >
           {t('runDetail.info')}
         </button>
         <button
+          type="button"
           data-tab="env"
-          className={activeTab === 'env' ? 'active' : ''}
+          className={`tab-strip__tab${activeTab === 'env' ? ' active' : ''}`}
           onClick={() => setActiveTab('env')}
         >
           {t('runDetail.env')}
         </button>
         <button
+          type="button"
           data-tab="logs"
-          className={activeTab === 'logs' ? 'active' : ''}
+          className={`tab-strip__tab${activeTab === 'logs' ? ' active' : ''}`}
           onClick={() => setActiveTab('logs')}
         >
           {t('runDetail.logs')} {logs.length > 0 && `(${logs.length})`}
         </button>
         <button
+          type="button"
           data-tab="metrics"
-          className={activeTab === 'metrics' ? 'active' : ''}
+          className={`tab-strip__tab${activeTab === 'metrics' ? ' active' : ''}`}
           onClick={() => setActiveTab('metrics')}
         >
           {t('runDetail.metrics')} {metrics.length > 0 && `(${metrics.length})`}
@@ -691,13 +695,13 @@ export default function RunDetail() {
                 download={`run-${runId}-logs.txt`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="download-button"
+                className="btn btn-secondary btn-sm"
               >
                 Download Logs
               </a>
             ) : (
               <button
-                className="download-button"
+                className="btn btn-secondary btn-sm"
                 disabled={!logsDownloadUrlError}
                 title={logsDownloadUrlError ? 'Erneut versuchen' : 'Lade Download-URL…'}
                 onClick={() => logsDownloadUrlError && queryClient.invalidateQueries({ queryKey: ['logs-download-url', runId] })}
@@ -808,7 +812,7 @@ export default function RunDetail() {
                  '✗ Getrennt'}
               </span>
             )}
-            <button onClick={handleDownloadMetrics} className="download-button">
+            <button type="button" onClick={handleDownloadMetrics} className="btn btn-secondary btn-sm">
               Download Metrics
             </button>
           </div>

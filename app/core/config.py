@@ -445,6 +445,11 @@ class Config:
     CUSTOM_OAUTH_CLAIM_EMAIL: str = os.getenv("CUSTOM_OAUTH_CLAIM_EMAIL", "email")
     CUSTOM_OAUTH_CLAIM_NAME: str = os.getenv("CUSTOM_OAUTH_CLAIM_NAME", "name")
     CUSTOM_OAUTH_NAME: str = os.getenv("CUSTOM_OAUTH_NAME", "Custom")
+    """Anzeigename für den Custom-OAuth-Button (Login / Settings)."""
+    CUSTOM_OAUTH_ICON_URL: Optional[str] = os.getenv("CUSTOM_OAUTH_ICON_URL")
+    """Optional: Absolute http(s)-URL zu einem Icon für den Custom-OAuth-Login-Button (PNG/SVG)."""
+    LOGIN_BRANDING_LOGO_URL: Optional[str] = os.getenv("LOGIN_BRANDING_LOGO_URL")
+    """Optional: Absolute http(s)-URL zu einem Mandanten-Logo über dem Fastflow-Branding auf der Login-Seite."""
 
     # Authentication-Konfiguration (Login via GitHub OAuth, Google OAuth)
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "change-me-in-production")

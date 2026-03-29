@@ -29,12 +29,15 @@
     "offline": "Offline",
     "docs": "Doku",
     "viewOnGitHub": "View on GitHub",
-    "logout": "Abmelden"
+    "logout": "Abmelden",
+    "languageSwitcher": "Sprache"
   },
   "appTitle": "Fast-Flow",
   "language": {
     "de": "DE",
-    "en": "EN"
+    "en": "EN",
+    "nativeDe": "Deutsch",
+    "nativeEn": "English"
   },
   "dashboard": {
     "gitSync": "Git Sync",
@@ -58,6 +61,8 @@
     "signInGoogle": "Sign in with Google",
     "signInMicrosoft": "Sign in with Microsoft",
     "signInCustom": "Sign in with Custom",
+    "signInNamedProvider": "Mit {{name}} anmelden",
+    "customProviderFallback": "Custom",
     "githubNotConfigured": "GitHub nicht konfiguriert",
     "googleNotConfigured": "Google nicht konfiguriert",
     "microsoftNotConfigured": "Microsoft nicht konfiguriert",
@@ -100,6 +105,12 @@
   },
   "settings": {
     "title": "Einstellungen",
+    "uiDisplayTitle": "Anzeige",
+    "uiDisplayHint": "Diese Optionen werden nur in diesem Browser gespeichert.",
+    "showAttribution": "„Made with ❤️ …“-Hinweis anzeigen",
+    "showAttributionHint": "Gilt für die Anmeldeseite, Infoseiten und die Seitenleiste.",
+    "showVersion": "Versionsnummer anzeigen",
+    "showVersionHint": "Gilt für Anmeldeseite, Infoseiten, Seitenleiste und den Update-Hinweis in der Kopfzeile.",
     "saving": "Einstellungen speichern",
     "saved": "Einstellungen aktualisiert (Neustart erforderlich)",
     "savedMessage": "Einstellungen aktualisiert",
@@ -468,6 +479,14 @@
     "showDual": "Dual: beide Zeitzonen anzeigen",
     "showStandard": "Standard: eine Zeitzone mit Umschalter",
     "switchDisplay": "Anzeige wechseln"
+  },
+  "headerLanguage": {
+    "toggle": "Sprache umschalten",
+    "showDual": "Dual: beide Sprachen anzeigen",
+    "showStandard": "Standard: eine Sprache mit Umschalter",
+    "switchDisplay": "Anzeige wechseln",
+    "selectDe": "Deutsch wählen",
+    "selectEn": "English wählen"
   },
   "versionInfo": {},
   "audit": {

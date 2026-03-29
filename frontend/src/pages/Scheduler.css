@@ -10,99 +10,6 @@
   margin-bottom: 2rem;
 }
 
-.add-button {
-  padding: 0.5rem 1rem;
-  background-color: #22c55e;
-  color: white;
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-size: 0.9rem;
-}
-
-.add-button:hover {
-  background-color: #45a049;
-}
-
-.job-form {
-  background-color: #2a2a2a;
-  padding: 1.5rem;
-  border-radius: var(--radius-md);
-  margin-bottom: 2rem;
-}
-
-.job-form h3 {
-  margin-top: 0;
-  margin-bottom: 1.5rem;
-}
-
-.form-group {
-  margin-bottom: 1rem;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 0.5rem;
-  color: #888;
-  font-size: 0.9rem;
-}
-
-.form-group input[type="text"],
-.form-group select {
-  width: 100%;
-  padding: 0.5rem;
-  background-color: #1a1a1a;
-  color: white;
-  border: 1px solid #444;
-  border-radius: var(--radius-sm);
-  font-size: 0.9rem;
-  font-family: inherit;
-}
-
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-}
-
-.checkbox-label input[type="checkbox"] {
-  cursor: pointer;
-}
-
-.form-actions {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 1.5rem;
-}
-
-.submit-button,
-.cancel-button {
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-size: 0.9rem;
-}
-
-.submit-button {
-  background-color: #646cff;
-  color: white;
-}
-
-.submit-button:hover {
-  background-color: #535bf2;
-}
-
-.cancel-button {
-  background-color: #666;
-  color: white;
-}
-
-.cancel-button:hover {
-  background-color: #555;
-}
-
 .jobs-table {
   width: 100%;
   border-collapse: collapse;
@@ -162,33 +69,6 @@
 .action-buttons {
   display: flex;
   gap: 0.5rem;
-}
-
-.edit-button,
-.delete-button {
-  padding: 0.25rem 0.75rem;
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-size: 0.85rem;
-}
-
-.edit-button {
-  background-color: #6366f1;
-  color: white;
-}
-
-.edit-button:hover {
-  background-color: #0b7dda;
-}
-
-.delete-button {
-  background-color: #ef4444;
-  color: white;
-}
-
-.delete-button:hover {
-  background-color: #da190b;
 }
 
 .no-jobs {
@@ -326,20 +206,6 @@
   background-color: var(--color-surface-variant, #333);
   color: var(--color-text-secondary, #aaa);
   border-radius: var(--radius-sm, 4px);
-}
-
-.details-button {
-  padding: 0.25rem 0.75rem;
-  background-color: #646cff;
-  color: white;
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-size: 0.85rem;
-}
-
-.details-button:hover {
-  background-color: #535bf2;
 }
 
 .next-runs-section {

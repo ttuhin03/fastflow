@@ -157,6 +157,23 @@
   margin-bottom: var(--spacing-2xl);
 }
 
+.login-branding-logo-wrap {
+  margin: 0 auto var(--spacing-md);
+  max-width: 200px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.login-branding-logo {
+  max-width: 100%;
+  max-height: 56px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 12px rgba(0, 0, 0, 0.25));
+}
+
 .login-icon {
   width: 88px;
   height: 88px;
@@ -437,12 +454,17 @@
 
 .login-btn-github .login-btn-github-icon,
 .login-btn-google .login-btn-google-icon,
-.login-btn-microsoft .login-btn-microsoft-icon {
+.login-btn-microsoft .login-btn-microsoft-icon,
+.login-btn-custom .login-btn-custom-icon {
   width: 22px;
   height: 22px;
   flex-shrink: 0;
   color: var(--color-primary);
   opacity: 0.95;
+}
+
+.login-btn-custom .login-btn-custom-icon {
+  object-fit: contain;
 }
 
 .login-btn-github:hover:not(:disabled),

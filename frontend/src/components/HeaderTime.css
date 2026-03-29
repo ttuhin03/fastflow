@@ -64,6 +64,11 @@
   filter: brightness(1.2);
 }
 
+.header-time-toggle:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 /* Alternative: Dual (beide Zeitzonen) */
 .header-time-dual {
   display: flex;
@@ -88,6 +93,31 @@
 
 .ht-dual-cet {
   color: var(--color-text-primary);
+}
+
+button.header-lang-dual-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  text-align: left;
+  transition: opacity 0.15s ease, filter 0.15s ease;
+}
+
+button.header-lang-dual-btn:hover {
+  filter: brightness(1.12);
+}
+
+button.header-lang-dual-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }
 
 /* Umschalter zwischen Default- und Dual-Anzeige */

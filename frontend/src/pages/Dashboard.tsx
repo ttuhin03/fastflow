@@ -126,9 +126,10 @@ export default function Dashboard() {
       {!isReadonly && (
         <div className="dashboard-header">
           <button
+            type="button"
             onClick={handleSync}
             disabled={syncMutation.isPending}
-            className="btn btn-primary sync-button"
+            className="btn btn-primary dashboard-sync-btn"
           >
             <MdSync />
             {syncMutation.isPending ? t('dashboard.syncRunning') : t('dashboard.gitSync')}
