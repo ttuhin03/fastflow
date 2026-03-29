@@ -515,6 +515,18 @@
   object-fit: contain;
 }
 
+/* Tastatur-Fokus (OAuth-Buttons) */
+.login-btn-github:focus-visible,
+.login-btn-google:focus-visible,
+.login-btn-microsoft:focus-visible,
+.login-btn-custom:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--color-surface) 88%, var(--color-background) 12%),
+    0 0 0 4px rgb(from var(--color-primary) r g b / 0.55);
+  z-index: 1;
+}
+
 .login-btn-github:hover:not(:disabled),
 .login-btn-google:hover:not(:disabled),
 .login-btn-microsoft:hover:not(:disabled),
@@ -701,6 +713,13 @@
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.03);
 }
 
+.github-link:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--color-surface) 88%, var(--color-background) 12%),
+    0 0 0 4px rgb(from var(--color-primary) r g b / 0.45);
+}
+
 .github-link svg {
   font-size: 1.2rem;
   color: var(--color-primary);
@@ -734,6 +753,41 @@
 .login-footer-text strong {
   color: var(--color-primary);
   font-weight: var(--font-weight-bold);
+}
+
+/* Systemeinstellung „Bewegung reduzieren“ */
+@media (prefers-reduced-motion: reduce) {
+  .login-background-overlay {
+    animation: none;
+  }
+
+  .login-card {
+    animation: none;
+  }
+
+  @media (hover: hover) {
+    .login-card:hover {
+      transform: none;
+    }
+  }
+
+  .login-card::before {
+    animation: none;
+  }
+
+  .login-icon {
+    animation: none;
+  }
+
+  .login-card h1,
+  .login-subtitle,
+  .login-form {
+    animation: none !important;
+  }
+
+  .login-footer-text .heart {
+    animation: none;
+  }
 }
 
 /* Responsive Design */
