@@ -188,7 +188,8 @@ export default function Login() {
         >
           <source src="/background.mp4" type="video/mp4" />
         </video>
-        <div className="login-background-overlay"></div>
+        <div className="login-background-mesh" aria-hidden />
+        <div className="login-background-overlay" />
       </div>
 
       <div className="login-content">
@@ -209,6 +210,7 @@ export default function Login() {
                 <MdCode />
               </div>
             )}
+            <p className="login-eyebrow">{t('auth.loginEyebrow')}</p>
             <h1>{t('appTitle')}</h1>
             <p className="login-subtitle">{t('auth.subtitle')}</p>
           </div>

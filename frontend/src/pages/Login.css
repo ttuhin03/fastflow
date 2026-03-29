@@ -1,5 +1,6 @@
 .login-container {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -7,6 +8,22 @@
   padding: var(--spacing-lg);
   position: relative;
   overflow: hidden;
+}
+
+@media (min-width: 900px) {
+  .login-container {
+    justify-content: flex-end;
+    padding-right: clamp(1.5rem, 7vw, 5rem);
+    padding-left: clamp(1rem, 4vw, 2rem);
+  }
+}
+
+@media (max-width: 899px) {
+  .login-container {
+    justify-content: center;
+    padding-left: var(--spacing-lg);
+    padding-right: var(--spacing-lg);
+  }
 }
 
 .login-background {
@@ -30,7 +47,21 @@
   transform: translate(-50%, -50%);
   object-fit: cover;
   z-index: 0;
-  filter: brightness(0.15);
+  filter: brightness(0.12) contrast(1.05);
+}
+
+/* Aurora-Mesh über dem Video (Experiment) */
+.login-background-mesh {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 90% 55% at 15% 35%, rgb(from var(--color-primary) r g b / 0.22), transparent 58%),
+    radial-gradient(ellipse 70% 50% at 88% 70%, rgb(from var(--color-primary-dark) r g b / 0.18), transparent 52%),
+    radial-gradient(ellipse 50% 35% at 50% 95%, rgba(20, 28, 45, 0.55), transparent 50%);
+  mix-blend-mode: screen;
+  opacity: 0.75;
 }
 
 .login-background-overlay {
@@ -39,32 +70,57 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(135deg, 
-    rgba(0, 0, 0, 0.5) 0%, 
-    rgb(from var(--color-primary) r g b / 0.1) 25%,
-    rgb(from var(--color-primary-dark) r g b / 0.1) 50%,
-    rgba(0, 0, 0, 0.4) 75%,
-    rgba(0, 0, 0, 0.5) 100%);
   z-index: 1;
-  animation: gradientShift 8s ease-in-out infinite;
+  background-color: rgba(0, 0, 0, 0.22);
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(
+      135deg,
+      rgba(0, 0, 0, 0.42) 0%,
+      rgb(from var(--color-primary) r g b / 0.09) 28%,
+      rgb(from var(--color-primary-dark) r g b / 0.08) 52%,
+      rgba(0, 0, 0, 0.38) 100%
+    );
+  background-size:
+    52px 52px,
+    52px 52px,
+    100% 100%;
+  background-position: center;
+  animation: gradientShift 10s ease-in-out infinite;
 }
 
 @keyframes gradientShift {
-  0%, 100% {
-    background: linear-gradient(135deg, 
-      rgba(0, 0, 0, 0.5) 0%, 
-      rgb(from var(--color-primary) r g b / 0.1) 25%,
-      rgb(from var(--color-primary-dark) r g b / 0.1) 50%,
-      rgba(0, 0, 0, 0.4) 75%,
-      rgba(0, 0, 0, 0.5) 100%);
+  0%,
+  100% {
+    background-color: rgba(0, 0, 0, 0.22);
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+      linear-gradient(
+        135deg,
+        rgba(0, 0, 0, 0.45) 0%,
+        rgb(from var(--color-primary) r g b / 0.1) 30%,
+        rgb(from var(--color-primary-dark) r g b / 0.09) 55%,
+        rgba(0, 0, 0, 0.4) 100%
+      );
+    background-size: 52px 52px, 52px 52px, 100% 100%;
+    background-position: center;
   }
   50% {
-    background: linear-gradient(135deg, 
-      rgba(0, 0, 0, 0.4) 0%, 
-      rgb(from var(--color-primary-dark) r g b / 0.15) 25%,
-      rgb(from var(--color-primary) r g b / 0.15) 50%,
-      rgba(0, 0, 0, 0.3) 75%,
-      rgba(0, 0, 0, 0.4) 100%);
+    background-color: rgba(0, 0, 0, 0.18);
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+      linear-gradient(
+        145deg,
+        rgba(0, 0, 0, 0.38) 0%,
+        rgb(from var(--color-primary-dark) r g b / 0.12) 32%,
+        rgb(from var(--color-primary) r g b / 0.11) 58%,
+        rgba(0, 0, 0, 0.36) 100%
+      );
+    background-size: 52px 52px, 52px 52px, 100% 100%;
+    background-position: center;
   }
 }
 
@@ -73,7 +129,7 @@
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 440px;
+  max-width: 420px;
   display: flex;
   flex-direction: column;
   gap: var(--spacing-xl);
@@ -82,23 +138,44 @@
 .login-card {
   width: 100%;
   padding: var(--spacing-2xl);
-  backdrop-filter: blur(24px) saturate(180%);
+  padding-left: calc(var(--spacing-2xl) + 6px);
+  backdrop-filter: blur(28px) saturate(165%);
   background: linear-gradient(
-    165deg,
-    color-mix(in srgb, var(--color-surface) 92%, white) 0%,
-    color-mix(in srgb, var(--color-surface) 98%, var(--color-background)) 100%
+    155deg,
+    color-mix(in srgb, var(--color-surface) 88%, white) 0%,
+    color-mix(in srgb, var(--color-surface) 96%, var(--color-background)) 100%
   );
-  border: 1px solid color-mix(in srgb, var(--color-border) 50%, rgba(255, 255, 255, 0.08));
-  border-radius: var(--radius-lg);
+  border: 1px solid color-mix(in srgb, var(--color-border) 55%, rgba(255, 255, 255, 0.1));
+  border-radius: var(--radius-lg) calc(var(--radius-lg) + 6px) var(--radius-lg) var(--radius-lg);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 24px 48px rgba(0, 0, 0, 0.35),
-    0 0 0 1px rgba(0, 0, 0, 0.1),
-    0 0 80px rgb(from var(--color-primary) r g b / 0.08);
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 28px 56px rgba(0, 0, 0, 0.38),
+    0 0 0 1px rgba(0, 0, 0, 0.12),
+    0 0 90px rgb(from var(--color-primary) r g b / 0.09);
   animation: cardFadeIn 0.6s cubic-bezier(0.22, 1, 0.36, 1);
   position: relative;
   overflow: hidden;
   transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.2s ease;
+}
+
+.login-card::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 18%;
+  bottom: 18%;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: linear-gradient(180deg, var(--color-primary), var(--color-primary-dark));
+  opacity: 0.88;
+  z-index: 0;
+  box-shadow: 0 0 20px rgb(from var(--color-primary) r g b / 0.35);
+}
+
+.login-card > .login-header,
+.login-card > .login-form {
+  position: relative;
+  z-index: 1;
 }
 
 .login-card::before {
@@ -155,6 +232,16 @@
 .login-header {
   text-align: center;
   margin-bottom: var(--spacing-2xl);
+}
+
+.login-eyebrow {
+  margin: 0 0 var(--spacing-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--color-text-secondary) 92%, var(--color-primary) 8%);
+  animation: subtitleFadeIn 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
 }
 
 .login-branding-logo-wrap {
@@ -757,6 +844,10 @@
 
 /* Systemeinstellung „Bewegung reduzieren“ */
 @media (prefers-reduced-motion: reduce) {
+  .login-background-mesh {
+    opacity: 0.5;
+  }
+
   .login-background-overlay {
     animation: none;
   }

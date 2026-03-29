@@ -61,6 +61,7 @@
     "providerUnavailable": "This login provider is not configured. Please contact the administrator.",
     "oauthSectionInactive": "Not configured",
     "subtitle": "Pipeline Orchestrator",
+    "loginEyebrow": "Sign in",
     "signInGitHub": "Sign in with GitHub",
     "signInGoogle": "Sign in with Google",
     "signInMicrosoft": "Sign in with Microsoft",
