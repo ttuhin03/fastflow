@@ -148,11 +148,18 @@ def _safe_public_url(url: Optional[str]) -> Optional[str]:
     return u
 
 
-def _auth_providers_public() -> dict[str, Any]:
+def _auth_providers_public(session: Session) -> dict[str, Any]:
     """Provider-Flags plus optionales Login-Branding (öffentlicher Endpoint)."""
     flags = _providers_configured()
     out: dict[str, Any] = {**flags}
-    logo = _safe_public_url(getattr(config, "LOGIN_BRANDING_LOGO_URL", None))
+    db_logo = None
+    try:
+        ss = get_system_settings(session)
+        db_logo = _safe_public_url(getattr(ss, "login_branding_logo_url", None))
+    except Exception:
+        pass
+    env_logo = _safe_public_url(getattr(config, "LOGIN_BRANDING_LOGO_URL", None))
+    logo = db_logo or env_logo
     if logo:
         out["login_branding_logo_url"] = logo
     if flags["custom"]:
@@ -165,13 +172,14 @@ def _auth_providers_public() -> dict[str, Any]:
 
 
 @router.get("/providers", response_model=dict)
-async def get_auth_providers() -> dict[str, Any]:
+async def get_auth_providers(session: Session = Depends(get_session)) -> dict[str, Any]:
     """
     Gibt zurück, welche OAuth-Provider konfiguriert sind.
     Öffentlich (kein Login), damit die Login-Seite Buttons ein-/ausblenden kann.
     Optional: login_branding_logo_url, custom_display_name, custom_oauth_icon_url.
+    Logo: Datenbank-Einstellung hat Vorrang vor LOGIN_BRANDING_LOGO_URL (Umgebung).
     """
-    return _auth_providers_public()
+    return _auth_providers_public(session)
 
 
 @router.get("/github/authorize")

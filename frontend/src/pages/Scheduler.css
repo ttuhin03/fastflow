@@ -7,58 +7,60 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rem;
+  margin-bottom: var(--spacing-xl);
 }
 
 .jobs-table {
   width: 100%;
   border-collapse: collapse;
-  background-color: #2a2a2a;
+  background-color: var(--color-surface-variant);
   border-radius: var(--radius-md);
   overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--color-border) 85%, transparent);
 }
 
 .jobs-table th,
 .jobs-table td {
-  padding: 1rem;
+  padding: var(--spacing-md);
   text-align: left;
-  border-bottom: 1px solid #444;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .jobs-table th {
-  background-color: #1a1a1a;
-  font-weight: 600;
+  background-color: var(--color-background);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-secondary);
 }
 
 .trigger-value {
-  background-color: #1a1a1a;
-  padding: 0.25rem 0.5rem;
+  background-color: var(--color-surface-variant);
+  padding: var(--spacing-xs) var(--spacing-sm);
   border-radius: var(--radius-sm);
   font-family: 'Courier New', monospace;
-  font-size: 0.85rem;
+  font-size: var(--font-size-sm);
 }
 
 .status-toggle {
-  padding: 0.25rem 0.75rem;
+  padding: var(--spacing-xs) 0.75rem;
   border: none;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 0.85rem;
-  font-weight: 500;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
 }
 
 .status-toggle.enabled {
-  background-color: #22c55e;
-  color: white;
+  background-color: var(--color-success);
+  color: #ffffff;
 }
 
 .status-toggle.disabled {
-  background-color: #666;
-  color: white;
+  background-color: var(--color-border-light);
+  color: var(--color-text-primary);
 }
 
 .status-toggle:hover:not(:disabled) {
-  opacity: 0.8;
+  opacity: 0.85;
 }
 
 .status-toggle:disabled {
@@ -68,32 +70,33 @@
 
 .action-buttons {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--spacing-sm);
 }
 
 .no-jobs {
   text-align: center;
-  color: #888;
-  padding: 2rem;
-  background-color: #2a2a2a;
+  color: var(--color-text-secondary);
+  padding: var(--spacing-xl);
+  background-color: var(--color-card);
+  border: 1px solid color-mix(in srgb, var(--color-border) 85%, transparent);
   border-radius: var(--radius-md);
 }
 
 .job-details-row {
-  background-color: #1a1a1a;
+  background-color: var(--color-surface-variant);
 }
 
 .job-details-row td {
-  padding: 1.5rem;
+  padding: var(--spacing-lg);
 }
 
 .job-details {
-  padding: 1rem;
+  padding: var(--spacing-md);
 }
 
 .job-details h4 {
-  margin: 0 0 1rem 0;
-  color: #888;
+  margin: 0 0 var(--spacing-md) 0;
+  color: var(--color-text-secondary);
 }
 
 .job-runs-table {
@@ -116,20 +119,20 @@
 
 .job-runs-table th,
 .job-runs-table td {
-  padding: 0.75rem 1rem;
+  padding: 0.75rem var(--spacing-md);
   text-align: left;
   border-bottom: 1px solid var(--color-border);
 }
 
 .job-runs-table th {
   background-color: var(--color-surface-variant);
-  font-weight: 600;
+  font-weight: var(--font-weight-bold);
   color: var(--color-text-secondary);
-  font-size: 0.85rem;
+  font-size: var(--font-size-sm);
 }
 
 .job-runs-table td {
-  font-size: 0.85rem;
+  font-size: var(--font-size-sm);
   color: var(--color-text-primary);
 }
 
@@ -142,84 +145,85 @@
 }
 
 .status {
-  padding: 0.25rem 0.75rem;
+  padding: var(--spacing-xs) 0.75rem;
   border-radius: var(--radius-sm);
-  font-size: 0.75rem;
-  font-weight: 500;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
 }
 
 .status-success {
-  background-color: #22c55e;
-  color: white;
+  background-color: var(--color-success);
+  color: #ffffff;
 }
 
 .status-failed {
-  background-color: #ef4444;
-  color: white;
+  background-color: var(--color-error);
+  color: #ffffff;
 }
 
 .status-running {
-  background-color: #6366f1;
-  color: white;
+  background-color: var(--color-primary);
+  color: #ffffff;
 }
 
 .status-pending {
-  background-color: #f59e0b;
-  color: white;
+  background-color: var(--color-warning);
+  color: #0f172a;
 }
 
 .exit-success {
-  color: #22c55e;
-  font-weight: 500;
+  color: var(--color-success);
+  font-weight: var(--font-weight-medium);
 }
 
 .exit-error {
-  color: #ef4444;
-  font-weight: 500;
+  color: var(--color-error);
+  font-weight: var(--font-weight-medium);
 }
 
 .view-link {
-  color: #646cff;
+  color: var(--color-primary-light);
   text-decoration: none;
 }
 
 .view-link:hover {
   text-decoration: underline;
+  color: var(--color-primary);
 }
 
 .no-data {
-  color: #888;
+  color: var(--color-text-secondary);
   font-style: italic;
 }
 
 .run-count {
-  font-weight: 500;
-  color: #888;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
 }
 
 .run-config-badge {
   display: inline-block;
-  margin-left: 0.5rem;
-  padding: 0.15rem 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  background-color: var(--color-surface-variant, #333);
-  color: var(--color-text-secondary, #aaa);
-  border-radius: var(--radius-sm, 4px);
+  margin-left: var(--spacing-sm);
+  padding: 0.15rem var(--spacing-sm);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  background-color: var(--color-surface-variant);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-sm);
 }
 
 .next-runs-section {
-  margin-bottom: 1.5rem;
-  padding: 1rem 1.25rem;
-  background-color: color-mix(in srgb, var(--color-surface-variant, #2a2a2a) 60%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-border, #444) 50%, transparent);
+  margin-bottom: var(--spacing-lg);
+  padding: var(--spacing-md) 1.25rem;
+  background-color: color-mix(in srgb, var(--color-surface-variant) 60%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent);
   border-radius: var(--radius-md);
 }
 
 .next-runs-section h4 {
   margin: 0 0 0.75rem 0;
-  color: var(--color-text-secondary, #888);
-  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -237,10 +241,10 @@
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  font-size: 0.875rem;
-  color: var(--color-text-primary, #eee);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
   padding: 0.3rem 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--color-border, #444) 30%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 30%, transparent);
 }
 
 .next-runs-list li:last-child {
@@ -252,6 +256,6 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background-color: #646cff;
+  background-color: var(--color-primary);
   flex-shrink: 0;
 }

@@ -17,17 +17,17 @@
 }
 
 .dependencies-subtitle-error {
-  color: var(--color-error, #c00);
+  color: var(--color-error);
 }
 
 .dependencies-audit-last {
   padding: var(--spacing-md);
-  background: var(--color-bg-secondary);
+  background: var(--color-surface-variant);
 }
 
 .dependencies-audit-last-title {
   margin: 0 0 var(--spacing-sm) 0;
-  font-size: var(--font-size-md);
+  font-size: var(--font-size-lg);
   color: var(--color-text-primary);
 }
 
@@ -42,7 +42,7 @@
 }
 
 .dependencies-audit-last-msg.error {
-  color: var(--color-error, #c00);
+  color: var(--color-error);
 }
 
 .dependencies-audit-last-list {
@@ -93,7 +93,7 @@
   padding: var(--spacing-xs) var(--spacing-sm);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--color-bg-secondary);
+  background: var(--color-surface-variant);
   color: var(--color-text-primary);
   font-size: var(--font-size-sm);
   min-width: 140px;
@@ -155,17 +155,17 @@
   gap: var(--spacing-sm);
   width: 100%;
   padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--color-bg-secondary);
+  background: var(--color-surface-variant);
   border: none;
   cursor: pointer;
-  font-size: var(--font-size-md);
+  font-size: var(--font-size-base);
   color: var(--color-text-primary);
   text-align: left;
   transition: background var(--transition-base);
 }
 
 .pipeline-deps-head:hover {
-  background: var(--color-bg-hover);
+  background: var(--color-surface);
 }
 
 .pipeline-deps-name {
@@ -186,17 +186,17 @@
 
 .vuln-yes {
   background: rgba(239, 68, 68, 0.2);
-  color: var(--color-error, #ef4444);
+  color: var(--color-error);
 }
 
 .vuln-no {
   background: rgba(34, 197, 94, 0.2);
-  color: var(--color-success, #22c55e);
+  color: var(--color-success);
 }
 
 .pipeline-deps-body {
   padding: var(--spacing-md);
-  background: var(--color-bg-primary);
+  background: var(--color-background);
   border-top: 1px solid var(--color-border);
 }
 
@@ -206,7 +206,7 @@
   background: rgba(239, 68, 68, 0.1);
   border-radius: var(--radius-sm);
   font-size: var(--font-size-sm);
-  color: var(--color-error, #ef4444);
+  color: var(--color-error);
 }
 
 .deps-table {
@@ -230,9 +230,9 @@
 .deps-table code {
   font-family: var(--font-mono, monospace);
   font-size: 0.9em;
-  background: var(--color-bg-secondary);
+  background: var(--color-surface-variant);
   padding: 2px 6px;
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
 }
 
 .vuln-list {
@@ -246,7 +246,7 @@
 }
 
 .vuln-list a {
-  color: var(--color-link, #6366f1);
+  color: var(--color-primary-light);
   text-decoration: none;
 }
 
@@ -279,7 +279,7 @@
 }
 
 .vuln-summary a {
-  color: var(--color-link, #6366f1);
+  color: var(--color-primary-light);
   text-decoration: none;
 }
 

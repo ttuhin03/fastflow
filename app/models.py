@@ -471,6 +471,10 @@ class SystemSettings(SQLModel, table=True):
         default="0 3 * * *",
         description="Cron-Ausdruck für Zeitpunkt (Standard: 3:00 Uhr täglich)",
     )
+    login_branding_logo_url: Optional[str] = Field(
+        default=None,
+        description="Optional: Logo-URL (http/https) für Login und UI; überschreibt LOGIN_BRANDING_LOGO_URL aus der Umgebung wenn gesetzt",
+    )
 
 
 class OrchestratorSettings(SQLModel, table=True):

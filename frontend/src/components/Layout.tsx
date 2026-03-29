@@ -38,6 +38,15 @@ export default function Layout() {
   const { showAttribution, showVersion } = useUiPreferences()
   const navigate = useNavigate()
   const location = useLocation()
+  const { data: authProviders } = useQuery({
+    queryKey: ['auth/providers'],
+    queryFn: async () => {
+      const r = await apiClient.get('/auth/providers')
+      return r.data as { login_branding_logo_url?: string }
+    },
+    staleTime: 60_000,
+  })
+
   const navItems = useMemo<NavItem[]>(() => [
     { path: '/', labelKey: 'nav.dashboard', icon: <MdDashboard /> },
     { path: '/pipelines', labelKey: 'nav.pipelines', icon: <MdAccountTree /> },
@@ -185,9 +194,15 @@ export default function Layout() {
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
           <div className="sidebar-logo-container">
-            <div className="sidebar-logo-icon">
-              <MdCode />
-            </div>
+            {authProviders?.login_branding_logo_url ? (
+              <div className="sidebar-logo-icon sidebar-logo-icon--image">
+                <img src={authProviders.login_branding_logo_url} alt="" className="sidebar-logo-img" />
+              </div>
+            ) : (
+              <div className="sidebar-logo-icon">
+                <MdCode />
+              </div>
+            )}
             <h1 className="sidebar-logo">{t('appTitle')}</h1>
           </div>
         </div>

@@ -57,6 +57,21 @@
     0 6px 18px rgba(79, 70, 229, 0.3);
  }
 
+/* Custom logo: kein radius auf dem Bild (sonst werden Ecken der Grafik abgeschnitten); nur leichter Rahmen */
+.sidebar-logo-icon--image {
+  padding: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-md);
+}
+
+.sidebar-logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  display: block;
+}
+
 .sidebar-logo-icon svg {
   font-size: 1.35rem;
   position: relative;
@@ -140,11 +155,11 @@
   font-weight: 700;
   line-height: 20px;
   text-align: center;
-  color: #fff;
-  background: linear-gradient(135deg, var(--color-warning, #f59e0b), #d97706);
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--color-warning), var(--color-warning-dark));
   border-radius: 10px;
   flex-shrink: 0;
-  box-shadow: 0 2px 6px rgba(255, 152, 0, 0.4);
+  box-shadow: 0 2px 6px rgb(from var(--color-warning) r g b / 0.4);
 }
 
 .nav-icon {
@@ -479,7 +494,7 @@
 }
 
 .sidebar-footer-text .heart {
-  color: #ef4444;
+  color: var(--color-error);
   animation: heartBeat 1.5s ease-in-out infinite;
   display: inline-block;
 }
@@ -508,7 +523,7 @@
 
 .logout-btn:hover {
   background: color-mix(in srgb, var(--color-error) 25%, transparent);
-  color: #fff;
+  color: #ffffff;
   border-color: var(--color-error);
   transform: translateY(-1px);
 }
@@ -657,7 +672,7 @@
 }
 
 .footer-text .heart {
-  color: #ef4444;
+  color: var(--color-error);
   animation: heartBeat 1.5s ease-in-out infinite;
   display: inline-block;
 }

@@ -286,7 +286,7 @@
 .settings-telemetry-note {
   margin-top: var(--spacing-sm);
   font-size: var(--font-size-sm);
-  color: var(--color-text-secondary, #666);
+  color: var(--color-text-secondary);
 }
 
 .settings-ui-pref-hint {

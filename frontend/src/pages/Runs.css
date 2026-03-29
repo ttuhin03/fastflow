@@ -188,13 +188,13 @@
 }
 
 .error-type-badge.error-type-pipeline_error {
-  background-color: #ef4444;
-  color: white;
+  background-color: var(--color-error);
+  color: #ffffff;
 }
 
 .error-type-badge.error-type-infrastructure_error {
-  background-color: #f59e0b;
-  color: white;
+  background-color: var(--color-warning);
+  color: #0f172a;
 }
 
 .status-icon.warning {
@@ -302,7 +302,7 @@
 
 .pagination-btn:hover:not(:disabled) {
   background-color: var(--color-primary);
-  color: #fff;
+  color: #ffffff;
   border-color: color-mix(in srgb, var(--color-primary-dark) 30%, transparent);
   transform: translateY(-1px);
   box-shadow:

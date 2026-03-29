@@ -15,6 +15,7 @@ import shutil
 import psutil
 from pathlib import Path
 from typing import Optional, Dict, Any, List
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
@@ -44,6 +45,19 @@ from sqlmodel import text
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/settings", tags=["settings"])
+
+
+def _safe_public_url(url: Optional[str]) -> Optional[str]:
+    """Nur http(s) mit Host, für sichere Nutzung als Bild-URL im Frontend."""
+    if not url or not isinstance(url, str):
+        return None
+    u = url.strip()
+    if not u:
+        return None
+    parsed = urlparse(u)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return None
+    return u
 
 
 class TelemetryStatusResponse(BaseModel):
@@ -111,6 +125,7 @@ class SystemSettingsResponse(BaseModel):
     enable_error_reporting: bool
     dependency_audit_enabled: bool = True
     dependency_audit_cron: str = "0 3 * * *"
+    login_branding_logo_url: Optional[str] = None
 
 
 class SystemSettingsUpdate(BaseModel):
@@ -120,6 +135,7 @@ class SystemSettingsUpdate(BaseModel):
     enable_error_reporting: Optional[bool] = None
     dependency_audit_enabled: Optional[bool] = None
     dependency_audit_cron: Optional[str] = None
+    login_branding_logo_url: Optional[str] = None
 
 
 class SettingsUpdate(BaseModel):
@@ -318,6 +334,7 @@ async def get_system_settings_endpoint(
         enable_error_reporting=ss.enable_error_reporting,
         dependency_audit_enabled=getattr(ss, "dependency_audit_enabled", True),
         dependency_audit_cron=getattr(ss, "dependency_audit_cron", "0 3 * * *") or "0 3 * * *",
+        login_branding_logo_url=getattr(ss, "login_branding_logo_url", None),
     )
 
 
@@ -363,6 +380,18 @@ async def update_system_settings_endpoint(
         ss.dependency_audit_enabled = body.dependency_audit_enabled
     if body.dependency_audit_cron is not None:
         ss.dependency_audit_cron = (body.dependency_audit_cron or "0 3 * * *").strip()
+    if body.login_branding_logo_url is not None:
+        raw = (body.login_branding_logo_url or "").strip()
+        if not raw:
+            ss.login_branding_logo_url = None
+        else:
+            validated = _safe_public_url(raw)
+            if not validated:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Ungültige Logo-URL: nur http:// oder https:// mit gültigem Host erlaubt",
+                )
+            ss.login_branding_logo_url = validated
     session.add(ss)
     session.commit()
     session.refresh(ss)
@@ -381,6 +410,7 @@ async def update_system_settings_endpoint(
         enable_error_reporting=ss.enable_error_reporting,
         dependency_audit_enabled=getattr(ss, "dependency_audit_enabled", True),
         dependency_audit_cron=getattr(ss, "dependency_audit_cron", "0 3 * * *") or "0 3 * * *",
+        login_branding_logo_url=getattr(ss, "login_branding_logo_url", None),
     )
 
 

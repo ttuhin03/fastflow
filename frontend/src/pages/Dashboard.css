@@ -97,7 +97,7 @@
 
 .stat-icon.runs {
   background-color: rgba(79, 70, 229, 0.15);
-  color: #818cf8;
+  color: var(--color-primary-light);
 }
 
 .stat-icon.success {

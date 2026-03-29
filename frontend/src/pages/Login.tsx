@@ -95,10 +95,11 @@ export default function Login() {
                   decoding="async"
                 />
               </div>
-            ) : null}
-            <div className="login-icon">
-              <MdCode />
-            </div>
+            ) : (
+              <div className="login-icon">
+                <MdCode />
+              </div>
+            )}
             <h1>{t('appTitle')}</h1>
             <p className="login-subtitle">{t('auth.subtitle')}</p>
           </div>

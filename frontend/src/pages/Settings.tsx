@@ -177,12 +177,15 @@ export default function Settings() {
     }
   }, [searchParams, setSearchParams, refetchMe])
 
+  const [localBrandingLogoUrl, setLocalBrandingLogoUrl] = useState<string | null>(null)
+
   const { data: systemSettings } = useQuery<{
     is_setup_completed: boolean
     enable_telemetry: boolean
     enable_error_reporting: boolean
     dependency_audit_enabled: boolean
     dependency_audit_cron: string
+    login_branding_logo_url?: string | null
   }>({
     queryKey: ['settings-system'],
     queryFn: async () => {
@@ -209,12 +212,14 @@ export default function Settings() {
       enable_error_reporting?: boolean
       dependency_audit_enabled?: boolean
       dependency_audit_cron?: string
+      login_branding_logo_url?: string
     }) => {
       const response = await apiClient.put('/settings/system', patch)
       return response.data
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings-system'] })
+      queryClient.invalidateQueries({ queryKey: ['auth/providers'] })
       showSuccess(t('settings.systemConfigSaved'))
     },
     onError: (err: unknown) => {
@@ -658,6 +663,41 @@ export default function Settings() {
           )}
         </p>
       </div>
+      {isAdmin && (
+        <div className="settings-section card">
+          <h3 className="section-title">
+            {t('settings.brandingLogoTitle')}
+            <InfoIcon content={t('settings.brandingLogoInfo')} />
+          </h3>
+          <p className="setting-hint setting-hint--flush">{t('settings.brandingLogoHint')}</p>
+          <div className="setting-item setting-item--offset-top">
+            <label htmlFor="login_branding_logo_url" className="setting-label">
+              {t('settings.brandingLogoUrlLabel')}
+            </label>
+            <input
+              id="login_branding_logo_url"
+              type="url"
+              className="form-input"
+              value={localBrandingLogoUrl !== null ? localBrandingLogoUrl : (systemSettings?.login_branding_logo_url ?? '')}
+              onChange={(e) => setLocalBrandingLogoUrl(e.target.value)}
+              onBlur={() => {
+                const v = (localBrandingLogoUrl !== null ? localBrandingLogoUrl : (systemSettings?.login_branding_logo_url ?? '')).trim()
+                const current = (systemSettings?.login_branding_logo_url ?? '').trim()
+                if (v !== current) {
+                  updateSystemSettingsMutation.mutate(
+                    { login_branding_logo_url: v },
+                    { onSettled: () => setLocalBrandingLogoUrl(null) }
+                  )
+                } else {
+                  setLocalBrandingLogoUrl(null)
+                }
+              }}
+              placeholder="https://example.com/logo.png"
+              disabled={updateSystemSettingsMutation.isPending || isReadonly}
+            />
+          </div>
+        </div>
+      )}
       {isAdmin && (
         <div className="settings-section card">
           <h3 className="section-title">
