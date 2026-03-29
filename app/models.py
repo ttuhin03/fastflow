@@ -483,6 +483,10 @@ class SystemSettings(SQLModel, table=True):
         default=True,
         description="Versionsnummer systemweit anzeigen (alle Nutzer, alle Clients)",
     )
+    show_unconfigured_oauth_on_login: bool = Field(
+        default=True,
+        description="Auf der Login-Seite auch nicht konfigurierte OAuth-Provider als deaktivierte Buttons anzeigen; bei False nur konfigurierte Provider",
+    )
 
 
 class OrchestratorSettings(SQLModel, table=True):

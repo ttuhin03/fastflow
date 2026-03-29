@@ -16,6 +16,8 @@ interface AuthProviders {
   login_branding_logo_url?: string
   custom_oauth_icon_url?: string
   custom_display_name?: string
+  /** false = nur konfigurierte Provider auf der Login-Seite */
+  show_unconfigured_oauth_on_login?: boolean
 }
 
 const PROVIDER_ORDER = ['github', 'google', 'microsoft', 'custom'] as const
@@ -39,7 +41,12 @@ export default function Login() {
   })
 
   const orderedProviderIds = useMemo(() => {
-    return [...PROVIDER_ORDER].sort((a, b) => {
+    const showUnconfigured = providers.show_unconfigured_oauth_on_login !== false
+    const candidates = PROVIDER_ORDER.filter((id) => {
+      if (showUnconfigured) return true
+      return providers[id] === true
+    })
+    return [...candidates].sort((a, b) => {
       const aOn = providers[a] === true
       const bOn = providers[b] === true
       if (aOn !== bOn) return aOn ? -1 : 1

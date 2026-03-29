@@ -153,11 +153,16 @@ def _auth_providers_public(session: Session) -> dict[str, Any]:
     flags = _providers_configured()
     out: dict[str, Any] = {**flags}
     db_logo = None
+    show_unconfigured_oauth_on_login = True
     try:
         ss = get_system_settings(session)
         db_logo = _safe_public_url(getattr(ss, "login_branding_logo_url", None))
+        show_unconfigured_oauth_on_login = bool(
+            getattr(ss, "show_unconfigured_oauth_on_login", True)
+        )
     except Exception:
         pass
+    out["show_unconfigured_oauth_on_login"] = show_unconfigured_oauth_on_login
     env_logo = _safe_public_url(getattr(config, "LOGIN_BRANDING_LOGO_URL", None))
     logo = db_logo or env_logo
     if logo:
@@ -176,7 +181,8 @@ async def get_auth_providers(session: Session = Depends(get_session)) -> dict[st
     """
     Gibt zurück, welche OAuth-Provider konfiguriert sind.
     Öffentlich (kein Login), damit die Login-Seite Buttons ein-/ausblenden kann.
-    Optional: login_branding_logo_url, custom_display_name, custom_oauth_icon_url.
+    Optional: login_branding_logo_url, custom_display_name, custom_oauth_icon_url,
+    show_unconfigured_oauth_on_login (ob nicht konfigurierte Provider auf der Login-Seite erscheinen).
     Logo: Datenbank-Einstellung hat Vorrang vor LOGIN_BRANDING_LOGO_URL (Umgebung).
     """
     return _auth_providers_public(session)

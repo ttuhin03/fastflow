@@ -190,6 +190,7 @@ export default function Settings() {
     login_branding_logo_url?: string | null
     ui_show_attribution: boolean
     ui_show_version: boolean
+    show_unconfigured_oauth_on_login: boolean
   }>({
     queryKey: ['settings-system'],
     queryFn: async () => {
@@ -219,6 +220,7 @@ export default function Settings() {
       login_branding_logo_url?: string
       ui_show_attribution?: boolean
       ui_show_version?: boolean
+      show_unconfigured_oauth_on_login?: boolean
     }) => {
       const response = await apiClient.put('/settings/system', patch)
       return response.data
@@ -715,6 +717,20 @@ export default function Settings() {
               placeholder="https://example.com/logo.png"
               disabled={updateSystemSettingsMutation.isPending || fieldDisabled}
             />
+          </div>
+          <div className="settings-telemetry-toggles setting-item--offset-top">
+            <label className="settings-telemetry-toggle">
+              <input
+                type="checkbox"
+                checked={systemSettings?.show_unconfigured_oauth_on_login ?? true}
+                onChange={(e) =>
+                  updateSystemSettingsMutation.mutate({ show_unconfigured_oauth_on_login: e.target.checked })
+                }
+                disabled={updateSystemSettingsMutation.isPending || fieldDisabled}
+              />
+              {t('settings.showUnconfiguredOauthOnLogin')}
+            </label>
+            <p className="setting-hint settings-ui-pref-hint">{t('settings.showUnconfiguredOauthOnLoginHint')}</p>
           </div>
         </div>
       )}

@@ -35,6 +35,7 @@ def get_system_settings(session: Session) -> SystemSettings:
             dependency_audit_cron="0 3 * * *",
             ui_show_attribution=True,
             ui_show_version=True,
+            show_unconfigured_oauth_on_login=True,
         )
         session.add(ss)
         session.commit()

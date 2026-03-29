@@ -153,6 +153,7 @@ class SystemSettingsResponse(BaseModel):
     login_branding_logo_url: Optional[str] = None
     ui_show_attribution: bool = True
     ui_show_version: bool = True
+    show_unconfigured_oauth_on_login: bool = True
 
 
 class SystemSettingsUpdate(BaseModel):
@@ -165,6 +166,7 @@ class SystemSettingsUpdate(BaseModel):
     login_branding_logo_url: Optional[str] = None
     ui_show_attribution: Optional[bool] = None
     ui_show_version: Optional[bool] = None
+    show_unconfigured_oauth_on_login: Optional[bool] = None
 
 
 class SettingsUpdate(BaseModel):
@@ -366,6 +368,7 @@ async def get_system_settings_endpoint(
         login_branding_logo_url=getattr(ss, "login_branding_logo_url", None),
         ui_show_attribution=bool(getattr(ss, "ui_show_attribution", True)),
         ui_show_version=bool(getattr(ss, "ui_show_version", True)),
+        show_unconfigured_oauth_on_login=bool(getattr(ss, "show_unconfigured_oauth_on_login", True)),
     )
 
 
@@ -427,6 +430,8 @@ async def update_system_settings_endpoint(
         ss.ui_show_attribution = body.ui_show_attribution
     if body.ui_show_version is not None:
         ss.ui_show_version = body.ui_show_version
+    if body.show_unconfigured_oauth_on_login is not None:
+        ss.show_unconfigured_oauth_on_login = body.show_unconfigured_oauth_on_login
     session.add(ss)
     session.commit()
     session.refresh(ss)
@@ -448,6 +453,7 @@ async def update_system_settings_endpoint(
         login_branding_logo_url=getattr(ss, "login_branding_logo_url", None),
         ui_show_attribution=bool(getattr(ss, "ui_show_attribution", True)),
         ui_show_version=bool(getattr(ss, "ui_show_version", True)),
+        show_unconfigured_oauth_on_login=bool(getattr(ss, "show_unconfigured_oauth_on_login", True)),
     )
 
 

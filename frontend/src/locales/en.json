@@ -194,6 +194,8 @@
     "brandingLogoInfo": "Public http(s) URL to an image (PNG, SVG, …). Used on the login page and sidebar. This setting overrides the LOGIN_BRANDING_LOGO_URL environment variable; leave empty to use the environment value again.",
     "brandingLogoHint": "Leave empty to use the logo from LOGIN_BRANDING_LOGO_URL (deployment).",
     "brandingLogoUrlLabel": "Logo URL",
+    "showUnconfiguredOauthOnLogin": "Show unconfigured OAuth providers on the login page",
+    "showUnconfiguredOauthOnLoginHint": "When off, only providers with credentials configured in the deployment are shown. The account linking section in Settings is unchanged.",
     "editLockTooltipLocked": "Locked: click to enable editing (helps prevent accidental changes).",
     "editLockTooltipUnlocked": "Unlocked: settings can be changed. Click again to lock.",
     "editLockUnlockAria": "Unlock settings for editing",

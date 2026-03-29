@@ -194,6 +194,8 @@
     "brandingLogoInfo": "Öffentliche http(s)-URL zu einem Bild (PNG, SVG, …). Gilt für die Anmeldeseite und die Seitenleiste. Diese Einstellung hat Vorrang vor der Umgebungsvariable LOGIN_BRANDING_LOGO_URL; leer lassen, um wieder die Umgebung zu nutzen.",
     "brandingLogoHint": "Leer lassen, um das Logo aus LOGIN_BRANDING_LOGO_URL (Deployment) zu übernehmen.",
     "brandingLogoUrlLabel": "Logo-URL",
+    "showUnconfiguredOauthOnLogin": "Nicht konfigurierte OAuth-Anbieter auf der Anmeldeseite anzeigen",
+    "showUnconfiguredOauthOnLoginHint": "Wenn aus, erscheinen nur Anbieter, die im Deployment mit Zugangsdaten konfiguriert sind. Der Bereich „Verknüpfte Konten“ in den Einstellungen bleibt unverändert.",
     "editLockTooltipLocked": "Gesperrt: Klicken zum Bearbeiten (verhindert versehentliche Änderungen).",
     "editLockTooltipUnlocked": "Entsperrt: Einstellungen können geändert werden. Erneut klicken zum Sperren.",
     "editLockUnlockAria": "Einstellungen zum Bearbeiten entsperren",
