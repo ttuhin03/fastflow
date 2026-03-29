@@ -824,8 +824,8 @@ export default function RunDetail() {
                     pipeline?.metadata?.cpu_hard_limit ?? 100,
                     pipeline?.metadata?.cpu_soft_limit ?? 0
                   )}
-                  color="#4caf50"
-                  warningColor="#ff9800"
+                  color="#22c55e"
+                  warningColor="#f59e0b"
                   softLimit={pipeline?.metadata?.cpu_soft_limit}
                   hardLimit={pipeline?.metadata?.cpu_hard_limit}
                 />
@@ -840,8 +840,8 @@ export default function RunDetail() {
                     pipeline?.metadata?.mem_hard_limit ? parseMemoryString(pipeline.metadata.mem_hard_limit) : 0,
                     pipeline?.metadata?.mem_soft_limit ? parseMemoryString(pipeline.metadata.mem_soft_limit) : 0
                   )}
-                  color="#2196f3"
-                  warningColor="#ff9800"
+                  color="#6366f1"
+                  warningColor="#f59e0b"
                   softLimit={pipeline?.metadata?.mem_soft_limit ? parseMemoryString(pipeline.metadata.mem_soft_limit) : undefined}
                   hardLimit={pipeline?.metadata?.mem_hard_limit ? parseMemoryString(pipeline.metadata.mem_hard_limit) : undefined}
                 />

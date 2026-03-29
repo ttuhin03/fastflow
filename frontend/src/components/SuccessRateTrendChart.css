@@ -51,15 +51,15 @@
 }
 
 .success-rate-tooltip .tooltip-number.success {
-  color: #4caf50;
+  color: #22c55e;
 }
 
 .success-rate-tooltip .tooltip-number.warning {
-  color: #ff9800;
+  color: #f59e0b;
 }
 
 .success-rate-tooltip .tooltip-number.error {
-  color: #f44336;
+  color: #ef4444;
 }
 
 .success-rate-tooltip .tooltip-details {

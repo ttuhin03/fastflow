@@ -91,22 +91,22 @@
 }
 
 .stat-icon.pipelines {
-  background-color: rgba(33, 150, 243, 0.15);
+  background-color: rgba(99, 102, 241, 0.15);
   color: var(--color-primary);
 }
 
 .stat-icon.runs {
-  background-color: rgba(156, 39, 176, 0.15);
-  color: #9C27B0;
+  background-color: rgba(79, 70, 229, 0.15);
+  color: #818cf8;
 }
 
 .stat-icon.success {
-  background-color: rgba(76, 175, 80, 0.15);
+  background-color: rgba(34, 197, 94, 0.15);
   color: var(--color-success);
 }
 
 .stat-icon.error {
-  background-color: rgba(244, 67, 54, 0.15);
+  background-color: rgba(239, 68, 68, 0.15);
   color: var(--color-error);
 }
 

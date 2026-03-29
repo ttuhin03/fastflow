@@ -12,7 +12,7 @@
 
 .add-button {
   padding: 0.5rem 1rem;
-  background-color: #4caf50;
+  background-color: #22c55e;
   color: white;
   border: none;
   border-radius: var(--radius-sm);
@@ -141,7 +141,7 @@
 }
 
 .status-toggle.enabled {
-  background-color: #4caf50;
+  background-color: #22c55e;
   color: white;
 }
 
@@ -174,7 +174,7 @@
 }
 
 .edit-button {
-  background-color: #2196f3;
+  background-color: #6366f1;
   color: white;
 }
 
@@ -183,7 +183,7 @@
 }
 
 .delete-button {
-  background-color: #f44336;
+  background-color: #ef4444;
   color: white;
 }
 
@@ -269,32 +269,32 @@
 }
 
 .status-success {
-  background-color: #4caf50;
+  background-color: #22c55e;
   color: white;
 }
 
 .status-failed {
-  background-color: #f44336;
+  background-color: #ef4444;
   color: white;
 }
 
 .status-running {
-  background-color: #2196f3;
+  background-color: #6366f1;
   color: white;
 }
 
 .status-pending {
-  background-color: #ff9800;
+  background-color: #f59e0b;
   color: white;
 }
 
 .exit-success {
-  color: #4caf50;
+  color: #22c55e;
   font-weight: 500;
 }
 
 .exit-error {
-  color: #f44336;
+  color: #ef4444;
   font-weight: 500;
 }
 

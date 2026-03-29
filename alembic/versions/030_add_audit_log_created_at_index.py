@@ -16,8 +16,11 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.create_index("ix_audit_log_created_at", "audit_log", ["created_at"])
+    # Index ix_audit_log_created_at is already created in 028_add_audit_log.
+    # This revision remains for deployments that stamped 029 without 030; no-op avoids duplicate index errors.
+    pass
 
 
 def downgrade() -> None:
-    op.drop_index("ix_audit_log_created_at", table_name="audit_log")
+    # Do not drop: index is owned by 028_add_audit_log.
+    pass

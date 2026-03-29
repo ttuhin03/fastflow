@@ -48,8 +48,8 @@
 
 .header-time-toggle.utc {
   color: var(--color-info);
-  border-color: rgba(33, 150, 243, 0.3);
-  background-color: rgba(33, 150, 243, 0.1);
+  border-color: rgba(99, 102, 241, 0.3);
+  background-color: rgba(99, 102, 241, 0.1);
 }
 
 .header-time-toggle.cet {
@@ -76,7 +76,7 @@
 }
 
 .ht-dual-utc {
-  color: rgba(33, 150, 243, 0.95);
+  color: rgba(99, 102, 241, 0.95);
 }
 
 .ht-dual-sep {
@@ -115,5 +115,5 @@
   opacity: 1;
   color: var(--color-primary);
   border-color: var(--color-border);
-  background: rgba(33, 150, 243, 0.08);
+  background: rgba(99, 102, 241, 0.08);
 }

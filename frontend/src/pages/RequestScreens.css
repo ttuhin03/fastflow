@@ -22,10 +22,10 @@
 }
 
 .login-icon--error {
-  background: linear-gradient(135deg, rgba(244, 67, 54, 0.25), rgba(211, 47, 47, 0.2)) !important;
-  box-shadow: 0 4px 20px rgba(244, 67, 54, 0.35), 0 0 0 4px rgba(244, 67, 54, 0.1) !important;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.25), rgba(211, 47, 47, 0.2)) !important;
+  box-shadow: 0 4px 20px rgba(239, 68, 68, 0.35), 0 0 0 4px rgba(239, 68, 68, 0.1) !important;
 }
 
 .login-icon--error svg {
-  color: var(--color-error, #f44336);
+  color: var(--color-error, #ef4444);
 }

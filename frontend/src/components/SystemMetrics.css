@@ -40,18 +40,18 @@
   align-items: center;
   justify-content: center;
   font-size: 1.75rem;
-  background-color: rgba(33, 150, 243, 0.15);
+  background-color: rgba(99, 102, 241, 0.15);
   color: var(--color-primary);
   flex-shrink: 0;
 }
 
 .metric-icon.api {
-  background-color: rgba(156, 39, 176, 0.15);
-  color: #9c27b0;
+  background-color: rgba(79, 70, 229, 0.15);
+  color: #818cf8;
 }
 
 .metric-icon.system {
-  background-color: rgba(76, 175, 80, 0.15);
+  background-color: rgba(34, 197, 94, 0.15);
   color: var(--color-success);
 }
 
@@ -208,7 +208,7 @@
 }
 
 .status-badge.status-running {
-  background-color: rgba(33, 150, 243, 0.2);
+  background-color: rgba(99, 102, 241, 0.2);
   color: var(--color-primary);
 }
 

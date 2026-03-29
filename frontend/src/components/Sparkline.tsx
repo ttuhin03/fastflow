@@ -13,7 +13,7 @@ export default function Sparkline({
   data, 
   width = 100, 
   height = 30, 
-  color = '#4caf50',
+  color = '#22c55e',
   showPoints = false 
 }: SparklineProps) {
   const path = useMemo(() => {

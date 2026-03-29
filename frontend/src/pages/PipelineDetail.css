@@ -125,7 +125,7 @@
 }
 
 .toggle-switch input:checked + .toggle-slider {
-  background-color: #4caf50;
+  background-color: #22c55e;
 }
 
 .toggle-switch input:checked + .toggle-slider:before {
@@ -147,7 +147,7 @@
 }
 
 .status-badge.enabled {
-  background-color: #4caf50;
+  background-color: #22c55e;
   color: white;
 }
 
@@ -165,7 +165,7 @@
 .tag-badge {
   display: inline-block;
   padding: 0.25rem 0.5rem;
-  background-color: #2196f3;
+  background-color: #6366f1;
   color: white;
   border-radius: var(--radius-sm);
   font-size: 0.75rem;
@@ -238,7 +238,7 @@
 }
 
 .reset-button:hover:not(:disabled) {
-  background-color: #f57c00;
+  background-color: #d97706;
 }
 
 .reset-button:disabled {
@@ -263,11 +263,11 @@
 }
 
 .stat-box.success {
-  border: 2px solid #4caf50;
+  border: 2px solid #22c55e;
 }
 
 .stat-box.error {
-  border: 2px solid #f44336;
+  border: 2px solid #ef4444;
 }
 
 .stat-box .stat-label {
@@ -282,11 +282,11 @@
 }
 
 .stat-box.success .stat-value {
-  color: #4caf50;
+  color: #22c55e;
 }
 
 .stat-box.error .stat-value {
-  color: #f44336;
+  color: #ef4444;
 }
 
 .runs-table {
@@ -318,32 +318,32 @@
 }
 
 .status-success {
-  background-color: #4caf50;
+  background-color: #22c55e;
   color: white;
 }
 
 .status-failed {
-  background-color: #f44336;
+  background-color: #ef4444;
   color: white;
 }
 
 .status-running {
-  background-color: #2196f3;
+  background-color: #6366f1;
   color: white;
 }
 
 .status-pending {
-  background-color: #ff9800;
+  background-color: #f59e0b;
   color: white;
 }
 
 .exit-success {
-  color: #4caf50;
+  color: #22c55e;
   font-weight: 500;
 }
 
 .exit-error {
-  color: #f44336;
+  color: #ef4444;
   font-weight: 500;
 }
 
@@ -402,7 +402,7 @@
 
 .webhook-url {
   flex: 1;
-  color: #4caf50;
+  color: #22c55e;
   font-family: monospace;
   font-size: 0.9rem;
   word-break: break-all;
@@ -488,7 +488,7 @@
 }
 
 .enable-webhook-button {
-  background-color: #4caf50;
+  background-color: #22c55e;
   color: white;
 }
 
@@ -502,7 +502,7 @@
 }
 
 .disable-webhook-button {
-  background-color: #f44336;
+  background-color: #ef4444;
   color: white;
 }
 

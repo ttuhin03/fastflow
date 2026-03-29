@@ -151,7 +151,7 @@ export default function AverageRuntimeChart({ runs, days = 30 }: AverageRuntimeC
           <Bar 
             dataKey="avgDuration" 
             name="Durchschnittliche Laufzeit"
-            fill="#2196f3"
+            fill="#6366f1"
             radius={[4, 4, 0, 0]}
           />
         </BarChart>

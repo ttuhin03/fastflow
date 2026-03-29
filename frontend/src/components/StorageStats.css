@@ -40,28 +40,28 @@
   align-items: center;
   justify-content: center;
   font-size: 1.75rem;
-  background-color: rgba(33, 150, 243, 0.15);
+  background-color: rgba(99, 102, 241, 0.15);
   color: var(--color-primary);
   flex-shrink: 0;
 }
 
 .storage-stat-card .stat-icon.database-icon {
-  background-color: rgba(156, 39, 176, 0.15);
-  color: #9c27b0;
+  background-color: rgba(79, 70, 229, 0.15);
+  color: #818cf8;
 }
 
 .storage-stat-card .stat-icon.inode-icon {
-  background-color: rgba(76, 175, 80, 0.15);
-  color: #4caf50;
+  background-color: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
 }
 
 .storage-stat-card .stat-icon.inode-icon.inode-warn {
-  background-color: rgba(244, 67, 54, 0.15);
+  background-color: rgba(239, 68, 68, 0.15);
   color: var(--color-error);
 }
 
 .disk-usage-fill.inode {
-  background: linear-gradient(90deg, #4caf50, #81c784);
+  background: linear-gradient(90deg, #22c55e, #86efac);
 }
 
 .disk-usage-fill.inode.inode-warn {
@@ -150,7 +150,7 @@
 }
 
 .disk-usage-fill.database {
-  background: linear-gradient(90deg, #9c27b0, #ba68c8);
+  background: linear-gradient(90deg, #6366f1, #818cf8);
 }
 
 .spinner {

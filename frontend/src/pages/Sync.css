@@ -50,17 +50,17 @@
 }
 
 .status-badge.success {
-  background-color: #4caf50;
+  background-color: #22c55e;
   color: white;
 }
 
 .status-badge.failed {
-  background-color: #f44336;
+  background-color: #ef4444;
   color: white;
 }
 
 .status-badge.pending {
-  background-color: #ff9800;
+  background-color: #f59e0b;
   color: white;
 }
 
@@ -120,7 +120,7 @@
 .cached-badge {
   display: inline-block;
   padding: 0.5rem 1rem;
-  background-color: #4caf50;
+  background-color: #22c55e;
   color: white;
   border-radius: 4px;
   font-size: 0.9rem;
@@ -214,7 +214,7 @@
 
 .save-button {
   padding: 0.5rem 1rem;
-  background-color: #4caf50;
+  background-color: #22c55e;
   color: white;
   border: none;
   border-radius: 4px;
@@ -284,17 +284,17 @@
 }
 
 .log-success {
-  background-color: #4caf50;
+  background-color: #22c55e;
   color: white;
 }
 
 .log-failed {
-  background-color: #f44336;
+  background-color: #ef4444;
   color: white;
 }
 
 .log-started {
-  background-color: #2196f3;
+  background-color: #6366f1;
   color: white;
 }
 
@@ -309,7 +309,7 @@
 }
 
 .log-error {
-  color: #f44336;
+  color: #ef4444;
   margin-top: 0.5rem;
   font-weight: 500;
 }
@@ -348,7 +348,7 @@
 }
 
 .status-badge.configured {
-  background-color: #4caf50;
+  background-color: #22c55e;
   color: white;
 }
 
@@ -358,7 +358,7 @@
 }
 
 .status-warning {
-  background-color: #ff9800;
+  background-color: #f59e0b;
   color: white;
   padding: 0.5rem;
   border-radius: 4px;
@@ -495,7 +495,7 @@
 }
 
 .sync-repo-card .delete-button.btn-outlined:hover:not(:disabled) {
-  background-color: rgba(244, 67, 54, 0.15);
+  background-color: rgba(239, 68, 68, 0.15);
   color: var(--color-error);
   border-color: var(--color-error);
 }
@@ -709,7 +709,7 @@
 }
 
 .github-flow-info small {
-  color: #4caf50;
+  color: #22c55e;
   font-size: 0.85rem;
   line-height: 1.6;
 }

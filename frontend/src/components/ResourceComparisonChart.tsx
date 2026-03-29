@@ -109,7 +109,7 @@ export default function ResourceComparisonChart({ runs, maxRuns = 5 }: ResourceC
   }
 
   // Generiere Farben für Runs
-  const colors = ['#4caf50', '#2196f3', '#ff9800', '#9c27b0', '#f44336', '#00bcd4', '#ffeb3b']
+  const colors = ['#22c55e', '#6366f1', '#f59e0b', '#818cf8', '#ef4444', '#38bdf8', '#fcd34d']
 
   return (
     <div className="resource-comparison-chart">

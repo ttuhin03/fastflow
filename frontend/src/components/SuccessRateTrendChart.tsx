@@ -89,9 +89,9 @@ export default function SuccessRateTrendChart({ dailyStats, days = 30 }: Success
             type="monotone" 
             dataKey="successRate" 
             name="Erfolgsrate"
-            stroke="#4caf50" 
+            stroke="#22c55e" 
             strokeWidth={2}
-            dot={{ r: 3, fill: '#4caf50' }}
+            dot={{ r: 3, fill: '#22c55e' }}
             activeDot={{ r: 5 }}
           />
         </LineChart>

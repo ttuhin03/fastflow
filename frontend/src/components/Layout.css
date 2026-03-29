@@ -4,16 +4,14 @@
   background-color: var(--color-background);
 }
 
-/* Sidebar – elevated design */
+/* Sidebar — frosted (TREK-like) */
 .sidebar {
   width: var(--sidebar-width);
-  background: linear-gradient(
-    180deg,
-    var(--color-surface) 0%,
-    color-mix(in srgb, var(--color-surface) 98%, var(--color-background)) 100%
-  );
-  border-right: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent);
-  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15);
+  background: rgba(19, 19, 22, 0.82);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 4px 0 32px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.04);
   display: flex;
   flex-direction: column;
   position: fixed;
@@ -36,28 +34,28 @@
 }
 
 .sidebar-logo-icon {
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(145deg, rgba(33, 150, 243, 0.25), rgba(156, 39, 176, 0.15));
-  border-radius: var(--radius-lg);
-  color: var(--color-primary);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 4px 12px rgba(33, 150, 243, 0.25);
-  flex-shrink: 0;
-  border: 1px solid rgba(33, 150, 243, 0.2);
-  transition: transform var(--transition-base), box-shadow var(--transition-base);
-}
+ 	width: 40px;
+ 	height: 40px;
+ 	display: flex;
+ 	align-items: center;
+ 	justify-content: center;
+ 	background: linear-gradient(145deg, rgba(99, 102, 241, 0.22), rgba(129, 140, 248, 0.1));
+ 	border-radius: var(--radius-lg);
+ 	color: var(--color-primary-light);
+ 	box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 4px 14px rgba(79, 70, 229, 0.22);
+ 	flex-shrink: 0;
+ 	border: 1px solid rgba(99, 102, 241, 0.28);
+ 	transition: transform var(--transition-base), box-shadow var(--transition-base);
+ }
 
 .sidebar-logo-icon:hover {
-  transform: scale(1.02);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.1),
-    0 6px 16px rgba(33, 150, 243, 0.3);
-}
+ 	transform: scale(1.02);
+ 	box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 6px 18px rgba(79, 70, 229, 0.3);
+ }
 
 .sidebar-logo-icon svg {
   font-size: 1.35rem;
@@ -66,16 +64,16 @@
 }
 
 .sidebar-logo {
-  font-size: var(--font-size-xl);
-  font-weight: 700;
-  margin: 0;
-  letter-spacing: -0.02em;
-  background: linear-gradient(135deg, var(--color-primary) 0%, #9c27b0 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  filter: drop-shadow(0 0 20px rgba(33, 150, 243, 0.15));
-}
+ 	font-size: var(--font-size-xl);
+ 	font-weight: 700;
+ 	margin: 0;
+ 	letter-spacing: -0.02em;
+ 	background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-primary) 100%);
+ 	-webkit-background-clip: text;
+ 	-webkit-text-fill-color: transparent;
+ 	background-clip: text;
+ 	filter: drop-shadow(0 0 18px rgba(99, 102, 241, 0.2));
+ }
 
 /* Navigation */
 .sidebar-nav {
@@ -87,14 +85,14 @@
 }
 
 .sidebar-nav-indicator {
-  position: absolute;
-  left: var(--spacing-sm);
-  right: var(--spacing-sm);
-  border-radius: var(--radius-lg);
-  background: linear-gradient(
+ 	position: absolute;
+ 	left: var(--spacing-sm);
+ 	right: var(--spacing-sm);
+ 	border-radius: var(--radius-lg);
+ 	background: linear-gradient(
     90deg,
-    rgba(33, 150, 243, 0.25) 0%,
-    rgba(33, 150, 243, 0.1) 100%
+    rgba(99, 102, 241, 0.2) 0%,
+    rgba(99, 102, 241, 0.06) 100%
   );
   pointer-events: none;
   z-index: 0;
@@ -143,7 +141,7 @@
   line-height: 20px;
   text-align: center;
   color: #fff;
-  background: linear-gradient(135deg, var(--color-warning, #ff9800), #f57c00);
+  background: linear-gradient(135deg, var(--color-warning, #f59e0b), #d97706);
   border-radius: 10px;
   flex-shrink: 0;
   box-shadow: 0 2px 6px rgba(255, 152, 0, 0.4);
@@ -163,8 +161,8 @@
 }
 
 .nav-item.active .nav-icon {
-  background-color: rgba(33, 150, 243, 0.15);
-}
+ 	background-color: rgba(99, 102, 241, 0.18);
+ }
 
 .nav-icon.icon-clicked.settings-icon {
   animation: rotateIcon 0.6s ease-out;
@@ -394,9 +392,9 @@
   font-weight: 600;
 }
 .sidebar-lang .lang-sep {
-  color: var(--color-text-tertiary);
-  font-size: var(--font-size-xs);
-}
+ 	color: var(--color-text-disabled);
+ 	font-size: var(--font-size-xs);
+ }
 
 /* Sidebar Footer – elevated */
 .sidebar-footer {
@@ -512,7 +510,7 @@
 }
 
 .sidebar-footer-text .heart {
-  color: #f44336;
+  color: #ef4444;
   animation: heartBeat 1.5s ease-in-out infinite;
   display: inline-block;
 }
@@ -560,21 +558,17 @@
   min-height: 100vh;
 }
 
-/* Top bar – elevated design */
+/* Top bar — frosted */
 .main-header {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--color-surface) 102%, white) 0%,
-    var(--color-surface) 50%,
-    color-mix(in srgb, var(--color-surface) 98%, var(--color-background)) 100%
-  );
-  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 55%, transparent);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03), 0 4px 20px rgba(0, 0, 0, 0.08);
+  background: rgba(9, 9, 11, 0.72);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 1px 12px rgba(0, 0, 0, 0.2);
   padding: var(--spacing-md) var(--spacing-xl);
   position: sticky;
   top: 0;
   z-index: var(--z-header);
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
 .header-content {
@@ -660,8 +654,8 @@
   align-items: center;
   gap: var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-md);
-  background: rgba(42, 42, 42, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: color-mix(in srgb, var(--color-card) 88%, transparent);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-md);
   color: var(--color-text-primary);
   text-decoration: none;
@@ -674,8 +668,8 @@
 }
 
 .footer-github-link:hover {
-  background: rgba(42, 42, 42, 0.95);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: color-mix(in srgb, var(--color-surface-variant) 92%, transparent);
+  border-color: rgba(255, 255, 255, 0.12);
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
@@ -694,7 +688,7 @@
 }
 
 .footer-text .heart {
-  color: #f44336;
+  color: #ef4444;
   animation: heartBeat 1.5s ease-in-out infinite;
   display: inline-block;
 }
@@ -747,7 +741,7 @@
 
 .mobile-menu-button:active {
   transform: scale(0.95);
-  background-color: var(--color-primary-dark, #1976d2);
+  background-color: var(--color-primary-dark);
 }
 
 /* Sidebar Overlay for Mobile */

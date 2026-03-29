@@ -25,7 +25,7 @@
 }
 
 .cancel-button {
-  background-color: #f44336;
+  background-color: #ef4444;
   color: white;
 }
 
@@ -34,7 +34,7 @@
 }
 
 .retry-button {
-  background-color: #4caf50;
+  background-color: #22c55e;
   color: white;
 }
 
@@ -60,12 +60,12 @@
 }
 
 .error-type-badge.error-type-pipeline_error {
-  background-color: #f44336;
+  background-color: #ef4444;
   color: white;
 }
 
 .error-type-badge.error-type-infrastructure_error {
-  background-color: #ff9800;
+  background-color: #f59e0b;
   color: white;
 }
 
@@ -80,13 +80,13 @@
 .error-message.error-message-pipeline_error {
   background-color: #ffebee;
   color: #c62828;
-  border-left: 3px solid #f44336;
+  border-left: 3px solid #ef4444;
 }
 
 .error-message.error-message-infrastructure_error {
   background-color: #fff3e0;
   color: #e65100;
-  border-left: 3px solid #ff9800;
+  border-left: 3px solid #f59e0b;
 }
 
 .run-info-card {
@@ -131,32 +131,32 @@
 }
 
 .status-success {
-  background-color: #4caf50;
+  background-color: #22c55e;
   color: white;
 }
 
 .status-failed {
-  background-color: #f44336;
+  background-color: #ef4444;
   color: white;
 }
 
 .status-running {
-  background-color: #2196f3;
+  background-color: #6366f1;
   color: white;
 }
 
 .status-pending {
-  background-color: #ff9800;
+  background-color: #f59e0b;
   color: white;
 }
 
 .exit-success {
-  color: #4caf50;
+  color: #22c55e;
   font-weight: 500;
 }
 
 .exit-error {
-  color: #f44336;
+  color: #ef4444;
   font-weight: 500;
 }
 
@@ -375,23 +375,23 @@
 }
 
 .cell-status-success {
-  background-color: rgba(76, 175, 80, 0.3);
-  color: #4caf50;
+  background-color: rgba(34, 197, 94, 0.3);
+  color: #22c55e;
 }
 
 .cell-status-failed {
-  background-color: rgba(244, 67, 54, 0.3);
-  color: #f44336;
+  background-color: rgba(239, 68, 68, 0.3);
+  color: #ef4444;
 }
 
 .cell-status-retrying {
   background-color: rgba(255, 152, 0, 0.3);
-  color: #ff9800;
+  color: #f59e0b;
 }
 
 .cell-status-running {
-  background-color: rgba(33, 150, 243, 0.3);
-  color: #2196f3;
+  background-color: rgba(99, 102, 241, 0.3);
+  color: #818cf8;
 }
 
 .cell-log-header-toggle {
@@ -426,7 +426,7 @@
 }
 
 .cell-log-stderr pre {
-  color: #f44336;
+  color: #ef4444;
 }
 
 .cell-log-images {
@@ -480,7 +480,7 @@
 }
 
 .line-chart text {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  font-family: var(--font-family);
 }
 
 .no-chart-data {
@@ -522,7 +522,7 @@
 .warning-badge {
   display: inline-block;
   padding: 0.25rem 0.5rem;
-  background-color: #ff9800;
+  background-color: #f59e0b;
   color: white;
   border-radius: var(--radius-sm);
   font-size: 0.75rem;
@@ -537,12 +537,12 @@
 }
 
 .health-status.healthy {
-  background-color: #4caf50;
+  background-color: #22c55e;
   color: white;
 }
 
 .health-status.unhealthy {
-  background-color: #f44336;
+  background-color: #ef4444;
   color: white;
 }
 
@@ -555,12 +555,12 @@
 }
 
 .health-badge.healthy {
-  background-color: #4caf50;
+  background-color: #22c55e;
   color: white;
 }
 
 .health-badge.unhealthy {
-  background-color: #f44336;
+  background-color: #ef4444;
   color: white;
 }
 
@@ -572,17 +572,17 @@
 }
 
 .connection-status.connected {
-  background-color: #4caf50;
+  background-color: #22c55e;
   color: white;
 }
 
 .connection-status.disconnected {
-  background-color: #f44336;
+  background-color: #ef4444;
   color: white;
 }
 
 .connection-status.reconnecting {
-  background-color: #ff9800;
+  background-color: #f59e0b;
   color: white;
   animation: pulse 1.5s ease-in-out infinite;
 }

@@ -147,17 +147,17 @@
 }
 
 .status-success {
-  background-color: rgba(76, 175, 80, 0.15);
+  background-color: rgba(34, 197, 94, 0.15);
   color: var(--color-success);
 }
 
 .status-failed {
-  background-color: rgba(244, 67, 54, 0.15);
+  background-color: rgba(239, 68, 68, 0.15);
   color: var(--color-error);
 }
 
 .status-running {
-  background-color: rgba(33, 150, 243, 0.15);
+  background-color: rgba(99, 102, 241, 0.15);
   color: var(--color-primary);
 }
 
@@ -188,12 +188,12 @@
 }
 
 .error-type-badge.error-type-pipeline_error {
-  background-color: #f44336;
+  background-color: #ef4444;
   color: white;
 }
 
 .error-type-badge.error-type-infrastructure_error {
-  background-color: #ff9800;
+  background-color: #f59e0b;
   color: white;
 }
 

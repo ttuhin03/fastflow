@@ -67,7 +67,7 @@ export const showConfirm = (
             },
             style: {
               padding: '0.5rem 1rem',
-              background: '#4caf50',
+              background: '#22c55e',
               color: 'white',
               border: 'none',
               borderRadius: '4px',
