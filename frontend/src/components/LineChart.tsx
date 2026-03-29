@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useId } from 'react'
+import { useTranslation } from 'react-i18next'
 
 export interface LineChartMetric {
   timestamp: string
@@ -19,6 +20,7 @@ interface LineChartProps {
 }
 
 export function LineChart({ data, valueKey, maxValue, color, warningColor, softLimit, hardLimit }: LineChartProps) {
+  const { t } = useTranslation()
   const svgRef = useRef<SVGSVGElement>(null)
   const [dimensions, setDimensions] = useState({ width: 800, height: 200 })
   const gradientId = useId()
@@ -41,7 +43,7 @@ export function LineChart({ data, valueKey, maxValue, color, warningColor, softL
   }, [])
 
   if (data.length === 0) {
-    return <div className="no-chart-data">Keine Daten verfügbar</div>
+    return <div className="no-chart-data">{t('charts.lineChart.noData')}</div>
   }
 
   const width = dimensions.width

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { FaExclamationCircle } from 'react-icons/fa';
@@ -20,6 +21,7 @@ interface VersionInfoProps {
 }
 
 const VersionInfo: React.FC<VersionInfoProps> = ({ variant = 'footer' }) => {
+    const { t } = useTranslation();
     const { data, isLoading } = useQuery({
         queryKey: ['system-version'],
         queryFn: async () => {
@@ -40,7 +42,7 @@ const VersionInfo: React.FC<VersionInfoProps> = ({ variant = 'footer' }) => {
             <div className="version-update-banner" role="alert">
                 <FaExclamationCircle className="version-update-banner-icon" aria-hidden />
                 <span className="version-update-banner-text">
-                    New version <strong>v{latestVersion}</strong> available
+                    {t('versionInfo.newVersionAvailable', { version: latestVersion })}
                 </span>
                 <a
                     href={RELEASES_URL}
@@ -48,7 +50,7 @@ const VersionInfo: React.FC<VersionInfoProps> = ({ variant = 'footer' }) => {
                     rel="noopener noreferrer"
                     className="version-update-banner-link"
                 >
-                    View releases
+                    {t('versionInfo.viewReleases')}
                 </a>
             </div>
         );
@@ -63,7 +65,7 @@ const VersionInfo: React.FC<VersionInfoProps> = ({ variant = 'footer' }) => {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-amber-500 hover:text-amber-400"
-                    title={`Update available: ${latestVersion}`}
+                    title={t('versionInfo.updateAvailableTitle', { version: latestVersion })}
                 >
                     <FaExclamationCircle style={{ fontSize: '8px' }} />
                 </a>

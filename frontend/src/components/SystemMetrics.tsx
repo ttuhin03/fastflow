@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
@@ -26,6 +27,7 @@ interface SystemMetrics {
 }
 
 export default function SystemMetrics() {
+  const { t } = useTranslation()
   const metricsInterval = useRefetchInterval(5000)
   const { data: metrics, isLoading } = useQuery<SystemMetrics>({
     queryKey: ['system-metrics'],
@@ -40,7 +42,7 @@ export default function SystemMetrics() {
     return (
       <div className="system-metrics loading">
         <div className="spinner"></div>
-        <p>Laden...</p>
+        <p>{t('common.loading')}</p>
       </div>
     )
   }
@@ -48,7 +50,7 @@ export default function SystemMetrics() {
   if (!metrics) {
     return (
       <div className="system-metrics error">
-        <p>System-Metriken konnten nicht geladen werden</p>
+        <p>{t('systemMetrics.loadError')}</p>
       </div>
     )
   }
@@ -68,7 +70,7 @@ export default function SystemMetrics() {
 
   return (
     <div className="system-metrics">
-      <h3 className="section-title">System-Metriken</h3>
+      <h3 className="section-title">{t('systemMetrics.title')}</h3>
       
       <div className="system-metrics-grid">
         {/* Aktive Container */}
@@ -77,9 +79,9 @@ export default function SystemMetrics() {
             <MdStorage />
           </div>
           <div className="metric-content">
-            <h4 className="metric-label">Aktive Container</h4>
+            <h4 className="metric-label">{t('systemMetrics.activeContainers')}</h4>
             <p className="metric-value">{metrics.active_containers}</p>
-            <p className="metric-detail">Pipeline-Container</p>
+            <p className="metric-detail">{t('systemMetrics.pipelineContainers')}</p>
           </div>
         </div>
 
@@ -89,9 +91,9 @@ export default function SystemMetrics() {
             <MdMemory />
           </div>
           <div className="metric-content">
-            <h4 className="metric-label">Container RAM</h4>
+            <h4 className="metric-label">{t('systemMetrics.containerRam')}</h4>
             <p className="metric-value">{formatMB(metrics.containers_ram_mb)}</p>
-            <p className="metric-detail">Gesamtverbrauch</p>
+            <p className="metric-detail">{t('systemMetrics.totalUsage')}</p>
           </div>
         </div>
 
@@ -101,11 +103,11 @@ export default function SystemMetrics() {
             <MdSpeed />
           </div>
           <div className="metric-content">
-            <h4 className="metric-label">Container CPU</h4>
+            <h4 className="metric-label">{t('systemMetrics.containerCpu')}</h4>
             <p className={`metric-value percentage ${getPercentageColor(metrics.containers_cpu_percent)}`}>
               {metrics.containers_cpu_percent.toFixed(1)}%
             </p>
-            <p className="metric-detail">Gesamtverbrauch</p>
+            <p className="metric-detail">{t('systemMetrics.totalUsage')}</p>
           </div>
         </div>
 
@@ -115,9 +117,9 @@ export default function SystemMetrics() {
             <MdDataUsage />
           </div>
           <div className="metric-content">
-            <h4 className="metric-label">API RAM</h4>
+            <h4 className="metric-label">{t('systemMetrics.apiRam')}</h4>
             <p className="metric-value">{formatMB(metrics.api_ram_mb)}</p>
-            <p className="metric-detail">FastFlow API</p>
+            <p className="metric-detail">{t('systemMetrics.fastflowApi')}</p>
           </div>
         </div>
 
@@ -127,11 +129,11 @@ export default function SystemMetrics() {
             <MdSpeed />
           </div>
           <div className="metric-content">
-            <h4 className="metric-label">API CPU</h4>
+            <h4 className="metric-label">{t('systemMetrics.apiCpu')}</h4>
             <p className={`metric-value percentage ${getPercentageColor(metrics.api_cpu_percent)}`}>
               {metrics.api_cpu_percent.toFixed(1)}%
             </p>
-            <p className="metric-detail">FastFlow API</p>
+            <p className="metric-detail">{t('systemMetrics.fastflowApi')}</p>
           </div>
         </div>
 
@@ -141,7 +143,7 @@ export default function SystemMetrics() {
             <MdMemory />
           </div>
           <div className="metric-content">
-            <h4 className="metric-label">System RAM</h4>
+            <h4 className="metric-label">{t('systemMetrics.systemRam')}</h4>
             <p className="metric-value">{formatMB(metrics.system_ram_used_mb)} / {formatMB(metrics.system_ram_total_mb)}</p>
             <div className="usage-bar">
               <div
@@ -152,7 +154,7 @@ export default function SystemMetrics() {
               />
             </div>
             <p className={`metric-detail percentage ${getPercentageColor(metrics.system_ram_percent)}`}>
-              {metrics.system_ram_percent.toFixed(1)}% verwendet
+              {t('systemMetrics.percentUsed', { pct: metrics.system_ram_percent.toFixed(1) })}
             </p>
           </div>
         </div>
@@ -163,11 +165,11 @@ export default function SystemMetrics() {
             <MdSpeed />
           </div>
           <div className="metric-content">
-            <h4 className="metric-label">System CPU</h4>
+            <h4 className="metric-label">{t('systemMetrics.systemCpu')}</h4>
             <p className={`metric-value percentage ${getPercentageColor(metrics.system_cpu_percent)}`}>
               {metrics.system_cpu_percent.toFixed(1)}%
             </p>
-            <p className="metric-detail">Gesamtauslastung</p>
+            <p className="metric-detail">{t('systemMetrics.overallLoad')}</p>
           </div>
         </div>
       </div>
@@ -175,17 +177,17 @@ export default function SystemMetrics() {
       {/* Container Details */}
       {metrics.container_details.length > 0 && (
         <div className="container-details">
-          <h4 className="details-title">Container-Details</h4>
+          <h4 className="details-title">{t('systemMetrics.containerDetails')}</h4>
           <div className="container-details-table">
             <table>
               <thead>
                 <tr>
-                  <th>Pipeline</th>
-                  <th>Run ID</th>
-                  <th>Container ID</th>
-                  <th>RAM</th>
-                  <th>CPU</th>
-                  <th>Status</th>
+                  <th>{t('systemMetrics.pipeline')}</th>
+                  <th>{t('systemMetrics.runId')}</th>
+                  <th>{t('systemMetrics.containerId')}</th>
+                  <th>{t('systemMetrics.ram')}</th>
+                  <th>{t('systemMetrics.cpu')}</th>
+                  <th>{t('systemMetrics.status')}</th>
                 </tr>
               </thead>
               <tbody>

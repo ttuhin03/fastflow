@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../api/client'
 import { getFormatLocale } from '../utils/locale'
@@ -26,6 +27,7 @@ interface User {
 }
 
 export default function UserManagement() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [isOpen, setIsOpen] = useState(false)
   const [showCreateForm, setShowCreateForm] = useState(false)
@@ -82,10 +84,10 @@ export default function UserManagement() {
       queryClient.invalidateQueries({ queryKey: ['users'] })
       setShowCreateForm(false)
       resetForm()
-      showSuccess('Benutzer erfolgreich erstellt')
+      showSuccess(t('users.toastUserCreated'))
     },
     onError: (error: any) => {
-      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
+      showError(t('users.errorWithDetail', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
@@ -105,10 +107,10 @@ export default function UserManagement() {
       // Show invite link
       const fullLink = `${window.location.origin}/invite/${data.token}`
       navigator.clipboard.writeText(fullLink)
-      showSuccess(`Einladungslink erstellt und in Zwischenablage kopiert: ${fullLink}`)
+      showSuccess(t('users.toastInviteCreatedWithLink', { link: fullLink }))
     },
     onError: (error: any) => {
-      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
+      showError(t('users.errorWithDetail', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
@@ -121,10 +123,10 @@ export default function UserManagement() {
       queryClient.invalidateQueries({ queryKey: ['users'] })
       setEditingUser(null)
       resetForm()
-      showSuccess('Benutzer erfolgreich aktualisiert')
+      showSuccess(t('users.toastUserUpdated'))
     },
     onError: (error: any) => {
-      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
+      showError(t('users.errorWithDetail', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
@@ -136,10 +138,10 @@ export default function UserManagement() {
       return response.data
     },
     onSuccess: () => {
-      showSuccess('Passwort erfolgreich zurückgesetzt')
+      showSuccess(t('users.toastPasswordReset'))
     },
     onError: (error: any) => {
-      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
+      showError(t('users.errorWithDetail', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
@@ -150,10 +152,10 @@ export default function UserManagement() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
-      showSuccess('Benutzer erfolgreich blockiert')
+      showSuccess(t('users.toastUserBlocked'))
     },
     onError: (error: any) => {
-      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
+      showError(t('users.errorWithDetail', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
@@ -164,10 +166,10 @@ export default function UserManagement() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
-      showSuccess('Benutzer erfolgreich entblockiert')
+      showSuccess(t('users.toastUserUnblocked'))
     },
     onError: (error: any) => {
-      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
+      showError(t('users.errorWithDetail', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
@@ -178,10 +180,10 @@ export default function UserManagement() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
-      showSuccess('Benutzer erfolgreich gelöscht')
+      showSuccess(t('users.toastUserDeleted'))
     },
     onError: (error: any) => {
-      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
+      showError(t('users.errorWithDetail', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
@@ -247,7 +249,7 @@ export default function UserManagement() {
     e.preventDefault()
     if (!resetPasswordUserId) return
     if (resetPasswordValue.length < 6) {
-      showError('Passwort muss mindestens 6 Zeichen lang sein')
+      showError(t('users.passwordMinLength'))
       return
     }
     resetPasswordMutation.mutate({ userId: resetPasswordUserId, newPassword: resetPasswordValue })
@@ -256,21 +258,21 @@ export default function UserManagement() {
   }
 
   const handleBlockUser = async (userId: string) => {
-    const confirmed = await showConfirm('Möchten Sie diesen Benutzer wirklich blockieren?')
+    const confirmed = await showConfirm(t('users.confirmBlock'))
     if (confirmed) {
       blockUserMutation.mutate(userId)
     }
   }
 
   const handleUnblockUser = async (userId: string) => {
-    const confirmed = await showConfirm('Möchten Sie diesen Benutzer wirklich entblockieren?')
+    const confirmed = await showConfirm(t('users.confirmUnblock'))
     if (confirmed) {
       unblockUserMutation.mutate(userId)
     }
   }
 
   const handleDeleteUser = async (userId: string) => {
-    const confirmed = await showConfirm('Möchten Sie diesen Benutzer wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.')
+    const confirmed = await showConfirm(t('users.confirmDelete'))
     if (confirmed) {
       deleteUserMutation.mutate(userId)
     }
@@ -286,10 +288,10 @@ export default function UserManagement() {
       <button
         onClick={() => setIsOpen(true)}
         className="user-management-btn"
-        title="Nutzermanagement"
+        title={t('users.managementTitle')}
       >
         <MdPeople />
-        <span>Nutzer</span>
+        <span>{t('users.shortLabel')}</span>
       </button>
 
       {resetPasswordUserId && (
@@ -306,18 +308,18 @@ export default function UserManagement() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="user-management-header">
-              <h2 id="reset-password-title">Passwort zurücksetzen</h2>
+              <h2 id="reset-password-title">{t('users.resetPasswordTitle')}</h2>
               <button
                 onClick={() => setResetPasswordUserId(null)}
                 className="close-btn"
-                aria-label="Schließen"
+                aria-label={t('users.closeAria')}
               >
                 <MdClose />
               </button>
             </div>
             <form onSubmit={handleResetPasswordSubmit} className="user-form">
               <div className="form-group">
-                <label htmlFor="reset-password-input">Neues Passwort:</label>
+                <label htmlFor="reset-password-input">{t('users.newPassword')}:</label>
                 <input
                   id="reset-password-input"
                   type="password"
@@ -331,14 +333,14 @@ export default function UserManagement() {
               </div>
               <div className="form-actions">
                 <button type="submit" className="btn btn-success">
-                  Passwort setzen
+                  {t('users.setPassword')}
                 </button>
                 <button
                   type="button"
                   onClick={() => setResetPasswordUserId(null)}
                   className="btn btn-secondary"
                 >
-                  Abbrechen
+                  {t('common.cancel')}
                 </button>
               </div>
             </form>
@@ -350,7 +352,7 @@ export default function UserManagement() {
         <div className="user-management-modal-overlay" onClick={() => setIsOpen(false)}>
           <div className="user-management-modal" onClick={(e) => e.stopPropagation()}>
             <div className="user-management-header">
-              <h2>Nutzermanagement</h2>
+              <h2>{t('users.managementTitle')}</h2>
               <button
                 onClick={() => {
                   setIsOpen(false)
@@ -374,7 +376,7 @@ export default function UserManagement() {
                 className="btn btn-primary"
               >
                 <MdAdd />
-                Nutzer erstellen
+                {t('users.createUser')}
               </button>
               <button
                 onClick={() => {
@@ -385,18 +387,18 @@ export default function UserManagement() {
                 className="btn btn-primary"
               >
                 <MdEmail />
-                Einladung senden
+                {t('users.sendInvite')}
               </button>
             </div>
 
             {showCreateForm && (
               <div className="user-form">
-                <h3>{editingUser ? 'Benutzer bearbeiten' : 'Neuen Benutzer erstellen'}</h3>
+                <h3>{editingUser ? t('users.editUser') : t('users.newUser')}</h3>
                 <form onSubmit={editingUser ? handleUpdateUser : handleCreateUser}>
                   {!editingUser && (
                     <>
                       <div className="form-group">
-                        <label>Benutzername:</label>
+                        <label>{t('users.username')}:</label>
                         <input
                           type="text"
                           value={formUsername}
@@ -405,7 +407,7 @@ export default function UserManagement() {
                         />
                       </div>
                       <div className="form-group">
-                        <label>Passwort:</label>
+                        <label>{t('users.password')}:</label>
                         <input
                           type="password"
                           value={formPassword}
@@ -417,7 +419,7 @@ export default function UserManagement() {
                     </>
                   )}
                   <div className="form-group">
-                    <label>E-Mail (optional):</label>
+                    <label>{t('users.emailOptional')}:</label>
                     <input
                       type="email"
                       value={formEmail}
@@ -425,20 +427,20 @@ export default function UserManagement() {
                     />
                   </div>
                   <div className="form-group">
-                    <label>Rolle:</label>
+                    <label>{t('users.roleLabel')}</label>
                     <select
                       value={formRole}
                       onChange={(e) => setFormRole(e.target.value as 'readonly' | 'write' | 'admin')}
                       required
                     >
-                      <option value="readonly">Readonly</option>
-                      <option value="write">Write</option>
-                      <option value="admin">Admin</option>
+                      <option value="readonly">{t('users.roleOptionReadonly')}</option>
+                      <option value="write">{t('users.roleOptionWrite')}</option>
+                      <option value="admin">{t('users.roleOptionAdmin')}</option>
                     </select>
                   </div>
                   <div className="form-actions">
                     <button type="submit" className="btn btn-success">
-                      {editingUser ? 'Aktualisieren' : 'Erstellen'}
+                      {editingUser ? t('users.update') : t('users.createUser')}
                     </button>
                     <button
                       type="button"
@@ -448,7 +450,7 @@ export default function UserManagement() {
                       }}
                       className="btn btn-secondary"
                     >
-                      Abbrechen
+                      {t('common.cancel')}
                     </button>
                   </div>
                 </form>
@@ -457,10 +459,10 @@ export default function UserManagement() {
 
             {showInviteForm && (
               <div className="user-form">
-                <h3>Einladung senden</h3>
+                <h3>{t('users.sendInvite')}</h3>
                 <form onSubmit={handleInviteUser}>
                   <div className="form-group">
-                    <label>E-Mail:</label>
+                    <label>{t('users.email')}:</label>
                     <input
                       type="email"
                       value={inviteEmail}
@@ -469,19 +471,19 @@ export default function UserManagement() {
                     />
                   </div>
                   <div className="form-group">
-                    <label>Rolle:</label>
+                    <label>{t('users.roleLabel')}</label>
                     <select
                       value={inviteRole}
                       onChange={(e) => setInviteRole(e.target.value as 'readonly' | 'write' | 'admin')}
                       required
                     >
-                      <option value="readonly">Readonly</option>
-                      <option value="write">Write</option>
-                      <option value="admin">Admin</option>
+                      <option value="readonly">{t('users.roleOptionReadonly')}</option>
+                      <option value="write">{t('users.roleOptionWrite')}</option>
+                      <option value="admin">{t('users.roleOptionAdmin')}</option>
                     </select>
                   </div>
                   <div className="form-group">
-                    <label>Gültig für (Stunden):</label>
+                    <label>{t('users.validForHours')}</label>
                     <input
                       type="number"
                       value={inviteExpiresHours}
@@ -493,7 +495,7 @@ export default function UserManagement() {
                   </div>
                   <div className="form-actions">
                     <button type="submit" className="btn btn-success">
-                      Einladung erstellen
+                      {t('users.createInvite')}
                     </button>
                     <button
                       type="button"
@@ -503,7 +505,7 @@ export default function UserManagement() {
                       }}
                       className="btn btn-secondary"
                     >
-                      Abbrechen
+                      {t('common.cancel')}
                     </button>
                   </div>
                 </form>
@@ -511,19 +513,19 @@ export default function UserManagement() {
             )}
 
             <div className="users-list">
-              <h3>Benutzer</h3>
+              <h3>{t('users.usersListHeading')}</h3>
               {isLoading ? (
-                <div>Laden...</div>
+                <div>{t('users.loading')}</div>
               ) : users && users.length > 0 ? (
                 <table className="users-table">
                   <thead>
                     <tr>
-                      <th>Benutzername</th>
-                      <th>E-Mail</th>
-                      <th>Rolle</th>
-                      <th>Status</th>
-                      <th>Erstellt</th>
-                      <th>Aktionen</th>
+                      <th>{t('users.username')}</th>
+                      <th>{t('users.email')}</th>
+                      <th>{t('users.role')}</th>
+                      <th>{t('users.status')}</th>
+                      <th>{t('users.createdAt')}</th>
+                      <th>{t('users.actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -533,14 +535,14 @@ export default function UserManagement() {
                         <td>{user.email || '-'}</td>
                         <td>
                           <span className={`badge badge-${user.role === 'admin' ? 'danger' : user.role === 'write' ? 'warning' : 'secondary'}`}>
-                            {user.role}
+                            {user.role === 'admin' ? t('users.roleDisplayAdmin') : user.role === 'write' ? t('users.roleDisplayWrite') : t('users.roleDisplayReadonly')}
                           </span>
                         </td>
                         <td>
                           {user.blocked ? (
-                            <span className="badge badge-danger">Blockiert</span>
+                            <span className="badge badge-danger">{t('users.badgeBlocked')}</span>
                           ) : (
-                            <span className="badge badge-success">Aktiv</span>
+                            <span className="badge badge-success">{t('users.badgeActive')}</span>
                           )}
                         </td>
                         <td>{new Date(user.created_at).toLocaleDateString(getFormatLocale())}</td>
@@ -549,14 +551,14 @@ export default function UserManagement() {
                             <button
                               onClick={() => handleEditUser(user)}
                               className="btn-icon"
-                              title="Bearbeiten"
+                              title={t('users.edit')}
                             >
                               <MdEdit />
                             </button>
                             <button
                               onClick={() => handleResetPassword(user.id)}
                               className="btn-icon"
-                              title="Passwort zurücksetzen"
+                              title={t('users.resetPasswordTooltip')}
                             >
                               <MdLockReset />
                             </button>
@@ -564,7 +566,7 @@ export default function UserManagement() {
                               <button
                                 onClick={() => handleUnblockUser(user.id)}
                                 className="btn-icon"
-                                title="Entblockieren"
+                                title={t('users.unblock')}
                               >
                                 <MdBlock />
                               </button>
@@ -572,7 +574,7 @@ export default function UserManagement() {
                               <button
                                 onClick={() => handleBlockUser(user.id)}
                                 className="btn-icon"
-                                title="Blockieren"
+                                title={t('users.block')}
                               >
                                 <MdBlock />
                               </button>
@@ -580,7 +582,7 @@ export default function UserManagement() {
                             <button
                               onClick={() => handleDeleteUser(user.id)}
                               className="btn-icon btn-danger"
-                              title="Löschen"
+                              title={t('common.delete')}
                             >
                               <MdDelete />
                             </button>
@@ -591,7 +593,7 @@ export default function UserManagement() {
                   </tbody>
                 </table>
               ) : (
-                <div className="empty-state">Keine Benutzer gefunden</div>
+                <div className="empty-state">{t('users.noUsersFound')}</div>
               )}
             </div>
           </div>

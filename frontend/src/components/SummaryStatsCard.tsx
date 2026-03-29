@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
@@ -22,6 +23,7 @@ interface SummaryStatsResponse {
 const SUCCESS_RATE_WARN = 80
 
 export default function SummaryStatsCard() {
+  const { t } = useTranslation()
   const interval = useRefetchInterval(60000)
   const { data, isLoading } = useQuery<SummaryStatsResponse>({
     queryKey: ['summary-stats'],
@@ -43,15 +45,15 @@ export default function SummaryStatsCard() {
         <MdTimeline />
       </div>
       <div className="summary-stats-content">
-        <h4 className="summary-stats-label">Lauf-Statistik</h4>
+        <h4 className="summary-stats-label">{t('summaryStats.title')}</h4>
         <p className="summary-stats-value">
-          Letzte 24h: {data.last_24h.failed_runs} Fehler von {data.last_24h.total_runs} Runs
+          {t('summaryStats.last24h', { failed: data.last_24h.failed_runs, total: data.last_24h.total_runs })}
         </p>
         <p className={`summary-stats-rate ${lowRate ? 'warn' : ''}`}>
-          Success Rate (7 Tage): {data.last_7d.success_rate_pct.toFixed(1)}%
+          {t('summaryStats.successRate7d', { rate: data.last_7d.success_rate_pct.toFixed(1) })}
           {lowRate && (
             <span className="summary-stats-warn">
-              <MdWarning /> Unter {SUCCESS_RATE_WARN}%
+              <MdWarning /> {t('summaryStats.belowThreshold', { threshold: SUCCESS_RATE_WARN })}
             </span>
           )}
         </p>

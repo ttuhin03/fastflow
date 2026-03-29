@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getFormatLocale } from '../utils/locale'
 import apiClient from '../api/client'
@@ -42,17 +43,17 @@ const normalizeRole = (role: string): 'readonly' | 'write' | 'admin' => {
   return role.toLowerCase() as 'readonly' | 'write' | 'admin'
 }
 
-function getProvider(user: User): string {
-  if (user.github_id) return 'GitHub'
-  if (user.google_id) return 'Google'
-  return '–'
+function linkedProviderKeys(user: User): Array<'github' | 'google'> {
+  const a: Array<'github' | 'google'> = []
+  if (user.github_id) a.push('github')
+  if (user.google_id) a.push('google')
+  return a
 }
 
-function getLinkedAccounts(user: User): ('GitHub' | 'Google')[] {
-  const a: ('GitHub' | 'Google')[] = []
-  if (user.github_id) a.push('GitHub')
-  if (user.google_id) a.push('Google')
-  return a
+function providerCellKey(user: User): 'users.providerGitHub' | 'users.providerGoogle' | 'users.providerNone' {
+  if (user.github_id) return 'users.providerGitHub'
+  if (user.google_id) return 'users.providerGoogle'
+  return 'users.providerNone'
 }
 
 interface UsersProps {
@@ -61,6 +62,7 @@ interface UsersProps {
 }
 
 export default function Users({ editLocked = false }: UsersProps) {
+  const { t } = useTranslation()
   const { isAdmin } = useAuth()
   const adminActionsDisabled = editLocked
   const queryClient = useQueryClient()
@@ -106,8 +108,8 @@ export default function Users({ editLocked = false }: UsersProps) {
       <div className="users-page">
         <div className="users-list-card">
           <div className="empty-state">
-            <h3>Zugriff verweigert</h3>
-            <p>Sie haben keine Berechtigung, auf die Nutzerverwaltung zuzugreifen. Diese Funktion ist nur für Administratoren verfügbar.</p>
+            <h3>{t('users.accessDeniedTitle')}</h3>
+            <p>{t('users.accessDeniedBody')}</p>
             {errorResponse?.data?.detail && (
               <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', opacity: 0.8 }}>
                 {errorResponse.data.detail}
@@ -135,10 +137,10 @@ export default function Users({ editLocked = false }: UsersProps) {
       resetInviteForm()
       navigator.clipboard.writeText(data.link)
       const until = new Date(data.expires_at).toLocaleString(getFormatLocale())
-      showSuccess(`Einladungslink erstellt und in Zwischenablage kopiert. Gültig bis ${until}.`)
+      showSuccess(t('users.toastInviteCopied', { until }))
     },
     onError: (error: any) => {
-      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
+      showError(t('users.errorWithDetail', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
@@ -154,10 +156,10 @@ export default function Users({ editLocked = false }: UsersProps) {
       queryClient.invalidateQueries({ queryKey: ['users'] })
       setEditingUser(null)
       resetForm()
-      showSuccess('Benutzer erfolgreich aktualisiert')
+      showSuccess(t('users.toastUserUpdated'))
     },
     onError: (error: any) => {
-      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
+      showError(t('users.errorWithDetail', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
@@ -168,10 +170,10 @@ export default function Users({ editLocked = false }: UsersProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
-      showSuccess('Benutzer erfolgreich blockiert')
+      showSuccess(t('users.toastUserBlocked'))
     },
     onError: (error: any) => {
-      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
+      showError(t('users.errorWithDetail', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
@@ -182,10 +184,10 @@ export default function Users({ editLocked = false }: UsersProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
-      showSuccess('Benutzer erfolgreich entblockiert')
+      showSuccess(t('users.toastUserUnblocked'))
     },
     onError: (error: any) => {
-      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
+      showError(t('users.errorWithDetail', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
@@ -196,10 +198,10 @@ export default function Users({ editLocked = false }: UsersProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
-      showSuccess('Benutzer erfolgreich gelöscht')
+      showSuccess(t('users.toastUserDeleted'))
     },
     onError: (error: any) => {
-      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
+      showError(t('users.errorWithDetail', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
@@ -209,10 +211,10 @@ export default function Users({ editLocked = false }: UsersProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invites'] })
-      showSuccess('Einladung widerrufen')
+      showSuccess(t('users.toastInviteRevoked'))
     },
     onError: (error: any) => {
-      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
+      showError(t('users.errorWithDetail', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
@@ -226,10 +228,10 @@ export default function Users({ editLocked = false }: UsersProps) {
       queryClient.invalidateQueries({ queryKey: ['invites'] })
       setApproveModalUser(null)
       setApproveRole('readonly')
-      showSuccess('Beitrittsanfrage freigegeben')
+      showSuccess(t('users.toastJoinApproved'))
     },
     onError: (error: any) => {
-      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
+      showError(t('users.errorWithDetail', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
@@ -241,10 +243,10 @@ export default function Users({ editLocked = false }: UsersProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
       queryClient.invalidateQueries({ queryKey: ['invites'] })
-      showSuccess('Beitrittsanfrage abgelehnt')
+      showSuccess(t('users.toastJoinRejected'))
     },
     onError: (error: any) => {
-      showError(`Fehler: ${error.response?.data?.detail || error.message}`)
+      showError(t('users.errorWithDetail', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
@@ -284,21 +286,21 @@ export default function Users({ editLocked = false }: UsersProps) {
   }
 
   const handleBlockUser = async (userId: string) => {
-    const confirmed = await showConfirm('Möchten Sie diesen Benutzer wirklich blockieren?')
+    const confirmed = await showConfirm(t('users.confirmBlock'))
     if (confirmed) {
       blockUserMutation.mutate(userId)
     }
   }
 
   const handleUnblockUser = async (userId: string) => {
-    const confirmed = await showConfirm('Möchten Sie diesen Benutzer wirklich entblockieren?')
+    const confirmed = await showConfirm(t('users.confirmUnblock'))
     if (confirmed) {
       unblockUserMutation.mutate(userId)
     }
   }
 
   const handleDeleteUser = async (userId: string) => {
-    const confirmed = await showConfirm('Möchten Sie diesen Benutzer wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.')
+    const confirmed = await showConfirm(t('users.confirmDelete'))
     if (confirmed) {
       deleteUserMutation.mutate(userId)
     }
@@ -316,7 +318,7 @@ export default function Users({ editLocked = false }: UsersProps) {
   }
 
   const handleRejectUser = async (userId: string) => {
-    const confirmed = await showConfirm('Möchten Sie diese Beitrittsanfrage wirklich ablehnen?')
+    const confirmed = await showConfirm(t('users.confirmRejectJoin'))
     if (confirmed) {
       rejectUserMutation.mutate(userId)
     }
@@ -339,7 +341,7 @@ export default function Users({ editLocked = false }: UsersProps) {
               disabled={adminActionsDisabled}
             >
               <MdEmail />
-              Einladung senden
+              {t('users.sendInvite')}
             </button>
           </div>
         </div>
@@ -348,29 +350,29 @@ export default function Users({ editLocked = false }: UsersProps) {
       {isAdmin && approveModalUser && (
         <div className="users-form-card" style={{ marginBottom: '1rem' }}>
           <div className="users-form-header">
-            <h3>Beitrittsanfrage freigeben</h3>
+            <h3>{t('users.approveJoinTitle')}</h3>
             <button onClick={() => setApproveModalUser(null)} className="close-btn"><MdClose /></button>
           </div>
           <p style={{ marginBottom: '1rem', color: 'var(--color-text-secondary)' }}>
-            <strong>{approveModalUser.username}</strong> ({approveModalUser.email || 'keine E-Mail'}) – Rolle vergeben:
+            <strong>{approveModalUser.username}</strong> ({approveModalUser.email || t('users.noEmail')}) – {t('users.assignRole')}
           </p>
           <form onSubmit={handleApproveUser}>
             <div className="form-group">
-              <label>Rolle:</label>
+              <label>{t('users.roleLabel')}</label>
               <select
                 value={approveRole}
                 onChange={(e) => setApproveRole(e.target.value as 'readonly' | 'write' | 'admin')}
                 required
                 disabled={adminActionsDisabled}
               >
-                <option value="readonly">Readonly</option>
-                <option value="write">Write</option>
-                <option value="admin">Admin</option>
+                <option value="readonly">{t('users.roleOptionReadonly')}</option>
+                <option value="write">{t('users.roleOptionWrite')}</option>
+                <option value="admin">{t('users.roleOptionAdmin')}</option>
               </select>
             </div>
             <div className="form-actions">
-              <button type="submit" className="btn btn-success" disabled={adminActionsDisabled}><MdCheck /> Freigeben</button>
-              <button type="button" onClick={() => setApproveModalUser(null)} className="btn btn-secondary">Abbrechen</button>
+              <button type="submit" className="btn btn-success" disabled={adminActionsDisabled}><MdCheck /> {t('users.approve')}</button>
+              <button type="button" onClick={() => setApproveModalUser(null)} className="btn btn-secondary">{t('common.cancel')}</button>
             </div>
           </form>
         </div>
@@ -379,7 +381,7 @@ export default function Users({ editLocked = false }: UsersProps) {
       {isAdmin && (editingUser || showInviteForm) && (
         <div className="users-form-card">
           <div className="users-form-header">
-            <h3>{showInviteForm ? 'Einladung senden' : 'Benutzer bearbeiten'}</h3>
+            <h3>{showInviteForm ? t('users.sendInvite') : t('users.editUser')}</h3>
             <button
               onClick={() => {
                 setShowInviteForm(false)
@@ -396,8 +398,8 @@ export default function Users({ editLocked = false }: UsersProps) {
             <form onSubmit={handleUpdateUser}>
               <div className="form-group">
                 <label>
-                  Rolle:
-                  <InfoIcon content="Readonly: Nur Leserechte. Write: Schreibrechte. Admin: Vollzugriff." />
+                  {t('users.roleLabel')}
+                  <InfoIcon content={t('users.roleEditHint')} />
                 </label>
                 <select
                   value={formRole}
@@ -405,14 +407,14 @@ export default function Users({ editLocked = false }: UsersProps) {
                   required
                   disabled={adminActionsDisabled}
                 >
-                  <option value="readonly">Readonly</option>
-                  <option value="write">Write</option>
-                  <option value="admin">Admin</option>
+                  <option value="readonly">{t('users.roleOptionReadonly')}</option>
+                  <option value="write">{t('users.roleOptionWrite')}</option>
+                  <option value="admin">{t('users.roleOptionAdmin')}</option>
                 </select>
               </div>
               <div className="form-actions">
-                <button type="submit" className="btn btn-success" disabled={adminActionsDisabled}>Aktualisieren</button>
-                <button type="button" onClick={() => { setEditingUser(null); resetForm() }} className="btn btn-secondary">Abbrechen</button>
+                <button type="submit" className="btn btn-success" disabled={adminActionsDisabled}>{t('users.update')}</button>
+                <button type="button" onClick={() => { setEditingUser(null); resetForm() }} className="btn btn-secondary">{t('common.cancel')}</button>
               </div>
             </form>
           )}
@@ -420,7 +422,7 @@ export default function Users({ editLocked = false }: UsersProps) {
           {showInviteForm && (
             <form onSubmit={handleInviteUser}>
               <div className="form-group">
-                <label>E-Mail:</label>
+                <label>{t('users.email')}:</label>
                 <input
                   type="email"
                   value={inviteEmail}
@@ -431,8 +433,8 @@ export default function Users({ editLocked = false }: UsersProps) {
               </div>
               <div className="form-group">
                 <label>
-                  Rolle:
-                  <InfoIcon content="Readonly: Nur Leserechte (Pipelines anschauen, Runs ansehen). Write: Schreibrechte (Pipelines starten, Secrets verwalten). Admin: Vollzugriff (User-Verwaltung, Einstellungen)" />
+                  {t('users.roleLabel')}
+                  <InfoIcon content={t('users.roleInviteHint')} />
                 </label>
                 <select
                   value={inviteRole}
@@ -440,15 +442,15 @@ export default function Users({ editLocked = false }: UsersProps) {
                   required
                   disabled={adminActionsDisabled}
                 >
-                  <option value="readonly">Readonly</option>
-                  <option value="write">Write</option>
-                  <option value="admin">Admin</option>
+                  <option value="readonly">{t('users.roleOptionReadonly')}</option>
+                  <option value="write">{t('users.roleOptionWrite')}</option>
+                  <option value="admin">{t('users.roleOptionAdmin')}</option>
                 </select>
               </div>
               <div className="form-group">
                 <label>
-                  Gültig für (Stunden):
-                  <InfoIcon content="Gültigkeitsdauer des Einladungslinks (Standard: 168h = 7 Tage)" />
+                  {t('users.validForHours')}
+                  <InfoIcon content={t('users.validForHoursHint')} />
                 </label>
                 <input
                   type="number"
@@ -462,7 +464,7 @@ export default function Users({ editLocked = false }: UsersProps) {
               </div>
               <div className="form-actions">
                 <button type="submit" className="btn btn-success" disabled={adminActionsDisabled}>
-                  Einladung erstellen
+                  {t('users.createInvite')}
                 </button>
                 <button
                   type="button"
@@ -472,7 +474,7 @@ export default function Users({ editLocked = false }: UsersProps) {
                   }}
                   className="btn btn-secondary"
                 >
-                  Abbrechen
+                  {t('common.cancel')}
                 </button>
               </div>
             </form>
@@ -483,18 +485,18 @@ export default function Users({ editLocked = false }: UsersProps) {
       {pendingUsers.length > 0 && (
         <div className="users-list-card" style={{ marginBottom: '1.5rem' }}>
           <h3 className="users-section-title">
-            Beitrittsanfragen
-            <InfoIcon content="Nutzer haben sich per OAuth angemeldet und warten auf Freigabe. Freigeben oder Ablehnen." />
+            {t('users.joinRequests')}
+            <InfoIcon content={t('users.joinRequestsInfo')} />
           </h3>
           <div className="users-table-container">
             <table className="users-table">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>E-Mail <InfoIcon content="Von GitHub oder Google. Kann leer sein, wenn beim Provider nicht freigegeben." /></th>
-                  <th>Provider</th>
-                  <th>Erstellt</th>
-                  {isAdmin && <th>Aktionen</th>}
+                  <th>{t('users.name')}</th>
+                  <th>{t('users.email')} <InfoIcon content={t('users.emailFromProvider')} /></th>
+                  <th>{t('users.provider')}</th>
+                  <th>{t('users.createdAt')}</th>
+                  {isAdmin && <th>{t('users.actions')}</th>}
                 </tr>
               </thead>
               <tbody>
@@ -502,13 +504,13 @@ export default function Users({ editLocked = false }: UsersProps) {
                   <tr key={u.id}>
                     <td>{u.username}</td>
                     <td>{u.email || '–'}</td>
-                    <td>{getProvider(u)}</td>
+                    <td>{t(providerCellKey(u))}</td>
                     <td>{new Date(u.created_at).toLocaleString(getFormatLocale())}</td>
                     {isAdmin && (
                       <td>
                         <div className="user-actions">
-                          <button onClick={() => handleOpenApproveModal(u)} className="btn-icon" title="Freigeben" disabled={adminActionsDisabled}><MdCheck /></button>
-                          <button onClick={() => handleRejectUser(u.id)} className="btn-icon btn-danger" title="Ablehnen" disabled={adminActionsDisabled}><MdCancel /></button>
+                          <button onClick={() => handleOpenApproveModal(u)} className="btn-icon" title={t('users.approve')} disabled={adminActionsDisabled}><MdCheck /></button>
+                          <button onClick={() => handleRejectUser(u.id)} className="btn-icon btn-danger" title={t('users.reject')} disabled={adminActionsDisabled}><MdCancel /></button>
                         </div>
                       </td>
                     )}
@@ -522,23 +524,23 @@ export default function Users({ editLocked = false }: UsersProps) {
 
       <div className="users-list-card">
         <h3 className="users-section-title">
-          Aktive Nutzer
-          <InfoIcon content="Alle Benutzer melden sich über GitHub oder Google an. Der erste Admin wird über INITIAL_ADMIN_EMAIL festgelegt, weitere über Einladungen oder Freigabe von Beitrittsanfragen." />
+          {t('users.activeUsers')}
+          <InfoIcon content={t('users.activeUsersInfo')} />
         </h3>
         {isLoading ? (
-          <div className="loading-state">Laden...</div>
+          <div className="loading-state">{t('users.loading')}</div>
         ) : activeUsers.length > 0 ? (
           <div className="users-table-container">
             <table className="users-table">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>E-Mail <InfoIcon content="Von GitHub oder Google. Kann leer sein, wenn beim Provider nicht freigegeben." /></th>
-                  <th>Konten</th>
-                  <th>Rolle</th>
-                  <th>Status</th>
-                  <th>Erstellt</th>
-                  {isAdmin && <th>Aktionen</th>}
+                  <th>{t('users.name')}</th>
+                  <th>{t('users.email')} <InfoIcon content={t('users.emailFromProvider')} /></th>
+                  <th>{t('users.accounts')}</th>
+                  <th>{t('users.role')}</th>
+                  <th>{t('users.status')}</th>
+                  <th>{t('users.createdAt')}</th>
+                  {isAdmin && <th>{t('users.actions')}</th>}
                 </tr>
               </thead>
               <tbody>
@@ -551,7 +553,7 @@ export default function Users({ editLocked = false }: UsersProps) {
                           target="_blank"
                           rel="noopener noreferrer"
                           className="github-user-link"
-                          title={`GitHub: @${user.github_login}`}
+                          title={t('users.githubTitle', { login: user.github_login })}
                         >
                           {user.username}
                           <MdOpenInNew className="icon-external" />
@@ -563,9 +565,17 @@ export default function Users({ editLocked = false }: UsersProps) {
                     <td>{user.email || '-'}</td>
                     <td>
                       <div className="account-badges">
-                        {getLinkedAccounts(user).length > 0 ? (
-                          getLinkedAccounts(user).map((p) => (
-                            <span key={p} className="badge badge-account" title={`${p} verknüpft`}>{p}</span>
+                        {linkedProviderKeys(user).length > 0 ? (
+                          linkedProviderKeys(user).map((p) => (
+                            <span
+                              key={p}
+                              className="badge badge-account"
+                              title={t('users.accountLinked', {
+                                provider: p === 'github' ? t('users.providerGitHub') : t('users.providerGoogle'),
+                              })}
+                            >
+                              {p === 'github' ? t('users.providerGitHub') : t('users.providerGoogle')}
+                            </span>
                           ))
                         ) : (
                           <span className="account-none">–</span>
@@ -574,21 +584,21 @@ export default function Users({ editLocked = false }: UsersProps) {
                     </td>
                     <td>
                       <Tooltip content={
-                        normalizeRole(user.role) === 'admin' ? 'Admin: Vollzugriff (User-Verwaltung, Einstellungen)' :
-                        normalizeRole(user.role) === 'write' ? 'Write: Schreibrechte (Pipelines starten, Secrets verwalten)' :
-                        'Readonly: Nur Leserechte (Pipelines anschauen, Runs ansehen)'
+                        normalizeRole(user.role) === 'admin' ? t('users.roleTooltipAdmin') :
+                        normalizeRole(user.role) === 'write' ? t('users.roleTooltipWrite') :
+                        t('users.roleTooltipReadonly')
                       }>
                         <span className={`badge badge-${normalizeRole(user.role) === 'admin' ? 'admin' : normalizeRole(user.role) === 'write' ? 'write' : 'readonly'}`}>
-                          {normalizeRole(user.role)}
+                          {normalizeRole(user.role) === 'admin' ? t('users.roleDisplayAdmin') : normalizeRole(user.role) === 'write' ? t('users.roleDisplayWrite') : t('users.roleDisplayReadonly')}
                         </span>
                       </Tooltip>
                     </td>
                     <td>
-                      <Tooltip content={user.blocked ? 'Blockierte User können sich nicht anmelden' : 'User ist aktiv und kann sich anmelden'}>
+                      <Tooltip content={user.blocked ? t('users.statusTooltipBlocked') : t('users.statusTooltipActive')}>
                         {user.blocked ? (
-                          <span className="badge badge-error">Blockiert</span>
+                          <span className="badge badge-error">{t('users.badgeBlocked')}</span>
                         ) : (
-                          <span className="badge badge-success">Aktiv</span>
+                          <span className="badge badge-success">{t('users.badgeActive')}</span>
                         )}
                       </Tooltip>
                     </td>
@@ -599,7 +609,7 @@ export default function Users({ editLocked = false }: UsersProps) {
                           <button
                             onClick={() => handleEditUser(user)}
                             className="btn-icon"
-                            title="Bearbeiten"
+                            title={t('users.edit')}
                             disabled={adminActionsDisabled}
                           >
                             <MdEdit />
@@ -608,7 +618,7 @@ export default function Users({ editLocked = false }: UsersProps) {
                             <button
                               onClick={() => handleUnblockUser(user.id)}
                               className="btn-icon"
-                              title="Entblockieren"
+                              title={t('users.unblock')}
                               disabled={adminActionsDisabled}
                             >
                               <MdBlock />
@@ -617,7 +627,7 @@ export default function Users({ editLocked = false }: UsersProps) {
                             <button
                               onClick={() => handleBlockUser(user.id)}
                               className="btn-icon"
-                              title="Blockieren"
+                              title={t('users.block')}
                               disabled={adminActionsDisabled}
                             >
                               <MdBlock />
@@ -626,7 +636,7 @@ export default function Users({ editLocked = false }: UsersProps) {
                           <button
                             onClick={() => handleDeleteUser(user.id)}
                             className="btn-icon btn-danger"
-                            title="Löschen"
+                            title={t('common.delete')}
                             disabled={adminActionsDisabled}
                           >
                             <MdDelete />
@@ -640,42 +650,42 @@ export default function Users({ editLocked = false }: UsersProps) {
             </table>
           </div>
         ) : (
-          <div className="empty-state">Keine aktiven Nutzer</div>
+          <div className="empty-state">{t('users.noActiveUsers')}</div>
         )}
       </div>
 
       <div className="users-list-card" style={{ marginTop: '1.5rem' }}>
-        <h3>Einladungen</h3>
+        <h3>{t('users.invitationsHeading')}</h3>
         {invites.length === 0 ? (
-          <div className="empty-state">Keine Einladungen</div>
+          <div className="empty-state">{t('users.noInvites')}</div>
         ) : (
           <div className="users-table-container">
             <table className="users-table">
               <thead>
                 <tr>
-                  <th>E-Mail</th>
-                  <th>Rolle</th>
-                  <th>Erstellt</th>
-                  <th>Läuft ab</th>
-                  <th>Status</th>
-                  {isAdmin && <th>Aktionen</th>}
+                  <th>{t('users.email')}</th>
+                  <th>{t('users.role')}</th>
+                  <th>{t('users.createdAt')}</th>
+                  <th>{t('users.expires')}</th>
+                  <th>{t('users.status')}</th>
+                  {isAdmin && <th>{t('users.actions')}</th>}
                 </tr>
               </thead>
               <tbody>
                 {invites.map((i) => (
                   <tr key={i.id}>
                     <td>{i.recipient_email}</td>
-                    <td><span className={`badge badge-${normalizeRole(i.role)}`}>{normalizeRole(i.role)}</span></td>
+                    <td><span className={`badge badge-${normalizeRole(i.role)}`}>{normalizeRole(i.role) === 'admin' ? t('users.roleDisplayAdmin') : normalizeRole(i.role) === 'write' ? t('users.roleDisplayWrite') : t('users.roleDisplayReadonly')}</span></td>
                     <td>{new Date(i.created_at).toLocaleString(getFormatLocale())}</td>
                     <td>{new Date(i.expires_at).toLocaleString(getFormatLocale())}</td>
-                    <td>{i.is_used ? <span className="badge badge-success">Eingelöst</span> : <span className="badge">Offen</span>}</td>
+                    <td>{i.is_used ? <span className="badge badge-success">{t('users.inviteStatusRedeemed')}</span> : <span className="badge">{t('users.inviteStatusOpen')}</span>}</td>
                     {isAdmin && (
                       <td>
                         {!i.is_used && new Date(i.expires_at) > new Date() && (
                           <button
                             onClick={() => deleteInviteMutation.mutate(i.id)}
                             className="btn-icon btn-danger"
-                            title="Widerrufen"
+                            title={t('users.revoke')}
                             disabled={adminActionsDisabled}
                           >
                             <MdDelete />

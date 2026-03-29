@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
@@ -12,6 +13,7 @@ interface ConcurrencyResponse {
 }
 
 export default function ConcurrencyStatus() {
+  const { t } = useTranslation()
   const interval = useRefetchInterval(15000)
   const { data, isLoading } = useQuery<ConcurrencyResponse>({
     queryKey: ['concurrency'],
@@ -34,9 +36,9 @@ export default function ConcurrencyStatus() {
         <MdTrendingUp />
       </div>
       <div className="concurrency-content">
-        <h4 className="concurrency-label">Concurrency</h4>
+        <h4 className="concurrency-label">{t('concurrency.label')}</h4>
         <p className="concurrency-value">
-          {data.active_runs} / {data.concurrency_limit} aktive Runs
+          {t('concurrency.activeRuns', { active: data.active_runs, limit: data.concurrency_limit })}
         </p>
         <div className="concurrency-bar">
           <div
@@ -45,7 +47,7 @@ export default function ConcurrencyStatus() {
           />
         </div>
         {data.utilization >= 0.9 && (
-          <p className="concurrency-hint">Limit oft erreicht – ggf. erhöhen oder Last prüfen.</p>
+          <p className="concurrency-hint">{t('concurrency.hintHigh')}</p>
         )}
       </div>
     </div>

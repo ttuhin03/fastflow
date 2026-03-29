@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+
 interface RunEnvSectionProps {
   envVars: Record<string, string>
   parameters: Record<string, string>
@@ -8,6 +10,7 @@ interface RunEnvSectionProps {
  * Hinweis: Werte für Secrets können serverseitig redigiert werden (***).
  */
 export function RunEnvSection({ envVars, parameters }: RunEnvSectionProps) {
+  const { t } = useTranslation()
   const hasEnv = Object.keys(envVars || {}).length > 0
   const hasParams = Object.keys(parameters || {}).length > 0
 
@@ -15,9 +18,9 @@ export function RunEnvSection({ envVars, parameters }: RunEnvSectionProps) {
     <div className="env-container">
       {hasEnv && (
         <div className="run-info-card">
-          <h3>Environment-Variablen</h3>
+          <h3>{t('runEnv.envVars')}</h3>
           <p className="env-vars-note">
-            Werte für Secrets werden aus Sicherheitsgründen nicht angezeigt (***).
+            {t('runEnv.secretsNote')}
           </p>
           <div className="env-vars">
             {Object.entries(envVars).map(([key, value]) => (
@@ -32,7 +35,7 @@ export function RunEnvSection({ envVars, parameters }: RunEnvSectionProps) {
 
       {hasParams && (
         <div className="run-info-card">
-          <h3>Parameter</h3>
+          <h3>{t('runEnv.parameters')}</h3>
           <div className="parameters">
             {Object.entries(parameters).map(([key, value]) => (
               <div key={key} className="parameter">
@@ -46,7 +49,7 @@ export function RunEnvSection({ envVars, parameters }: RunEnvSectionProps) {
 
       {!hasEnv && !hasParams && (
         <div className="run-info-card">
-          <p className="no-env-vars">Keine Environment-Variablen oder Parameter gesetzt</p>
+          <p className="no-env-vars">{t('runEnv.none')}</p>
         </div>
       )}
     </div>
