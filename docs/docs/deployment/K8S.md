@@ -13,18 +13,18 @@ Fast-Flow kann in einem lokalen oder produktiven Kubernetes-Cluster betrieben we
 
   | Option | Empfehlung | Hinweis |
   |--------|------------|---------|
-  | **kubeadm** | Produktion | Reale oder VM-Nodes mit Docker auf dem Host |
+  | **kubeadm** | Produktion | Standard-Worker mit containerd (kein Docker für Runs nötig) |
   | **Docker Desktop** | Lokale Entwicklung | Einstellungen → „Enable Kubernetes“ aktivieren |
-  | **Kind** (Kubernetes in Docker) | Leichtgewichtig | Erfordert [extraMounts](#kind-docker-socket) für Docker-Socket |
-  | **Minikube** | Feature-reich | Mit `--driver=docker` für Docker-Socket-Zugriff |
+  | **Kind** (Kubernetes in Docker) | Leichtgewichtig | Projekt-Root: `kind-config.yaml` – nur nötig, wenn du **zusätzlich** Docker-Executor im Cluster nutzt (ungewöhnlich) |
+  | **Minikube** | Feature-reich | Beliebiger gangbarer Treiber |
 
-- **Docker** auf dem Host/Node (für Pipeline-Runs; der Orchestrator nutzt den Docker-Daemon via Socket)
+- **Docker** (lokal): nur zum **Bauen und Laden** des Orchestrator-Images (`docker build`, `kind load`, Minikube-Docker-Env). **Pipeline-Runs** laufen mit den Standard-Manifesten als **Kubernetes Jobs** (`PIPELINE_EXECUTOR=kubernetes`) – dafür ist **kein** Docker-Daemon auf den Kubernetes-Nodes erforderlich.
 
-## Kind: Docker-Socket freigeben
+## Kind: optional Docker-Socket für den Host
 
-Der Orchestrator benötigt Zugriff auf den Docker-Daemon für Pipeline-Runs. Bei Kind müssen Sie den Host-Docker-Socket in die Nodes mounten.
+Die mitgelieferten `k8s/`-Deployments starten Pipeline-Runs als **Jobs** über die Kubernetes-API. Ein **Host-Docker-Socket** in Kind ist nur relevant, wenn du den Orchestrator bewusst mit `PIPELINE_EXECUTOR=docker` betreibst und Worker-Container auf dem Docker des Hosts starten willst (nicht der empfohlene Weg für reine K8s-Umgebungen).
 
-Die Datei `kind-config.yaml` liegt im Projekt-Root. Cluster erstellen:
+Falls du den Socket dennoch in Kind-Nodes brauchst, kann `kind-config.yaml` im Projekt-Root **extraMounts** für `/var/run/docker.sock` setzen. Cluster erstellen:
 
 ```bash
 kind create cluster --config kind-config.yaml
@@ -102,17 +102,16 @@ Danach Pod neu starten: `kubectl rollout restart deployment/fastflow-orchestrato
 | `/docs` | FastAPI Swagger (API-Doku) |
 | `/redoc` | FastAPI ReDoc |
 
-### 7. Pipelines: PVC, PIPELINES_HOST_DIR und DEV vs. PROD
+### 7. Pipelines: PVC, Executor und DEV vs. PROD
 
-Pipelines liegen im **fastflow-pvc** (Unterverzeichnis `pipelines`) – ein gemeinsamer PVC (20 GiB) für data, logs und pipelines.
+Pipelines liegen im **`fastflow-pvc`** (Unterverzeichnis `pipelines`) – gemeinsam mit `data` und `logs` (20 GiB-Setup in den Beispiel-Manifesten).
 
-- **`PIPELINES_HOST_DIR`** (ConfigMap): Muss den **Node-Pfad** des PVCs enthalten, damit Worker-Container von dort mounten können. Ohne diese Variable funktionieren Pipeline-Runs nicht (404 auf `/app/main.py`).
-  - Pfad ermitteln: `kubectl exec deploy/fastflow-orchestrator -c orchestrator -- grep pipelines /proc/self/mountinfo | head -1`
-  - Den Quellpfad (z. B. `/var/lib/kubelet/pods/.../pvc-xxx/pipelines`) in die ConfigMap unter `PIPELINES_HOST_DIR` eintragen.
+- **`PIPELINE_EXECUTOR=kubernetes`** (Standard im `k8s/deployment`): Vor jedem Run kopiert der Orchestrator die Pipeline in ein **gemeinsames Cache-Volume** (`fastflow-cache-pvc`, Mount z. B. `/shared`, Unterverzeichnis `pipeline_runs/<Run-ID>`). Die Jobs mounten dieses Volume und den uv-Cache – **kein** manuelles `PIPELINES_HOST_DIR` für Worker-Bind-Mounts nötig.
+- **`PIPELINES_HOST_DIR`**: Wird vor allem für **`PIPELINE_EXECUTOR=docker`** benötigt, wenn der Orchestrator Docker-Worker mit Host-Pfaden startet. In der typischen K8s-Jobs-Konfiguration entfällt das.
 
 - **`ENVIRONMENT`** steuert die Befüllung:
   - **`development`**: Beim Start werden Beispiel-Pipelines aus dem Image nach `/app/pipelines` kopiert, falls das Verzeichnis leer ist.
-  - **`production`**: Kein Kopieren. Pipelines kommen ausschließlich über [Git-Sync](./GIT_DEPLOYMENT.md) oder manuelles Befüllen.
+  - **`production`**: Kein Kopieren. Pipelines kommen ausschließlich über [Git-Sync](./GIT_DEPLOYMENT.md) oder manuelles Befüllen des PVC.
 
 Für Produktion in der ConfigMap setzen:
 
@@ -159,15 +158,33 @@ curl http://localhost:8000/ready
 
 ## Architektur
 
-- **Orchestrator**: FastAPI + React-Frontend + Docusaurus-Doku, Port 8000
-- **PostgreSQL** (optional): Datenbank-Service auf Port 5432
-- **Docker-Proxy** (Sidecar): Sicherer Zugriff auf den Host-Docker-Socket für Pipeline-Runs
-- **Volumes**:
-  - **fastflow-pvc** (20 GiB): data, logs, pipelines als Unterverzeichnisse (subPath)
-  - **postgres-pvc**: bei PostgreSQL
-  - **hostPath**: Docker-Socket (`/var/run/docker.sock`) für Pipeline-Worker
+```mermaid
+flowchart LR
+  subgraph Cluster["Kubernetes Cluster"]
+    O["Deployment: FastAPI Orchestrator\n+ Frontend"]
+    J["Job pro Pipeline-Run\nWorker-Image, uv run"]
+    O -->|"Batch API:\nJob erstellen"| J
+    O -->|"Pod-Logs,\nMetrics API"| J
+  end
+  U["Benutzer / Browser"] -->|"HTTPS"| O
+  subgraph Vol["Persistent Volumes"]
+    P1["fastflow-pvc\ndata, logs, pipelines"]
+    P2["fastflow-cache-pvc\nuv-Cache, uv-Python,\npipeline_runs pro Run"]
+  end
+  O --- P1
+  O --- P2
+  J --- P2
+```
 
-Der Docker-Socket-Zugriff funktioniert nur, wenn die Cluster-Nodes Zugriff auf einen Docker-Daemon haben (kubeadm, Kind mit extraMounts, Minikube mit docker driver, Docker Desktop).
+- **Orchestrator-Deployment**: FastAPI + React-Frontend + Docusaurus-Doku; `PIPELINE_EXECUTOR=kubernetes`; **ServiceAccount** mit RBAC für Jobs/Pods/Logs.
+- **PostgreSQL** (optional): Datenbank-Service auf Port 5432.
+- **Pipeline-Runs**: Ein **Kubernetes Job** pro Ausführung (kein Docker-Socket auf den Nodes); nach dem Lauf Bereinigung der Kopie unter `pipeline_runs/` auf dem Cache-Volume.
+- **Volumes** (typisch):
+  - **fastflow-pvc**: am **Orchestrator**: `data`, `logs`, `pipelines` (subPath)
+  - **fastflow-cache-pvc**: am **Orchestrator** (Mount z. B. `/shared`) und am **Job-Pod** (ein PVC, mehrere subPaths): **uv_cache**, **uv_python**, **pipeline_runs/&lt;Run-ID&gt;**
+  - **postgres-pvc**: bei PostgreSQL
+
+**Hinweis:** Wer Fast-Flow mit **`PIPELINE_EXECUTOR=docker`** in einem Pod betreibt, braucht weiterhin Docker-in-Docker bzw. Socket-Mount – die Standard-`k8s/`-Manifeste sind dafür nicht ausgelegt.
 
 ## Siehe auch
 
