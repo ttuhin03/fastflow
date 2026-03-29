@@ -532,7 +532,7 @@ textarea.form-input {
 }
 
 .executor-docker {
-  color: var(--color-primary, #0ea5e9);
+  color: var(--color-primary);
 }
 
 .executor-kubernetes {

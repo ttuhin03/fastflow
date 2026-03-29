@@ -46,7 +46,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation()
 
   if (loading) {
-    return <div>{t('common.loading')}</div>
+    return <div className="loading-fallback">{t('common.loading')}</div>
   }
 
   if (!isAuthenticated) {

@@ -472,3 +472,16 @@
   color: var(--color-success);
   flex-shrink: 0;
 }
+
+/* Full-app loading (Suspense + auth gate) */
+.loading-fallback {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 50vh;
+  padding: var(--spacing-xl);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-base);
+  background-color: var(--color-background);
+}
