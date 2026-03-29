@@ -3,9 +3,9 @@ import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
-import { useUiPreferences } from '../contexts/UiPreferencesContext'
+import { UI_DISPLAY_QUERY_KEY } from '../contexts/UiPreferencesContext'
 import apiClient from '../api/client'
-import { MdSave, MdRefresh, MdInfo, MdWarning, MdEmail, MdGroup, MdLink, MdCheck, MdPerson, MdSync, MdStorage, MdPlayCircle, MdNotifications, MdPeople, MdKey, MdContentCopy, MdDelete } from 'react-icons/md'
+import { MdSave, MdRefresh, MdInfo, MdWarning, MdEmail, MdGroup, MdLink, MdCheck, MdPerson, MdSync, MdStorage, MdPlayCircle, MdNotifications, MdPeople, MdKey, MdContentCopy, MdDelete, MdLock, MdLockOpen } from 'react-icons/md'
 import { showError, showSuccess } from '../utils/toast'
 import { captureException } from '../utils/posthog'
 import { getApiOrigin } from '../config'
@@ -30,6 +30,8 @@ function accountOAuthLinkUrl(path: '/link/github' | '/link/google' | '/link/micr
 }
 
 export type SettingsSection = 'account' | 'system' | 'pipeline' | 'notifications' | 'git-sync' | 'nutzer'
+
+const SENSITIVE_SETTINGS_SECTIONS: SettingsSection[] = ['system', 'pipeline', 'notifications', 'git-sync', 'nutzer']
 
 interface NotificationApiKeyItem {
   id: number
@@ -73,17 +75,13 @@ export default function Settings() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { isReadonly, isAdmin } = useAuth()
-  const {
-    showAttribution,
-    showVersion,
-    setShowAttribution,
-    setShowVersion,
-  } = useUiPreferences()
   const [localSettings, setLocalSettings] = useState<Settings | null>(null)
   const [showCleanupInfo, setShowCleanupInfo] = useState(false)
   const [localDependencyAuditCron, setLocalDependencyAuditCron] = useState<string | null>(null)
   const [generatedKey, setGeneratedKey] = useState<{ key: string; id: number; label?: string | null } | null>(null)
   const [newKeyLabel, setNewKeyLabel] = useState('')
+  /** Geschützte Tabs: Eingaben erst nach Klick auf Schloss (verhindert versehentliche Änderungen). */
+  const [sensitiveSettingsLocked, setSensitiveSettingsLocked] = useState(true)
 
   const [searchParams, setSearchParams] = useSearchParams()
   const section = (searchParams.get('section') as SettingsSection) || 'account'
@@ -114,6 +112,10 @@ export default function Settings() {
     const pr = pill.getBoundingClientRect()
     setIndicator({ left: pr.left - tr.left, width: pr.width })
   }, [section, sectionItems.length])
+
+  useEffect(() => {
+    setSensitiveSettingsLocked(true)
+  }, [section])
 
   const { data: settings, isLoading } = useQuery<Settings>({
     queryKey: ['settings'],
@@ -186,6 +188,8 @@ export default function Settings() {
     dependency_audit_enabled: boolean
     dependency_audit_cron: string
     login_branding_logo_url?: string | null
+    ui_show_attribution: boolean
+    ui_show_version: boolean
   }>({
     queryKey: ['settings-system'],
     queryFn: async () => {
@@ -213,12 +217,15 @@ export default function Settings() {
       dependency_audit_enabled?: boolean
       dependency_audit_cron?: string
       login_branding_logo_url?: string
+      ui_show_attribution?: boolean
+      ui_show_version?: boolean
     }) => {
       const response = await apiClient.put('/settings/system', patch)
       return response.data
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings-system'] })
+      queryClient.invalidateQueries({ queryKey: UI_DISPLAY_QUERY_KEY })
       queryClient.invalidateQueries({ queryKey: ['auth/providers'] })
       showSuccess(t('settings.systemConfigSaved'))
     },
@@ -469,6 +476,10 @@ export default function Settings() {
 
   const currentSettings = localSettings || settings
 
+  const isSensitiveSection = SENSITIVE_SETTINGS_SECTIONS.includes(section)
+  const fieldLocked = isSensitiveSection && sensitiveSettingsLocked
+  const fieldDisabled = isReadonly || fieldLocked
+
   const renderNav = () => (
     <nav className="settings-nav" role="tablist" aria-label={t('settings.navAriaSettings')}>
       <div ref={trayRef} className="settings-nav-tray">
@@ -498,32 +509,38 @@ export default function Settings() {
     </nav>
   )
 
-  if (section === 'git-sync') {
-    return (
-      <div className="settings-page">
-        {renderNav()}
-        <div className="settings-content settings-embedded">
-          <Sync />
-        </div>
-      </div>
-    )
-  }
-
-  if (section === 'nutzer') {
-    return (
-      <div className="settings-page">
-        {renderNav()}
-        <div className="settings-content settings-embedded">
-          <Users />
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="settings-page">
       {renderNav()}
-      <div className="settings-content">
+      <div
+        className={`settings-content${isSensitiveSection ? ' settings-content--sensitive' : ''}${
+          section === 'git-sync' || section === 'nutzer' ? ' settings-embedded' : ''
+        }`}
+      >
+        {isSensitiveSection && (
+          <div className="settings-sensitive-bar">
+            <Tooltip
+              content={
+                sensitiveSettingsLocked
+                  ? t('settings.editLockTooltipLocked')
+                  : t('settings.editLockTooltipUnlocked')
+              }
+              position="left"
+            >
+              <button
+                type="button"
+                className={`settings-edit-lock-btn ${sensitiveSettingsLocked ? 'is-locked' : 'is-unlocked'}`}
+                onClick={() => setSensitiveSettingsLocked((v) => !v)}
+                aria-pressed={!sensitiveSettingsLocked}
+                aria-label={
+                  sensitiveSettingsLocked ? t('settings.editLockUnlockAria') : t('settings.editLockLockAria')
+                }
+              >
+                {sensitiveSettingsLocked ? <MdLock /> : <MdLockOpen />}
+              </button>
+            </Tooltip>
+          </div>
+        )}
         {section === 'account' && (
           <div className="settings">
             <div className="settings-header card">
@@ -533,31 +550,6 @@ export default function Settings() {
                 {t('settings.envOnly')}
                 {t('settings.accountRestartNote')}
               </p>
-            </div>
-
-            <div className="settings-section card">
-              <h3 className="section-title">{t('settings.uiDisplayTitle')}</h3>
-              <p className="setting-hint setting-hint--flush">{t('settings.uiDisplayHint')}</p>
-              <div className="settings-telemetry-toggles">
-                <label className="settings-telemetry-toggle">
-                  <input
-                    type="checkbox"
-                    checked={showAttribution}
-                    onChange={(e) => setShowAttribution(e.target.checked)}
-                  />
-                  {t('settings.showAttribution')}
-                </label>
-                <p className="setting-hint settings-ui-pref-hint">{t('settings.showAttributionHint')}</p>
-                <label className="settings-telemetry-toggle">
-                  <input
-                    type="checkbox"
-                    checked={showVersion}
-                    onChange={(e) => setShowVersion(e.target.checked)}
-                  />
-                  {t('settings.showVersion')}
-                </label>
-                <p className="setting-hint settings-ui-pref-hint">{t('settings.showVersionHint')}</p>
-              </div>
             </div>
 
             <div className="settings-section card">
@@ -665,6 +657,34 @@ export default function Settings() {
       </div>
       {isAdmin && (
         <div className="settings-section card">
+          <h3 className="section-title">{t('settings.uiDisplayTitle')}</h3>
+          <p className="setting-hint setting-hint--flush">{t('settings.uiDisplayHint')}</p>
+          <div className="settings-telemetry-toggles">
+            <label className="settings-telemetry-toggle">
+              <input
+                type="checkbox"
+                checked={systemSettings?.ui_show_attribution ?? true}
+                onChange={(e) => updateSystemSettingsMutation.mutate({ ui_show_attribution: e.target.checked })}
+                disabled={updateSystemSettingsMutation.isPending || fieldDisabled}
+              />
+              {t('settings.showAttribution')}
+            </label>
+            <p className="setting-hint settings-ui-pref-hint">{t('settings.showAttributionHint')}</p>
+            <label className="settings-telemetry-toggle">
+              <input
+                type="checkbox"
+                checked={systemSettings?.ui_show_version ?? true}
+                onChange={(e) => updateSystemSettingsMutation.mutate({ ui_show_version: e.target.checked })}
+                disabled={updateSystemSettingsMutation.isPending || fieldDisabled}
+              />
+              {t('settings.showVersion')}
+            </label>
+            <p className="setting-hint settings-ui-pref-hint">{t('settings.showVersionHint')}</p>
+          </div>
+        </div>
+      )}
+      {isAdmin && (
+        <div className="settings-section card">
           <h3 className="section-title">
             {t('settings.brandingLogoTitle')}
             <InfoIcon content={t('settings.brandingLogoInfo')} />
@@ -693,7 +713,7 @@ export default function Settings() {
                 }
               }}
               placeholder="https://example.com/logo.png"
-              disabled={updateSystemSettingsMutation.isPending || isReadonly}
+              disabled={updateSystemSettingsMutation.isPending || fieldDisabled}
             />
           </div>
         </div>
@@ -709,7 +729,7 @@ export default function Settings() {
               <input
                 type="checkbox"
                 checked={systemSettings?.enable_telemetry ?? false}
-                disabled={updateSystemSettingsMutation.isPending}
+                disabled={updateSystemSettingsMutation.isPending || fieldDisabled}
                 onChange={(e) => updateSystemSettingsMutation.mutate({ enable_telemetry: e.target.checked })}
               />
               {t('settings.telemetryToggle')}
@@ -718,7 +738,7 @@ export default function Settings() {
               <input
                 type="checkbox"
                 checked={systemSettings?.enable_error_reporting ?? false}
-                disabled={updateSystemSettingsMutation.isPending}
+                disabled={updateSystemSettingsMutation.isPending || fieldDisabled}
                 onChange={(e) => updateSystemSettingsMutation.mutate({ enable_error_reporting: e.target.checked })}
               />
               {t('settings.errorReportingToggle')}
@@ -741,7 +761,7 @@ export default function Settings() {
               <input
                 type="checkbox"
                 checked={systemSettings?.dependency_audit_enabled ?? true}
-                disabled={updateSystemSettingsMutation.isPending || isReadonly}
+                disabled={updateSystemSettingsMutation.isPending || fieldDisabled}
                 onChange={(e) =>
                   updateSystemSettingsMutation.mutate({ dependency_audit_enabled: e.target.checked })
                 }
@@ -773,7 +793,7 @@ export default function Settings() {
                 }
               }}
               placeholder="0 3 * * *"
-              disabled={updateSystemSettingsMutation.isPending || isReadonly}
+              disabled={updateSystemSettingsMutation.isPending || fieldDisabled}
             />
           </div>
           <p className="settings-telemetry-note">
@@ -801,6 +821,7 @@ export default function Settings() {
             <button
               type="button"
               onClick={handleTestFrontendException}
+              disabled={fieldDisabled}
               className="btn btn-outlined"
             >
               {t('settings.testExceptionFrontend')}
@@ -808,7 +829,7 @@ export default function Settings() {
             <button
               type="button"
               onClick={() => triggerTestExceptionBackendMutation.mutate()}
-              disabled={triggerTestExceptionBackendMutation.isPending}
+              disabled={triggerTestExceptionBackendMutation.isPending || fieldDisabled}
               className="btn btn-outlined"
             >
               {triggerTestExceptionBackendMutation.isPending ? t('settings.sending') : t('settings.testExceptionBackend')}
@@ -846,7 +867,7 @@ export default function Settings() {
                   value={currentSettings.log_retention_runs || ''}
                   onChange={(e) => handleInputChange('log_retention_runs', e.target.value)}
                   placeholder={t('settings.noneUnlimited')}
-                  disabled={isReadonly}
+                  disabled={fieldDisabled}
                 />
               </div>
 
@@ -864,7 +885,7 @@ export default function Settings() {
                   value={currentSettings.log_retention_days || ''}
                   onChange={(e) => handleInputChange('log_retention_days', e.target.value)}
                   placeholder={t('settings.noneUnlimited')}
-                  disabled={isReadonly}
+                  disabled={fieldDisabled}
                 />
               </div>
 
@@ -882,7 +903,7 @@ export default function Settings() {
                   value={currentSettings.log_max_size_mb || ''}
                   onChange={(e) => handleInputChange('log_max_size_mb', e.target.value)}
                   placeholder={t('settings.noneUnlimited')}
-                  disabled={isReadonly}
+                  disabled={fieldDisabled}
                 />
               </div>
             </div>
@@ -913,7 +934,7 @@ export default function Settings() {
                   className="form-input"
                   value={currentSettings.max_concurrent_runs}
                   onChange={(e) => handleInputChange('max_concurrent_runs', e.target.value)}
-                  disabled={isReadonly}
+                  disabled={fieldDisabled}
                 />
               </div>
 
@@ -931,7 +952,7 @@ export default function Settings() {
                   value={currentSettings.container_timeout || ''}
                   onChange={(e) => handleInputChange('container_timeout', e.target.value)}
                   placeholder={t('settings.noneUnlimited')}
-                  disabled={isReadonly}
+                  disabled={fieldDisabled}
                 />
               </div>
 
@@ -947,7 +968,7 @@ export default function Settings() {
                   className="form-input"
                   value={currentSettings.retry_attempts}
                   onChange={(e) => handleInputChange('retry_attempts', e.target.value)}
-                  disabled={isReadonly}
+                  disabled={fieldDisabled}
                 />
               </div>
             </div>
@@ -960,7 +981,7 @@ export default function Settings() {
               <div className="actions-grid">
                 <button
                   onClick={handleSave}
-                  disabled={updateSettingsMutation.isPending || !localSettings}
+                  disabled={updateSettingsMutation.isPending || !localSettings || fieldLocked}
                   className="btn btn-primary"
                 >
                   <MdSave />
@@ -969,7 +990,7 @@ export default function Settings() {
                 <Tooltip content={t('settings.forceFlushTooltip')}>
                   <button
                     onClick={handleForceCleanup}
-                    disabled={forceCleanupMutation.isPending}
+                    disabled={forceCleanupMutation.isPending || fieldLocked}
                     className="btn btn-warning"
                   >
                     <MdRefresh />
@@ -1015,7 +1036,7 @@ export default function Settings() {
                     checked={currentSettings.email_enabled}
                     onChange={(e) => handleInputChange('email_enabled', e.target.checked)}
                     className="checkbox-input"
-                    disabled={isReadonly}
+                    disabled={fieldDisabled}
                   />
                   <span>{t('settings.enableEmail')}</span>
                 </label>
@@ -1032,7 +1053,7 @@ export default function Settings() {
                   value={currentSettings.smtp_host || ''}
                   onChange={(e) => handleInputChange('smtp_host', e.target.value)}
                   placeholder="smtp.example.com"
-                  disabled={isReadonly || !currentSettings.email_enabled}
+                  disabled={fieldDisabled || !currentSettings.email_enabled}
                 />
               </div>
 
@@ -1049,7 +1070,7 @@ export default function Settings() {
                   value={currentSettings.smtp_port}
                   onChange={(e) => handleInputChange('smtp_port', e.target.value)}
                   placeholder="587"
-                  disabled={isReadonly || !currentSettings.email_enabled}
+                  disabled={fieldDisabled || !currentSettings.email_enabled}
                 />
               </div>
 
@@ -1064,7 +1085,7 @@ export default function Settings() {
                   value={currentSettings.smtp_user || ''}
                   onChange={(e) => handleInputChange('smtp_user', e.target.value)}
                   placeholder="user@example.com"
-                  disabled={isReadonly || !currentSettings.email_enabled}
+                  disabled={fieldDisabled || !currentSettings.email_enabled}
                 />
               </div>
 
@@ -1095,7 +1116,7 @@ export default function Settings() {
                   value={currentSettings.smtp_from || ''}
                   onChange={(e) => handleInputChange('smtp_from', e.target.value)}
                   placeholder="noreply@example.com"
-                  disabled={isReadonly || !currentSettings.email_enabled}
+                  disabled={fieldDisabled || !currentSettings.email_enabled}
                 />
               </div>
 
@@ -1111,7 +1132,7 @@ export default function Settings() {
                   value={currentSettings.email_recipients.join(', ')}
                   onChange={(e) => handleInputChange('email_recipients', e.target.value)}
                   placeholder="admin@example.com, team@example.com"
-                  disabled={isReadonly || !currentSettings.email_enabled}
+                  disabled={fieldDisabled || !currentSettings.email_enabled}
                 />
               </div>
 
@@ -1119,7 +1140,7 @@ export default function Settings() {
                 {!isReadonly && (
                   <button
                     onClick={() => testEmailMutation.mutate()}
-                    disabled={!currentSettings.email_enabled || testEmailMutation.isPending}
+                    disabled={!currentSettings.email_enabled || testEmailMutation.isPending || fieldLocked}
                     className="btn btn-primary"
                   >
                   <MdEmail />
@@ -1144,7 +1165,7 @@ export default function Settings() {
                     checked={currentSettings.teams_enabled}
                     onChange={(e) => handleInputChange('teams_enabled', e.target.checked)}
                     className="checkbox-input"
-                    disabled={isReadonly}
+                    disabled={fieldDisabled}
                   />
                   <span>{t('settings.enableTeams')}</span>
                 </label>
@@ -1163,7 +1184,7 @@ export default function Settings() {
                   value={currentSettings.teams_webhook_url || ''}
                   onChange={(e) => handleInputChange('teams_webhook_url', e.target.value)}
                   placeholder="https://outlook.office.com/webhook/..."
-                  disabled={isReadonly || !currentSettings.teams_enabled}
+                  disabled={fieldDisabled || !currentSettings.teams_enabled}
                 />
               </div>
 
@@ -1171,7 +1192,7 @@ export default function Settings() {
                 {!isReadonly && (
                   <button
                     onClick={() => testTeamsMutation.mutate()}
-                    disabled={!currentSettings.teams_enabled || testTeamsMutation.isPending}
+                    disabled={!currentSettings.teams_enabled || testTeamsMutation.isPending || fieldLocked}
                     className="btn btn-primary"
                   >
                     <MdGroup />
@@ -1197,7 +1218,7 @@ export default function Settings() {
                     checked={currentSettings.notification_api_enabled ?? false}
                     onChange={(e) => handleInputChange('notification_api_enabled', e.target.checked)}
                     className="checkbox-input"
-                    disabled={isReadonly}
+                    disabled={fieldDisabled}
                   />
                   <span>{t('settings.notificationApiEnabled')}</span>
                 </label>
@@ -1214,7 +1235,7 @@ export default function Settings() {
                   className="form-input"
                   value={currentSettings.notification_api_rate_limit_per_minute ?? 30}
                   onChange={(e) => handleInputChange('notification_api_rate_limit_per_minute', e.target.value)}
-                  disabled={isReadonly || !(currentSettings.notification_api_enabled ?? false)}
+                  disabled={fieldDisabled || !(currentSettings.notification_api_enabled ?? false)}
                 />
               </div>
               <div className="setting-item full-width">
@@ -1242,7 +1263,7 @@ export default function Settings() {
                                   type="button"
                                   className="btn btn-secondary btn-sm"
                                   onClick={() => deleteNotificationKeyMutation.mutate(k.id)}
-                                  disabled={deleteNotificationKeyMutation.isPending}
+                                  disabled={deleteNotificationKeyMutation.isPending || fieldLocked}
                                   aria-label={t('settings.removeKey')}
                                 >
                                   <MdDelete /> {t('settings.removeKey')}
@@ -1266,12 +1287,13 @@ export default function Settings() {
                         value={newKeyLabel}
                         onChange={(e) => setNewKeyLabel(e.target.value)}
                         placeholder={t('settings.notificationApiKeyLabelPlaceholder')}
+                        disabled={fieldLocked}
                       />
                       <button
                         type="button"
                         className="btn btn-primary"
                         onClick={() => createNotificationKeyMutation.mutate(newKeyLabel.trim() || undefined)}
-                        disabled={createNotificationKeyMutation.isPending}
+                        disabled={createNotificationKeyMutation.isPending || fieldLocked}
                       >
                         <MdKey /> {t('settings.generateKey')}
                       </button>
@@ -1303,6 +1325,10 @@ export default function Settings() {
         )}
           </div>
         )}
+
+        {section === 'git-sync' && <Sync editLocked={fieldLocked} />}
+
+        {section === 'nutzer' && <Users editLocked={fieldLocked} />}
       </div>
 
       {/* Cleanup Info Modal */}
@@ -1376,7 +1402,7 @@ export default function Settings() {
               <button
                 className="btn btn-warning"
                 onClick={confirmForceCleanup}
-                disabled={forceCleanupMutation.isPending}
+                disabled={forceCleanupMutation.isPending || isReadonly}
               >
                 <MdRefresh />
                 {forceCleanupMutation.isPending ? t('settings.cleanupRunning') : t('settings.cleanupExecute')}

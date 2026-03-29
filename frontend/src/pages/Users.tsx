@@ -55,8 +55,14 @@ function getLinkedAccounts(user: User): ('GitHub' | 'Google')[] {
   return a
 }
 
-export default function Users() {
+interface UsersProps {
+  /** Gesperrt aus den Einstellungen (Schloss): keine Admin-Aktionen bis Entsperren */
+  editLocked?: boolean
+}
+
+export default function Users({ editLocked = false }: UsersProps) {
   const { isAdmin } = useAuth()
+  const adminActionsDisabled = editLocked
   const queryClient = useQueryClient()
   const [showInviteForm, setShowInviteForm] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
@@ -330,6 +336,7 @@ export default function Users() {
                 resetInviteForm()
               }}
               className="btn btn-primary"
+              disabled={adminActionsDisabled}
             >
               <MdEmail />
               Einladung senden
@@ -354,6 +361,7 @@ export default function Users() {
                 value={approveRole}
                 onChange={(e) => setApproveRole(e.target.value as 'readonly' | 'write' | 'admin')}
                 required
+                disabled={adminActionsDisabled}
               >
                 <option value="readonly">Readonly</option>
                 <option value="write">Write</option>
@@ -361,7 +369,7 @@ export default function Users() {
               </select>
             </div>
             <div className="form-actions">
-              <button type="submit" className="btn btn-success"><MdCheck /> Freigeben</button>
+              <button type="submit" className="btn btn-success" disabled={adminActionsDisabled}><MdCheck /> Freigeben</button>
               <button type="button" onClick={() => setApproveModalUser(null)} className="btn btn-secondary">Abbrechen</button>
             </div>
           </form>
@@ -395,6 +403,7 @@ export default function Users() {
                   value={formRole}
                   onChange={(e) => setFormRole(e.target.value as 'readonly' | 'write' | 'admin')}
                   required
+                  disabled={adminActionsDisabled}
                 >
                   <option value="readonly">Readonly</option>
                   <option value="write">Write</option>
@@ -402,7 +411,7 @@ export default function Users() {
                 </select>
               </div>
               <div className="form-actions">
-                <button type="submit" className="btn btn-success">Aktualisieren</button>
+                <button type="submit" className="btn btn-success" disabled={adminActionsDisabled}>Aktualisieren</button>
                 <button type="button" onClick={() => { setEditingUser(null); resetForm() }} className="btn btn-secondary">Abbrechen</button>
               </div>
             </form>
@@ -417,6 +426,7 @@ export default function Users() {
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
                   required
+                  disabled={adminActionsDisabled}
                 />
               </div>
               <div className="form-group">
@@ -428,6 +438,7 @@ export default function Users() {
                   value={inviteRole}
                   onChange={(e) => setInviteRole(e.target.value as 'readonly' | 'write' | 'admin')}
                   required
+                  disabled={adminActionsDisabled}
                 >
                   <option value="readonly">Readonly</option>
                   <option value="write">Write</option>
@@ -446,10 +457,11 @@ export default function Users() {
                   min={1}
                   max={720}
                   required
+                  disabled={adminActionsDisabled}
                 />
               </div>
               <div className="form-actions">
-                <button type="submit" className="btn btn-success">
+                <button type="submit" className="btn btn-success" disabled={adminActionsDisabled}>
                   Einladung erstellen
                 </button>
                 <button
@@ -495,8 +507,8 @@ export default function Users() {
                     {isAdmin && (
                       <td>
                         <div className="user-actions">
-                          <button onClick={() => handleOpenApproveModal(u)} className="btn-icon" title="Freigeben"><MdCheck /></button>
-                          <button onClick={() => handleRejectUser(u.id)} className="btn-icon btn-danger" title="Ablehnen"><MdCancel /></button>
+                          <button onClick={() => handleOpenApproveModal(u)} className="btn-icon" title="Freigeben" disabled={adminActionsDisabled}><MdCheck /></button>
+                          <button onClick={() => handleRejectUser(u.id)} className="btn-icon btn-danger" title="Ablehnen" disabled={adminActionsDisabled}><MdCancel /></button>
                         </div>
                       </td>
                     )}
@@ -588,6 +600,7 @@ export default function Users() {
                             onClick={() => handleEditUser(user)}
                             className="btn-icon"
                             title="Bearbeiten"
+                            disabled={adminActionsDisabled}
                           >
                             <MdEdit />
                           </button>
@@ -596,6 +609,7 @@ export default function Users() {
                               onClick={() => handleUnblockUser(user.id)}
                               className="btn-icon"
                               title="Entblockieren"
+                              disabled={adminActionsDisabled}
                             >
                               <MdBlock />
                             </button>
@@ -604,6 +618,7 @@ export default function Users() {
                               onClick={() => handleBlockUser(user.id)}
                               className="btn-icon"
                               title="Blockieren"
+                              disabled={adminActionsDisabled}
                             >
                               <MdBlock />
                             </button>
@@ -612,6 +627,7 @@ export default function Users() {
                             onClick={() => handleDeleteUser(user.id)}
                             className="btn-icon btn-danger"
                             title="Löschen"
+                            disabled={adminActionsDisabled}
                           >
                             <MdDelete />
                           </button>
@@ -660,6 +676,7 @@ export default function Users() {
                             onClick={() => deleteInviteMutation.mutate(i.id)}
                             className="btn-icon btn-danger"
                             title="Widerrufen"
+                            disabled={adminActionsDisabled}
                           >
                             <MdDelete />
                           </button>

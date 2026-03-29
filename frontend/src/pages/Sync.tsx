@@ -51,10 +51,16 @@ function isSshUrl(url: string): boolean {
   return u.startsWith('git@') || u.startsWith('ssh://')
 }
 
-export default function Sync() {
+interface SyncProps {
+  /** Gesperrt aus den Einstellungen (Schloss): keine Änderungen bis Entsperren */
+  editLocked?: boolean
+}
+
+export default function Sync({ editLocked = false }: SyncProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { isReadonly } = useAuth()
+  const fieldDisabled = isReadonly || editLocked
   const formatLocale = getFormatLocale()
   const [syncBranch, setSyncBranch] = useState('')
   const [activeTab, setActiveTab] = useState<'status' | 'settings' | 'logs' | 'repository'>('status')
@@ -443,14 +449,14 @@ export default function Sync() {
               value={syncBranch}
               onChange={(e) => setSyncBranch(e.target.value)}
               placeholder={syncStatus?.branch || 'main'}
-              disabled={isReadonly}
+              disabled={fieldDisabled}
             />
           </div>
           {!isReadonly && (
             <button
               type="button"
               onClick={handleSync}
-              disabled={syncMutation.isPending}
+              disabled={syncMutation.isPending || fieldDisabled}
               className="btn btn-primary sync-form-submit"
             >
               {syncMutation.isPending ? t('dashboard.syncRunning') : t('sync.runSync')}
@@ -492,7 +498,7 @@ export default function Sync() {
                     onChange={(e) =>
                       setSettingsForm({ ...settingsForm, auto_sync_enabled: e.target.checked })
                     }
-                    disabled={isReadonly}
+                    disabled={fieldDisabled}
                   />
                   {t('sync.autoSyncEnable')}
                   <InfoIcon content={t('sync.saveSettingsNote')} />
@@ -514,7 +520,7 @@ export default function Sync() {
                       auto_sync_interval: e.target.value ? parseInt(e.target.value) : null,
                     })
                   }
-                  disabled={isReadonly || !settingsForm.auto_sync_enabled}
+                  disabled={fieldDisabled || !settingsForm.auto_sync_enabled}
                 />
               </div>
               {!isReadonly && (
@@ -522,7 +528,7 @@ export default function Sync() {
                   <button
                     type="button"
                     onClick={handleSaveSettings}
-                    disabled={updateSettingsMutation.isPending}
+                    disabled={updateSettingsMutation.isPending || fieldDisabled}
                     className="btn btn-primary"
                   >
                     {updateSettingsMutation.isPending ? t('common.saving') : t('sync.saveSettings')}
@@ -606,7 +612,7 @@ export default function Sync() {
                     value={repoForm.repo_url}
                     onChange={(e) => setRepoForm({ ...repoForm, repo_url: e.target.value })}
                     placeholder="https://github.com/org/repo.git oder git@github.com:org/repo.git"
-                    disabled={isReadonly}
+                    disabled={fieldDisabled}
                   />
                 </div>
                 {!isSshUrl(repoForm.repo_url) && (
@@ -622,7 +628,7 @@ export default function Sync() {
                       value={repoForm.token}
                       onChange={(e) => setRepoForm({ ...repoForm, token: e.target.value })}
                       placeholder="ghp_..."
-                      disabled={isReadonly}
+                      disabled={fieldDisabled}
                       autoComplete="off"
                     />
                   </div>
@@ -639,7 +645,7 @@ export default function Sync() {
                           <button
                             type="button"
                             onClick={handleGenerateDeployKey}
-                            disabled={generateDeployKeyMutation.isPending}
+                            disabled={generateDeployKeyMutation.isPending || fieldDisabled}
                             className="btn btn-primary"
                           >
                             {generateDeployKeyMutation.isPending ? 'Erzeuge...' : repoConfig?.configured ? 'Deploy-Key neu erzeugen' : 'Deploy-Key erzeugen und speichern'}
@@ -670,6 +676,7 @@ export default function Sync() {
                           type="button"
                           className="btn btn-ghost btn-sm manual-key-toggle"
                           onClick={() => setShowManualDeployKey((v) => !v)}
+                          disabled={fieldDisabled}
                         >
                           {showManualDeployKey ? '− Manuellen Key ausblenden' : '+ Eigenen privaten Key manuell eintragen'}
                         </button>
@@ -686,7 +693,7 @@ export default function Sync() {
                           value={repoForm.deploy_key}
                           onChange={(e) => setRepoForm({ ...repoForm, deploy_key: e.target.value })}
                           placeholder="-----BEGIN OPENSSH PRIVATE KEY-----..."
-                          disabled={isReadonly}
+                          disabled={fieldDisabled}
                           rows={4}
                           className="form-input repo-deploy-key-input"
                           autoComplete="off"
@@ -704,7 +711,7 @@ export default function Sync() {
                     value={repoForm.branch}
                     onChange={(e) => setRepoForm({ ...repoForm, branch: e.target.value })}
                     placeholder="main"
-                    disabled={isReadonly}
+                    disabled={fieldDisabled}
                   />
                 </div>
                 <div className="setting-item">
@@ -719,14 +726,14 @@ export default function Sync() {
                     value={repoForm.pipelines_subdir}
                     onChange={(e) => setRepoForm({ ...repoForm, pipelines_subdir: e.target.value })}
                     placeholder="z. B. pipelines"
-                    disabled={isReadonly}
+                    disabled={fieldDisabled}
                   />
                 </div>
                 {!isReadonly && (
                   <div className="sync-repo-form-actions">
                     <button
                       onClick={handleSaveRepoConfig}
-                      disabled={saveRepoConfigMutation.isPending}
+                      disabled={saveRepoConfigMutation.isPending || fieldDisabled}
                       className="btn btn-primary"
                     >
                       {saveRepoConfigMutation.isPending ? t('common.saving') : t('sync.save')}
@@ -734,7 +741,7 @@ export default function Sync() {
                     <Tooltip content="Testet die Verbindung (git ls-remote)">
                       <button
                         onClick={handleTestRepoConfig}
-                        disabled={testRepoConfigMutation.isPending}
+                        disabled={testRepoConfigMutation.isPending || fieldDisabled}
                         className="btn btn-outlined"
                       >
                         {testRepoConfigMutation.isPending ? t('common.saving') : t('sync.testConfig')}
@@ -744,7 +751,7 @@ export default function Sync() {
                       <button
                         type="button"
                         onClick={handleDeleteRepoConfig}
-                        disabled={deleteRepoConfigMutation.isPending}
+                        disabled={deleteRepoConfigMutation.isPending || fieldDisabled}
                         className="btn btn-error btn-sm"
                       >
                         {deleteRepoConfigMutation.isPending ? 'Löscht...' : 'Löschen'}
@@ -768,7 +775,7 @@ export default function Sync() {
                     <button
                       type="button"
                       onClick={handleClearPipelines}
-                      disabled={clearPipelinesMutation.isPending}
+                      disabled={clearPipelinesMutation.isPending || fieldDisabled}
                       className="btn btn-outlined"
                     >
                       {clearPipelinesMutation.isPending ? t('sync.clearing') : t('sync.clearPipelinesDir')}

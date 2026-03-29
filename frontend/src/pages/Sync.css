@@ -314,20 +314,47 @@
   margin-top: var(--spacing-sm);
 }
 
-/* Repository card: gleicher Look wie Einstellungs-Sektionen (Design-Variablen) */
+/* Repository: sicherheitsrelevant – warme Rot/Orange-Akzente */
 .sync-repo-card {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
+  position: relative;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--color-warning) 42%, var(--color-border));
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--color-warning) 10%, var(--color-card)),
+    color-mix(in srgb, var(--color-error) 6%, var(--color-card)) 55%,
+    var(--color-card)
+  );
+  box-shadow:
+    var(--shadow-sm),
+    0 4px 28px color-mix(in srgb, var(--color-warning) 14%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #fff 6%, transparent);
+}
+
+.sync-repo-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+  background: linear-gradient(180deg, var(--color-warning) 0%, var(--color-error) 100%);
+  pointer-events: none;
+  box-shadow: 2px 0 12px color-mix(in srgb, var(--color-warning) 35%, transparent);
 }
 
 .sync-repo-card .section-title {
   font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
+  color: color-mix(in srgb, var(--color-warning) 28%, var(--color-text-primary));
   margin: 0;
   padding-bottom: var(--spacing-sm);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 2px solid color-mix(in srgb, var(--color-warning) 55%, var(--color-border));
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--color-error) 15%, transparent);
 }
 
 .sync-repo-card .repo-config-intro {
@@ -376,8 +403,10 @@
 
 .deploy-key-generate-section {
   margin-top: var(--spacing-md);
-  padding-top: var(--spacing-md);
-  border-top: 1px solid var(--color-border);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--color-warning) 22%, var(--color-border));
+  background: color-mix(in srgb, var(--color-error) 4%, var(--color-surface));
 }
 
 .deploy-key-generate-heading {
@@ -437,9 +466,11 @@
 .sync-repo-help {
   margin-top: var(--spacing-lg);
   padding: var(--spacing-md);
-  background-color: var(--color-surface);
+  background: color-mix(in srgb, var(--color-warning) 7%, var(--color-surface));
   border-radius: var(--radius-sm);
-  border-left: 3px solid var(--color-primary);
+  border: 1px solid color-mix(in srgb, var(--color-warning) 28%, var(--color-border));
+  border-left: 4px solid var(--color-warning);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 5%, transparent);
 }
 
 .sync-repo-help h4 {
@@ -461,9 +492,10 @@
 
 .repo-configured-badge {
   padding: var(--spacing-sm) var(--spacing-md);
-  background-color: var(--color-surface);
+  background: color-mix(in srgb, var(--color-warning) 12%, var(--color-surface));
   border-radius: var(--radius-sm);
-  color: var(--color-text-secondary);
+  border: 1px solid color-mix(in srgb, var(--color-warning) 35%, var(--color-border));
+  color: var(--color-text-primary);
   font-size: var(--font-size-sm);
 }
 

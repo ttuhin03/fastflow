@@ -1,105 +1,38 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useSyncExternalStore,
-  type ReactNode,
-} from 'react'
+import { createContext, useContext, useMemo, type ReactNode } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import apiClient from '../api/client'
 
-export const KEY_SHOW_ATTRIBUTION = 'fastflow_ui_show_attribution'
-export const KEY_SHOW_VERSION = 'fastflow_ui_show_version'
+export const UI_DISPLAY_QUERY_KEY = ['ui-display'] as const
 
-function readBool(key: string, defaultVal: boolean): boolean {
-  try {
-    const v = localStorage.getItem(key)
-    if (v === null) return defaultVal
-    return v === '1' || v === 'true'
-  } catch {
-    return defaultVal
-  }
-}
-
-function writeBool(key: string, value: boolean) {
-  try {
-    localStorage.setItem(key, value ? '1' : '0')
-  } catch {
-    /* ignore */
-  }
-}
-
-const listeners = new Set<() => void>()
-
-function computeSnapshot(): { showAttribution: boolean; showVersion: boolean } {
-  return {
-    showAttribution: readBool(KEY_SHOW_ATTRIBUTION, true),
-    showVersion: readBool(KEY_SHOW_VERSION, true),
-  }
-}
-
-/** Cached reference — useSyncExternalStore requires the same object when values are unchanged. */
-let snapshotCache = computeSnapshot()
-
-function publishSnapshot() {
-  const next = computeSnapshot()
-  if (
-    next.showAttribution === snapshotCache.showAttribution &&
-    next.showVersion === snapshotCache.showVersion
-  ) {
-    return
-  }
-  snapshotCache = next
-  listeners.forEach((l) => l())
-}
-
-function subscribe(callback: () => void) {
-  listeners.add(callback)
-  return () => {
-    listeners.delete(callback)
-  }
-}
-
-function getSnapshot() {
-  return snapshotCache
+type UiDisplayApi = {
+  ui_show_attribution: boolean
+  ui_show_version: boolean
 }
 
 type UiPrefs = {
   showAttribution: boolean
   showVersion: boolean
-  setShowAttribution: (v: boolean) => void
-  setShowVersion: (v: boolean) => void
 }
 
 const Context = createContext<UiPrefs | null>(null)
 
 export function UiPreferencesProvider({ children }: { children: ReactNode }) {
-  const snap = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
-
-  useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === KEY_SHOW_ATTRIBUTION || e.key === KEY_SHOW_VERSION) publishSnapshot()
-    }
-    window.addEventListener('storage', onStorage)
-    return () => window.removeEventListener('storage', onStorage)
-  }, [])
-
-  const setShowAttribution = useCallback((v: boolean) => {
-    writeBool(KEY_SHOW_ATTRIBUTION, v)
-    publishSnapshot()
-  }, [])
-  const setShowVersion = useCallback((v: boolean) => {
-    writeBool(KEY_SHOW_VERSION, v)
-    publishSnapshot()
-  }, [])
+  const { data } = useQuery({
+    queryKey: UI_DISPLAY_QUERY_KEY,
+    queryFn: async () => {
+      const r = await apiClient.get<UiDisplayApi>('/settings/ui-display')
+      return r.data
+    },
+    staleTime: 60_000,
+    retry: 1,
+  })
 
   const value = useMemo(
     () => ({
-      ...snap,
-      setShowAttribution,
-      setShowVersion,
+      showAttribution: data?.ui_show_attribution ?? true,
+      showVersion: data?.ui_show_version ?? true,
     }),
-    [snap, setShowAttribution, setShowVersion]
+    [data?.ui_show_attribution, data?.ui_show_version]
   )
 
   return <Context.Provider value={value}>{children}</Context.Provider>

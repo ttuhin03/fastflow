@@ -33,6 +33,8 @@ def get_system_settings(session: Session) -> SystemSettings:
             enable_error_reporting=False,
             dependency_audit_enabled=True,
             dependency_audit_cron="0 3 * * *",
+            ui_show_attribution=True,
+            ui_show_version=True,
         )
         session.add(ss)
         session.commit()

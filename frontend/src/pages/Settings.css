@@ -101,6 +101,55 @@
   gap: var(--spacing-lg);
 }
 
+/* Bearbeitungsschutz: Schloss oben rechts (System / Pipeline / Benachrichtigungen) */
+.settings-sensitive-bar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-shrink: 0;
+  margin: calc(-1 * var(--spacing-xs)) 0 var(--spacing-xs);
+}
+
+.settings-edit-lock-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition:
+    background-color var(--transition-base),
+    color var(--transition-base),
+    border-color var(--transition-base),
+    box-shadow var(--transition-base);
+}
+
+.settings-edit-lock-btn:hover {
+  background: var(--color-surface-variant);
+  color: var(--color-text-primary);
+  border-color: color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+}
+
+.settings-edit-lock-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.settings-edit-lock-btn svg {
+  font-size: 1.25rem;
+}
+
+.settings-edit-lock-btn.is-unlocked {
+  color: var(--color-primary);
+  border-color: color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+}
+
 .settings-content.settings-embedded {
   padding: 0;
 }

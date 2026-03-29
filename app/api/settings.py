@@ -88,6 +88,31 @@ async def get_telemetry_status(
     )
 
 
+class UiDisplayResponse(BaseModel):
+    """Systemweite Anzeige-Optionen (Attribution, Version). Öffentlich lesbar für Login-UI."""
+    ui_show_attribution: bool
+    ui_show_version: bool
+
+
+@router.get("/ui-display", response_model=UiDisplayResponse)
+async def get_ui_display_settings(
+    session: Session = Depends(get_session),
+) -> UiDisplayResponse:
+    """
+    Liefert die systemweiten UI-Anzeige-Flags. Kein Auth (wie /telemetry-status),
+    damit Login- und Fehlerseiten dieselben Werte wie die eingeloggte App nutzen.
+    """
+    try:
+        ss = get_system_settings(session)
+        return UiDisplayResponse(
+            ui_show_attribution=bool(getattr(ss, "ui_show_attribution", True)),
+            ui_show_version=bool(getattr(ss, "ui_show_version", True)),
+        )
+    except Exception as e:
+        logger.debug("ui-display: SystemSettings nicht lesbar, Defaults true: %s", e)
+        return UiDisplayResponse(ui_show_attribution=True, ui_show_version=True)
+
+
 class NotificationApiKeyItem(BaseModel):
     """Ein Eintrag in der Liste der Notification-API-Keys (ohne Klartext-Key)."""
     id: int
@@ -126,6 +151,8 @@ class SystemSettingsResponse(BaseModel):
     dependency_audit_enabled: bool = True
     dependency_audit_cron: str = "0 3 * * *"
     login_branding_logo_url: Optional[str] = None
+    ui_show_attribution: bool = True
+    ui_show_version: bool = True
 
 
 class SystemSettingsUpdate(BaseModel):
@@ -136,6 +163,8 @@ class SystemSettingsUpdate(BaseModel):
     dependency_audit_enabled: Optional[bool] = None
     dependency_audit_cron: Optional[str] = None
     login_branding_logo_url: Optional[str] = None
+    ui_show_attribution: Optional[bool] = None
+    ui_show_version: Optional[bool] = None
 
 
 class SettingsUpdate(BaseModel):
@@ -335,6 +364,8 @@ async def get_system_settings_endpoint(
         dependency_audit_enabled=getattr(ss, "dependency_audit_enabled", True),
         dependency_audit_cron=getattr(ss, "dependency_audit_cron", "0 3 * * *") or "0 3 * * *",
         login_branding_logo_url=getattr(ss, "login_branding_logo_url", None),
+        ui_show_attribution=bool(getattr(ss, "ui_show_attribution", True)),
+        ui_show_version=bool(getattr(ss, "ui_show_version", True)),
     )
 
 
@@ -392,6 +423,10 @@ async def update_system_settings_endpoint(
                     detail="Ungültige Logo-URL: nur http:// oder https:// mit gültigem Host erlaubt",
                 )
             ss.login_branding_logo_url = validated
+    if body.ui_show_attribution is not None:
+        ss.ui_show_attribution = body.ui_show_attribution
+    if body.ui_show_version is not None:
+        ss.ui_show_version = body.ui_show_version
     session.add(ss)
     session.commit()
     session.refresh(ss)
@@ -411,6 +446,8 @@ async def update_system_settings_endpoint(
         dependency_audit_enabled=getattr(ss, "dependency_audit_enabled", True),
         dependency_audit_cron=getattr(ss, "dependency_audit_cron", "0 3 * * *") or "0 3 * * *",
         login_branding_logo_url=getattr(ss, "login_branding_logo_url", None),
+        ui_show_attribution=bool(getattr(ss, "ui_show_attribution", True)),
+        ui_show_version=bool(getattr(ss, "ui_show_version", True)),
     )
 
 

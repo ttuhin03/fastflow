@@ -475,6 +475,14 @@ class SystemSettings(SQLModel, table=True):
         default=None,
         description="Optional: Logo-URL (http/https) für Login und UI; überschreibt LOGIN_BRANDING_LOGO_URL aus der Umgebung wenn gesetzt",
     )
+    ui_show_attribution: bool = Field(
+        default=True,
+        description="„Made with …“-Hinweis systemweit anzeigen (alle Nutzer, alle Clients)",
+    )
+    ui_show_version: bool = Field(
+        default=True,
+        description="Versionsnummer systemweit anzeigen (alle Nutzer, alle Clients)",
+    )
 
 
 class OrchestratorSettings(SQLModel, table=True):
