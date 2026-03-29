@@ -153,16 +153,16 @@ export default function PipelineDetail() {
       queryClient.invalidateQueries({ queryKey: ['pipeline-stats', name] })
       queryClient.invalidateQueries({ queryKey: ['pipeline', name] })
       queryClient.invalidateQueries({ queryKey: ['pipelines'] })
-      showSuccess('Statistiken wurden zurückgesetzt')
+      showSuccess(t('pipelineDetail.statsResetSuccess'))
     },
     onError: (error: any) => {
-      showError(`Fehler beim Zurücksetzen: ${error.response?.data?.detail || error.message}`)
+      showError(t('pipelineDetail.statsResetError', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
 
   const handleResetStats = async () => {
-    const confirmed = await showConfirm('Möchten Sie die Statistiken wirklich zurücksetzen?')
+    const confirmed = await showConfirm(t('pipelineDetail.confirmResetStats'))
     if (confirmed) {
       resetStatsMutation.mutate()
     }
@@ -185,7 +185,7 @@ export default function PipelineDetail() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['downstream-triggers', name] })
-      showSuccess('Downstream-Trigger wurde hinzugefügt')
+      showSuccess(t('pipelineDetail.downstreamAdded'))
     },
     onError: (error: any) => {
       showError(error.response?.data?.detail || error.message)
@@ -198,7 +198,7 @@ export default function PipelineDetail() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['downstream-triggers', name] })
-      showSuccess('Downstream-Trigger wurde entfernt')
+      showSuccess(t('pipelineDetail.downstreamRemoved'))
     },
     onError: (error: any) => {
       showError(error.response?.data?.detail || error.message)
@@ -234,7 +234,7 @@ export default function PipelineDetail() {
     const baseUrl = window.location.origin
     const webhookUrl = `${baseUrl}/api/webhooks/${name}/${webhookKey}`
     navigator.clipboard.writeText(webhookUrl)
-    showSuccess('Webhook-URL wurde in die Zwischenablage kopiert')
+    showSuccess(t('pipelineDetail.webhookUrlCopied'))
   }
 
   if (pipelineLoading || statsLoading) {
@@ -242,7 +242,7 @@ export default function PipelineDetail() {
   }
 
   if (!pipeline) {
-    return <div>Pipeline nicht gefunden</div>
+    return <div>{t('pipelineDetail.pipelineNotFound')}</div>
   }
 
   return (
@@ -250,44 +250,44 @@ export default function PipelineDetail() {
       <div className="pipeline-detail-header">
         <h2>{pipeline.name}</h2>
         <button type="button" onClick={() => navigate('/pipelines')} className="btn btn-ghost btn-sm">
-          ← Zurück
+          {t('pipelineDetail.backToList')}
         </button>
       </div>
 
       <div className="pipeline-info-card">
-        <h3>Informationen</h3>
+        <h3>{t('pipelineDetail.information')}</h3>
         <div className="info-grid">
         <div className="info-item">
-          <span className="info-label">Status:</span>
+          <span className="info-label">{t('pipelineDetail.status')}:</span>
           <span className={`status-badge ${pipeline.enabled ? 'enabled' : 'disabled'}`}>
-            {pipeline.enabled ? 'Aktiv' : 'Inaktiv'}
+            {pipeline.enabled ? t('common.active') : t('common.inactive')}
           </span>
-          <InfoIcon content="Status wird in pipeline.json konfiguriert. 'Aktiv' bedeutet, dass die Pipeline ausgeführt werden kann." />
+          <InfoIcon content={t('pipelineDetail.infoStatusHint')} />
           <span className="info-hint" style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginLeft: '0.5rem' }}>
-            (Konfiguriert in pipeline.json)
+            {t('pipelineDetail.configuredInJsonHint')}
           </span>
         </div>
           <div className="info-item">
-            <span className="info-label">Requirements:</span>
+            <span className="info-label">{t('pipelineDetail.requirementsLabel')}</span>
             <span className="info-value">
-              {pipeline.has_requirements ? 'Ja' : 'Nein'}
+              {pipeline.has_requirements ? t('common.yes') : t('common.no')}
             </span>
-            <InfoIcon content="Zeigt an, ob eine requirements.txt Datei vorhanden ist" />
+            <InfoIcon content={t('pipelineDetail.requirementsInfoHint')} />
           </div>
           <div className="info-item">
-            <span className="info-label">Python-Version:</span>
+            <span className="info-label">{t('pipelineDetail.pythonVersionLabel')}</span>
             <span className="info-value">
-              {pipeline.metadata.python_version || '3.11 (Standard)'}
+              {pipeline.metadata.python_version || t('pipelineDetail.pythonVersionDefault')}
             </span>
-            <InfoIcon content="Wird in pipeline.json über python_version gesetzt – beliebig pro Pipeline (z.B. 3.10, 3.11, 3.12). Fehlt es, gilt die Standardversion (z.B. 3.11)." />
+            <InfoIcon content={t('pipelineDetail.infoPythonVersionHint')} />
           </div>
           {pipeline.last_cache_warmup && (
             <div className="info-item">
-              <span className="info-label">Letzter Cache-Warmup:</span>
+              <span className="info-label">{t('pipelineDetail.lastCacheWarmupLabel')}</span>
               <span className="info-value">
                 {new Date(pipeline.last_cache_warmup).toLocaleString(getFormatLocale())}
               </span>
-              <InfoIcon content="Zeitpunkt des letzten Pre-Heating. Pipelines mit Cache starten schneller." />
+              <InfoIcon content={t('pipelineDetail.lastCacheWarmupTooltip')} />
             </div>
           )}
           {pipeline.metadata.description && (
@@ -298,7 +298,7 @@ export default function PipelineDetail() {
           )}
           {pipeline.metadata.tags && pipeline.metadata.tags.length > 0 && (
             <div className="info-item full-width">
-              <span className="info-label">Tags:</span>
+              <span className="info-label">{t('pipelineDetail.tagsLabel')}</span>
               <div className="tags">
                 {pipeline.metadata.tags.map((tag) => (
                   <span key={tag} className="tag-badge">
@@ -318,7 +318,7 @@ export default function PipelineDetail() {
             <div className="limit-section">
               <h4>
                 Hard Limits
-                <InfoIcon content="Harte Limits - Pipeline wird beendet, wenn diese überschritten werden" />
+                <InfoIcon content={t('pipelineDetail.infoHardLimitsHint')} />
               </h4>
               <div className="limit-items">
                 <Tooltip content="Anzahl der CPU-Kerne">
@@ -341,7 +341,7 @@ export default function PipelineDetail() {
               <div className="limit-section">
                 <h4>
                   Soft Limits (Monitoring)
-                  <InfoIcon content="Weiche Limits - Nur für Monitoring, Pipeline läuft weiter bei Überschreitung" />
+                  <InfoIcon content={t('pipelineDetail.infoSoftLimitsHint')} />
                 </h4>
                 <div className="limit-items">
                   {pipeline.metadata.cpu_soft_limit && (

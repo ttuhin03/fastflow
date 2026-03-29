@@ -272,10 +272,57 @@
   animation: formFadeIn 0.8s ease-out 0.6s both;
 }
 
+.login-form-oauth {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
 /* Tooltip-Wrapper für ausgegraute Buttons: volle Breite wie die anderen Buttons */
 .login-form .tooltip-trigger {
   display: block;
   width: 100%;
+}
+
+.login-provider-row {
+  width: 100%;
+}
+
+.login-provider-row--active .login-btn-github:not(.login-btn-unconfigured),
+.login-provider-row--active .login-btn-google:not(.login-btn-unconfigured),
+.login-provider-row--active .login-btn-microsoft:not(.login-btn-unconfigured),
+.login-provider-row--active .login-btn-custom:not(.login-btn-unconfigured) {
+  border-color: color-mix(in srgb, var(--color-primary) 35%, var(--color-border) 65%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 0 0 1px rgb(from var(--color-primary) r g b / 0.12);
+}
+
+.login-oauth-section-label {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-xs);
+  margin-bottom: 0;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.login-oauth-section-label::before,
+.login-oauth-section-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--color-border) 80%, transparent) 20%,
+    color-mix(in srgb, var(--color-border) 80%, transparent) 80%,
+    transparent
+  );
 }
 
 @keyframes formFadeIn {
@@ -446,10 +493,11 @@
   transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.login-btn-google,
-.login-btn-microsoft,
-.login-btn-custom {
-  margin-top: var(--spacing-sm);
+.login-form-oauth .login-btn-github,
+.login-form-oauth .login-btn-google,
+.login-form-oauth .login-btn-microsoft,
+.login-form-oauth .login-btn-custom {
+  margin-top: 0;
 }
 
 .login-btn-github .login-btn-github-icon,
@@ -487,9 +535,16 @@
 
 /* Nicht konfigurierte Provider: ausgeblendet, mit Tooltip-Info beim Hover */
 .login-btn-unconfigured {
-  opacity: 0.5;
+  opacity: 0.72;
   cursor: not-allowed;
   pointer-events: auto;
+  filter: grayscale(0.35);
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--color-border) 75%, transparent);
+}
+
+.login-provider-row--inactive .login-btn-unconfigured {
+  background: color-mix(in srgb, var(--color-background) 40%, var(--color-surface-variant) 60%);
 }
 
 .login-btn-unconfigured:hover {

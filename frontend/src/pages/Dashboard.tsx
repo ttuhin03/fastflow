@@ -182,7 +182,7 @@ export default function Dashboard() {
       </div>
 
       <div className="dashboard-system-section">
-        <h3 className="section-title">{t('dashboard.systemStatus', 'System-Status')}</h3>
+        <h3 className="section-title">{t('dashboard.systemStatus')}</h3>
         <SystemStatus />
       </div>
 

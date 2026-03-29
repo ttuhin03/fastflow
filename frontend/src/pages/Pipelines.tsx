@@ -233,11 +233,11 @@ export default function Pipelines() {
               <div className="pipeline-header">
                 <h3 className="pipeline-name">{pipeline.name}</h3>
                 <span className={`badge ${pipeline.enabled ? 'badge-success' : 'badge-secondary'}`}>
-                  {pipeline.enabled ? 'Aktiv' : 'Inaktiv'}
+                  {pipeline.enabled ? t('common.active') : t('common.inactive')}
                 </span>
               </div>
               <div className="pipeline-recent-runs">
-                <span className="recent-runs-label">Letzte Runs:</span>
+                <span className="recent-runs-label">{t('dashboard.lastRuns')}</span>
                 <RunStatusCircles pipelineName={pipeline.name} />
               </div>
               <div className="pipeline-actions">
@@ -249,7 +249,7 @@ export default function Pipelines() {
                     disabled={!pipeline.enabled || startingPipeline === pipeline.name}
                   >
                     <MdPlayArrow />
-                    {startingPipeline === pipeline.name ? 'Startet...' : 'Starten'}
+                    {startingPipeline === pipeline.name ? t('pipelines.starting') : t('pipelines.start')}
                   </button>
                 )}
                 <button

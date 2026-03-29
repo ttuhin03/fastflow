@@ -200,9 +200,9 @@ export default function Sync({ editLocked = false }: SyncProps) {
     },
     onSuccess: (data: { success: boolean; message: string }) => {
       if (data.success) {
-        showSuccess('✓ ' + data.message)
+        showSuccess(t('sync.testMessagePrefixOk') + data.message)
       } else {
-        showError('✗ ' + data.message)
+        showError(t('sync.testMessagePrefixFail') + data.message)
       }
     },
     onError: (error: any) => {
@@ -356,7 +356,7 @@ export default function Sync({ editLocked = false }: SyncProps) {
 
   return (
     <div className="sync">
-      <h2>Git Sync</h2>
+      <h2>{t('dashboard.gitSync')}</h2>
 
       <div className="tab-strip sync-page-tabs">
         <button
@@ -448,7 +448,7 @@ export default function Sync({ editLocked = false }: SyncProps) {
               type="text"
               value={syncBranch}
               onChange={(e) => setSyncBranch(e.target.value)}
-              placeholder={syncStatus?.branch || 'main'}
+              placeholder={syncStatus?.branch || t('sync.branchPlaceholderDefault')}
               disabled={fieldDisabled}
             />
           </div>
@@ -506,8 +506,8 @@ export default function Sync({ editLocked = false }: SyncProps) {
               </div>
               <div className="form-group">
                 <label htmlFor="sync-interval">
-                  Auto-Sync-Intervall (Sekunden, min. 60):
-                  <InfoIcon content="Intervall in Sekunden (Minimum: 60). Beispiel: 300 = alle 5 Minuten" />
+                  {t('sync.autoSyncIntervalLabel')}
+                  <InfoIcon content={t('sync.autoSyncIntervalHint')} />
                 </label>
                 <input
                   id="sync-interval"
@@ -536,8 +536,7 @@ export default function Sync({ editLocked = false }: SyncProps) {
                 </div>
               )}
               <p className="settings-note">
-                {t('sync.saveSettingsNote')}
-                Für persistente Änderungen die .env-Datei bearbeiten.
+                {t('sync.saveSettingsNote')} {t('sync.settingsEnvPersistNote')}
               </p>
             </div>
           )}
@@ -546,7 +545,7 @@ export default function Sync({ editLocked = false }: SyncProps) {
 
       {activeTab === 'logs' && (
         <div className="sync-logs-card">
-          <h3>Sync-Logs</h3>
+          <h3>{t('sync.syncLogsTitle')}</h3>
           {syncLogs && syncLogs.length > 0 ? (
             <div className="sync-logs-list">
               {syncLogs.map((log: any, index: number) => (
@@ -558,17 +557,17 @@ export default function Sync({ editLocked = false }: SyncProps) {
                         : '-'}
                     </span>
                     <span className={`log-status log-${log.status || 'unknown'}`}>
-                      {log.status || log.event || 'Unknown'}
+                      {log.status || log.event || t('sync.logStatusUnknown')}
                     </span>
                   </div>
                   {log.message && (
                     <div className="log-message">{log.message}</div>
                   )}
                   {log.error && (
-                    <div className="log-error">Fehler: {log.error}</div>
+                    <div className="log-error">{t('sync.logErrorLine', { detail: log.error })}</div>
                   )}
                   {log.branch && (
-                    <div className="log-details">Branch: {log.branch}</div>
+                    <div className="log-details">{t('sync.logBranchLine', { branch: log.branch })}</div>
                   )}
                   {log.pipelines_cached && log.pipelines_cached.length > 0 && (
                     <div className="log-details">
@@ -579,31 +578,31 @@ export default function Sync({ editLocked = false }: SyncProps) {
               ))}
             </div>
           ) : (
-            <p className="no-logs">Keine Sync-Logs gefunden</p>
+            <p className="no-logs">{t('sync.noSyncLogs')}</p>
           )}
         </div>
       )}
 
       {activeTab === 'repository' && (
         <div className="sync-repo-card settings-section card">
-          <h3 className="section-title">Repository verbinden</h3>
+          <h3 className="section-title">{t('sync.connectRepository')}</h3>
           <p className="repo-config-intro setting-hint">
-            <strong>HTTPS:</strong> URL + optional Personal Access Token. — <strong>SSH:</strong> URL + Deploy-Key (empfohlen: vom Server erzeugen).
+            {t('sync.repoIntroPlain')}
           </p>
           {repoConfigLoading ? (
-            <div className="setting-hint">Lade Konfiguration...</div>
+            <div className="setting-hint">{t('sync.loadingRepoConfig')}</div>
           ) : (
             <>
               {repoConfig?.configured && (
                 <div className="repo-configured-badge">
-                  Repository ist konfiguriert: {repoConfig.repo_url}
+                  {t('sync.repoConfiguredBadge', { url: repoConfig.repo_url })}
                 </div>
               )}
               <div className="sync-repo-form">
                 <div className="setting-item">
                   <label htmlFor="repo-url" className="setting-label">
-                    Repository-URL (HTTPS oder SSH):
-                    <InfoIcon content="HTTPS: https://github.com/org/repo.git — SSH: git@github.com:org/repo.git" />
+                    {t('sync.repoUrlLabel')}
+                    <InfoIcon content={t('sync.repoUrlHint')} />
                   </label>
                   <input
                     id="repo-url"
@@ -611,15 +610,15 @@ export default function Sync({ editLocked = false }: SyncProps) {
                     className="form-input"
                     value={repoForm.repo_url}
                     onChange={(e) => setRepoForm({ ...repoForm, repo_url: e.target.value })}
-                    placeholder="https://github.com/org/repo.git oder git@github.com:org/repo.git"
+                    placeholder={t('sync.repoUrlPlaceholder')}
                     disabled={fieldDisabled}
                   />
                 </div>
                 {!isSshUrl(repoForm.repo_url) && (
                   <div className="setting-item">
                     <label htmlFor="repo-token" className="setting-label">
-                      Token (optional, für private Repos):
-                      <InfoIcon content="Personal Access Token mit repo-Berechtigung. Leer lassen bei öffentlichen Repos." />
+                      {t('sync.repoTokenLabel')}
+                      <InfoIcon content={t('sync.repoTokenHint')} />
                     </label>
                     <input
                       id="repo-token"
@@ -627,7 +626,7 @@ export default function Sync({ editLocked = false }: SyncProps) {
                       className="form-input"
                       value={repoForm.token}
                       onChange={(e) => setRepoForm({ ...repoForm, token: e.target.value })}
-                      placeholder="ghp_..."
+                      placeholder={t('sync.tokenPlaceholder')}
                       disabled={fieldDisabled}
                       autoComplete="off"
                     />
@@ -637,9 +636,9 @@ export default function Sync({ editLocked = false }: SyncProps) {
                   <>
                     {!isReadonly && (
                       <div className="deploy-key-generate-section">
-                        <h4 className="deploy-key-generate-heading">Deploy-Key (empfohlen)</h4>
+                        <h4 className="deploy-key-generate-heading">{t('sync.deployKeySectionTitle')}</h4>
                         <p className="deploy-key-generate-hint setting-hint">
-                          Server erzeugt ein Key-Paar. Nur den öffentlichen Key bei GitHub (Settings → Deploy keys) eintragen – kein privater Key nötig.
+                          {t('sync.deployKeySectionHint')}
                         </p>
                         <div className="sync-repo-form-actions">
                           <button
@@ -648,12 +647,12 @@ export default function Sync({ editLocked = false }: SyncProps) {
                             disabled={generateDeployKeyMutation.isPending || fieldDisabled}
                             className="btn btn-primary"
                           >
-                            {generateDeployKeyMutation.isPending ? 'Erzeuge...' : repoConfig?.configured ? 'Deploy-Key neu erzeugen' : 'Deploy-Key erzeugen und speichern'}
+                            {generateDeployKeyMutation.isPending ? t('sync.deployKeyGenerating') : repoConfig?.configured ? t('sync.deployKeyRegenerate') : t('sync.deployKeyGeneratedSave')}
                           </button>
                         </div>
                         {generatedPublicKey && (
                           <div className="setting-item generated-public-key-box">
-                            <label className="setting-label">Öffentlicher Key (bei GitHub eintragen):</label>
+                            <label className="setting-label">{t('sync.publicKeyLabel')}</label>
                             <textarea
                               readOnly
                               value={generatedPublicKey}
@@ -665,10 +664,10 @@ export default function Sync({ editLocked = false }: SyncProps) {
                               onClick={handleCopyPublicKey}
                               className="btn btn-outlined"
                             >
-                              In Zwischenablage kopieren
+                              {t('sync.copyToClipboard')}
                             </button>
                             <p className="generated-key-hint setting-hint">
-                              In GitHub: Settings → Deploy keys → Add deploy key. Danach „Konfiguration testen“ oder Sync ausführen.
+                              {t('sync.deployKeyGithubHint')}
                             </p>
                           </div>
                         )}
@@ -678,21 +677,21 @@ export default function Sync({ editLocked = false }: SyncProps) {
                           onClick={() => setShowManualDeployKey((v) => !v)}
                           disabled={fieldDisabled}
                         >
-                          {showManualDeployKey ? '− Manuellen Key ausblenden' : '+ Eigenen privaten Key manuell eintragen'}
+                          {showManualDeployKey ? t('sync.manualKeyHide') : t('sync.manualKeyShow')}
                         </button>
                       </div>
                     )}
                     {showManualDeployKey && (
                       <div className="setting-item manual-deploy-key-section">
                         <label htmlFor="repo-deploy-key" className="setting-label">
-                          Privater SSH-Key (z. B. mit ssh-keygen erzeugt):
-                          <InfoIcon content="Inhalt des privaten Keys einfügen, falls Sie keinen Key vom Server verwenden." />
+                          {t('sync.sshPrivateKeyLabel')}
+                          <InfoIcon content={t('sync.manualPrivateKeyHint')} />
                         </label>
                         <textarea
                           id="repo-deploy-key"
                           value={repoForm.deploy_key}
                           onChange={(e) => setRepoForm({ ...repoForm, deploy_key: e.target.value })}
-                          placeholder="-----BEGIN OPENSSH PRIVATE KEY-----..."
+                          placeholder={t('sync.sshKeyPlaceholder')}
                           disabled={fieldDisabled}
                           rows={4}
                           className="form-input repo-deploy-key-input"
@@ -703,21 +702,21 @@ export default function Sync({ editLocked = false }: SyncProps) {
                   </>
                 )}
                 <div className="setting-item">
-                  <label htmlFor="repo-branch" className="setting-label">Branch:</label>
+                  <label htmlFor="repo-branch" className="setting-label">{t('sync.branchLabel')}</label>
                   <input
                     id="repo-branch"
                     type="text"
                     className="form-input"
                     value={repoForm.branch}
                     onChange={(e) => setRepoForm({ ...repoForm, branch: e.target.value })}
-                    placeholder="main"
+                    placeholder={t('sync.branchPlaceholderDefault')}
                     disabled={fieldDisabled}
                   />
                 </div>
                 <div className="setting-item">
                   <label htmlFor="repo-pipelines-subdir" className="setting-label">
-                    Pipelines-Unterordner (optional):
-                    <InfoIcon content="Wenn Ihre Pipelines im Repo in einem Unterordner liegen (z. B. pipelines/), hier den Ordnernamen eintragen. Leer = Repo-Root." />
+                    {t('sync.pipelinesSubdir')}
+                    <InfoIcon content={t('sync.pipelinesSubdirTooltip')} />
                   </label>
                   <input
                     id="repo-pipelines-subdir"
@@ -725,7 +724,7 @@ export default function Sync({ editLocked = false }: SyncProps) {
                     className="form-input"
                     value={repoForm.pipelines_subdir}
                     onChange={(e) => setRepoForm({ ...repoForm, pipelines_subdir: e.target.value })}
-                    placeholder="z. B. pipelines"
+                    placeholder={t('sync.pipelinesSubdirPlaceholder')}
                     disabled={fieldDisabled}
                   />
                 </div>
@@ -738,7 +737,7 @@ export default function Sync({ editLocked = false }: SyncProps) {
                     >
                       {saveRepoConfigMutation.isPending ? t('common.saving') : t('sync.save')}
                     </button>
-                    <Tooltip content="Testet die Verbindung (git ls-remote)">
+                    <Tooltip content={t('sync.testConnectionTooltip')}>
                       <button
                         onClick={handleTestRepoConfig}
                         disabled={testRepoConfigMutation.isPending || fieldDisabled}
@@ -754,23 +753,23 @@ export default function Sync({ editLocked = false }: SyncProps) {
                         disabled={deleteRepoConfigMutation.isPending || fieldDisabled}
                         className="btn btn-error btn-sm"
                       >
-                        {deleteRepoConfigMutation.isPending ? 'Löscht...' : 'Löschen'}
+                        {deleteRepoConfigMutation.isPending ? t('sync.deleting') : t('sync.delete')}
                       </button>
                     )}
                   </div>
                 )}
                 <div className="sync-repo-help">
-                  <h4 className="setting-label">Kurz</h4>
+                  <h4 className="setting-label">{t('sync.helpShortTitle')}</h4>
                   <ul>
-                    <li><strong>HTTPS:</strong> URL + optional PAT (private Repos). <strong>SSH:</strong> URL + Deploy-Key (am einfachsten: „Deploy-Key erzeugen“, öffentlichen Key bei GitHub eintragen).</li>
-                    <li>Branch und optional Pipelines-Unterordner eintragen, dann Speichern und „Konfiguration testen“.</li>
+                    <li>{t('sync.helpBulletHttpsSsh')}</li>
+                    <li>{t('sync.stepBranch')}</li>
                   </ul>
                 </div>
                 {!isReadonly && (
                   <div className="clear-pipelines-section">
-                    <h4 className="setting-label">Neues Repo verbinden</h4>
+                    <h4 className="setting-label">{t('sync.connectNewRepoTitle')}</h4>
                     <p className="setting-hint">
-                      Wenn bereits Pipelines (z. B. Beispiele) im Verzeichnis liegen, muss es zuerst geleert werden, damit ein neues Repository geklont werden kann.
+                      {t('sync.connectNewRepoHint')}
                     </p>
                     <button
                       type="button"

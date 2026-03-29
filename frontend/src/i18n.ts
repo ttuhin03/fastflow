@@ -31,7 +31,8 @@ i18n.use(initReactI18next).init({
     en: { translation: en },
   },
   lng: initialLng,
-  fallbackLng: 'de',
+  // Missing keys fall back to English so EN UI never shows German labels.
+  fallbackLng: 'en',
   interpolation: {
     escapeValue: false,
   },

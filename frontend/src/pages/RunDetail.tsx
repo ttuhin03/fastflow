@@ -39,6 +39,8 @@ interface Pipeline {
     cpu_soft_limit?: number
     mem_soft_limit?: string
     python_version?: string
+    description?: string
+    tags?: string[]
   }
 }
 
@@ -196,10 +198,10 @@ export default function RunDetail() {
         queryClient.invalidateQueries({ queryKey: ['all-pipelines-daily-stats'] })
         queryClient.invalidateQueries({ queryKey: ['pipeline-daily-stats', run.pipeline_name] })
       }
-      showSuccess('Run wurde erfolgreich abgebrochen')
+      showSuccess(t('runDetail.cancelSuccess'))
     },
     onError: (error: any) => {
-      showError(`Fehler beim Abbrechen: ${error.response?.data?.detail || error.message}`)
+      showError(t('runs.cancelError', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
@@ -215,7 +217,7 @@ export default function RunDetail() {
       navigate(`/runs/${data.id}`)
     },
     onError: (error: any) => {
-      showError(`Fehler beim Neustart: ${error.response?.data?.detail || error.message}`)
+      showError(t('runDetail.retryError', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
@@ -460,7 +462,7 @@ export default function RunDetail() {
 
   const getDuration = () => {
     if (!run) return '-'
-    if (!run.finished_at) return 'Läuft...'
+    if (!run.finished_at) return t('runs.runningDuration')
     const start = new Date(run.started_at).getTime()
     const end = new Date(run.finished_at).getTime()
     const seconds = Math.floor((end - start) / 1000)
@@ -512,34 +514,48 @@ export default function RunDetail() {
 
       <div className="run-info-card">
         <div className="info-row">
-          <span className="info-label">ID:</span>
+          <span className="info-label">{t('runDetail.idLabel')}</span>
           <span className="info-value">{run.id}</span>
         </div>
         <div className="info-row">
-          <span className="info-label">Pipeline:</span>
+          <span className="info-label">{t('runDetail.pipelineLabel')}</span>
           <span className="info-value">{run.pipeline_name}</span>
         </div>
         <div className="info-row">
-          <span className="info-label">Python-Version:</span>
-          <span className="info-value">{pipeline?.metadata?.python_version || '3.11 (Standard)'}</span>
+          <span className="info-label">{t('runDetail.pythonVersionLabel')}</span>
+          <span className="info-value">{pipeline?.metadata?.python_version || t('runDetail.pythonVersionDefault')}</span>
         </div>
+        {pipeline?.metadata?.description && (
+          <div className="info-row">
+            <span className="info-label">{t('pipelineDetail.descriptionLabel')}</span>
+            <span className="info-value">{pipeline.metadata.description}</span>
+          </div>
+        )}
+        {pipeline?.metadata?.tags && pipeline.metadata.tags.length > 0 && (
+          <div className="info-row">
+            <span className="info-label">{t('pipelineDetail.tagsLabel')}</span>
+            <span className="info-value">
+              {pipeline.metadata.tags.join(', ')}
+            </span>
+          </div>
+        )}
         <div className="info-row">
-          <span className="info-label">Status:</span>
+          <span className="info-label">{t('runDetail.statusLabel')}</span>
           <span className={`status status-${run.status.toLowerCase()}`}>
             {run.status}
           </span>
         </div>
         {run.error_type && (
           <div className="info-row">
-            <span className="info-label">Fehler-Typ:</span>
+            <span className="info-label">{t('runDetail.errorTypeLabel')}</span>
             <span className={`error-type-badge error-type-${run.error_type}`}>
-              {run.error_type === 'pipeline_error' ? 'Pipeline Error' : 'Infrastructure Error'}
+              {run.error_type === 'pipeline_error' ? t('runDetail.errorTypePipeline') : t('runDetail.errorTypeInfrastructure')}
             </span>
           </div>
         )}
         {run.error_message && (
           <div className="info-row">
-            <span className="info-label">Fehler-Details:</span>
+            <span className="info-label">{t('runDetail.errorDetailsLabel')}</span>
             <span className={`error-message error-message-${run.error_type || 'unknown'}`}>
               {run.error_message}
             </span>
@@ -560,12 +576,12 @@ export default function RunDetail() {
           </div>
         )}
         <div className="info-row">
-          <span className="info-label">Dauer:</span>
+          <span className="info-label">{t('runDetail.durationLabel')}</span>
           <span className="info-value">{getDuration()}</span>
         </div>
         {run.exit_code !== null && (
           <div className="info-row">
-            <span className="info-label">Exit Code:</span>
+            <span className="info-label">{t('runDetail.exitCodeLabel')}</span>
             <span className={`info-value ${run.exit_code === 0 ? 'exit-success' : 'exit-error'}`}>
               {run.exit_code}
             </span>
@@ -573,13 +589,13 @@ export default function RunDetail() {
         )}
         {run.uv_version && (
           <div className="info-row">
-            <span className="info-label">UV Version:</span>
+            <span className="info-label">{t('runDetail.uvVersionLabel')}</span>
             <span className="info-value">{run.uv_version}</span>
           </div>
         )}
         {run.setup_duration !== null && (
           <div className="info-row">
-            <span className="info-label">Setup Dauer:</span>
+            <span className="info-label">{t('runDetail.setupDurationLabel')}</span>
             <span className="info-value">{run.setup_duration.toFixed(2)}s</span>
           </div>
         )}
@@ -611,9 +627,9 @@ export default function RunDetail() {
         )}
         {health && (
           <div className="info-row">
-            <span className="info-label">Container Status:</span>
+            <span className="info-label">{t('runDetail.containerStatusLabel')}</span>
             <span className={`health-status ${health.healthy ? 'healthy' : 'unhealthy'}`}>
-              {health.container_status || health.status || (health.healthy ? 'Running' : 'Unknown')}
+              {health.container_status || health.status || (health.healthy ? t('runDetail.healthRunning') : t('runDetail.healthUnknown'))}
             </span>
             {health.health && (
               <span className={`health-badge ${health.health === 'healthy' ? 'healthy' : 'unhealthy'}`}>
@@ -697,16 +713,16 @@ export default function RunDetail() {
                 rel="noopener noreferrer"
                 className="btn btn-secondary btn-sm"
               >
-                Download Logs
+                {t('runDetail.downloadLogs')}
               </a>
             ) : (
               <button
                 className="btn btn-secondary btn-sm"
                 disabled={!logsDownloadUrlError}
-                title={logsDownloadUrlError ? 'Erneut versuchen' : 'Lade Download-URL…'}
+                title={logsDownloadUrlError ? t('runDetail.retryDownload') : t('runDetail.loadingDownloadUrl')}
                 onClick={() => logsDownloadUrlError && queryClient.invalidateQueries({ queryKey: ['logs-download-url', runId] })}
               >
-                {logsDownloadUrlError ? 'Erneut versuchen' : 'Download Logs'}
+                {logsDownloadUrlError ? t('runDetail.retryDownload') : t('runDetail.downloadLogs')}
               </button>
             )}
           </div>
@@ -813,7 +829,7 @@ export default function RunDetail() {
               </span>
             )}
             <button type="button" onClick={handleDownloadMetrics} className="btn btn-secondary btn-sm">
-              Download Metrics
+              {t('runDetail.downloadMetrics')}
             </button>
           </div>
           {metrics.length > 0 ? (

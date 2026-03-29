@@ -123,7 +123,7 @@ export default function Runs() {
   const totalRuns = runsData?.total || 0
 
   const getDuration = (run: Run) => {
-    if (!run.finished_at) return 'Läuft...'
+    if (!run.finished_at) return t('runs.runningDuration')
     const start = new Date(run.started_at).getTime()
     const end = new Date(run.finished_at).getTime()
     const seconds = Math.floor((end - start) / 1000)
@@ -134,6 +134,25 @@ export default function Runs() {
     const hours = Math.floor(minutes / 60)
     const remainingMinutes = minutes % 60
     return `${hours}h ${remainingMinutes}m`
+  }
+
+  const statusTooltipText = (status: string) => {
+    switch (status) {
+      case 'SUCCESS':
+        return t('runs.statusTooltipSuccess')
+      case 'FAILED':
+        return t('runs.statusTooltipFailed')
+      case 'RUNNING':
+        return t('runs.statusTooltipRunning')
+      case 'PENDING':
+        return t('runs.statusTooltipPending')
+      case 'WARNING':
+        return t('runs.statusTooltipWarning')
+      case 'INTERRUPTED':
+        return t('runs.statusTooltipInterrupted')
+      default:
+        return status
+    }
   }
 
   const getStatusIcon = (status: string) => {
@@ -159,14 +178,14 @@ export default function Runs() {
     <div className="runs">
       <div className="runs-filters card">
         <div className="filter-group">
-          <label htmlFor="pipeline-filter" className="form-label">Pipeline:</label>
+          <label htmlFor="pipeline-filter" className="form-label">{t('runs.filterPipeline')}</label>
           <select
             id="pipeline-filter"
             value={pipelineFilter}
             onChange={(e) => setPipelineFilter(e.target.value)}
             className="form-input"
           >
-            <option value="">Alle</option>
+            <option value="">{t('runs.listAll')}</option>
             {pipelines?.map((p: any) => (
               <option key={p.name} value={p.name}>
                 {p.name}
@@ -177,8 +196,8 @@ export default function Runs() {
 
         <div className="filter-group">
           <label htmlFor="status-filter" className="form-label">
-            Status:
-            <InfoIcon content="Filtern Sie Runs nach Status: PENDING = Wartet auf Start, RUNNING = Läuft aktuell, SUCCESS = Erfolgreich abgeschlossen, FAILED = Fehlgeschlagen" />
+            {t('runs.filterStatus')}
+            <InfoIcon content={t('runs.statusFilterHint')} />
           </label>
           <select
             id="status-filter"
@@ -186,7 +205,7 @@ export default function Runs() {
             onChange={(e) => setStatusFilter(e.target.value)}
             className="form-input"
           >
-            <option value="">Alle</option>
+            <option value="">{t('runs.listAll')}</option>
             <option value="PENDING">Pending</option>
             <option value="RUNNING">Running</option>
             <option value="SUCCESS">Success</option>
@@ -195,20 +214,20 @@ export default function Runs() {
         </div>
 
         <div className="filter-group">
-          <label htmlFor="sort-order" className="form-label">Sortierung:</label>
+          <label htmlFor="sort-order" className="form-label">{t('runs.sortLabel')}</label>
           <select
             id="sort-order"
             value={sortOrder}
             onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
             className="form-input"
           >
-            <option value="desc">Neueste zuerst</option>
-            <option value="asc">Älteste zuerst</option>
+            <option value="desc">{t('runs.sortNewest')}</option>
+            <option value="asc">{t('runs.sortOldest')}</option>
           </select>
         </div>
 
         <div className="filter-group">
-          <label htmlFor="page-size" className="form-label">Einträge pro Seite:</label>
+          <label htmlFor="page-size" className="form-label">{t('runs.pageSizeLabel')}</label>
           <select
             id="page-size"
             value={pageSize}
@@ -226,7 +245,7 @@ export default function Runs() {
         </div>
 
         <div className="filter-group">
-          <label htmlFor="start-date" className="form-label">Von:</label>
+          <label htmlFor="start-date" className="form-label">{t('runs.dateFrom')}</label>
           <input
             id="start-date"
             type="datetime-local"
@@ -237,7 +256,7 @@ export default function Runs() {
         </div>
 
         <div className="filter-group">
-          <label htmlFor="end-date" className="form-label">Bis:</label>
+          <label htmlFor="end-date" className="form-label">{t('runs.dateTo')}</label>
           <input
             id="end-date"
             type="datetime-local"
@@ -255,14 +274,14 @@ export default function Runs() {
             <table className="runs-table">
               <thead>
                 <tr>
-                  <th>ID</th>
-                  <th>Pipeline</th>
-                  <th>Commit</th>
-                  <th>Status</th>
-                  <th>Gestartet</th>
-                  <th>Dauer</th>
-                  <th>Exit Code</th>
-                  <th>Aktionen</th>
+                  <th>{t('runs.thId')}</th>
+                  <th>{t('runs.thPipeline')}</th>
+                  <th>{t('runs.thCommit')}</th>
+                  <th>{t('runs.thStatus')}</th>
+                  <th>{t('runs.thStarted')}</th>
+                  <th>{t('runs.thDuration')}</th>
+                  <th>{t('runs.thExitCode')}</th>
+                  <th>{t('runs.thActions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -280,15 +299,7 @@ export default function Runs() {
                       )}
                     </td>
                     <td>
-                      <Tooltip content={
-                        run.status === 'SUCCESS' ? '✓ SUCCESS: Run erfolgreich abgeschlossen' :
-                        run.status === 'FAILED' ? '✗ FAILED: Run mit Fehler beendet' :
-                        run.status === 'RUNNING' ? '▶ RUNNING: Run läuft aktuell' :
-                        run.status === 'PENDING' ? '⏳ PENDING: Wartet auf Start' :
-                        run.status === 'WARNING' ? '⚠ WARNING: Run mit Warnung beendet' :
-                        run.status === 'INTERRUPTED' ? '⏹ INTERRUPTED: Run wurde unterbrochen' :
-                        run.status
-                      }>
+                      <Tooltip content={statusTooltipText(run.status)}>
                         <div className="status-cell">
                           {getStatusIcon(run.status)}
                           <span className={`status-badge status-${run.status.toLowerCase()}`}>
@@ -296,7 +307,7 @@ export default function Runs() {
                           </span>
                           {run.error_type && (
                             <span className={`error-type-badge error-type-${run.error_type}`}>
-                              {run.error_type === 'pipeline_error' ? 'Pipeline' : 'Infrastructure'}
+                              {run.error_type === 'pipeline_error' ? t('runs.errorTypePipeline') : t('runs.errorTypeInfrastructure')}
                             </span>
                           )}
                         </div>
@@ -304,13 +315,13 @@ export default function Runs() {
                     </td>
                     <td>{new Date(run.started_at).toLocaleString(getFormatLocale())}</td>
                     <td>
-                      <Tooltip content="Berechnet aus Start- und Endzeit">
+                      <Tooltip content={t('runs.durationTooltip')}>
                         {getDuration(run)}
                       </Tooltip>
                     </td>
                     <td>
                       {run.exit_code !== null ? (
-                        <Tooltip content="0 = erfolgreich, != 0 = Fehler. Standard UNIX Exit Code.">
+                        <Tooltip content={t('runs.exitCodeTooltip')}>
                           <span className={run.exit_code === 0 ? 'exit-success' : 'exit-error'}>
                             {run.exit_code}
                           </span>
@@ -322,7 +333,7 @@ export default function Runs() {
                     <td>
                       <Link to={`/runs/${run.id}`} className="btn btn-outlined btn-sm details-link">
                         <MdInfo />
-                        Details
+                        {t('runs.details')}
                       </Link>
                     </td>
                   </tr>
@@ -345,37 +356,37 @@ export default function Runs() {
                   </span>
                   {run.error_type && (
                     <span className={`error-type-badge error-type-${run.error_type}`}>
-                      {run.error_type === 'pipeline_error' ? 'Pipeline' : 'Infrastructure'}
+                      {run.error_type === 'pipeline_error' ? t('runs.errorTypePipeline') : t('runs.errorTypeInfrastructure')}
                     </span>
                   )}
                 </div>
                 <div className="run-card-body">
                   <div className="run-card-row">
-                    <span className="run-card-label">Pipeline:</span>
+                    <span className="run-card-label">{t('runs.cardPipeline')}</span>
                     <span className="run-card-value">{run.pipeline_name}</span>
                   </div>
                   {run.git_sha && (
                     <div className="run-card-row">
-                      <span className="run-card-label">Commit:</span>
+                      <span className="run-card-label">{t('runs.cardCommit')}</span>
                       <Tooltip content={`${run.git_sha}${run.git_branch ? ` (${run.git_branch})` : ''}`}>
                         <span className="run-card-value commit-sha">{run.git_sha.slice(0, 7)}</span>
                       </Tooltip>
                     </div>
                   )}
                   <div className="run-card-row">
-                    <span className="run-card-label">Gestartet:</span>
+                    <span className="run-card-label">{t('runs.cardStarted')}</span>
                     <span className="run-card-value">{new Date(run.started_at).toLocaleString(getFormatLocale())}</span>
                   </div>
                   <div className="run-card-row">
-                    <span className="run-card-label">Dauer:</span>
-                    <Tooltip content="Berechnet aus Start- und Endzeit">
+                    <span className="run-card-label">{t('runs.cardDuration')}</span>
+                    <Tooltip content={t('runs.durationTooltip')}>
                       <span className="run-card-value">{getDuration(run)}</span>
                     </Tooltip>
                   </div>
                   {run.exit_code !== null && (
                     <div className="run-card-row">
-                      <span className="run-card-label">Exit Code:</span>
-                      <Tooltip content="0 = erfolgreich, != 0 = Fehler. Standard UNIX Exit Code.">
+                      <span className="run-card-label">{t('runs.cardExitCode')}</span>
+                      <Tooltip content={t('runs.exitCodeTooltip')}>
                         <span className={`run-card-value ${run.exit_code === 0 ? 'exit-success' : 'exit-error'}`}>
                           {run.exit_code}
                         </span>
@@ -386,7 +397,7 @@ export default function Runs() {
                 <div className="run-card-footer">
                   <Link to={`/runs/${run.id}`} className="btn btn-outlined btn-sm details-link">
                     <MdInfo />
-                    Details
+                    {t('runs.details')}
                   </Link>
                 </div>
               </div>
@@ -396,7 +407,11 @@ export default function Runs() {
           {totalPages > 1 && (
             <div className="pagination-container card">
               <div className="pagination-info">
-                Zeige {((page - 1) * pageSize) + 1} - {Math.min(page * pageSize, totalRuns)} von {totalRuns} Runs
+                {t('runs.paginationShowing', {
+                  from: (page - 1) * pageSize + 1,
+                  to: Math.min(page * pageSize, totalRuns),
+                  total: totalRuns,
+                })}
               </div>
               <div className="pagination-controls">
                 <button
@@ -404,31 +419,31 @@ export default function Runs() {
                   onClick={() => setPage(1)}
                   disabled={page === 1}
                 >
-                  « Erste
+                  {t('runs.paginationFirst')}
                 </button>
                 <button
                   className="pagination-btn"
                   onClick={() => setPage(page - 1)}
                   disabled={page === 1}
                 >
-                  ‹ Zurück
+                  {t('runs.paginationBack')}
                 </button>
                 <span className="pagination-page-info">
-                  Seite {page} von {totalPages}
+                  {t('runs.paginationPage', { page, total: totalPages })}
                 </span>
                 <button
                   className="pagination-btn"
                   onClick={() => setPage(page + 1)}
                   disabled={page >= totalPages}
                 >
-                  Weiter ›
+                  {t('runs.paginationNext')}
                 </button>
                 <button
                   className="pagination-btn"
                   onClick={() => setPage(totalPages)}
                   disabled={page >= totalPages}
                 >
-                  Letzte »
+                  {t('runs.paginationLast')}
                 </button>
               </div>
             </div>
@@ -436,7 +451,7 @@ export default function Runs() {
         </>
       ) : (
         <div className="empty-state card">
-          <p>Keine Runs gefunden</p>
+          <p>{t('runs.emptyList')}</p>
         </div>
       )}
     </div>
