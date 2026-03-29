@@ -61,6 +61,7 @@
     "providerUnavailable": "Dieser Anmeldeanbieter ist nicht konfiguriert. Bitte Administrator kontaktieren.",
     "oauthSectionInactive": "Nicht konfiguriert",
     "subtitle": "Pipeline Orchestrator",
+    "loginEyebrow": "Anmelden",
     "signInGitHub": "Sign in with GitHub",
     "signInGoogle": "Sign in with Google",
     "signInMicrosoft": "Sign in with Microsoft",

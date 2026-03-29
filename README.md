@@ -6,12 +6,12 @@
 
 > **Kubernetes-ready:** Fast-Flow läuft mit **Docker** (Compose oder Socket-Proxy) oder nativ auf **Kubernetes** – Pipeline-Runs als K8s-Jobs, ohne Docker-Socket. Siehe [k8s/README.md](k8s/README.md) und [Kubernetes Deployment](docs/docs/deployment/K8S.md).
 
-**The lightweight, Docker-native, Python-centric task orchestrator for 2026.**
+**The lightweight, container-native, Python-centric task orchestrator for 2026.** (Docker Compose **oder** Kubernetes Jobs – wählbar über `PIPELINE_EXECUTOR`.)
 
 Fast-Flow ist die Antwort auf die Komplexität von Airflow und die Schwerfälligkeit traditioneller CI/CD-Tools. Er wurde für Entwickler gebaut, die echte Isolation wollen, ohne auf die Geschwindigkeit lokaler Skripte zu verzichten.
 
 <!-- 60-Sekunden-Überblick -->
-**In 60 Sekunden:** Ein Python-Skript pro Pipeline, kein DAG, kein Image-Build. `git push` → Sync → Run. Jede Pipeline läuft in einem isolierten Docker-Container mit **uv** (JIT-Dependencies). Ein FastAPI-Container + Docker-Socket-Proxy, fertig.
+**In 60 Sekunden:** Ein Python-Skript pro Pipeline, kein DAG, kein Image-Build. `git push` → Sync → Run. Jede Pipeline läuft isoliert mit **uv** (JIT-Dependencies): unter Docker als ephemerer Container (optional [Socket-Proxy](#-sicherheit-docker-socket-proxy)), unter Kubernetes als **Job-Pod** ohne Docker auf den Nodes. Ein FastAPI-Orchestrator, fertig.
 
 > [!NOTE]
 >  Lies unser [Anti-Overhead Manifesto](docs/docs/manifesto.md), um zu verstehen, warum Fast-Flow die bessere Alternative zu Airflow, Dagster & Co. ist.
@@ -48,7 +48,7 @@ Fast-Flow ist die Antwort auf die Komplexität von Airflow und die Schwerfällig
 - [App-Überblick (Screenshots)](#app-überblick)
 - [🚀 Schnellstart (Docker · Lokal · Kubernetes)](#-schnellstart)
 - [🏗 Architektur: Das "Runner-Cache"-Prinzip](#-architektur-das-runner-cache-prinzip)
-- [🛠 Der Container-Prozess & Lifecycle](#-der-container-prozess--lifecycle)
+- [🛠 Worker-Prozess & Lifecycle](#-worker-prozess--lifecycle)
 - [🔄 Git-Native Deployment](#-git-native-deployment)
 - [🚀 Warum Fast-Flow? (Vergleich)](#-warum-fast-flow-vergleich)
 - [🎯 Warum Fast-Flow gewinnt (The Python Advantage)](#-warum-fast-flow-gewinnt-the-python-advantage)
@@ -64,8 +64,9 @@ Starten Sie Fast-Flow in wenigen Minuten.
 
 ### Voraussetzungen
 
-- **Docker** & Docker Compose
-- **Python 3.11+** (nur für lokale Entwicklung)
+- **Docker** & Docker Compose (für Option 1 und lokale Pipeline-Runs im Docker-Modus)
+- **Python 3.11+** (nur für lokale Entwicklung / Key-Generierung)
+- **Kubernetes** + **kubectl** (für Option 3; zum Bauen des Images oft weiterhin Docker auf der Workstation)
 
 ### Option 1: Docker (Empfohlen für Produktion)
 
@@ -148,14 +149,16 @@ Die Anmeldung erfolgt **über GitHub oder Google**:
 
 Im Gegensatz zu klassischen Orchestratoren, die oft "Dependency Hell" in ihren Worker-Umgebungen erleben, nutzt Fast-Flow eine moderne JIT-Environment-Architektur.
 
+Über **`PIPELINE_EXECUTOR`** wählst du das Backend: **`docker`** (Compose / Docker-API) oder **`kubernetes`** (Batch API → Jobs). Detaillierte Übersicht: [Architektur (Doku)](docs/docs/architektur.md).
+
 - **The Singleton Brain**: Ein einzelner FastAPI-Prozess verwaltet den Zustand, den Scheduler und den Git-Sync.
-- **Ephemeral Workers**: Jede Pipeline startet in einem isolierten Docker-Container. Keine Seiteneffekte, keine Rückstände.
-- **uv-Acceleration**: Der globale uv-Cache und die uv-Python-Installationen (z.B. 3.11, 3.12) werden als persistente Volumes in den Container gemountet. Dependencies und die **pro Pipeline wählbare** Python-Version (aus `pipeline.json` oder `DEFAULT_PYTHON_VERSION`) sind so in Millisekunden verfügbar – ohne festes Python im Basis-Image.
-- **Live-Streaming**: Logs und Ressourcen-Metriken (CPU/RAM) werden per SSE (Server-Sent Events) in Echtzeit direkt aus dem Docker-Socket an das React-Frontend gestreamt.
+- **Ephemeral Workers**: Jede Pipeline startet in einer isolierten Sandbox – Docker-Container oder Kubernetes-Job-Pod. Keine Seiteneffekte zwischen Runs.
+- **uv-Acceleration**: Der globale uv-Cache und die uv-Python-Installationen (z.B. 3.11, 3.12) sind persistent (Host-Volumes bzw. PVCs) und werden in den Worker gemountet. Dependencies und die **pro Pipeline wählbare** Python-Version (aus `pipeline.json` oder `DEFAULT_PYTHON_VERSION`) sind so in Millisekunden verfügbar – ohne festes Python im Basis-Image.
+- **Live-Streaming**: Logs und Metriken (CPU/RAM) per SSE: bei Docker über Container-Logs und Docker-Stats (über Socket-Proxy); bei Kubernetes über Pod-Logs und optional die Metrics-API (metrics-server).
 
-## 🛠 Der Container-Prozess & Lifecycle
+## 🛠 Worker-Prozess & Lifecycle
 
-Fast-Flow nutzt ein "Disposable Worker"-Modell. Anstatt langlebige Instanzen zu pflegen, wird für jede Ausführung ein frischer, isolierter Container erzeugt. Der gesamte Prozess folgt diesem Ablauf:
+Fast-Flow nutzt ein "Disposable Worker"-Modell. Für jede Ausführung entsteht ein frischer, isolierter **Container** (Docker) bzw. **Pod** (Kubernetes Job). Der Ablauf:
 
 ### 1. Trigger & Initialisierung
 
@@ -166,90 +169,104 @@ Sobald ein Run über das React-Frontend (manuell) oder den APScheduler (geplant)
 
 ### 2. Die "Zero-Build" Execution
 
-Hier liegt der Kern der Fast-Flow Performance. Statt ein Docker-Image zu bauen, wird ein generisches Basis-Image (nur uv, optional mit vorinstalliertem Python) gestartet:
+Hier liegt der Kern der Fast-Flow Performance. Statt ein Pipeline-spezifisches Image zu bauen, startet ein generisches Worker-Image (uv, optional vorinstalliertes Python):
 
-- **Mounting**: Pipeline-Verzeichnis (read-only), uv-Cache und uv-Python-Installationen (`/data/uv_python`) werden vom Host in den Container gemountet.
-- **Just-In-Time Environment**: `uv run --python {version}` – die Version ist **beliebig pro Pipeline** konfigurierbar (`python_version` in pipeline.json, z.B. 3.10, 3.11, 3.12) oder `DEFAULT_PYTHON_VERSION`. Python stammt aus `uv python install` (Preheating), nicht aus dem Image.
+- **Docker**: Pipeline-Verzeichnis read-only vom Host, uv-Cache und uv-Python gemountet.
+- **Kubernetes**: Der Orchestrator kopiert die Pipeline vor dem Job in ein **gemeinsames Volume** (`pipeline_runs/<Run-ID>` auf dem Cache-PVC); Jobs mounten uv-Cache und uv-Python dieselben wie in der [K8s-Doku](docs/docs/deployment/K8S.md).
+- **Just-In-Time (beide)**: `uv run --python {version}` – Version **pro Pipeline** (`python_version` in pipeline.json) oder `DEFAULT_PYTHON_VERSION`. Python aus `uv python install` (Preheating).
   - **Abhängigkeiten im Cache?** → In Millisekunden per Hardlink verknüpft.
-  - **Neue Abhängigkeiten?** → Einmalig geladen und im Host-Cache für zukünftige Runs gesichert.
-- **Preheating**: Beim Start und nach Git-Sync führt der Orchestrator `uv python install {version}` und `uv pip compile --python {version}` aus – Low Latency beim ersten Run.
+  - **Neue Abhängigkeiten?** → Einmalig geladen, im gemeinsamen Cache für spätere Runs.
+- **Preheating**: Beim Start und nach Git-Sync: `uv python install` / `uv pip compile` – geringe Latenz beim ersten Run.
 
 ### 3. Monitoring & Kommunikation (Headless Architecture)
 
-Während der Container läuft, fungiert die FastAPI als Vermittler:
+Während der Worker läuft, vermittelt die FastAPI:
 
-- **Logs**: Die API liest den stdout/stderr-Stream des Docker-Containers asynchron und stellt ihn über einen SSE-Endpunkt (Server-Sent Events) bereit.
-- **Metrics**: Die Docker-Stats-API wird abgegriffen, um CPU- und RAM-Werte in Echtzeit an das React-Dashboard zu senden.
-- **Security**: Die API kommuniziert nicht direkt mit dem Docker-Socket, sondern über einen sicheren Docker-Socket-Proxy (`tecnativa/docker-socket-proxy`), der nur konfigurierte Operationen erlaubt und den direkten Root-Zugriff auf den Docker-Socket verhindert.
+- **Logs**: stdout/stderr asynchron → SSE (Docker: Container-Logs; Kubernetes: Pod-Logs).
+- **Metrics**: Docker-Stats über den Proxy **oder** Kubernetes Metrics-API für den Run-Pod (wenn verfügbar).
+- **Security**: Bei **Docker** kein direkter Socket-Zugriff, nur über [Docker-Socket-Proxy](#-sicherheit-docker-socket-proxy). Bei **Kubernetes** spricht der Orchestrator mit der **Kubernetes-API** (RBAC/ServiceAccount), kein Host-Docker-Socket für Runs.
 
 ### 4. Terminierung & Cleanup
 
 Nach Abschluss des Python-Skripts:
 
 - Der Exit-Code wird erfasst (z.B. 137 für OOM-Fehler).
-- Der Container wird automatisch entfernt (`--rm`), was das System absolut sauber hält.
-- Die Logs werden finalisiert und für die Langzeitarchivierung auf der Festplatte gespeichert.
+- **Docker**: Container wird entfernt (`--rm`). **Kubernetes**: Job endet; TTL/Cluster-Policy räumt Ressourcen auf; Pipeline-Kopie im Volume wird bereinigt.
+- Die Logs werden finalisiert und für die Langzeitarchivierung gespeichert.
 
 ### 🏗 Architektur-Diagramm (Datenfluss)
 
 ```mermaid
-graph TB
-    subgraph "Client Layer"
+flowchart TB
+    subgraph ClientLayer["Client Layer"]
         A["🌐 React Frontend<br/><small>TypeScript + Vite</small>"]
     end
-    
-    subgraph "Application Layer"
+
+    subgraph AppLayer["Application Layer"]
         B["⚡ FastAPI Orchestrator<br/><small>Python 3.11+</small>"]
         C[("💾 Database<br/><small>SQLite/PostgreSQL</small>")]
-        D["🔐 Auth & Secrets<br/><small>GitHub App / Fernet</small>"]
+        D["🔐 Auth & Secrets<br/><small>OAuth / Fernet</small>"]
     end
-    
-    subgraph "Security Layer"
-        E["🛡️ Docker Socket Proxy<br/><small>tecnativa/docker-socket-proxy</small>"]
-    end
-    
-    subgraph "Infrastructure Layer"
-        F["🐳 Docker Daemon<br/><small>Host System</small>"]
-    end
-    
-    subgraph "Execution Layer"
-        G["📦 Pipeline Container<br/><small>uv run --python {version}</small>"]
-        H["📚 uv-Cache<br/><small>/data/uv_cache</small>"]
-        J["🐍 uv-Python-Installationen<br/><small>/data/uv_python</small>"]
-        I["📝 Pipeline Code<br/><small>/app:ro</small>"]
-    end
-    
-    A -->|"REST/SSE<br/>Live Updates"| B
-    B -->|"SQLModel<br/>ORM"| C
+
+    A -->|"REST/SSE Live Updates"| B
+    B -->|"SQLModel ORM"| C
     B -->|"JWT & Encryption"| D
-    B -->|"HTTP API<br/>http://docker-proxy:2375"| E
-    E -->|"Unix Socket<br/>/var/run/docker.sock:ro"| F
-    F -->|"Creates & Manages"| G
-    G -.->|"Read/Write"| H
-    G -.->|"Read-Only"| J
-    G -.->|"Read-Only"| I
-    B -.->|"Logs & Stats<br/>via Proxy"| G
-    
+
+    PE{"PIPELINE_EXECUTOR"}
+    B --> PE
+
+    subgraph DockerPfad["Docker (z. B. Compose)"]
+        E["🛡️ Docker Socket Proxy<br/><small>tecnativa</small>"]
+        F["🐳 Docker Daemon"]
+        G["📦 Pipeline-Container<br/><small>uv run --python</small>"]
+        H["📚 uv-Cache"]
+        J["🐍 uv-Python"]
+        I["📝 Pipeline-Code<br/><small>ro mount</small>"]
+    end
+
+    subgraph K8sPfad["Kubernetes Jobs"]
+        K["☸️ Kubernetes API<br/><small>BatchV1 Jobs</small>"]
+        L["📦 Job-Pod<br/><small>uv run --python</small>"]
+        M["📚 PVC: uv + pipeline_runs"]
+    end
+
+    PE -->|docker| E
+    E --> F
+    F --> G
+    G -.-> H
+    G -.-> J
+    G -.-> I
+    B -.->|"HTTP zu Proxy"| E
+    B -.->|"Logs & Stats"| G
+
+    PE -->|kubernetes| K
+    K --> L
+    L -.-> M
+    B -.->|"RBAC / SA"| K
+    B -.->|"Pod-Logs & Metrics"| L
+
     classDef frontend fill:#61dafb,stroke:#20232a,stroke-width:2px,color:#000
     classDef backend fill:#009688,stroke:#004d40,stroke-width:2px,color:#fff
     classDef security fill:#ff9800,stroke:#e65100,stroke-width:2px,color:#000
     classDef infra fill:#2196f3,stroke:#0d47a1,stroke-width:2px,color:#fff
     classDef execution fill:#9c27b0,stroke:#4a148c,stroke-width:2px,color:#fff
     classDef storage fill:#607d8b,stroke:#263238,stroke-width:2px,color:#fff
-    
+    classDef decision fill:#fff9c4,stroke:#f57f17,stroke-width:2px,color:#000
+
     class A frontend
     class B,C,D backend
     class E security
-    class F infra
-    class G execution
-    class H,I,J storage
+    class F,K infra
+    class G,L execution
+    class H,I,J,M storage
+    class PE decision
 ```
 
 ### Warum dieser Ansatz?
 
 - **Geschwindigkeit**: Durch den Entfall von `docker build` Schritten startet eine Pipeline so schnell wie ein lokaler Prozess.
 - **Isolation**: Ein Fehler in `pipeline_a` kann niemals die Umgebung von `pipeline_b` beeinflussen.
-- **Skalierbarkeit**: Da der Controller (API) und die Worker (Container) entkoppelt sind, kann das System durch das Hinzufügen von Message-Queues (wie Redis) leicht auf mehrere Server verteilt werden.
+- **Skalierbarkeit**: Controller (API) und Worker (Container bzw. Jobs) sind entkoppelt; spätere Erweiterung z. B. mit Message-Queues (Redis) möglich.
 
 ## 🔄 Git-Native Deployment
 
@@ -291,8 +308,8 @@ In Fast-Flow ist dein Git-Repository die einzige Wahrheit. Es gibt keinen "Uploa
 
 | Feature | Fast-Flow | Airflow | Dagster |
 |---------|-----------|---------|---------|
-| Setup | 🟢 1 Docker-Container | 🔴 Komplexes Cluster | 🟡 Mittel |
-| Isolation | 🟢 Strikt (Docker pro Task) | 🔴 Schwach (Shared Worker) | 🟡 Mittel |
+| Setup | 🟢 Compose oder K8s-Manifeste | 🔴 Komplexes Cluster | 🟡 Mittel |
+| Isolation | 🟢 Strikt (Container/Job pro Task) | 🔴 Schwach (Shared Worker) | 🟡 Mittel |
 | Dependency-Speed | 🟢 Instant (uv JIT) | 🔴 Langsam (Image Builds) | 🟡 Mittel |
 | UI-Vibe | 🟢 Modern & Realtime (React) | 🔴 Altbacken / Statisch | 🟡 Modern |
 | Deployment | 🟢 Git Push + Auto-Sync | 🔴 Komplexe CI/CD Pipelines | 🟡 Code-Deployment |
@@ -319,9 +336,9 @@ In anderen Orchestratoren musst du oft YAML-Dateien schreiben oder dich mit komp
 
 ### 3. 🛠 Minimalistischer Footprint
 
-Während Airflow eine Postgres-DB, einen Redis-Broker, einen Scheduler, einen Webserver und mehrere Worker braucht, kommt Fast-Flow als Single-Container-Lösung aus.
+Während Airflow eine Postgres-DB, einen Redis-Broker, einen Scheduler, einen Webserver und mehrere Worker braucht, bleibt Fast-Flow bewusst schlank: typisch **ein Orchestrator-Deployment** plus ephemere Worker (Docker-Container oder K8s-Jobs).
 
-- **Wartungsarm**: Ein Update bedeutet `docker-compose pull`. Fertig.
+- **Wartungsarm**: Update z. B. `docker-compose pull` oder neues Orchestrator-Image im Cluster.
 - **Ressourcenschonend**: Ideal für Edge-Server oder kleinere VM-Instanzen.
 
 ### Die Fast-Flow Vorteile:
@@ -344,7 +361,7 @@ Während Airflow eine Postgres-DB, einen Redis-Broker, einen Scheduler, einen We
 ## Hauptfunktionen
 
 - **Automatische Pipeline-Erkennung**: Pipelines werden automatisch aus einem Git-Repository erkannt
-- **Isolierte Ausführung**: Jede Pipeline läuft in einem eigenen Docker-Container
+- **Isolierte Ausführung**: Jede Pipeline in eigenem Docker-Container oder Kubernetes-Job (`PIPELINE_EXECUTOR`)
 - **Resource-Management**: Konfigurierbare CPU- und Memory-Limits pro Pipeline
 - **Scheduling**: Unterstützung für CRON- und Interval-basierte Jobs
 - **Webhooks**: Pipeline-Trigger via HTTP-Webhooks
@@ -355,7 +372,7 @@ Während Airflow eine Postgres-DB, einen Redis-Broker, einen Scheduler, einen We
 
 ## 🔒 Sicherheit: Docker Socket Proxy
 
-Fast-Flow nutzt einen **Docker Socket Proxy** (`tecnativa/docker-socket-proxy`) als Sicherheitsschicht zwischen dem Orchestrator und dem Docker-Daemon. Dies verhindert direkten Root-Zugriff auf den Docker-Socket und schränkt die verfügbaren Docker-API-Operationen ein.
+Bei **`PIPELINE_EXECUTOR=docker`** (Standard mit Docker Compose) nutzt Fast-Flow einen **Docker Socket Proxy** (`tecnativa/docker-socket-proxy`) zwischen Orchestrator und Docker-Daemon. So entfällt direkter Root-Zugriff auf den Socket; nur ausgewählte Docker-API-Operationen sind erlaubt. Bei **`PIPELINE_EXECUTOR=kubernetes`** spricht der Orchestrator mit der **Kubernetes-API** (Jobs/Pods); der Proxy entfällt.
 
 ### Warum ein Proxy?
 
@@ -391,7 +408,7 @@ Die Doku liegt unter `docs/docs/` und wird mit **Docusaurus** bereitgestellt. Lo
 |--------|--------|
 | **Einstieg** | [Schnellstart](docs/docs/schnellstart.md) · [Setup-Anleitung](docs/docs/setup.md) · [Manifesto](docs/docs/manifesto.md) · [Architektur](docs/docs/architektur.md) |
 | **Pipelines** | [Übersicht](docs/docs/pipelines/uebersicht.md) · [Erste Pipeline](docs/docs/pipelines/erste-pipeline.md) · [Erweiterte Pipelines](docs/docs/pipelines/erweiterte-pipelines.md) · [pipeline.json Referenz](docs/docs/pipelines/referenz.md) |
-| **Betrieb** | [Konfiguration](docs/docs/deployment/CONFIGURATION.md) · [Produktion](docs/docs/deployment/PRODUCTION.md) · [Git-Deployment](docs/docs/deployment/GIT_DEPLOYMENT.md) · [Docker Socket Proxy](docs/docs/deployment/DOCKER_PROXY.md) |
+| **Betrieb** | [Konfiguration](docs/docs/deployment/CONFIGURATION.md) · [Produktion](docs/docs/deployment/PRODUCTION.md) · [Git-Deployment](docs/docs/deployment/GIT_DEPLOYMENT.md) · [Kubernetes](docs/docs/deployment/K8S.md) · [Docker Socket Proxy](docs/docs/deployment/DOCKER_PROXY.md) |
 | **Sicherheit & Ops** | [OAuth (GitHub & Google)](docs/docs/oauth/README.md) · [S3 Log-Backup](docs/docs/deployment/S3_LOG_BACKUP.md) · [Compliance](docs/docs/compliance-security.md) |
 | **Referenz** | [API](docs/docs/api/API.md) · [Datenbank/Schema](docs/docs/database/SCHEMA.md) · [Versioning](docs/docs/deployment/VERSIONING.md) · [Telemetrie](docs/docs/telemetry/README.md) |
 | **Hilfe** | [Troubleshooting](docs/docs/troubleshooting.md) · [Disclaimer](docs/docs/disclaimer.md) |
@@ -442,7 +459,7 @@ Weitere Details: [Versioning & Releases](docs/docs/deployment/VERSIONING.md)
 
 ## Pipeline-Repository-Struktur
 
-Das Pipeline-Repository wird als Volume in den Orchestrator-Container gemountet. Pipelines werden automatisch erkannt und ausgeführt.
+Das Pipeline-Repository liegt unter `PIPELINES_DIR` – lokal, per Volume im Orchestrator (Docker Compose) oder auf einem **PVC** (Kubernetes). Pipelines werden automatisch erkannt; im K8s-Jobs-Modus kopiert der Orchestrator den Snapshot pro Run auf das Cache-Volume.
 
 > [!TIP]
 > Verwenden Sie unser **[fastflow-pipeline-template](https://github.com/ttuhin03/fastflow-pipeline-template)** für einen schnellen Start und eine optimale Struktur Ihrer Pipelines.
@@ -567,7 +584,7 @@ Metadaten-Datei für Resource-Limits und Konfiguration.
   - Secrets sollten NICHT hier gespeichert werden (verwende stattdessen Secrets-Management in der UI)
 
 **Verhalten:**
-- **Hard Limits**: Werden beim Container-Start gesetzt (Docker-Limits)
+- **Hard Limits**: Werden beim Worker-Start gesetzt (Docker cgroups bzw. Kubernetes `resources.limits`)
   - Überschreitung führt zu OOM-Kill (Exit-Code 137) bei Memory
   - CPU wird gedrosselt (Throttling) bei Überschreitung
 - **Soft Limits**: Werden nur überwacht, keine Limitierung
@@ -684,11 +701,11 @@ Die Anwendung startet nicht ohne Key. Generieren Sie einen (siehe Schnellstart) 
 
 **Wichtiger Hinweis zur Sicherheit und Haftung:**
 
-Dieses Projekt befindet sich in einem **Frühen Stadium / Beta-Status**. Da der Orchestrator Zugriff auf den Docker-Socket benötigt, um Pipelines auszuführen, besteht bei unsachgemäßer Konfiguration ein Sicherheitsrisiko für das Host-System.
+Dieses Projekt befindet sich in einem **Frühen Stadium / Beta-Status**. Im Modus **`PIPELINE_EXECUTOR=docker`** hat der Orchestrator indirekten Zugriff auf den Docker-Daemon (über den empfohlenen Proxy) – bei unsachgemäßer Konfiguration ein relevantes Risiko für das Host-System. Unter **`kubernetes`** sind die Runs vom Host-Docker entkoppelt; dort gelten stattdessen übliche K8s-Themen (RBAC, Netzwerk, Secrets).
 
 - **Nutzung auf eigene Gefahr:** Die Software wird „wie besehen“ (as is) zur Verfügung gestellt. Der Autor übernimmt keinerlei Haftung für Schäden an Hardware, Datenverlust, Sicherheitslücken oder Betriebsunterbrechungen, die durch die Nutzung dieser Software entstehen könnten.
 - **Keine Gewährleistung:** Es gibt keine Garantie für die Richtigkeit, Funktionsfähigkeit oder ständige Verfügbarkeit der Software.
-- **Sicherheitsempfehlung:** Betreiben Sie diesen Orchestrator niemals ungeschützt im öffentlichen Internet. Nutzen Sie immer den empfohlenen Docker-Socket-Proxy und eine starke Authentifizierung.
+- **Sicherheitsempfehlung:** Niemals ungeschützt im öffentlichen Internet betreiben. Bei Docker-Betrieb den Socket-Proxy verwenden und starke Authentifizierung; bei Kubernetes minimale RBAC-Rechte für den Orchestrator-ServiceAccount.
 
 Ausführlich in der Doku: [Disclaimer & Haftungsausschluss](docs/docs/disclaimer.md).
  

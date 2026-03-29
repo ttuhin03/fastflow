@@ -10,9 +10,9 @@ Kurze Erklärung der zentralen Begriffe in Fast-Flow – für alle, die unter di
 
 Fast-Flow nutzt **keine** eigenen Docker-Images pro Pipeline und keine shared Worker-Umgebung. Stattdessen:
 
-- **Runner:** Jeder Run startet einen **ephemeren** Docker-Container („Disposable Worker“). Nach dem Lauf wird der Container entfernt.
-- **Cache:** Der **uv-Cache** (Pakete) und **uv-Python-Installationen** (z.B. 3.11, 3.12) liegen als **persistente Volumes** auf dem Host. Sie werden in die Container **gemountet**, nicht bei jedem Run neu gebaut.
-- **Effekt:** Kein `docker build`, keine Dependency-Hölle. Dependencies sind nach dem ersten Run in Millisekunden verfügbar (Hardlinks aus dem Cache).
+- **Runner:** Jeder Run startet eine **ephemere** Isolation – entweder ein Docker-Container oder ein **Kubernetes-Job-Pod** („Disposable Worker“), gesteuert über `PIPELINE_EXECUTOR`. Nach dem Lauf wird die Sandbox entfernt bzw. beendet.
+- **Cache:** Der **uv-Cache** (Pakete) und **uv-Python-Installationen** (z.B. 3.11, 3.12) liegen **persistent** (Host-Volumes bei Docker Compose, **PVCs** bei Kubernetes). Sie werden in den Worker **gemountet**, nicht bei jedem Run neu gebaut.
+- **Effekt:** Kein Image-Build pro Pipeline, keine Dependency-Hölle. Dependencies sind nach dem ersten Run in Millisekunden verfügbar (Hardlinks bzw. Cache aus dem Volume).
 
 ## uv (Paketmanager)
 
@@ -30,11 +30,11 @@ Fast-Flow nutzt **keine** eigenen Docker-Images pro Pipeline und keine shared Wo
 
 ## Disposable Worker
 
-Jede Pipeline-Ausführung läuft in einem **eigenen, frischen** Container. Nach dem Lauf wird der Container mit `--rm` entfernt. Es gibt keine langlebigen Worker-Prozesse, die sich Zustand oder Dependencies teilen – dadurch maximale **Isolation** und **Sauberkeit**.
+Jede Pipeline-Ausführung läuft in einem **eigenen, frischen** Worker – Docker-Container oder K8s-Job. Nach dem Lauf wird die Umgebung entfernt bzw. der Job beendet. Es gibt keine langlebigen Worker-Prozesse, die sich Zustand oder Dependencies teilen – dadurch maximale **Isolation** und **Sauberkeit**.
 
 ## Docker Socket Proxy
 
-Der Orchestrator spricht **nicht** direkt mit dem Docker-Socket (`/var/run/docker.sock`), sondern über einen [Docker-Socket-Proxy](https://github.com/Tecnativa/docker-socket-proxy) (`tecnativa/docker-socket-proxy`). Der Proxy erlaubt nur konfigurierte Operationen (z.B. Container erstellen, Logs, Stats) und blockiert den Rest – so bleibt der Root-Zugriff auf den Host eingeschränkt.
+Nur im Modus **`PIPELINE_EXECUTOR=docker`**: Der Orchestrator spricht **nicht** direkt mit dem Docker-Socket (`/var/run/docker.sock`), sondern über einen [Docker-Socket-Proxy](https://github.com/Tecnativa/docker-socket-proxy) (`tecnativa/docker-socket-proxy`). Der Proxy erlaubt nur konfigurierte Operationen (z.B. Container erstellen, Logs, Stats) und blockiert den Rest. Bei **`kubernetes`** entfällt dieser Pfad; stattdessen spricht die Anwendung mit der **Kubernetes-API** (Jobs, Pods, Logs).
 
 ## Git als Source of Truth
 
@@ -52,4 +52,5 @@ Pipelines müssen **nicht** in der Datenbank oder UI angelegt werden. Sobald ein
 
 - [**Architektur**](/docs/architektur) – Runner-Cache und Container-Lifecycle im Detail
 - [**Pipelines – Übersicht**](/docs/pipelines/uebersicht) – Struktur und Erkennung
-- [**Docker Socket Proxy**](/docs/deployment/DOCKER_PROXY) – Sicherheitsarchitektur
+- [**Docker Socket Proxy**](/docs/deployment/DOCKER_PROXY) – Sicherheitsarchitektur (Docker-Executor)
+- [**Kubernetes Deployment**](/docs/deployment/K8S) – Jobs-Executor
