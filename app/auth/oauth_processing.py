@@ -12,6 +12,7 @@ from typing import Literal, Optional, Tuple
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.core.config import config
@@ -22,6 +23,8 @@ from app.services.notifications import notify_admin_join_request
 
 logger = logging.getLogger(__name__)
 Provider = Literal["github", "google", "microsoft", "custom"]
+
+_LINK_ALREADY_USED_DETAIL = "Dieses Konto ist bereits mit einem anderen Benutzer verknüpft."
 
 
 def _provider_id_attr(provider: Provider) -> str:
@@ -188,13 +191,39 @@ async def process_oauth_login(
                 if not user or user.blocked:
                     logger.warning("OAuth: Link-Flow fehlgeschlagen provider=%s (user_id=%s nicht gefunden oder blockiert)", provider, stored["user_id"])
                     raise HTTPException(status_code=403, detail="Benutzer nicht gefunden oder blockiert.")
+                existing = retry_on_sqlite_io(
+                    lambda: session.exec(
+                        select(User).where(
+                            getattr(User, id_attr) == provider_id,
+                            User.id != user.id,
+                        )
+                    ).first(),
+                    session=session,
+                )
+                if existing:
+                    logger.info(
+                        "OAuth: Link-Flow Kollision provider=%s user=%s existing_user=%s",
+                        provider,
+                        user.username,
+                        existing.username,
+                    )
+                    raise HTTPException(status_code=409, detail=_LINK_ALREADY_USED_DETAIL)
                 setattr(user, id_attr, provider_id)
                 if avatar:
                     user.avatar_url = avatar
                 if provider == "github":
                     user.github_login = oauth_data.get("login")
                 session.add(user)
-                session.commit()
+                try:
+                    session.commit()
+                except IntegrityError:
+                    session.rollback()
+                    logger.info(
+                        "OAuth: Link-Flow Kollision (integrity) provider=%s user=%s",
+                        provider,
+                        user.username,
+                    )
+                    raise HTTPException(status_code=409, detail=_LINK_ALREADY_USED_DETAIL)
                 session.refresh(user)
                 delete_oauth_state(state)
                 logger.info(

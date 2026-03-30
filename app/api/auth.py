@@ -25,6 +25,7 @@ from app.auth import (
     get_current_user,
     get_session_by_token,
     delete_oauth_state,
+    get_oauth_state,
     generate_oauth_state,
     store_oauth_state,
     GITHUB_AUTHORIZE_URL,
@@ -100,6 +101,20 @@ def _redirect_with_token(token: str) -> RedirectResponse:
 def _redirect_to_settings_linked(provider: str) -> RedirectResponse:
     frontend = (config.FRONTEND_URL or config.BASE_URL or "http://localhost:8000").rstrip("/")
     return RedirectResponse(url=f"{frontend}/settings?linked={provider}", status_code=302)
+
+
+def _redirect_to_settings_link_error(provider: str, reason: str = "already_linked") -> RedirectResponse:
+    frontend = (config.FRONTEND_URL or config.BASE_URL or "http://localhost:8000").rstrip("/")
+    return RedirectResponse(url=f"{frontend}/settings?link_error={reason}&provider={provider}", status_code=302)
+
+
+def _is_matching_link_state(state: Optional[str], provider: str) -> bool:
+    if not state:
+        return False
+    stored = get_oauth_state(state)
+    if not stored:
+        return False
+    return stored.get("purpose") == f"link_{provider}"
 
 
 def _redirect_anklopfen_screen(user: User) -> RedirectResponse:
@@ -223,7 +238,10 @@ async def github_callback(
         raise HTTPException(status_code=400, detail="GitHub OAuth: code fehlt")
     try:
         github_user = await get_github_user_data(code)
-    except HTTPException:
+    except HTTPException as exc:
+        if exc.status_code == 409 and _is_matching_link_state(state, "github"):
+            delete_oauth_state(state)
+            return _redirect_to_settings_link_error("github")
         raise
     # GitHub liefert "id", "login"; ggf. "avatar_url" für Profilbild
     oauth_data = {**github_user, "avatar_url": github_user.get("avatar_url")}
@@ -236,7 +254,10 @@ async def github_callback(
             oauth_data=oauth_data,
             state=state,
         )
-    except HTTPException:
+    except HTTPException as exc:
+        if exc.status_code == 409 and _is_matching_link_state(state, "google"):
+            delete_oauth_state(state)
+            return _redirect_to_settings_link_error("google")
         raise
     if anklopfen_only:
         if is_new_user:
@@ -296,7 +317,10 @@ async def google_callback(
         raise HTTPException(status_code=400, detail="Google OAuth: code fehlt")
     try:
         google_user = await get_google_user_data(code)
-    except HTTPException:
+    except HTTPException as exc:
+        if exc.status_code == 409 and _is_matching_link_state(state, "microsoft"):
+            delete_oauth_state(state)
+            return _redirect_to_settings_link_error("microsoft")
         raise
     try:
         user, link_only, anklopfen_only, is_new_user, registration_source = await process_oauth_login(
@@ -307,7 +331,10 @@ async def google_callback(
             oauth_data=google_user,
             state=state,
         )
-    except HTTPException:
+    except HTTPException as exc:
+        if exc.status_code == 409 and _is_matching_link_state(state, "custom"):
+            delete_oauth_state(state)
+            return _redirect_to_settings_link_error("custom")
         raise
     if anklopfen_only:
         if is_new_user:

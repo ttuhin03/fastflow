@@ -21,7 +21,12 @@ interface User {
   github_id?: string | null
   github_login?: string | null
   google_id?: string | null
+  custom_oauth_id?: string | null
   status?: string
+}
+
+interface AuthProviders {
+  custom_display_name?: string
 }
 
 interface InvitationRow {
@@ -43,10 +48,11 @@ const normalizeRole = (role: string): 'readonly' | 'write' | 'admin' => {
   return role.toLowerCase() as 'readonly' | 'write' | 'admin'
 }
 
-function linkedProviderKeys(user: User): Array<'github' | 'google'> {
-  const a: Array<'github' | 'google'> = []
+function linkedProviderKeys(user: User): Array<'github' | 'google' | 'custom'> {
+  const a: Array<'github' | 'google' | 'custom'> = []
   if (user.github_id) a.push('github')
   if (user.google_id) a.push('google')
+  if (user.custom_oauth_id) a.push('custom')
   return a
 }
 
@@ -74,6 +80,22 @@ export default function Users({ editLocked = false }: UsersProps) {
   const [inviteExpiresHours, setInviteExpiresHours] = useState(168)
   const [approveModalUser, setApproveModalUser] = useState<User | null>(null)
   const [approveRole, setApproveRole] = useState<'readonly' | 'write' | 'admin'>('readonly')
+
+  const { data: authProviders = {} } = useQuery<AuthProviders>({
+    queryKey: ['auth/providers'],
+    queryFn: async () => {
+      try {
+        const response = await apiClient.get('/auth/providers')
+        return response.data
+      } catch {
+        return {}
+      }
+    },
+    staleTime: 60_000,
+  })
+  const customProviderName = (authProviders.custom_display_name || '').trim() || t('auth.customProviderFallback')
+  const providerLabel = (provider: 'github' | 'google' | 'custom') =>
+    provider === 'github' ? t('users.providerGitHub') : provider === 'google' ? t('users.providerGoogle') : customProviderName
 
   // Check if current user is admin by trying to fetch users list
   // If successful, user is admin. If 403, user is not admin.
@@ -571,10 +593,10 @@ export default function Users({ editLocked = false }: UsersProps) {
                               key={p}
                               className="badge badge-account"
                               title={t('users.accountLinked', {
-                                provider: p === 'github' ? t('users.providerGitHub') : t('users.providerGoogle'),
+                                provider: providerLabel(p),
                               })}
                             >
-                              {p === 'github' ? t('users.providerGitHub') : t('users.providerGoogle')}
+                              {providerLabel(p)}
                             </span>
                           ))
                         ) : (
