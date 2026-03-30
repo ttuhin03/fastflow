@@ -4,14 +4,23 @@ import apiClient from '../api/client'
 
 export const UI_DISPLAY_QUERY_KEY = ['ui-display'] as const
 
+export type UiLoginBackground = 'video' | 'game_of_life'
+
 type UiDisplayApi = {
   ui_show_attribution: boolean
   ui_show_version: boolean
+  ui_login_background?: string
 }
 
 type UiPrefs = {
   showAttribution: boolean
   showVersion: boolean
+  /** Systemweit (SystemSettings); steuert Login-Hintergrund für alle Clients. */
+  loginBackground: UiLoginBackground
+}
+
+function normalizeLoginBackground(raw: string | undefined): UiLoginBackground {
+  return raw === 'game_of_life' ? 'game_of_life' : 'video'
 }
 
 const Context = createContext<UiPrefs | null>(null)
@@ -31,8 +40,9 @@ export function UiPreferencesProvider({ children }: { children: ReactNode }) {
     () => ({
       showAttribution: data?.ui_show_attribution ?? true,
       showVersion: data?.ui_show_version ?? true,
+      loginBackground: normalizeLoginBackground(data?.ui_login_background),
     }),
-    [data?.ui_show_attribution, data?.ui_show_version]
+    [data?.ui_show_attribution, data?.ui_show_version, data?.ui_login_background]
   )
 
   return <Context.Provider value={value}>{children}</Context.Provider>

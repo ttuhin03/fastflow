@@ -487,6 +487,10 @@ class SystemSettings(SQLModel, table=True):
         default=True,
         description="Auf der Login-Seite auch nicht konfigurierte OAuth-Provider als deaktivierte Buttons anzeigen; bei False nur konfigurierte Provider",
     )
+    ui_login_background: str = Field(
+        default="video",
+        description="Login-Hintergrund: video oder game_of_life (systemweit)",
+    )
 
 
 class OrchestratorSettings(SQLModel, table=True):

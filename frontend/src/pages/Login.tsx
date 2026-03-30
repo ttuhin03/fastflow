@@ -4,6 +4,8 @@ import { useQuery } from '@tanstack/react-query'
 import { MdCode } from 'react-icons/md'
 import Tooltip from '../components/Tooltip'
 import LoginAttributionFooter from '../components/LoginAttributionFooter'
+import LoginGameOfLifeBackground from '../components/LoginGameOfLifeBackground'
+import { useUiPreferences } from '../contexts/UiPreferencesContext'
 import apiClient from '../api/client'
 import { getApiOrigin } from '../config'
 import './Login.css'
@@ -26,6 +28,7 @@ type ProviderId = (typeof PROVIDER_ORDER)[number]
 export default function Login() {
   const { t } = useTranslation()
   const videoRef = useRef<HTMLVideoElement>(null)
+  const { loginBackground } = useUiPreferences()
 
   const { data: providers = {} } = useQuery<AuthProviders>({
     queryKey: ['auth/providers'],
@@ -55,10 +58,10 @@ export default function Login() {
   }, [providers])
 
   useEffect(() => {
-    if (videoRef.current) {
+    if (videoRef.current && loginBackground === 'video') {
       videoRef.current.playbackRate = 0.5
     }
-  }, [])
+  }, [loginBackground])
 
   const handleGitHubLogin = () => {
     if (providers.github) window.location.href = `${getApiOrigin()}/api/auth/github/authorize`
@@ -178,16 +181,20 @@ export default function Login() {
   return (
     <div className="login-container">
       <div className="login-background">
-        <video
-          ref={videoRef}
-          className="login-background-video"
-          autoPlay
-          loop
-          muted
-          playsInline
-        >
-          <source src="/background.mp4" type="video/mp4" />
-        </video>
+        {loginBackground === 'video' ? (
+          <video
+            ref={videoRef}
+            className="login-background-video"
+            autoPlay
+            loop
+            muted
+            playsInline
+          >
+            <source src="/background.mp4" type="video/mp4" />
+          </video>
+        ) : (
+          <LoginGameOfLifeBackground />
+        )}
         <div className="login-background-mesh" aria-hidden />
         <div className="login-background-overlay" />
       </div>

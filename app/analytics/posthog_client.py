@@ -36,6 +36,7 @@ def get_system_settings(session: Session) -> SystemSettings:
             ui_show_attribution=True,
             ui_show_version=True,
             show_unconfigured_oauth_on_login=True,
+            ui_login_background="video",
         )
         session.add(ss)
         session.commit()

@@ -210,6 +210,7 @@ export default function Settings() {
     ui_show_attribution: boolean
     ui_show_version: boolean
     show_unconfigured_oauth_on_login: boolean
+    ui_login_background: string
   }>({
     queryKey: ['settings-system'],
     queryFn: async () => {
@@ -240,6 +241,7 @@ export default function Settings() {
       ui_show_attribution?: boolean
       ui_show_version?: boolean
       show_unconfigured_oauth_on_login?: boolean
+      ui_login_background?: 'video' | 'game_of_life'
     }) => {
       const response = await apiClient.put('/settings/system', patch)
       return response.data
@@ -702,6 +704,28 @@ export default function Settings() {
               {t('settings.showVersion')}
             </label>
             <p className="setting-hint settings-ui-pref-hint">{t('settings.showVersionHint')}</p>
+            <p className="setting-hint setting-hint--flush setting-item--offset-top">{t('settings.loginBackgroundTitle')}</p>
+            <p className="setting-hint settings-ui-pref-hint">{t('settings.loginBackgroundHint')}</p>
+            <label className="settings-telemetry-toggle">
+              <input
+                type="radio"
+                name="ui_login_background"
+                checked={(systemSettings?.ui_login_background ?? 'video') === 'video'}
+                onChange={() => updateSystemSettingsMutation.mutate({ ui_login_background: 'video' })}
+                disabled={updateSystemSettingsMutation.isPending || fieldDisabled}
+              />
+              {t('settings.loginBackgroundVideo')}
+            </label>
+            <label className="settings-telemetry-toggle">
+              <input
+                type="radio"
+                name="ui_login_background"
+                checked={(systemSettings?.ui_login_background ?? 'video') === 'game_of_life'}
+                onChange={() => updateSystemSettingsMutation.mutate({ ui_login_background: 'game_of_life' })}
+                disabled={updateSystemSettingsMutation.isPending || fieldDisabled}
+              />
+              {t('settings.loginBackgroundGameOfLife')}
+            </label>
           </div>
         </div>
       )}

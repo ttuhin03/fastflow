@@ -14,7 +14,7 @@ import secrets as secrets_module
 import shutil
 import psutil
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Literal
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -45,6 +45,13 @@ from sqlmodel import text
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/settings", tags=["settings"])
+
+_UI_LOGIN_BG_ALLOWED: frozenset[str] = frozenset({"video", "game_of_life"})
+
+
+def _normalize_ui_login_background(raw: Optional[str]) -> str:
+    v = (raw or "video").strip()
+    return v if v in _UI_LOGIN_BG_ALLOWED else "video"
 
 
 def _safe_public_url(url: Optional[str]) -> Optional[str]:
@@ -89,9 +96,10 @@ async def get_telemetry_status(
 
 
 class UiDisplayResponse(BaseModel):
-    """Systemweite Anzeige-Optionen (Attribution, Version). Öffentlich lesbar für Login-UI."""
+    """Systemweite Anzeige-Optionen (Attribution, Version, Login-Hintergrund). Öffentlich lesbar für Login-UI."""
     ui_show_attribution: bool
     ui_show_version: bool
+    ui_login_background: str = "video"
 
 
 @router.get("/ui-display", response_model=UiDisplayResponse)
@@ -107,10 +115,15 @@ async def get_ui_display_settings(
         return UiDisplayResponse(
             ui_show_attribution=bool(getattr(ss, "ui_show_attribution", True)),
             ui_show_version=bool(getattr(ss, "ui_show_version", True)),
+            ui_login_background=_normalize_ui_login_background(getattr(ss, "ui_login_background", None)),
         )
     except Exception as e:
         logger.debug("ui-display: SystemSettings nicht lesbar, Defaults true: %s", e)
-        return UiDisplayResponse(ui_show_attribution=True, ui_show_version=True)
+        return UiDisplayResponse(
+            ui_show_attribution=True,
+            ui_show_version=True,
+            ui_login_background="video",
+        )
 
 
 class NotificationApiKeyItem(BaseModel):
@@ -154,6 +167,7 @@ class SystemSettingsResponse(BaseModel):
     ui_show_attribution: bool = True
     ui_show_version: bool = True
     show_unconfigured_oauth_on_login: bool = True
+    ui_login_background: str = "video"
 
 
 class SystemSettingsUpdate(BaseModel):
@@ -167,6 +181,7 @@ class SystemSettingsUpdate(BaseModel):
     ui_show_attribution: Optional[bool] = None
     ui_show_version: Optional[bool] = None
     show_unconfigured_oauth_on_login: Optional[bool] = None
+    ui_login_background: Optional[Literal["video", "game_of_life"]] = None
 
 
 class SettingsUpdate(BaseModel):
@@ -369,6 +384,7 @@ async def get_system_settings_endpoint(
         ui_show_attribution=bool(getattr(ss, "ui_show_attribution", True)),
         ui_show_version=bool(getattr(ss, "ui_show_version", True)),
         show_unconfigured_oauth_on_login=bool(getattr(ss, "show_unconfigured_oauth_on_login", True)),
+        ui_login_background=_normalize_ui_login_background(getattr(ss, "ui_login_background", None)),
     )
 
 
@@ -432,6 +448,8 @@ async def update_system_settings_endpoint(
         ss.ui_show_version = body.ui_show_version
     if body.show_unconfigured_oauth_on_login is not None:
         ss.show_unconfigured_oauth_on_login = body.show_unconfigured_oauth_on_login
+    if body.ui_login_background is not None:
+        ss.ui_login_background = body.ui_login_background
     session.add(ss)
     session.commit()
     session.refresh(ss)
@@ -454,6 +472,7 @@ async def update_system_settings_endpoint(
         ui_show_attribution=bool(getattr(ss, "ui_show_attribution", True)),
         ui_show_version=bool(getattr(ss, "ui_show_version", True)),
         show_unconfigured_oauth_on_login=bool(getattr(ss, "show_unconfigured_oauth_on_login", True)),
+        ui_login_background=_normalize_ui_login_background(getattr(ss, "ui_login_background", None)),
     )
 
 

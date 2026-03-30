@@ -326,10 +326,12 @@
   color: var(--color-text-primary);
 }
 
-.settings-telemetry-toggle input[type="checkbox"] {
+.settings-telemetry-toggle input[type="checkbox"],
+.settings-telemetry-toggle input[type="radio"] {
   width: 18px;
   height: 18px;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .settings-telemetry-note {
