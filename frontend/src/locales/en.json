@@ -175,6 +175,8 @@
     "linkedGithub": "GitHub account linked.",
     "linkedMicrosoft": "Microsoft account linked.",
     "linkedCustom": "Custom account linked.",
+    "linkErrorAlreadyLinked": "{{provider}} is already linked to another user account.",
+    "providerUnknown": "This account",
     "systemConfigSaved": "System configuration saved.",
     "saveFailed": "Save failed.",
     "updateError": "Error updating: {{detail}}",

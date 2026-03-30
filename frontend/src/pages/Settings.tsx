@@ -162,6 +162,8 @@ export default function Settings() {
 
   useEffect(() => {
     const linked = searchParams.get('linked')
+    const linkError = searchParams.get('link_error')
+    const errorProvider = searchParams.get('provider')
     if (linked === 'google' || linked === 'github' || linked === 'microsoft' || linked === 'custom') {
       const msg =
         linked === 'google'
@@ -177,7 +179,24 @@ export default function Settings() {
       setSearchParams(Object.fromEntries(np.entries()), { replace: true })
       refetchMe()
     }
-  }, [searchParams, setSearchParams, refetchMe])
+    if (linkError === 'already_linked') {
+      const providerName =
+        errorProvider === 'google'
+          ? 'Google'
+          : errorProvider === 'github'
+            ? 'GitHub'
+            : errorProvider === 'microsoft'
+              ? 'Microsoft'
+              : errorProvider === 'custom'
+                ? (authProviders.custom_display_name || '').trim() || t('auth.customProviderFallback')
+                : t('settings.providerUnknown')
+      showError(t('settings.linkErrorAlreadyLinked', { provider: providerName }))
+      const np = new URLSearchParams(searchParams)
+      np.delete('link_error')
+      np.delete('provider')
+      setSearchParams(Object.fromEntries(np.entries()), { replace: true })
+    }
+  }, [searchParams, setSearchParams, refetchMe, authProviders.custom_display_name, t])
 
   const [localBrandingLogoUrl, setLocalBrandingLogoUrl] = useState<string | null>(null)
 
@@ -477,6 +496,7 @@ export default function Settings() {
   }
 
   const currentSettings = localSettings || settings
+  const customProviderName = (authProviders.custom_display_name || '').trim() || t('auth.customProviderFallback')
 
   const isSensitiveSection = SENSITIVE_SETTINGS_SECTIONS.includes(section)
   const fieldLocked = isSensitiveSection && sensitiveSettingsLocked
@@ -622,7 +642,7 @@ export default function Settings() {
           </div>
           <div className="settings-account-row">
             <span className="settings-account-row__label">
-              <strong>Custom</strong>
+              <strong>{customProviderName}</strong>
               {me?.has_custom ? <MdCheck className="icon-success" aria-label={t('settings.linked')} /> : null}
             </span>
             {me?.has_custom ? (

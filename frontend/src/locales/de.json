@@ -175,6 +175,8 @@
     "linkedGithub": "GitHub-Konto verknüpft.",
     "linkedMicrosoft": "Microsoft-Konto verknüpft.",
     "linkedCustom": "Custom-Konto verknüpft.",
+    "linkErrorAlreadyLinked": "{{provider}} ist bereits mit einem anderen Benutzerkonto verknüpft.",
+    "providerUnknown": "Dieses Konto",
     "systemConfigSaved": "System-Konfiguration gespeichert.",
     "saveFailed": "Speichern fehlgeschlagen.",
     "updateError": "Fehler beim Aktualisieren: {{detail}}",
