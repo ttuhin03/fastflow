@@ -491,6 +491,14 @@ class SystemSettings(SQLModel, table=True):
         default="video",
         description="Login-Hintergrund: video oder game_of_life (systemweit)",
     )
+    ui_header_timezone_1: str = Field(
+        default="UTC",
+        description="Erste Zeitzone für Header-Uhr (IANA, z. B. UTC)",
+    )
+    ui_header_timezone_2: str = Field(
+        default="Europe/Berlin",
+        description="Zweite Zeitzone für Header-Uhr (IANA, z. B. Europe/Berlin = CET/CEST)",
+    )
 
 
 class OrchestratorSettings(SQLModel, table=True):

@@ -652,6 +652,26 @@ textarea.form-input {
   margin-top: var(--spacing-md);
 }
 
+.settings-header-tz-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
+}
+
+.settings-header-tz-label {
+  min-width: 8rem;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.settings-header-tz-select {
+  flex: 1;
+  min-width: 12rem;
+  max-width: 24rem;
+}
+
 .form-input--cron {
   max-width: 12rem;
   font-family: ui-monospace, monospace;

@@ -11,6 +11,7 @@ import { captureException } from '../utils/posthog'
 import { getApiOrigin } from '../config'
 import Tooltip from '../components/Tooltip'
 import InfoIcon from '../components/InfoIcon'
+import { HEADER_TIMEZONE_IDS } from '../constants/headerTimezones'
 import StorageStats from '../components/StorageStats'
 import SystemMetrics from '../components/SystemMetrics'
 import Sync from './Sync'
@@ -212,6 +213,8 @@ export default function Settings() {
     ui_show_version: boolean
     show_unconfigured_oauth_on_login: boolean
     ui_login_background: string
+    ui_header_timezone_1: string
+    ui_header_timezone_2: string
   }>({
     queryKey: ['settings-system'],
     queryFn: async () => {
@@ -243,6 +246,8 @@ export default function Settings() {
       ui_show_version?: boolean
       show_unconfigured_oauth_on_login?: boolean
       ui_login_background?: 'video' | 'game_of_life'
+      ui_header_timezone_1?: string
+      ui_header_timezone_2?: string
     }) => {
       const response = await apiClient.put('/settings/system', patch)
       return response.data
@@ -808,6 +813,60 @@ export default function Settings() {
               />
               {t('settings.loginBackgroundGameOfLife')}
             </label>
+            <p className="setting-hint setting-hint--flush setting-item--offset-top">{t('settings.headerTimezonesTitle')}</p>
+            <p className="setting-hint settings-ui-pref-hint">{t('settings.headerTimezonesHint')}</p>
+            <div className="settings-header-tz-row setting-item--offset-top">
+              <label className="settings-header-tz-label" htmlFor="ui_header_timezone_1">
+                {t('settings.headerTimezoneFirst')}
+              </label>
+              <select
+                id="ui_header_timezone_1"
+                className="form-input settings-header-tz-select"
+                value={systemSettings?.ui_header_timezone_1 ?? 'UTC'}
+                onChange={(e) => {
+                  const v = e.target.value
+                  const other = systemSettings?.ui_header_timezone_2 ?? 'Europe/Berlin'
+                  if (v === other) {
+                    showError(t('settings.headerTimezonesMustDiffer'))
+                    return
+                  }
+                  updateSystemSettingsMutation.mutate({ ui_header_timezone_1: v })
+                }}
+                disabled={updateSystemSettingsMutation.isPending || fieldDisabled}
+              >
+                {HEADER_TIMEZONE_IDS.map((id) => (
+                  <option key={id} value={id}>
+                    {t(`settings.headerTimezoneOption.${id.replace(/\//g, '_')}`)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="settings-header-tz-row">
+              <label className="settings-header-tz-label" htmlFor="ui_header_timezone_2">
+                {t('settings.headerTimezoneSecond')}
+              </label>
+              <select
+                id="ui_header_timezone_2"
+                className="form-input settings-header-tz-select"
+                value={systemSettings?.ui_header_timezone_2 ?? 'Europe/Berlin'}
+                onChange={(e) => {
+                  const v = e.target.value
+                  const other = systemSettings?.ui_header_timezone_1 ?? 'UTC'
+                  if (v === other) {
+                    showError(t('settings.headerTimezonesMustDiffer'))
+                    return
+                  }
+                  updateSystemSettingsMutation.mutate({ ui_header_timezone_2: v })
+                }}
+                disabled={updateSystemSettingsMutation.isPending || fieldDisabled}
+              >
+                {HEADER_TIMEZONE_IDS.map((id) => (
+                  <option key={id} value={id}>
+                    {t(`settings.headerTimezoneOption.${id.replace(/\//g, '_')}`)}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
       )}

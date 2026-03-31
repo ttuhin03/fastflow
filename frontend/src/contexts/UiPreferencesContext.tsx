@@ -10,6 +10,8 @@ type UiDisplayApi = {
   ui_show_attribution: boolean
   ui_show_version: boolean
   ui_login_background?: string
+  ui_header_timezone_1?: string
+  ui_header_timezone_2?: string
 }
 
 type UiPrefs = {
@@ -17,6 +19,9 @@ type UiPrefs = {
   showVersion: boolean
   /** Systemweit (SystemSettings); steuert Login-Hintergrund für alle Clients. */
   loginBackground: UiLoginBackground
+  /** Zwei IANA-Zeitzonen für die Header-Uhr (systemweit). */
+  headerTimezone1: string
+  headerTimezone2: string
 }
 
 function normalizeLoginBackground(raw: string | undefined): UiLoginBackground {
@@ -41,8 +46,16 @@ export function UiPreferencesProvider({ children }: { children: ReactNode }) {
       showAttribution: data?.ui_show_attribution ?? true,
       showVersion: data?.ui_show_version ?? true,
       loginBackground: normalizeLoginBackground(data?.ui_login_background),
+      headerTimezone1: data?.ui_header_timezone_1 ?? 'UTC',
+      headerTimezone2: data?.ui_header_timezone_2 ?? 'Europe/Berlin',
     }),
-    [data?.ui_show_attribution, data?.ui_show_version, data?.ui_login_background]
+    [
+      data?.ui_show_attribution,
+      data?.ui_show_version,
+      data?.ui_login_background,
+      data?.ui_header_timezone_1,
+      data?.ui_header_timezone_2,
+    ]
   )
 
   return <Context.Provider value={value}>{children}</Context.Provider>

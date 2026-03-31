@@ -48,6 +48,24 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 
 _UI_LOGIN_BG_ALLOWED: frozenset[str] = frozenset({"video", "game_of_life"})
 
+# IANA-Zeitzonen für die Header-Uhr (Auswahl in den Systemeinstellungen, genau zwei aktiv).
+ALLOWED_UI_HEADER_TIMEZONES: frozenset[str] = frozenset(
+    {
+        "UTC",
+        "Europe/Berlin",
+        "Europe/London",
+        "Europe/Paris",
+        "America/New_York",
+        "America/Chicago",
+        "America/Los_Angeles",
+        "America/Sao_Paulo",
+        "Asia/Dubai",
+        "Asia/Tokyo",
+        "Asia/Singapore",
+        "Australia/Sydney",
+    }
+)
+
 
 def _normalize_ui_login_background(raw: Optional[str]) -> str:
     v = (raw or "video").strip()
@@ -65,6 +83,16 @@ def _safe_public_url(url: Optional[str]) -> Optional[str]:
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         return None
     return u
+
+
+def _validate_ui_header_timezone_id(raw: Optional[str]) -> str:
+    tz = (raw or "").strip()
+    if tz not in ALLOWED_UI_HEADER_TIMEZONES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ungültige Zeitzone: nur Werte aus der erlaubten Liste",
+        )
+    return tz
 
 
 class TelemetryStatusResponse(BaseModel):
@@ -100,6 +128,8 @@ class UiDisplayResponse(BaseModel):
     ui_show_attribution: bool
     ui_show_version: bool
     ui_login_background: str = "video"
+    ui_header_timezone_1: str = "UTC"
+    ui_header_timezone_2: str = "Europe/Berlin"
 
 
 @router.get("/ui-display", response_model=UiDisplayResponse)
@@ -112,10 +142,20 @@ async def get_ui_display_settings(
     """
     try:
         ss = get_system_settings(session)
+        tz1 = getattr(ss, "ui_header_timezone_1", None) or "UTC"
+        tz2 = getattr(ss, "ui_header_timezone_2", None) or "Europe/Berlin"
+        if tz1 not in ALLOWED_UI_HEADER_TIMEZONES:
+            tz1 = "UTC"
+        if tz2 not in ALLOWED_UI_HEADER_TIMEZONES:
+            tz2 = "Europe/Berlin"
+        if tz1 == tz2:
+            tz2 = "Europe/Berlin" if tz1 != "Europe/Berlin" else "UTC"
         return UiDisplayResponse(
             ui_show_attribution=bool(getattr(ss, "ui_show_attribution", True)),
             ui_show_version=bool(getattr(ss, "ui_show_version", True)),
             ui_login_background=_normalize_ui_login_background(getattr(ss, "ui_login_background", None)),
+            ui_header_timezone_1=tz1,
+            ui_header_timezone_2=tz2,
         )
     except Exception as e:
         logger.debug("ui-display: SystemSettings nicht lesbar, Defaults true: %s", e)
@@ -123,6 +163,8 @@ async def get_ui_display_settings(
             ui_show_attribution=True,
             ui_show_version=True,
             ui_login_background="video",
+            ui_header_timezone_1="UTC",
+            ui_header_timezone_2="Europe/Berlin",
         )
 
 
@@ -168,6 +210,8 @@ class SystemSettingsResponse(BaseModel):
     ui_show_version: bool = True
     show_unconfigured_oauth_on_login: bool = True
     ui_login_background: str = "video"
+    ui_header_timezone_1: str = "UTC"
+    ui_header_timezone_2: str = "Europe/Berlin"
 
 
 class SystemSettingsUpdate(BaseModel):
@@ -182,6 +226,8 @@ class SystemSettingsUpdate(BaseModel):
     ui_show_version: Optional[bool] = None
     show_unconfigured_oauth_on_login: Optional[bool] = None
     ui_login_background: Optional[Literal["video", "game_of_life"]] = None
+    ui_header_timezone_1: Optional[str] = None
+    ui_header_timezone_2: Optional[str] = None
 
 
 class SettingsUpdate(BaseModel):
@@ -387,6 +433,8 @@ async def get_system_settings_endpoint(
         ui_show_version=bool(getattr(ss, "ui_show_version", True)),
         show_unconfigured_oauth_on_login=bool(getattr(ss, "show_unconfigured_oauth_on_login", True)),
         ui_login_background=_normalize_ui_login_background(getattr(ss, "ui_login_background", None)),
+        ui_header_timezone_1=getattr(ss, "ui_header_timezone_1", None) or "UTC",
+        ui_header_timezone_2=getattr(ss, "ui_header_timezone_2", None) or "Europe/Berlin",
     )
 
 
@@ -452,6 +500,17 @@ async def update_system_settings_endpoint(
         ss.show_unconfigured_oauth_on_login = body.show_unconfigured_oauth_on_login
     if body.ui_login_background is not None:
         ss.ui_login_background = body.ui_login_background
+    if body.ui_header_timezone_1 is not None:
+        ss.ui_header_timezone_1 = _validate_ui_header_timezone_id(body.ui_header_timezone_1)
+    if body.ui_header_timezone_2 is not None:
+        ss.ui_header_timezone_2 = _validate_ui_header_timezone_id(body.ui_header_timezone_2)
+    _tz1 = ss.ui_header_timezone_1 or "UTC"
+    _tz2 = ss.ui_header_timezone_2 or "Europe/Berlin"
+    if _tz1 == _tz2:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Die beiden Header-Zeitzonen müssen unterschiedlich sein.",
+        )
     session.add(ss)
     session.commit()
     session.refresh(ss)
@@ -475,6 +534,8 @@ async def update_system_settings_endpoint(
         ui_show_version=bool(getattr(ss, "ui_show_version", True)),
         show_unconfigured_oauth_on_login=bool(getattr(ss, "show_unconfigured_oauth_on_login", True)),
         ui_login_background=_normalize_ui_login_background(getattr(ss, "ui_login_background", None)),
+        ui_header_timezone_1=getattr(ss, "ui_header_timezone_1", None) or "UTC",
+        ui_header_timezone_2=getattr(ss, "ui_header_timezone_2", None) or "Europe/Berlin",
     )
 
 

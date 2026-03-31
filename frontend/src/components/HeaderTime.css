@@ -42,19 +42,18 @@
   text-transform: uppercase;
   transition: all var(--transition-base);
   margin-left: var(--spacing-xs);
-  min-width: 34px;
+  min-width: 2.75rem;
   text-align: center;
 }
 
-.header-time-toggle.utc {
+.header-time-toggle.tz-a {
   color: var(--color-info);
   border-color: rgba(99, 102, 241, 0.3);
   background-color: rgba(99, 102, 241, 0.1);
 }
 
-.header-time-toggle.cet {
+.header-time-toggle.tz-b {
   color: var(--color-warning);
-  /* Use warning color (orange) for CET to distinguish or maybe just text-secondary */
   border-color: var(--color-border);
   color: var(--color-text-secondary);
 }
@@ -80,7 +79,7 @@
   letter-spacing: 0.3px;
 }
 
-.ht-dual-utc {
+.ht-dual-tz-a {
   color: rgba(99, 102, 241, 0.95);
 }
 
@@ -91,7 +90,7 @@
   user-select: none;
 }
 
-.ht-dual-cet {
+.ht-dual-tz-b {
   color: var(--color-text-primary);
 }
 
