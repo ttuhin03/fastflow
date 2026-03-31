@@ -1,61 +1,19 @@
-import { useRef, useEffect, useMemo, Fragment } from 'react'
+import { useRef, useEffect, Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useQuery } from '@tanstack/react-query'
 import { MdCode } from 'react-icons/md'
 import Tooltip from '../components/Tooltip'
 import LoginAttributionFooter from '../components/LoginAttributionFooter'
 import LoginGameOfLifeBackground from '../components/LoginGameOfLifeBackground'
 import { useUiPreferences } from '../contexts/UiPreferencesContext'
-import apiClient from '../api/client'
 import { getApiOrigin } from '../config'
+import { useAuthProviders, type ProviderId } from '../hooks/useAuthProviders'
 import './Login.css'
-
-interface AuthProviders {
-  github?: boolean
-  google?: boolean
-  microsoft?: boolean
-  custom?: boolean
-  login_branding_logo_url?: string
-  custom_oauth_icon_url?: string
-  custom_display_name?: string
-  /** false = nur konfigurierte Provider auf der Login-Seite */
-  show_unconfigured_oauth_on_login?: boolean
-}
-
-const PROVIDER_ORDER = ['github', 'google', 'microsoft', 'custom'] as const
-type ProviderId = (typeof PROVIDER_ORDER)[number]
 
 export default function Login() {
   const { t } = useTranslation()
   const videoRef = useRef<HTMLVideoElement>(null)
   const { loginBackground } = useUiPreferences()
-
-  const { data: providers = {} } = useQuery<AuthProviders>({
-    queryKey: ['auth/providers'],
-    queryFn: async () => {
-      try {
-        const r = await apiClient.get('/auth/providers')
-        return r.data
-      } catch {
-        return {}
-      }
-    },
-    staleTime: 60_000,
-  })
-
-  const orderedProviderIds = useMemo(() => {
-    const showUnconfigured = providers.show_unconfigured_oauth_on_login !== false
-    const candidates = PROVIDER_ORDER.filter((id) => {
-      if (showUnconfigured) return true
-      return providers[id] === true
-    })
-    return [...candidates].sort((a, b) => {
-      const aOn = providers[a] === true
-      const bOn = providers[b] === true
-      if (aOn !== bOn) return aOn ? -1 : 1
-      return PROVIDER_ORDER.indexOf(a) - PROVIDER_ORDER.indexOf(b)
-    })
-  }, [providers])
+  const { providers, orderedProviderIds } = useAuthProviders()
 
   useEffect(() => {
     if (videoRef.current && loginBackground === 'video') {

@@ -906,9 +906,12 @@
     "invalidLink": "Invalid invitation link",
     "invalidLinkDesc": "The invitation link is incomplete or invalid.",
     "invitedTitle": "You have been invited to Fast-Flow!",
-    "invitedDesc": "Sign in with GitHub or Google to accept the invitation. The email must match the invitation.",
+    "invitedDesc": "Sign in with one of the providers below to accept the invitation. The email must match the invitation.",
     "registerGitHub": "Register with GitHub",
-    "registerGoogle": "Register with Google"
+    "registerGoogle": "Register with Google",
+    "registerMicrosoft": "Register with Microsoft",
+    "registerNamedProvider": "Register with {{name}}",
+    "registerCustom": "Register with Custom"
   },
   "requestSent": {
     "title": "Request sent",

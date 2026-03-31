@@ -9,7 +9,7 @@ Dieses Modul enthält alle REST-API-Endpoints für Pipeline-Management:
 
 import asyncio
 from collections import defaultdict
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any, Tuple, Sequence
 from uuid import UUID
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -230,18 +230,36 @@ def _get_daily_stats_from_db(
     return result
 
 
-def _parse_tags_filter(tags_param: Optional[str]) -> Optional[set]:
-    """Parst komma-getrennte Tags zu einem Set; leeres/None -> None (kein Filter)."""
+def _parse_tags_filter(tags_param: Optional[str]) -> Optional[Tuple[str, ...]]:
+    """Parst komma-getrennte Suchbegriffe; leeres/None -> None (kein Filter)."""
     if not tags_param or not tags_param.strip():
         return None
-    return {t.strip() for t in tags_param.split(",") if t.strip()}
+    parts = tuple(t.strip() for t in tags_param.split(",") if t.strip())
+    return parts if parts else None
+
+
+def _metadata_matches_tag_terms(
+    metadata_tags: Optional[List[str]], terms: Sequence[str]
+) -> bool:
+    """
+    True, wenn mindestens ein Suchbegriff als Teilstring (Groß/Klein egal)
+    in mindestens einem Tag vorkommt.
+    """
+    if not metadata_tags:
+        return False
+    lowered_tags = [t.lower() for t in metadata_tags]
+    for q in terms:
+        ql = q.lower()
+        if any(ql in tag for tag in lowered_tags):
+            return True
+    return False
 
 
 @router.get("", response_model=List[PipelineResponse])
 async def get_pipelines(
     tags: Optional[str] = Query(
         None,
-        description="Komma-getrennte Tags; nur Pipelines zurückgeben, die mindestens einen dieser Tags haben (z.B. tags=production,experiment)",
+        description="Komma-getrennte Suchbegriffe; Pipelines mit Tag, das einen Begriff als Teilstring enthält (Groß/Klein egal), z.B. tags=prod,ml",
     ),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
@@ -249,8 +267,8 @@ async def get_pipelines(
     """
     Gibt eine Liste aller verfügbaren Pipelines zurück (via Discovery, inkl. Statistiken).
 
-    Optional: Mit `tags` nur Pipelines anzeigen, die mindestens einen der angegebenen Tags
-    in ihrer pipeline.json (metadata.tags) haben.
+    Optional: Mit `tags` nur Pipelines anzeigen, bei denen mindestens ein Suchbegriff
+    in `metadata.tags` vorkommt (Teilstring, case-insensitive; mehrere Begriffe per Komma = ODER).
     
     Returns:
         Liste aller entdeckten Pipelines mit Statistiken aus der Datenbank
@@ -264,11 +282,13 @@ async def get_pipelines(
         if not discovered_pipelines:
             return []
 
-        tag_filter = _parse_tags_filter(tags)
-        if tag_filter is not None:
+        tag_terms = _parse_tags_filter(tags)
+        if tag_terms is not None:
             discovered_pipelines = [
                 d for d in discovered_pipelines
-                if getattr(d.metadata, "tags", None) and set(d.metadata.tags) & tag_filter
+                if _metadata_matches_tag_terms(
+                    getattr(d.metadata, "tags", None), tag_terms
+                )
             ]
             if not discovered_pipelines:
                 return []

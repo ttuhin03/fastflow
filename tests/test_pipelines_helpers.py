@@ -1,7 +1,7 @@
 """
 Unit-Tests für Pipeline-API-Hilfsfunktionen (app.api.pipelines).
 
-Testet _path_within_pipelines_dir und _parse_date_range.
+Testet _path_within_pipelines_dir, _parse_date_range und Tag-Suche.
 """
 
 import pytest
@@ -9,7 +9,12 @@ from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from fastapi import HTTPException
 
-from app.api.pipelines import _path_within_pipelines_dir, _parse_date_range
+from app.api.pipelines import (
+    _metadata_matches_tag_terms,
+    _parse_tags_filter,
+    _path_within_pipelines_dir,
+    _parse_date_range,
+)
 from app.core.config import config
 
 
@@ -120,3 +125,33 @@ def test_parse_date_range_iso_datetime():
     )
     assert start_dt.month == 1 and start_dt.day == 15
     assert end_dt.hour == 23 and end_dt.minute == 59  # end wird auf Tagesende gesetzt
+
+
+def test_parse_tags_filter_none_and_empty():
+    assert _parse_tags_filter(None) is None
+    assert _parse_tags_filter("") is None
+    assert _parse_tags_filter("   ") is None
+
+
+def test_parse_tags_filter_comma_split():
+    assert _parse_tags_filter("a, b") == ("a", "b")
+    assert _parse_tags_filter(" production ") == ("production",)
+
+
+def test_metadata_matches_tag_terms_substring_and_case():
+    tags = ["error-handling", "Demo"]
+    assert _metadata_matches_tag_terms(tags, ("error",)) is True
+    assert _metadata_matches_tag_terms(tags, ("ERROR",)) is True
+    assert _metadata_matches_tag_terms(tags, ("emo",)) is True
+    assert _metadata_matches_tag_terms(tags, ("nomatch",)) is False
+
+
+def test_metadata_matches_tag_terms_or_across_terms():
+    tags = ["zzz"]
+    assert _metadata_matches_tag_terms(tags, ("x", "z")) is True
+    assert _metadata_matches_tag_terms(tags, ("x", "y")) is False
+
+
+def test_metadata_matches_tag_terms_empty_or_none_tags():
+    assert _metadata_matches_tag_terms(None, ("a",)) is False
+    assert _metadata_matches_tag_terms([], ("a",)) is False

@@ -906,9 +906,12 @@
     "invalidLink": "Ungültiger Einladungslink",
     "invalidLinkDesc": "Der Einladungslink ist unvollständig oder ungültig.",
     "invitedTitle": "Du wurdest zu Fast-Flow eingeladen!",
-    "invitedDesc": "Melde dich mit GitHub oder Google an, um die Einladung anzunehmen. Die E-Mail muss der Einladung entsprechen.",
+    "invitedDesc": "Melde dich mit einem der unten angezeigten Anbieter an, um die Einladung anzunehmen. Die E-Mail muss der Einladung entsprechen.",
     "registerGitHub": "Mit GitHub registrieren",
-    "registerGoogle": "Mit Google registrieren"
+    "registerGoogle": "Mit Google registrieren",
+    "registerMicrosoft": "Mit Microsoft registrieren",
+    "registerNamedProvider": "Mit {{name}} registrieren",
+    "registerCustom": "Mit Custom registrieren"
   },
   "requestSent": {
     "title": "Anfrage gesendet",
