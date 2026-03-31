@@ -80,6 +80,7 @@ export default function Settings() {
   const [localDependencyAuditCron, setLocalDependencyAuditCron] = useState<string | null>(null)
   const [generatedKey, setGeneratedKey] = useState<{ key: string; id: number; label?: string | null } | null>(null)
   const [newKeyLabel, setNewKeyLabel] = useState('')
+  const [unlinkingProvider, setUnlinkingProvider] = useState<'github' | 'google' | 'microsoft' | 'custom' | null>(null)
   /** Geschützte Tabs: Eingaben erst nach Klick auf Schloss (verhindert versehentliche Änderungen). */
   const [sensitiveSettingsLocked, setSensitiveSettingsLocked] = useState(true)
 
@@ -269,6 +270,30 @@ export default function Settings() {
     },
     onError: (error: any) => {
       showError(t('settings.updateError', { detail: error.response?.data?.detail || error.message }))
+    },
+  })
+
+  const unlinkProviderMutation = useMutation({
+    mutationFn: async (provider: 'github' | 'google' | 'microsoft' | 'custom') => {
+      const response = await apiClient.delete(`/auth/link/${provider}`)
+      return response.data as { message?: string }
+    },
+    onSuccess: (_data, provider) => {
+      const providerName =
+        provider === 'google'
+          ? 'Google'
+          : provider === 'github'
+            ? 'GitHub'
+            : provider === 'microsoft'
+              ? 'Microsoft'
+              : customProviderName
+      showSuccess(t('settings.unlinkSuccess', { provider: providerName }))
+      setUnlinkingProvider(null)
+      refetchMe()
+    },
+    onError: (error: any) => {
+      setUnlinkingProvider(null)
+      showError(error.response?.data?.detail || error.message || t('settings.unlinkError'))
     },
   })
 
@@ -499,6 +524,19 @@ export default function Settings() {
 
   const currentSettings = localSettings || settings
   const customProviderName = (authProviders.custom_display_name || '').trim() || t('auth.customProviderFallback')
+  const canUnlink = (
+    provider: 'github' | 'google' | 'microsoft' | 'custom',
+    linked: boolean,
+  ) => {
+    if (!linked) return false
+    const linkedCount = [me?.has_github, me?.has_google, me?.has_microsoft, me?.has_custom].filter(Boolean).length
+    return linkedCount > 1 && unlinkingProvider !== provider && !unlinkProviderMutation.isPending
+  }
+  const onUnlinkProvider = (provider: 'github' | 'google' | 'microsoft' | 'custom', providerLabel: string) => {
+    if (!window.confirm(t('settings.unlinkConfirm', { provider: providerLabel }))) return
+    setUnlinkingProvider(provider)
+    unlinkProviderMutation.mutate(provider)
+  }
 
   const isSensitiveSection = SENSITIVE_SETTINGS_SECTIONS.includes(section)
   const fieldLocked = isSensitiveSection && sensitiveSettingsLocked
@@ -588,7 +626,18 @@ export default function Settings() {
               {me?.has_github ? <MdCheck className="icon-success" aria-label={t('settings.linked')} /> : null}
             </span>
             {me?.has_github ? (
-              <span className="settings-linked-badge">{t('settings.linked')}</span>
+              <div className="settings-account-row__actions">
+                <span className="settings-linked-badge">{t('settings.linked')}</span>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => onUnlinkProvider('github', 'GitHub')}
+                  disabled={!canUnlink('github', !!me?.has_github)}
+                  title={canUnlink('github', !!me?.has_github) ? '' : t('settings.unlinkLastProviderBlocked')}
+                >
+                  {unlinkingProvider === 'github' ? t('common.loading') : t('settings.unlink')}
+                </button>
+              </div>
             ) : authProvidersLoading ? (
               <span className="settings-provider-status">{t('common.loading')}</span>
             ) : authProviders.github ? (
@@ -608,7 +657,18 @@ export default function Settings() {
               {me?.has_google ? <MdCheck className="icon-success" aria-label={t('settings.linked')} /> : null}
             </span>
             {me?.has_google ? (
-              <span className="settings-linked-badge">{t('settings.linked')}</span>
+              <div className="settings-account-row__actions">
+                <span className="settings-linked-badge">{t('settings.linked')}</span>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => onUnlinkProvider('google', 'Google')}
+                  disabled={!canUnlink('google', !!me?.has_google)}
+                  title={canUnlink('google', !!me?.has_google) ? '' : t('settings.unlinkLastProviderBlocked')}
+                >
+                  {unlinkingProvider === 'google' ? t('common.loading') : t('settings.unlink')}
+                </button>
+              </div>
             ) : authProvidersLoading ? (
               <span className="settings-provider-status">{t('common.loading')}</span>
             ) : authProviders.google ? (
@@ -628,7 +688,18 @@ export default function Settings() {
               {me?.has_microsoft ? <MdCheck className="icon-success" aria-label={t('settings.linked')} /> : null}
             </span>
             {me?.has_microsoft ? (
-              <span className="settings-linked-badge">{t('settings.linked')}</span>
+              <div className="settings-account-row__actions">
+                <span className="settings-linked-badge">{t('settings.linked')}</span>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => onUnlinkProvider('microsoft', 'Microsoft')}
+                  disabled={!canUnlink('microsoft', !!me?.has_microsoft)}
+                  title={canUnlink('microsoft', !!me?.has_microsoft) ? '' : t('settings.unlinkLastProviderBlocked')}
+                >
+                  {unlinkingProvider === 'microsoft' ? t('common.loading') : t('settings.unlink')}
+                </button>
+              </div>
             ) : authProvidersLoading ? (
               <span className="settings-provider-status">{t('common.loading')}</span>
             ) : authProviders.microsoft ? (
@@ -648,7 +719,18 @@ export default function Settings() {
               {me?.has_custom ? <MdCheck className="icon-success" aria-label={t('settings.linked')} /> : null}
             </span>
             {me?.has_custom ? (
-              <span className="settings-linked-badge">{t('settings.linked')}</span>
+              <div className="settings-account-row__actions">
+                <span className="settings-linked-badge">{t('settings.linked')}</span>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => onUnlinkProvider('custom', customProviderName)}
+                  disabled={!canUnlink('custom', !!me?.has_custom)}
+                  title={canUnlink('custom', !!me?.has_custom) ? '' : t('settings.unlinkLastProviderBlocked')}
+                >
+                  {unlinkingProvider === 'custom' ? t('common.loading') : t('settings.unlink')}
+                </button>
+              </div>
             ) : authProvidersLoading ? (
               <span className="settings-provider-status">{t('common.loading')}</span>
             ) : authProviders.custom ? (

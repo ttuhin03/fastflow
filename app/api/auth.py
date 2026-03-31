@@ -108,6 +108,16 @@ def _redirect_to_settings_link_error(provider: str, reason: str = "already_linke
     return RedirectResponse(url=f"{frontend}/settings?link_error={reason}&provider={provider}", status_code=302)
 
 
+def _provider_field(provider: str) -> str:
+    if provider == "github":
+        return "github_id"
+    if provider == "google":
+        return "google_id"
+    if provider == "microsoft":
+        return "microsoft_id"
+    return "custom_oauth_id"
+
+
 def _is_matching_link_state(state: Optional[str], provider: str) -> bool:
     if not state:
         return False
@@ -614,6 +624,59 @@ async def get_current_user_info(
         "created_at": current_user.created_at.isoformat(),
         "role": role_val,
         "is_setup_completed": is_setup_completed,
+    }
+
+
+@router.delete("/link/{provider}", response_model=dict, status_code=status.HTTP_200_OK)
+async def unlink_provider(
+    provider: str,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict:
+    """
+    Entfernt einen verknüpften OAuth-Provider vom aktuell eingeloggten Benutzer.
+    Sicherheitsregel: Der letzte verbleibende Provider darf nicht entfernt werden (Lockout-Schutz).
+    """
+    provider_norm = provider.lower().strip()
+    allowed = {"github", "google", "microsoft", "custom"}
+    if provider_norm not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ungültiger Provider. Erlaubt: github, google, microsoft, custom.",
+        )
+
+    provider_field = _provider_field(provider_norm)
+    if not getattr(current_user, provider_field, None):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Dieser Provider ist für dieses Konto nicht verknüpft.",
+        )
+
+    linked_count = int(bool(getattr(current_user, "github_id", None))) + int(
+        bool(getattr(current_user, "google_id", None))
+    ) + int(bool(getattr(current_user, "microsoft_id", None))) + int(
+        bool(getattr(current_user, "custom_oauth_id", None))
+    )
+    if linked_count <= 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Der letzte verknüpfte Provider kann nicht entfernt werden.",
+        )
+
+    setattr(current_user, provider_field, None)
+    if provider_norm == "github":
+        current_user.github_login = None
+    session.add(current_user)
+    session.commit()
+    session.refresh(current_user)
+    logger.info("OAuth-Provider entfernt provider=%s user=%s", provider_norm, current_user.username)
+
+    return {
+        "message": f"{provider_norm} entfernt",
+        "has_github": bool(getattr(current_user, "github_id", None)),
+        "has_google": bool(getattr(current_user, "google_id", None)),
+        "has_microsoft": bool(getattr(current_user, "microsoft_id", None)),
+        "has_custom": bool(getattr(current_user, "custom_oauth_id", None)),
     }
 
 

@@ -625,6 +625,12 @@ textarea.form-input {
   font-size: var(--font-size-sm);
 }
 
+.settings-account-row__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
 .settings-provider-status {
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);

@@ -80,6 +80,7 @@ export default function Pipelines() {
       })
       return response.data
     },
+    placeholderData: (previousData) => previousData,
     refetchInterval: pipelinesInterval,
   })
 
@@ -181,7 +182,7 @@ export default function Pipelines() {
     )
   }
 
-  if (isLoading) {
+  if (isLoading && !pipelines) {
     return (
       <div className="pipelines-page">
         {renderNav()}
