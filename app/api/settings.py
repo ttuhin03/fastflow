@@ -193,7 +193,7 @@ class SettingsUpdate(BaseModel):
     container_timeout: Optional[int] = None
     retry_attempts: Optional[int] = None
     auto_sync_enabled: Optional[bool] = None
-    auto_sync_interval: Optional[int] = None
+    auto_sync_interval: Optional[int] = Field(default=None, ge=60)
     email_enabled: Optional[bool] = None
     smtp_host: Optional[str] = None
     smtp_port: Optional[int] = None
@@ -304,6 +304,8 @@ async def update_settings(
     session.commit()
     session.refresh(row)
     apply_orchestrator_settings_to_config(row)
+    from app.services.git_auto_sync import schedule_git_auto_sync_job
+    schedule_git_auto_sync_job()
     log_audit(session, "settings_update", "settings", None, None, current_user)
     return {
         "message": "Einstellungen wurden gespeichert und sind sofort aktiv."

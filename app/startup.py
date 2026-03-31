@@ -393,6 +393,12 @@ async def run_startup_tasks() -> None:
     if not config.TESTING:
         await _run_step("Session-Cleanup-Job", False, schedule_session_cleanup, "Session-Cleanup alle 30 Minuten geplant")
 
+    def schedule_git_auto_sync():
+        from app.services.git_auto_sync import schedule_git_auto_sync_job
+        schedule_git_auto_sync_job()
+    if not config.TESTING:
+        await _run_step("Git Auto-Sync-Job", False, schedule_git_auto_sync, None)
+
     def init_cleanup():
         from app.services.cleanup import init_docker_client_for_cleanup, schedule_cleanup_job
         init_docker_client_for_cleanup()

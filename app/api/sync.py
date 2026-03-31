@@ -185,6 +185,8 @@ async def update_sync_settings(
     session.commit()
     session.refresh(row)
     apply_orchestrator_settings_to_config(row)
+    from app.services.git_auto_sync import schedule_git_auto_sync_job
+    schedule_git_auto_sync_job()
     return {
         "auto_sync_enabled": config.AUTO_SYNC_ENABLED,
         "auto_sync_interval": config.AUTO_SYNC_INTERVAL,

@@ -72,6 +72,11 @@ def set_main_loop(loop: asyncio.AbstractEventLoop) -> None:
     logger.debug("Haupt-Event-Loop für Scheduler gesetzt")
 
 
+def get_main_loop() -> Optional[asyncio.AbstractEventLoop]:
+    """Gibt die von set_main_loop gesetzte App-Hauptschleife zurück (für Jobs, die Coroutines ausführen)."""
+    return _main_loop
+
+
 def get_database_url() -> str:
     """
     Gibt die Datenbank-URL für SQLAlchemyJobStore zurück.
