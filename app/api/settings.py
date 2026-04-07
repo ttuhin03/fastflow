@@ -12,6 +12,7 @@ import logging
 import os
 import secrets as secrets_module
 import shutil
+from datetime import datetime, timezone
 import psutil
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Literal
@@ -41,6 +42,8 @@ from app.services.secrets import encrypt
 from app.services.audit import log_audit
 from app.services.dependency_audit import get_last_dependency_audit
 from sqlmodel import text
+from botocore.config import Config as BotoConfig
+import boto3
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +85,21 @@ def _safe_public_url(url: Optional[str]) -> Optional[str]:
     parsed = urlparse(u)
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         return None
+    return u
+
+
+def _validate_s3_endpoint_url(raw: Optional[str]) -> Optional[str]:
+    if raw is None:
+        return None
+    u = raw.strip()
+    if not u:
+        return None
+    parsed = urlparse(u)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ungültige S3 Endpoint-URL: nur http:// oder https:// mit gültigem Host erlaubt",
+        )
     return u
 
 
@@ -196,6 +214,18 @@ class SettingsResponse(BaseModel):
     notification_api_enabled: bool = False
     notification_api_rate_limit_per_minute: int = 30
     notification_api_keys: List[NotificationApiKeyItem] = []
+    s3_backup_enabled: bool = False
+    s3_endpoint_url: Optional[str]
+    s3_bucket: Optional[str]
+    s3_region: str = "us-east-1"
+    s3_prefix: str = "pipeline-logs"
+    s3_use_path_style: bool = True
+    s3_access_key_configured: bool = False
+    s3_secret_access_key_configured: bool = False
+    s3_last_test_at: Optional[str] = None
+    s3_last_test_status: Optional[str] = None
+    s3_last_test_error: Optional[str] = None
+    s3_test_on_save: bool = False
 
 
 class SystemSettingsResponse(BaseModel):
@@ -251,6 +281,17 @@ class SettingsUpdate(BaseModel):
     teams_webhook_url: Optional[str] = None
     notification_api_enabled: Optional[bool] = None
     notification_api_rate_limit_per_minute: Optional[int] = None
+    s3_backup_enabled: Optional[bool] = None
+    s3_endpoint_url: Optional[str] = None
+    s3_bucket: Optional[str] = None
+    s3_access_key: Optional[str] = None
+    s3_secret_access_key: Optional[str] = None
+    s3_region: Optional[str] = None
+    s3_prefix: Optional[str] = None
+    s3_use_path_style: Optional[bool] = None
+    s3_clear_access_key: Optional[bool] = None
+    s3_clear_secret_access_key: Optional[bool] = None
+    s3_test_on_save: Optional[bool] = None
 
 
 @router.get("", response_model=SettingsResponse)
@@ -265,12 +306,13 @@ async def get_settings(
         SettingsResponse: Aktuelle Konfigurationswerte
     """
     keys_list: List[NotificationApiKeyItem] = []
+    row = get_orchestrator_settings_or_default(session)
     try:
-        for row in session.exec(select(NotificationApiKey).order_by(NotificationApiKey.id.desc())).all():
+        for key_row in session.exec(select(NotificationApiKey).order_by(NotificationApiKey.id.desc())).all():
             keys_list.append(NotificationApiKeyItem(
-                id=row.id,
-                label=row.label,
-                created_at=row.created_at.isoformat() if row.created_at else "",
+                id=key_row.id,
+                label=key_row.label,
+                created_at=key_row.created_at.isoformat() if key_row.created_at else "",
             ))
     except Exception as e:
         logger.debug("notification_api_keys not yet available: %s", e)
@@ -294,6 +336,20 @@ async def get_settings(
         notification_api_enabled=getattr(config, "NOTIFICATION_API_ENABLED", False),
         notification_api_rate_limit_per_minute=getattr(config, "NOTIFICATION_API_RATE_LIMIT_PER_MINUTE", 30),
         notification_api_keys=keys_list,
+        s3_backup_enabled=getattr(config, "S3_BACKUP_ENABLED", False),
+        s3_endpoint_url=getattr(config, "S3_ENDPOINT_URL", None),
+        s3_bucket=getattr(config, "S3_BUCKET", None),
+        s3_region=getattr(config, "S3_REGION", "us-east-1"),
+        s3_prefix=getattr(config, "S3_PREFIX", "pipeline-logs"),
+        s3_use_path_style=getattr(config, "S3_USE_PATH_STYLE", True),
+        s3_access_key_configured=bool(getattr(config, "S3_ACCESS_KEY", None) or getattr(row, "s3_access_key_encrypted", None)),
+        s3_secret_access_key_configured=bool(
+            getattr(config, "S3_SECRET_ACCESS_KEY", None) or getattr(row, "s3_secret_access_key_encrypted", None)
+        ),
+        s3_last_test_at=row.s3_last_test_at.isoformat() if getattr(row, "s3_last_test_at", None) else None,
+        s3_last_test_status=getattr(row, "s3_last_test_status", None),
+        s3_last_test_error=getattr(row, "s3_last_test_error", None),
+        s3_test_on_save=bool(getattr(row, "s3_test_on_save", None)),
     )
 
 
@@ -346,6 +402,45 @@ async def update_settings(
         row.notification_api_enabled = settings.notification_api_enabled
     if settings.notification_api_rate_limit_per_minute is not None:
         row.notification_api_rate_limit_per_minute = settings.notification_api_rate_limit_per_minute
+    if settings.s3_backup_enabled is not None:
+        row.s3_backup_enabled = settings.s3_backup_enabled
+    if settings.s3_endpoint_url is not None:
+        row.s3_endpoint_url = _validate_s3_endpoint_url(settings.s3_endpoint_url)
+    if settings.s3_bucket is not None:
+        row.s3_bucket = (settings.s3_bucket or "").strip() or None
+    if settings.s3_region is not None:
+        row.s3_region = (settings.s3_region or "").strip() or "us-east-1"
+    if settings.s3_prefix is not None:
+        row.s3_prefix = (settings.s3_prefix or "").strip() or "pipeline-logs"
+    if settings.s3_use_path_style is not None:
+        row.s3_use_path_style = settings.s3_use_path_style
+    if settings.s3_clear_access_key:
+        row.s3_access_key_encrypted = None
+    if settings.s3_clear_secret_access_key:
+        row.s3_secret_access_key_encrypted = None
+    if settings.s3_access_key is not None and settings.s3_access_key.strip():
+        row.s3_access_key_encrypted = encrypt(settings.s3_access_key.strip())
+    if settings.s3_secret_access_key is not None and settings.s3_secret_access_key.strip():
+        row.s3_secret_access_key_encrypted = encrypt(settings.s3_secret_access_key.strip())
+    if settings.s3_test_on_save is not None:
+        row.s3_test_on_save = settings.s3_test_on_save
+    enabled_after = row.s3_backup_enabled if row.s3_backup_enabled is not None else config.S3_BACKUP_ENABLED
+    endpoint_after = row.s3_endpoint_url if row.s3_endpoint_url is not None else config.S3_ENDPOINT_URL
+    bucket_after = row.s3_bucket if row.s3_bucket is not None else config.S3_BUCKET
+    prefix_after = row.s3_prefix if row.s3_prefix is not None else config.S3_PREFIX
+    access_after = row.s3_access_key_encrypted is not None or bool(config.S3_ACCESS_KEY)
+    secret_after = row.s3_secret_access_key_encrypted is not None or bool(config.S3_SECRET_ACCESS_KEY)
+    if enabled_after:
+        if not endpoint_after:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="S3 Endpoint-URL fehlt")
+        if not bucket_after:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="S3 Bucket fehlt")
+        if not prefix_after:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="S3 Prefix fehlt")
+        if not access_after:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="S3 Access Key fehlt")
+        if not secret_after:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="S3 Secret Access Key fehlt")
     session.add(row)
     session.commit()
     session.refresh(row)
@@ -892,6 +987,12 @@ class BackupFailuresResponse(BaseModel):
     last_backup_at: Optional[str] = None
 
 
+class S3ConnectivityTestResponse(BaseModel):
+    success: bool
+    message: str
+    tested_at: str
+
+
 @router.get("/backup-failures", response_model=BackupFailuresResponse)
 async def get_backup_failures_endpoint(
     current_user: User = Depends(get_current_user),
@@ -913,6 +1014,71 @@ async def get_backup_failures_endpoint(
     ts = get_last_backup_timestamp()
     last_backup_at = ts.isoformat() if ts else None
     return BackupFailuresResponse(failures=items, last_backup_at=last_backup_at)
+
+
+@router.post("/s3/test", response_model=S3ConnectivityTestResponse)
+async def test_s3_connectivity(
+    current_user: User = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> S3ConnectivityTestResponse:
+    """
+    Testet die aktuelle S3-Konfiguration (HeadBucket) und speichert den letzten
+    Teststatus in OrchestratorSettings.
+    """
+    tested_at = datetime.now(timezone.utc)
+    row = get_orchestrator_settings_or_default(session)
+    try:
+        if not config.S3_BACKUP_ENABLED:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="S3-Backup ist deaktiviert")
+        if not config.S3_ENDPOINT_URL or not config.S3_BUCKET:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="S3 Endpoint/Bucket ist unvollständig")
+        if not config.S3_ACCESS_KEY or not config.S3_SECRET_ACCESS_KEY:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="S3 Credentials sind unvollständig")
+
+        boto_cfg = BotoConfig(s3={"addressing_style": "path"}) if config.S3_USE_PATH_STYLE else None
+        client = boto3.client(
+            "s3",
+            endpoint_url=config.S3_ENDPOINT_URL,
+            aws_access_key_id=config.S3_ACCESS_KEY,
+            aws_secret_access_key=config.S3_SECRET_ACCESS_KEY,
+            region_name=config.S3_REGION,
+            config=boto_cfg,
+        )
+        client.head_bucket(Bucket=config.S3_BUCKET)
+        row.s3_last_test_at = tested_at
+        row.s3_last_test_status = "success"
+        row.s3_last_test_error = None
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+        log_audit(session, "s3_connectivity_test", "settings", None, {"status": "success"}, current_user)
+        return S3ConnectivityTestResponse(
+            success=True,
+            message="S3-Verbindung erfolgreich getestet.",
+            tested_at=tested_at.isoformat(),
+        )
+    except HTTPException as e:
+        row.s3_last_test_at = tested_at
+        row.s3_last_test_status = "failed"
+        row.s3_last_test_error = str(e.detail)
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+        log_audit(session, "s3_connectivity_test", "settings", None, {"status": "failed", "reason": str(e.detail)}, current_user)
+        raise
+    except Exception as e:
+        logger.warning("S3 connectivity test failed: %s", e)
+        row.s3_last_test_at = tested_at
+        row.s3_last_test_status = "failed"
+        row.s3_last_test_error = "S3-Verbindungstest fehlgeschlagen. Bitte Konfiguration und Netzwerk prüfen."
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+        log_audit(session, "s3_connectivity_test", "settings", None, {"status": "failed"}, current_user)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="S3-Verbindungstest fehlgeschlagen. Bitte Konfiguration und Netzwerk prüfen.",
+        )
 
 
 @router.post("/cleanup/force", response_model=Dict[str, Any])

@@ -51,6 +51,12 @@ Damit E-Mails bei Backup-Fehlern an alle gehen: `EMAIL_ENABLED`, `SMTP_HOST`, `S
 
 Siehe [Konfiguration – Log-Backup (S3/MinIO)](CONFIGURATION.md#log-backup-s3minio-optional).
 
+### Über die Einstellungs-UI
+
+Unter **Einstellungen → Pipeline & Runs** können Endpoint, Bucket, Region, Prefix, Path-Style und Credentials gesetzt werden (Secrets werden verschlüsselt in der Datenbank gespeichert). Dort gibt es eine **Objektpfad-Vorschau**, Anzeige des letzten manuellen Verbindungstests und optional **„Nach dem Speichern automatisch Verbindung testen“**. Der API-Endpoint für den Test ist `POST /api/settings/s3/test` (nur Admin).
+
+### Über `.env` / Deployment
+
 MinIO-Beispiel in `.env`:
 
 ```env
@@ -66,3 +72,4 @@ S3_USE_PATH_STYLE=true
 ## API
 
 - **`GET /api/settings/backup-failures`** (auth. erforderlich): Liefert die letzten S3-Backup-Fehler (`run_id`, `pipeline_name`, `error_message`, `created_at`). Wird vom Frontend für die UI-Benachrichtigungen genutzt. Die Liste ist in-memory, begrenzt und geht beim Neustart verloren.
+- **`POST /api/settings/s3/test`** (nur Admin): Prüft die aktuelle S3-Konfiguration (z. B. `HeadBucket`) und speichert Zeitpunkt/Status des letzten Tests in `orchestrator_settings`.

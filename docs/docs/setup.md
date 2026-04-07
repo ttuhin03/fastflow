@@ -110,7 +110,7 @@ JWT_SECRET_KEY=dein-langer-zufaelliger-string
 
 ### 2.3 OAuth: Mindestens ein Login-Provider
 
-Fast-Flow hat **kein** klassisches Passwort-Login. Der Zugriff läuft über **GitHub OAuth** und/oder **Google OAuth**. Es muss **mindestens ein** Provider vollständig konfiguriert sein (jeweils `CLIENT_ID` und `CLIENT_SECRET`), sonst startet die App nicht.
+Fast-Flow hat **kein** klassisches Passwort-Login. Der Zugriff läuft über OAuth-Provider (**GitHub**, **Google**, **Microsoft** oder **Custom OAuth**). Es muss **mindestens ein** Provider vollständig konfiguriert sein (jeweils `CLIENT_ID` und `CLIENT_SECRET`), sonst startet die App nicht.
 
 #### GitHub OAuth
 
@@ -145,13 +145,41 @@ GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 ```
 
-Ausführliche Schritte: [OAuth (GitHub & Google)](/docs/oauth/readme).
+#### Microsoft OAuth (Entra ID)
+
+In `.env`:
+
+```
+MICROSOFT_CLIENT_ID=...
+MICROSOFT_CLIENT_SECRET=...
+MICROSOFT_TENANT_ID=common
+```
+
+Callback:
+`http://localhost:8000/api/auth/microsoft/callback` (lokal) bzw. `https://deine-domain.de/api/auth/microsoft/callback`.
+
+#### Custom OAuth (z. B. Keycloak/Auth0)
+
+In `.env`:
+
+```
+CUSTOM_OAUTH_CLIENT_ID=...
+CUSTOM_OAUTH_CLIENT_SECRET=...
+CUSTOM_OAUTH_AUTHORIZE_URL=...
+CUSTOM_OAUTH_TOKEN_URL=...
+CUSTOM_OAUTH_USERINFO_URL=...
+```
+
+Callback:
+`http://localhost:8000/api/auth/custom/callback` (lokal) bzw. `https://deine-domain.de/api/auth/custom/callback`.
+
+Ausführliche Schritte: [OAuth (GitHub, Google, Microsoft, Custom)](/docs/oauth/readme).
 
 ---
 
 ### 2.4 `INITIAL_ADMIN_EMAIL` (stark empfohlen)
 
-**Was es ist:** Die E-Mail-Adresse des **ersten Admins**. Der User, der sich mit dieser E-Mail über GitHub oder Google anmeldet, erhält beim ersten Login automatisch die Admin-Rolle – **ohne** vorherige Einladung.
+**Was es ist:** Die E-Mail-Adresse des **ersten Admins**. Der User, der sich mit dieser E-Mail über einen unterstützten OAuth-Provider anmeldet, erhält beim ersten Login automatisch die Admin-Rolle – **ohne** vorherige Einladung.
 
 **Warum wichtig:** Ohne Admin kann niemand andere User einladen oder Einstellungen ändern. Mit `INITIAL_ADMIN_EMAIL` hast du sofort einen Admin.
 
@@ -159,7 +187,7 @@ Ausführliche Schritte: [OAuth (GitHub & Google)](/docs/oauth/readme).
 INITIAL_ADMIN_EMAIL=deine-email@beispiel.de
 ```
 
-Die E-Mail muss mit der Adresse übereinstimmen, die dein OAuth-Provider (GitHub/Google) für dein Konto zurückgibt.
+Die E-Mail muss mit der Adresse übereinstimmen, die dein OAuth-Provider für dein Konto zurückgibt.
 
 ---
 
@@ -202,7 +230,7 @@ Für Produktion: `ENVIRONMENT=production`.
 
 **Standard:** `./pipelines`
 
-**Wann anpassen:** Wenn du ein anderes Verzeichnis oder ein geklontes Git-Repo nutzt. Bei Docker: Der Pfad ist **im Container**; über `docker-compose` wird typischerweise ein Host-Ordner gemountet (siehe `docker-compose.yaml`).
+**Wann anpassen:** Wenn du ein anderes Verzeichnis oder ein geklontes Git-Repo nutzt. Bei Docker: Der Pfad ist **im Container**; über `docker compose` wird typischerweise ein Host-Ordner gemountet (siehe `docker-compose.yaml`).
 
 ```
 PIPELINES_DIR=./pipelines
@@ -279,16 +307,22 @@ Zusätzlich: Repo-URL und ggf. GitHub App oder Zugangsdaten (siehe [Konfiguratio
 ### Mit Docker (empfohlen für Produktion und einfachen Einstieg)
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 Logs prüfen:
 
 ```bash
-docker-compose logs -f orchestrator
+docker compose logs -f orchestrator
 ```
 
 Die UI ist unter **http://localhost:8000** (bzw. unter der in `BASE_URL` konfigurierten Adresse).
+
+#### Hinweis zu `entrypoint.sh`
+
+Das Orchestrator-Image nutzt standardmäßig `./entrypoint.sh` als Startkommando (via `Dockerfile` `CMD`). Dadurch laufen vor dem API-Start wichtige Schritte wie DB-Initialisierung/Migration sowie (im Dev-Modus) Seed-Pipeline-Kopie.
+
+Wenn du in Compose oder Kubernetes `command`/`args` für den Orchestrator überschreibst, rufe `./entrypoint.sh` weiterhin auf oder übernimm die Init-Schritte explizit, damit Start und Worker-Mount-Setup konsistent bleiben.
 
 ### Lokal (für Entwicklung)
 
@@ -317,7 +351,7 @@ Dann: Frontend meist unter **http://localhost:3000**, Backend unter **http://loc
 
 ## 5. Nach dem Start
 
-1. **Ersten Login:** Mit GitHub oder Google anmelden. Die in `INITIAL_ADMIN_EMAIL` hinterlegte E-Mail wird beim ersten Mal zum Admin.
+1. **Ersten Login:** Mit einem OAuth-Provider anmelden. Die in `INITIAL_ADMIN_EMAIL` hinterlegte E-Mail wird beim ersten Mal zum Admin.
 2. **Pipelines:** Entweder Ordner unter `PIPELINES_DIR` anlegen (z.B. `pipelines/meine_erste/main.py`) oder Git-Sync einrichten. Siehe [Erste Pipeline](/docs/pipelines/erste-pipeline) und [Pipelines – Übersicht](/docs/pipelines/uebersicht).
 3. **Secrets:** In der UI unter Pipelines → Secrets/Parameter eintragen. In der Pipeline über `os.getenv("NAME")` nutzbar.
 
@@ -327,7 +361,7 @@ Dann: Frontend meist unter **http://localhost:3000**, Backend unter **http://loc
 
 - [ ] `ENVIRONMENT=production`
 - [ ] `ENCRYPTION_KEY` und `JWT_SECRET_KEY` neu und sicher erzeugt, nicht die Beispiele aus der Doku
-- [ ] OAuth (GitHub und/oder Google) mit **Produktions**-Callback-URLs
+- [ ] OAuth (GitHub/Google/Microsoft/Custom, mind. ein Provider) mit **Produktions**-Callback-URLs
 - [ ] `BASE_URL` und ggf. `FRONTEND_URL` mit **https** und der echten Domain
 - [ ] HTTPS (z.B. Reverse-Proxy wie Nginx) – [Deployment-Guide](/docs/deployment/PRODUCTION)
 - [ ] `DATABASE_URL` für PostgreSQL gesetzt (empfohlen)
@@ -338,6 +372,6 @@ Dann: Frontend meist unter **http://localhost:3000**, Backend unter **http://loc
 ## Siehe auch
 
 - [Konfiguration](/docs/deployment/CONFIGURATION) – alle Umgebungsvariablen im Überblick
-- [OAuth (GitHub & Google)](/docs/oauth/readme) – detaillierte OAuth-Einrichtung
+- [OAuth (GitHub, Google, Microsoft, Custom)](/docs/oauth/readme) – detaillierte OAuth-Einrichtung
 - [Schnellstart](/docs/schnellstart) – kompakte Version ohne Erklärungen
 - [Troubleshooting](/docs/troubleshooting) – wenn etwas nicht startet

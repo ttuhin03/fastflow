@@ -203,6 +203,12 @@ Danach ggf. `kubectl rollout restart deployment/fastflow-orchestrator`, damit ne
 - **Script-Pipelines:** Der Orchestrator findet den Host-Pfad für das Pipeline-Verzeichnis über die Docker-API (Mounts des eigenen Containers). Das gemountete PVC erscheint dort als Host-Pfad; Worker-Container erhalten das richtige Verzeichnis unter `/app`.
 - **Notebook-Pipelines:** Es wird das Image **fastflow-worker:latest** verwendet (im Skript gebaut). Es enthält `/runner/nb_runner.py`. Ein Mount von `app/runners` vom Host ist in K8s nicht nötig (und nicht vorhanden).
 
+### Hinweis zu `entrypoint.sh` (K8s)
+
+Im Standard-Deployment (`k8s/deployment.yaml`) ist für den Orchestrator **kein** `command`/`args` gesetzt. Daher nutzt Kubernetes den Image-Default aus dem `Dockerfile`: `CMD ["./entrypoint.sh"]`.
+
+Wenn du `command` oder `args` im Deployment überschreibst, rufe `./entrypoint.sh` weiterhin auf (oder übernimm dessen Init-Schritte explizit), damit DB-Init/Migrationen und Startlogik konsistent bleiben.
+
 ### Pipeline-Arten – K8s-Support (Übersicht)
 
 In der App gibt es genau **zwei Einstiegstypen** (`type` in `pipeline.json` bzw. Discovery via `main.py` / `main.ipynb`):

@@ -14,7 +14,7 @@ Wenn die Anwendung in einem Docker-Container läuft:
 
 ```bash
 # Migrationen ausführen
-docker-compose exec fastflow-orchestrator alembic upgrade head
+docker compose exec fastflow-orchestrator alembic upgrade head
 
 # Oder wenn der Container anders heißt:
 docker exec <container-name> alembic upgrade head
@@ -38,7 +38,7 @@ Um zu sehen, welche Migrationen bereits ausgeführt wurden:
 
 ```bash
 # Im Container
-docker-compose exec fastflow-orchestrator alembic current
+docker compose exec fastflow-orchestrator alembic current
 
 # Oder lokal
 alembic current
@@ -48,7 +48,7 @@ Um alle verfügbaren Migrationen zu sehen:
 
 ```bash
 # Im Container
-docker-compose exec fastflow-orchestrator alembic history
+docker compose exec fastflow-orchestrator alembic history
 
 # Oder lokal
 alembic history
@@ -60,7 +60,7 @@ Wenn das Datenbankschema geändert wurde (z.B. neue Felder im Model), muss eine 
 
 ```bash
 # Im Container
-docker-compose exec fastflow-orchestrator alembic revision --autogenerate -m "Beschreibung der Änderung"
+docker compose exec fastflow-orchestrator alembic revision --autogenerate -m "Beschreibung der Änderung"
 
 # Oder lokal
 alembic revision --autogenerate -m "Beschreibung der Änderung"
@@ -74,7 +74,7 @@ Um die letzte Migration rückgängig zu machen:
 
 ```bash
 # Im Container
-docker-compose exec fastflow-orchestrator alembic downgrade -1
+docker compose exec fastflow-orchestrator alembic downgrade -1
 
 # Oder lokal
 alembic downgrade -1
@@ -84,7 +84,7 @@ Um zu einer spezifischen Revision zurückzukehren:
 
 ```bash
 # Im Container
-docker-compose exec fastflow-orchestrator alembic downgrade <revision-id>
+docker compose exec fastflow-orchestrator alembic downgrade <revision-id>
 
 # Oder lokal
 alembic downgrade <revision-id>
@@ -159,13 +159,13 @@ Falls Enum-Werte in der Datenbank nicht mit dem Code übereinstimmen (z.B. 'read
 
 ```bash
 # 1. Status prüfen
-docker-compose exec fastflow-orchestrator alembic current
+docker compose exec fastflow-orchestrator alembic current
 
 # 2. Migrationen ausführen
-docker-compose exec fastflow-orchestrator alembic upgrade head
+docker compose exec fastflow-orchestrator alembic upgrade head
 
 # 3. Status erneut prüfen
-docker-compose exec fastflow-orchestrator alembic current
+docker compose exec fastflow-orchestrator alembic current
 ```
 
 ## Weitere Informationen

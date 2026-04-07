@@ -24,7 +24,7 @@ The current version is stored in the `VERSION` file in the project root **with t
 
 ```
 VERSION
-├── v0.1.0
+├── v1.0.4
 ```
 
 This single source of truth is used by both:
@@ -46,7 +46,7 @@ v{MAJOR}.{MINOR}.{PATCH}
 ### Examples
 
 ✅ **Correct:**
-- VERSION file: `v0.1.0` → GitHub tag: `v0.1.0` ✓
+- VERSION file: `v1.0.4` → GitHub tag: `v1.0.4` ✓
 - VERSION file: `v1.0.0` → GitHub tag: `v1.0.0` ✓
 - VERSION file: `v2.3.5` → GitHub tag: `v2.3.5` ✓
 
@@ -60,24 +60,25 @@ v{MAJOR}.{MINOR}.{PATCH}
 
 1. **Update the VERSION file:**
    ```bash
-   echo "v0.2.0" > VERSION
+   export NEW_VERSION=v1.0.5
+   echo "$NEW_VERSION" > VERSION
    ```
 
 2. **Commit the change:**
    ```bash
    git add VERSION
-   git commit -m "Bump version to v0.2.0"
+   git commit -m "Bump version to $NEW_VERSION"
    ```
 
 3. **Create and push a tag (same as VERSION file):**
    ```bash
-   git tag v0.2.0
-   git push origin v0.2.0
+   git tag "$NEW_VERSION"
+   git push origin "$NEW_VERSION"
    ```
 
 4. **Create a GitHub Release:**
    - Go to: https://github.com/ttuhin03/fastflow/releases/new
-   - Select the tag: `v0.2.0`
+   - Select the tag: `$NEW_VERSION` (z. B. `v1.0.5`)
    - Add release notes
    - Publish the release
 
@@ -95,8 +96,8 @@ v{MAJOR}.{MINOR}.{PATCH}
 **Response:**
 ```json
 {
-  "version": "0.1.0",
-  "latest_version": "0.2.0",
+  "version": "1.0.4",
+  "latest_version": "1.0.5",
   "update_available": true,
   "last_checked": "2026-01-17T01:00:00",
   "check_error": null
@@ -148,7 +149,7 @@ Version check activity is logged:
 
 ```
 INFO - Checking for version updates...
-INFO - New version available: 0.2.0 (current: 0.1.0)
+INFO - New version available: 1.0.5 (current: 1.0.4)
 INFO - Version check scheduled: Daily at 2:00 AM
 ```
 
@@ -157,8 +158,8 @@ INFO - Version check scheduled: Daily at 2:00 AM
 The version checker uses these settings from `app/config.py`:
 
 - `VERSION`: Current version (read from `VERSION` file)
-- **GitHub Repository**: Hardcoded to `ttuhin03/fastflow`
-  - To change: Edit `app/version_checker.py` line ~35
+- **GitHub Repository**: Standardmäßig `ttuhin03/fastflow` (in Forks/privaten Mirrors ggf. abweichend konfiguriert)
+  - Bei Bedarf im Version-Checker-Code auf dein Ziel-Repository anpassen
 
 ## Scheduled Job Details
 
@@ -177,7 +178,7 @@ This runs at the same time as the cleanup job for efficiency.
 
 1. **Check logs** for error messages:
    ```bash
-   docker-compose logs backend | grep -i version
+   docker compose logs orchestrator | rg -i version
    ```
 
 2. **Verify GitHub release exists**:

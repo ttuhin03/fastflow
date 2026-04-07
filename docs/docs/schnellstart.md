@@ -23,10 +23,10 @@ cp .env.example .env
 python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 
 # 3. Starten
-docker-compose up -d
+docker compose up -d
 
 # 4. Logs ansehen
-docker-compose logs -f orchestrator
+docker compose logs -f orchestrator
 ```
 
 **UI:** [http://localhost:8000](http://localhost:8000)
@@ -66,16 +66,18 @@ Nach Neustart des Backends erscheint die Pipeline in der UI; lokal testen mit `u
 
 Fast-Flow läuft neben Docker auch **nativ auf Kubernetes**. Pipeline-Runs laufen dann als Kubernetes-Jobs (kein Docker-Socket nötig). Vollständige Anleitung: [Kubernetes Deployment](/docs/deployment/K8S) sowie das [k8s/README.md](https://github.com/ttuhin03/fastflow/blob/main/k8s/README.md) im Repository.
 
-## Login (GitHub OAuth, Google OAuth)
+## Login (GitHub, Google, Microsoft, Custom OAuth)
 
-1. **GitHub:** OAuth-App (Settings → Developer settings → OAuth Apps), Callback `{BASE_URL}/api/auth/github/callback`.  
-   **Google:** OAuth-Client (Google Cloud Console), Callback `{BASE_URL}/api/auth/google/callback`.
-2. In **`.env`:** `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` und/oder `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`; `INITIAL_ADMIN_EMAIL` (E-Mail für ersten Admin).
+1. **GitHub:** Callback `{BASE_URL}/api/auth/github/callback`  
+   **Google:** Callback `{BASE_URL}/api/auth/google/callback`  
+   **Microsoft:** Callback `{BASE_URL}/api/auth/microsoft/callback`  
+   **Custom OAuth:** Callback `{BASE_URL}/api/auth/custom/callback`
+2. In **`.env`:** mindestens einen Provider vollständig setzen (`GITHUB_*`, `GOOGLE_*`, `MICROSOFT_*` oder `CUSTOM_OAUTH_*`) sowie `INITIAL_ADMIN_EMAIL`.
 3. **Docker (alles :8000):** `FRONTEND_URL` weglassen oder `=http://localhost:8000`, `BASE_URL=http://localhost:8000`.  
    **Dev (Frontend :3000, Backend :8000):** `FRONTEND_URL=http://localhost:3000`, `BASE_URL=http://localhost:8000`.
 
 :::tip
-Ausführliche Schritte, Einladung, Konto verknüpfen, Beitrittsanfragen: [OAuth (GitHub & Google)](/docs/oauth/readme).
+Ausführliche Schritte, Einladung, Konto verknüpfen, Beitrittsanfragen: [OAuth (GitHub, Google, Microsoft, Custom)](/docs/oauth/readme).
 :::
 
 ## Nächste Schritte

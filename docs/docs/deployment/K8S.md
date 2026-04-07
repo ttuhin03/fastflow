@@ -186,6 +186,12 @@ flowchart LR
 
 **Hinweis:** Wer Fast-Flow mit **`PIPELINE_EXECUTOR=docker`** in einem Pod betreibt, braucht weiterhin Docker-in-Docker bzw. Socket-Mount – die Standard-`k8s/`-Manifeste sind dafür nicht ausgelegt.
 
+## Hinweis zu `entrypoint.sh`
+
+Im Standard-Manifest `k8s/deployment.yaml` hat der Orchestrator-Container kein eigenes `command`/`args`. Dadurch verwendet Kubernetes den Image-Default aus dem `Dockerfile` (`CMD ["./entrypoint.sh"]`).
+
+Wenn `command` oder `args` im Deployment überschrieben werden, sollte `./entrypoint.sh` weiterhin aufgerufen werden (oder die enthaltenen Init-Schritte explizit übernommen werden), damit Startlogik und Initialisierung konsistent bleiben.
+
 ## Siehe auch
 
 - [Production-Checkliste](./PRODUCTION_CHECKLIST.md)

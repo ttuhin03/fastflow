@@ -21,7 +21,7 @@ Die meisten Endpoints erfordern Authentifizierung. Verwenden Sie einen Bearer-To
 Authorization: Bearer <token>
 ```
 
-Token werden über GitHub OAuth (`GET /api/auth/github/authorize`) oder Google OAuth (`GET /api/auth/google/authorize`) erhalten; nach Autorisierung Redirect zu `/auth/callback#token=...`.
+Token werden über OAuth-Provider erhalten (`GET /api/auth/{provider}/authorize`), z. B. GitHub, Google, Microsoft oder Custom OAuth; nach Autorisierung Redirect zu `/auth/callback#token=...`.
 
 ## Endpoints
 
@@ -674,9 +674,9 @@ Tauscht Manifest Code gegen GitHub App Credentials. Erfordert Admin-Login.
 
 ### `GET /api/settings`
 
-Gibt die aktuellen System-Einstellungen zurück.
+Gibt die aktuellen System-Einstellungen zurück (inkl. persistenter Werte aus `orchestrator_settings`, z. B. Log-Retention, Benachrichtigungen, S3-Backup).
 
-**Response:**
+**Response (Auszug):**
 ```json
 {
   "log_retention_runs": 100,
@@ -694,15 +694,38 @@ Gibt die aktuellen System-Einstellungen zurück.
   "smtp_from": null,
   "email_recipients": [],
   "teams_enabled": false,
-  "teams_webhook_url": null
+  "teams_webhook_url": null,
+  "s3_backup_enabled": false,
+  "s3_endpoint_url": null,
+  "s3_bucket": null,
+  "s3_region": "us-east-1",
+  "s3_prefix": "pipeline-logs",
+  "s3_use_path_style": true,
+  "s3_access_key_configured": false,
+  "s3_secret_access_key_configured": false,
+  "s3_last_test_at": null,
+  "s3_last_test_status": null,
+  "s3_last_test_error": null,
+  "s3_test_on_save": false
 }
 ```
 
 ### `PUT /api/settings`
 
-Aktualisiert System-Einstellungen.
+Aktualisiert System-Einstellungen und speichert sie in der Datenbank (`orchestrator_settings`). Die laufende Konfiguration wird sofort angewendet (kein Neustart nötig). S3-Access/Secret können als Klartext mitgesendet werden (werden verschlüsselt gespeichert); mit `s3_clear_access_key` / `s3_clear_secret_access_key` können gespeicherte Keys entfernt werden.
 
-**Hinweis:** Aktuell werden Einstellungen nur aus Environment-Variablen geladen. Diese Funktion gibt eine Warnung zurück, dass Einstellungen über Environment-Variablen geändert werden müssen.
+### `POST /api/settings/s3/test`
+
+Testet die aktuelle S3-Konfiguration (z. B. `HeadBucket`). **Nur Admin.** Speichert Zeitpunkt und Status des letzten Tests in der Datenbank.
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "S3-Verbindung erfolgreich getestet.",
+  "tested_at": "2026-04-07T12:00:00+00:00"
+}
+```
 
 ### `GET /api/settings/storage`
 
@@ -863,7 +886,7 @@ Alle Endpoints erfordern Authentifizierung. `GET /api/users`, Invites, Approve, 
 
 ### `GET /api/users`
 
-Listet alle Nutzer (inkl. `status`, `github_id`, `google_id`). Keine Filterung; Frontend gruppiert in „Aktive Nutzer“ (`status=active`) und „Beitrittsanfragen“ (`status=pending`).
+Listet alle Nutzer (inkl. `status`, `github_id`, `google_id`, `microsoft_id`, `custom_oauth_id`). Keine Filterung; Frontend gruppiert in „Aktive Nutzer“ (`status=active`) und „Beitrittsanfragen“ (`status=pending`).
 
 **Response:**
 ```json
@@ -888,7 +911,7 @@ Einzelnen Nutzer abrufen.
 
 ### `PUT /api/users/{user_id}`
 
-Nutzer aktualisieren. Body: `{ "role": "READONLY|WRITE|ADMIN", "blocked": false }`. E-Mail kommt von GitHub/Google und wird nicht per API geändert.
+Nutzer aktualisieren. Body: `{ "role": "READONLY|WRITE|ADMIN", "blocked": false }`. E-Mail kommt vom OAuth-Provider und wird nicht per API geändert.
 
 ### `POST /api/users/{user_id}/approve`
 
@@ -936,6 +959,17 @@ Einladung widerrufen (Admin).
 
 ## Authentifizierung
 
+### `GET /api/auth/providers`
+
+Liefert die aktivierten Login-Provider für die Login-Seite.
+
+**Response:**
+```json
+{
+  "providers": ["github", "google", "microsoft", "custom"]
+}
+```
+
 ### `GET /api/auth/github/authorize`
 
 Leitet zur GitHub OAuth-Seite weiter. Nach Autorisierung: Redirect zu `{FRONTEND_URL}/auth/callback#token=...`.
@@ -954,6 +988,22 @@ Leitet zur Google OAuth-Seite weiter. `state` optional (Invitation-Token oder CS
 
 Google OAuth Callback. Verhalten wie GitHub-Callback; bei Link-Flow: `{FRONTEND_URL}/settings?linked=google`; bei anklopfen_only: `{FRONTEND_URL}/request-sent` oder `{FRONTEND_URL}/request-rejected` ohne Session.
 
+### `GET /api/auth/microsoft/authorize`
+
+Leitet zur Microsoft OAuth-Seite weiter. `state` optional (Invitation-Token oder CSRF).
+
+### `GET /api/auth/microsoft/callback`
+
+Microsoft OAuth Callback. Verhalten wie GitHub-/Google-Callback; bei Link-Flow: `{FRONTEND_URL}/settings?linked=microsoft`; bei anklopfen_only: `{FRONTEND_URL}/request-sent` oder `{FRONTEND_URL}/request-rejected` ohne Session.
+
+### `GET /api/auth/custom/authorize`
+
+Leitet zum konfigurierten Custom-OAuth-Provider weiter. `state` optional (Invitation-Token oder CSRF).
+
+### `GET /api/auth/custom/callback`
+
+Custom OAuth Callback. Verhalten wie andere Provider; bei Link-Flow: `{FRONTEND_URL}/settings?linked=custom`; bei anklopfen_only: `{FRONTEND_URL}/request-sent` oder `{FRONTEND_URL}/request-rejected` ohne Session.
+
 ### `GET /api/auth/link/google`
 
 Startet Google-OAuth zum **Verknüpfen** des Google-Kontos mit dem eingeloggten User. Erfordert Authentifizierung. Redirect zu `{FRONTEND_URL}/settings?linked=google` nach Erfolg.
@@ -961,6 +1011,14 @@ Startet Google-OAuth zum **Verknüpfen** des Google-Kontos mit dem eingeloggten 
 ### `GET /api/auth/link/github`
 
 Startet GitHub-OAuth zum **Verknüpfen** des GitHub-Kontos. Erfordert Authentifizierung. Redirect zu `{FRONTEND_URL}/settings?linked=github` nach Erfolg.
+
+### `GET /api/auth/link/microsoft`
+
+Startet Microsoft-OAuth zum **Verknüpfen** des Microsoft-Kontos. Erfordert Authentifizierung. Redirect zu `{FRONTEND_URL}/settings?linked=microsoft` nach Erfolg.
+
+### `GET /api/auth/link/custom`
+
+Startet Custom-OAuth zum **Verknüpfen** des Custom-Provider-Kontos. Erfordert Authentifizierung. Redirect zu `{FRONTEND_URL}/settings?linked=custom` nach Erfolg.
 
 ### `POST /api/auth/logout`
 
@@ -1042,6 +1100,6 @@ Beispiel:
 
 ## Siehe auch
 
-- [OAuth (GitHub & Google)](/docs/oauth/readme) – Login, Token
+- [OAuth (GitHub, Google, Microsoft, Custom)](/docs/oauth/readme) – Login, Token
 - [Konfiguration](/docs/deployment/CONFIGURATION) – `JWT_*`, `ENCRYPTION_KEY`
 - [Schnellstart](/docs/schnellstart) – Erste Schritte

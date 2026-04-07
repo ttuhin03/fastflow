@@ -542,6 +542,22 @@ class OrchestratorSettings(SQLModel, table=True):
     # Notification API (Skripte: E-Mail/Teams per Key)
     notification_api_enabled: Optional[bool] = Field(default=None)
     notification_api_rate_limit_per_minute: Optional[int] = Field(default=None)
+    # S3 Log-Backup (optional)
+    s3_backup_enabled: Optional[bool] = Field(default=None)
+    s3_endpoint_url: Optional[str] = Field(default=None)
+    s3_bucket: Optional[str] = Field(default=None)
+    s3_access_key_encrypted: Optional[str] = Field(default=None)
+    s3_secret_access_key_encrypted: Optional[str] = Field(default=None)
+    s3_region: Optional[str] = Field(default=None)
+    s3_prefix: Optional[str] = Field(default=None)
+    s3_use_path_style: Optional[bool] = Field(default=None)
+    s3_last_test_at: Optional[datetime] = Field(default=None)
+    s3_last_test_status: Optional[str] = Field(default=None, description="success | failed")
+    s3_last_test_error: Optional[str] = Field(default=None)
+    s3_test_on_save: Optional[bool] = Field(
+        default=None,
+        description="Nach Speichern der Settings automatisch S3-Verbindungstest ausführen (UI)",
+    )
 
 
 class NotificationApiKey(SQLModel, table=True):

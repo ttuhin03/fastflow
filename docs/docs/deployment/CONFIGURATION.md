@@ -79,6 +79,8 @@ Pipeline-Logs werden vor der lokalen Löschung (Cleanup) auf S3/MinIO gesichert.
 | `S3_PREFIX` | `pipeline-logs` | Prefix für Objektkeys. |
 | `S3_USE_PATH_STYLE` | `true` | Path-Style-URLs (für MinIO typisch). |
 
+Alternativ (oder ergänzend) können S3-Backup-Parameter in der **Einstellungs-UI** unter **Pipeline & Runs** gepflegt werden: Werte landen in `orchestrator_settings` (Access/Secret verschlüsselt). Environment-Variablen gelten weiterhin; beim Start werden gespeicherte DB-Werte auf die laufende Konfiguration angewendet. Ein **Verbindungstest** ist per Button oder optional **nach dem Speichern** möglich (`POST /api/settings/s3/test`, nur Admin).
+
 ## Sicherheit & Authentifizierung
 
 > [!IMPORTANT]
@@ -91,16 +93,30 @@ Pipeline-Logs werden vor der lokalen Löschung (Cleanup) auf S3/MinIO gesichert.
 | `JWT_ALGORITHM` | `HS256` | Algorithmus für die JWT-Signatur (typisch: HS256). | HS256 |
 | `JWT_ACCESS_TOKEN_MINUTES` | `15` | Gültigkeitsdauer des Access-Tokens in Minuten (Laufzeit des JWT, `exp`-Claim). Kürzere Laufzeit reduziert das Risiko bei kompromittierten Tokens. | 15 |
 | `JWT_EXPIRATION_HOURS` | `24` | Gültigkeitsdauer der Session in der DB in Stunden. Nach Ablauf erscheint „Sitzung abgelaufen“; Re-Login nötig. | 24 |
-| `GITHUB_CLIENT_ID` | *Leer* | OAuth App Client ID (GitHub). | **Pflicht** (oder Google) |
-| `GITHUB_CLIENT_SECRET` | *Leer* | OAuth App Client Secret (GitHub). | **Pflicht** (oder Google) |
+| `GITHUB_CLIENT_ID` | *Leer* | OAuth App Client ID (GitHub). | **Pflicht** (mind. ein Provider) |
+| `GITHUB_CLIENT_SECRET` | *Leer* | OAuth App Client Secret (GitHub). | **Pflicht** (mind. ein Provider) |
 | `GOOGLE_CLIENT_ID` | *Leer* | OAuth 2.0 Client ID (Google). Callback: `{BASE_URL}/api/auth/google/callback`. | Optional |
 | `GOOGLE_CLIENT_SECRET` | *Leer* | OAuth 2.0 Client Secret (Google). | Optional |
+| `MICROSOFT_CLIENT_ID` | *Leer* | OAuth Client ID (Microsoft Entra ID). Callback: `{BASE_URL}/api/auth/microsoft/callback`. | Optional |
+| `MICROSOFT_CLIENT_SECRET` | *Leer* | OAuth Client Secret (Microsoft Entra ID). | Optional |
+| `MICROSOFT_TENANT_ID` | `common` | Tenant-Scoping für Microsoft OAuth (`common`, Tenant-ID, `organizations`, `consumers`). | Optional |
+| `CUSTOM_OAUTH_CLIENT_ID` | *Leer* | OAuth Client ID für Custom Provider (z. B. Keycloak/Auth0). | Optional |
+| `CUSTOM_OAUTH_CLIENT_SECRET` | *Leer* | OAuth Client Secret für Custom Provider. | Optional |
+| `CUSTOM_OAUTH_AUTHORIZE_URL` | *Leer* | Authorize-Endpoint des Custom Providers. | Optional |
+| `CUSTOM_OAUTH_TOKEN_URL` | *Leer* | Token-Endpoint des Custom Providers. | Optional |
+| `CUSTOM_OAUTH_USERINFO_URL` | *Leer* | UserInfo-Endpoint des Custom Providers. | Optional |
+| `CUSTOM_OAUTH_SCOPES` | `openid email profile` | Scopes für Custom OAuth. | Optional |
+| `CUSTOM_OAUTH_CLAIM_ID` | `sub` | Claim für eindeutige User-ID beim Custom Provider. | Optional |
+| `CUSTOM_OAUTH_CLAIM_EMAIL` | `email` | Claim für E-Mail beim Custom Provider. | Optional |
+| `CUSTOM_OAUTH_CLAIM_NAME` | `name` | Claim für Anzeigename beim Custom Provider. | Optional |
+| `CUSTOM_OAUTH_NAME` | `Custom` | Anzeigename des Custom Providers auf der Login-Seite. | Optional |
+| `CUSTOM_OAUTH_ICON_URL` | *Leer* | Optionale Icon-URL für den Custom-Login-Button. | Optional |
 | `SKIP_OAUTH_VERIFICATION` | *Leer* | `1`/`true`: HTTP-Verifizierung der OAuth-Credentials beim Start überspringen (z.B. CI/Tests). Die Prüfung „mind. ein Provider vollständig“ bleibt aktiv. | Optional |
-| `INITIAL_ADMIN_EMAIL` | *Leer* | E-Mail des ersten Admins (Zutritt ohne Einladung, GitHub oder Google). | **Empfohlen** |
-| `FRONTEND_URL` / `BASE_URL` | s. [OAuth (GitHub & Google)](/docs/oauth/readme) | Für OAuth-Callback und Einladungs-Links. | Anpassen |
+| `INITIAL_ADMIN_EMAIL` | *Leer* | E-Mail des ersten Admins (Zutritt ohne Einladung, über unterstützten OAuth-Provider). | **Empfohlen** |
+| `FRONTEND_URL` / `BASE_URL` | s. [OAuth (GitHub, Google, Microsoft, Custom)](/docs/oauth/readme) | Für OAuth-Callback und Einladungs-Links. | Anpassen |
 | `PROXY_HEADERS_TRUSTED` | `false` | Wenn `true`: `X-Forwarded-For` wird für Rate Limiting verwendet. **Nur** aktivieren, wenn die App hinter einem vertrauenswürdigen Reverse-Proxy (Nginx, Traefik) läuft. Bei `false` wird `request.client.host` genutzt (Schutz vor Spoofing). | Bei Proxy: `true` |
 
-**OAuth beim Start:** Es muss mindestens ein OAuth-Provider (GitHub oder Google) vollständig konfiguriert sein (jeweils `CLIENT_ID` und `CLIENT_SECRET`). Ohne dies startet die App nicht. Beim Start werden die gesetzten Credentials per Request an den jeweiligen Anbieter verifiziert; bei ungültigen Werten oder Redirect-URI-Mismatch startet die App ebenfalls nicht.
+**OAuth beim Start:** Es muss mindestens ein OAuth-Provider (GitHub, Google, Microsoft oder Custom) vollständig konfiguriert sein (jeweils `CLIENT_ID` und `CLIENT_SECRET`; bei Custom zusätzlich Authorize/Token/UserInfo-URLs). Ohne dies startet die App nicht. Beim Start werden die gesetzten Credentials per Request an den jeweiligen Anbieter verifiziert; bei ungültigen Werten oder Redirect-URI-Mismatch startet die App ebenfalls nicht.
 
 ## Benachrichtigungen (Optional)
 

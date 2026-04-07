@@ -6,6 +6,7 @@ Beim App-Start werden DB-Werte auf config angewendet (Override von Env).
 """
 
 import logging
+import os
 from typing import List, Optional
 
 from sqlmodel import Session
@@ -87,6 +88,41 @@ def apply_orchestrator_settings_to_config(settings: OrchestratorSettings) -> Non
         config.NOTIFICATION_API_ENABLED = settings.notification_api_enabled
     if getattr(settings, "notification_api_rate_limit_per_minute", None) is not None:
         config.NOTIFICATION_API_RATE_LIMIT_PER_MINUTE = settings.notification_api_rate_limit_per_minute
+    if getattr(settings, "s3_backup_enabled", None) is not None:
+        config.S3_BACKUP_ENABLED = settings.s3_backup_enabled
+    if getattr(settings, "s3_endpoint_url", None) is not None:
+        config.S3_ENDPOINT_URL = settings.s3_endpoint_url
+    if getattr(settings, "s3_bucket", None) is not None:
+        config.S3_BUCKET = settings.s3_bucket
+    if getattr(settings, "s3_access_key_encrypted", None) is not None:
+        try:
+            config.S3_ACCESS_KEY = decrypt(settings.s3_access_key_encrypted)
+        except Exception as e:
+            logger.warning("S3 access key aus DB konnte nicht entschlüsselt werden: %s", e)
+            config.S3_ACCESS_KEY = os.getenv("S3_ACCESS_KEY")
+    else:
+        config.S3_ACCESS_KEY = os.getenv("S3_ACCESS_KEY")
+    if getattr(settings, "s3_secret_access_key_encrypted", None) is not None:
+        try:
+            config.S3_SECRET_ACCESS_KEY = decrypt(settings.s3_secret_access_key_encrypted)
+        except Exception as e:
+            logger.warning("S3 secret access key aus DB konnte nicht entschlüsselt werden: %s", e)
+            config.S3_SECRET_ACCESS_KEY = os.getenv("S3_SECRET_ACCESS_KEY")
+    else:
+        config.S3_SECRET_ACCESS_KEY = os.getenv("S3_SECRET_ACCESS_KEY")
+    if getattr(settings, "s3_region", None) is not None:
+        config.S3_REGION = settings.s3_region
+    if getattr(settings, "s3_prefix", None) is not None:
+        config.S3_PREFIX = settings.s3_prefix
+    if getattr(settings, "s3_use_path_style", None) is not None:
+        config.S3_USE_PATH_STYLE = settings.s3_use_path_style
+
+    try:
+        from app.services.s3_backup import reset_s3_client
+
+        reset_s3_client()
+    except Exception as e:
+        logger.debug("S3-Client-Reset nach Orchestrator-Settings nicht möglich: %s", e)
 
 
 def _parse_email_recipients(value: Optional[str]) -> List[str]:

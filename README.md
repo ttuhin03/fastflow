@@ -82,13 +82,25 @@ cp .env.example .env
 python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 
 # 3. Starten
-docker-compose up -d
+docker compose up -d
 
 # 4. Logs ansehen
-docker-compose logs -f orchestrator
+docker compose logs -f orchestrator
 ```
 
+> Hinweis: Falls dein System noch die Legacy-CLI nutzt, funktionieren die gleichen Befehle auch mit `docker-compose`.
+
 **UI öffnen:** [http://localhost:8000](http://localhost:8000)
+
+#### Hinweis zu `entrypoint.sh`
+
+Das Orchestrator-Image startet standardmäßig über `./entrypoint.sh` (siehe `Dockerfile` `CMD`). Das Skript:
+- initialisiert DB/Migrationen via `python scripts/init_db_for_migrations.py`
+- kopiert in `ENVIRONMENT=development` optional Seed-Pipelines nach `/app/pipelines`
+- erkennt `PIPELINES_HOST_DIR` automatisch (wichtig für Docker-Worker-Mounts)
+- startet danach `uvicorn app.main:app --host 0.0.0.0 --port 8000`
+
+Wenn du in Compose/Kubernetes `command` oder `args` überschreibst, sollte diese Init-Logik explizit erhalten bleiben (z. B. durch Aufruf von `./entrypoint.sh`).
 
 ### Option 2: Lokal (Für Entwicklung)
 
@@ -130,18 +142,20 @@ kubectl apply -f k8s/service.yaml
 
 Vollständige Anleitung (Images, OAuth, Produktion): [k8s/README.md](k8s/README.md) · [Kubernetes Deployment (Doku)](docs/docs/deployment/K8S.md).
 
-### 🔐 Login (GitHub OAuth, Google OAuth)
+### 🔐 Login (GitHub, Google, Microsoft, Custom OAuth)
 
-Die Anmeldung erfolgt **über GitHub oder Google**:
+Die Anmeldung erfolgt **über GitHub, Google, Microsoft (Entra ID) oder Custom OAuth (z. B. Keycloak/Auth0)**:
 
 1. **GitHub:** OAuth-App (Settings → Developer settings → OAuth Apps), Callback `{BASE_URL}/api/auth/github/callback`.  
-   **Google:** OAuth-Client (Google Cloud Console), Callback `{BASE_URL}/api/auth/google/callback`.
-2. In **`.env`**: `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` und/oder `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`; `INITIAL_ADMIN_EMAIL` (E-Mail für ersten Admin).
+   **Google:** OAuth-Client (Google Cloud Console), Callback `{BASE_URL}/api/auth/google/callback`.  
+   **Microsoft:** App-Registrierung (Azure/Entra), Callback `{BASE_URL}/api/auth/microsoft/callback`.  
+   **Custom OAuth:** Callback `{BASE_URL}/api/auth/custom/callback` plus Provider-Endpoints (`AUTHORIZE_URL`, `TOKEN_URL`, `USERINFO_URL`).
+2. In **`.env`**: Credentials für mindestens einen Provider setzen (`GITHUB_*`, `GOOGLE_*`, `MICROSOFT_*` oder `CUSTOM_OAUTH_*`) sowie `INITIAL_ADMIN_EMAIL` (E-Mail für ersten Admin).
 3. **Docker** (Alles :8000): `FRONTEND_URL` weglassen oder `=http://localhost:8000`, `BASE_URL=http://localhost:8000`.  
    **Dev** (Frontend :3000, Backend :8000): `FRONTEND_URL=http://localhost:3000`, `BASE_URL=http://localhost:8000`.
 
 > [!TIP]
-> Ausführliche Schritte, Einladung, Konto verknüpfen, **Beitrittsanfragen**: [OAuth (GitHub & Google)](docs/docs/oauth/README.md).
+> Ausführliche Schritte, Einladung, Konto verknüpfen, **Beitrittsanfragen**: [OAuth (GitHub, Google, Microsoft, Custom)](docs/docs/oauth/README.md).
 
 **Beitrittsanfragen (Anklopfen):** Unbekannte Nutzer (ohne Einladung) können per OAuth eine Anfrage stellen. Sie erhalten **keine Session**, werden auf `/request-sent` umgeleitet und erscheinen unter **Users → Beitrittsanfragen**. Nach Freigabe durch einen Admin können sie sich normal anmelden. Abgelehnte bzw. noch wartende Nutzer landen bei erneutem OAuth-Login auf `/request-sent` bzw. `/request-rejected` (ebenfalls ohne Session).
 
@@ -338,7 +352,7 @@ In anderen Orchestratoren musst du oft YAML-Dateien schreiben oder dich mit komp
 
 Während Airflow eine Postgres-DB, einen Redis-Broker, einen Scheduler, einen Webserver und mehrere Worker braucht, bleibt Fast-Flow bewusst schlank: typisch **ein Orchestrator-Deployment** plus ephemere Worker (Docker-Container oder K8s-Jobs).
 
-- **Wartungsarm**: Update z. B. `docker-compose pull` oder neues Orchestrator-Image im Cluster.
+- **Wartungsarm**: Update z. B. `docker compose pull` oder neues Orchestrator-Image im Cluster.
 - **Ressourcenschonend**: Ideal für Edge-Server oder kleinere VM-Instanzen.
 
 ### Die Fast-Flow Vorteile:
@@ -356,7 +370,7 @@ Während Airflow eine Postgres-DB, einen Redis-Broker, einen Scheduler, einen We
 - **Execution**: Docker Engine API + uv **oder** Kubernetes Jobs (K8s-ready, siehe [k8s/README.md](k8s/README.md))
 - **Security**: Docker Socket Proxy (tecnativa/docker-socket-proxy) bei Docker-Betrieb; bei K8s keine Socket-Freigabe nötig
 - **Scheduling**: APScheduler (Persistent)
-- **Auth**: GitHub OAuth, JWT & Fernet Encryption
+- **Auth**: OAuth (GitHub, Google, Microsoft, Custom), JWT & Fernet Encryption
 
 ## Hauptfunktionen
 
@@ -409,7 +423,7 @@ Die Doku liegt unter `docs/docs/` und wird mit **Docusaurus** bereitgestellt. Lo
 | **Einstieg** | [Schnellstart](docs/docs/schnellstart.md) · [Setup-Anleitung](docs/docs/setup.md) · [Manifesto](docs/docs/manifesto.md) · [Architektur](docs/docs/architektur.md) |
 | **Pipelines** | [Übersicht](docs/docs/pipelines/uebersicht.md) · [Erste Pipeline](docs/docs/pipelines/erste-pipeline.md) · [Erweiterte Pipelines](docs/docs/pipelines/erweiterte-pipelines.md) · [pipeline.json Referenz](docs/docs/pipelines/referenz.md) |
 | **Betrieb** | [Konfiguration](docs/docs/deployment/CONFIGURATION.md) · [Produktion](docs/docs/deployment/PRODUCTION.md) · [Git-Deployment](docs/docs/deployment/GIT_DEPLOYMENT.md) · [Kubernetes](docs/docs/deployment/K8S.md) · [Docker Socket Proxy](docs/docs/deployment/DOCKER_PROXY.md) |
-| **Sicherheit & Ops** | [OAuth (GitHub & Google)](docs/docs/oauth/README.md) · [S3 Log-Backup](docs/docs/deployment/S3_LOG_BACKUP.md) · [Compliance](docs/docs/compliance-security.md) |
+| **Sicherheit & Ops** | [OAuth (GitHub, Google, Microsoft, Custom)](docs/docs/oauth/README.md) · [S3 Log-Backup](docs/docs/deployment/S3_LOG_BACKUP.md) · [Compliance](docs/docs/compliance-security.md) |
 | **Referenz** | [API](docs/docs/api/API.md) · [Datenbank/Schema](docs/docs/database/SCHEMA.md) · [Versioning](docs/docs/deployment/VERSIONING.md) · [Telemetrie](docs/docs/telemetry/README.md) |
 | **Hilfe** | [Troubleshooting](docs/docs/troubleshooting.md) · [Disclaimer](docs/docs/disclaimer.md) |
 
@@ -419,10 +433,10 @@ Fast-Flow verwendet einen automatisierten Versions-Check, der täglich prüft, o
 
 ### Version-Format
 
-Die Version wird in der `VERSION`-Datei im Projekt-Root gespeichert:
+Die Version wird in der `VERSION`-Datei im Projekt-Root gespeichert (aktuell z. B. `v1.0.4`):
 
 ```
-v0.1.0
+v1.0.4
 ```
 
 ### GitHub Releases erstellen
@@ -431,20 +445,21 @@ Um eine neue Version zu veröffentlichen:
 
 1. **VERSION-Datei aktualisieren:**
    ```bash
-   echo "v0.2.0" > VERSION
+   export NEW_VERSION=v1.0.5
+   echo "$NEW_VERSION" > VERSION
    git add VERSION
-   git commit -m "Bump version to v0.2.0"
+   git commit -m "Bump version to $NEW_VERSION"
    ```
 
 2. **Tag erstellen (muss VERSION-Datei exakt entsprechen):**
    ```bash
-   git tag v0.2.0
-   git push origin v0.2.0
+   git tag "$NEW_VERSION"
+   git push origin "$NEW_VERSION"
    ```
 
 3. **GitHub Release erstellen:**
    - Gehe zu: https://github.com/ttuhin03/fastflow/releases/new
-   - Wähle Tag: `v0.2.0`
+   - Wähle Tag: `$NEW_VERSION` (z. B. `v1.0.5`)
    - Füge Release Notes hinzu
    - Veröffentliche das Release
 
@@ -686,7 +701,7 @@ Prüfen Sie: `docker ps`
 
 ### "Docker-Proxy / 403 Forbidden"
 Der Orchestrator darf nur bestimmte Befehle ausführen. Prüfen Sie die Proxy-Logs:
-`docker-compose logs docker-proxy`
+`docker compose logs docker-proxy`
 Stellen Sie sicher, dass `POST=1` (für Container-Start) gesetzt ist.
 
 ### "Port 8000 belegt"

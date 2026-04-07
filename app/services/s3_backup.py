@@ -23,8 +23,14 @@ from app.resilience.resilience import circuit_s3, CircuitBreakerOpenError, with_
 
 logger = logging.getLogger(__name__)
 
-# Modul-Singleton
+# Modul-Singleton (bei Änderung der S3-Config via Settings/DB zurücksetzen)
 _s3_client: Optional[Any] = None
+
+
+def reset_s3_client() -> None:
+    """Invalidiert den gecachten boto3-Client (z. B. nach Config-Update aus der DB)."""
+    global _s3_client
+    _s3_client = None
 
 # In-Memory-Liste der letzten S3-Backup-Fehler (für UI/API), max 50
 _backup_failures: List[Dict[str, str]] = []

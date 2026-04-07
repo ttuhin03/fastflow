@@ -18,7 +18,7 @@ Häufige Fehler und schnelle Lösungen.
 Der Orchestrator spricht nur über den [Docker-Socket-Proxy](/docs/deployment/DOCKER_PROXY). Nicht erlaubte Operationen führen zu 403.
 
 - **Logs prüfen:**  
-  `docker-compose logs docker-proxy`
+  `docker compose logs docker-proxy`
 - **Sicherstellen:** In der Proxy-Konfiguration muss z.B. `POST=1` für Container-Erstellung gesetzt sein. Siehe [Docker Socket Proxy](/docs/deployment/DOCKER_PROXY).
 
 ## "Port 8000 belegt"
@@ -36,12 +36,12 @@ Die Anwendung startet ohne gültigen `ENCRYPTION_KEY` nicht.
 
 ## OAuth / Login funktioniert nicht
 
-- **Callbacks:** GitHub `{BASE_URL}/api/auth/github/callback`, Google `{BASE_URL}/api/auth/google/callback`. `BASE_URL` in `.env` muss exakt der erreichbaren URL entsprechen (inkl. Port, ohne Trailing Slash).
+- **Callbacks:** GitHub `{BASE_URL}/api/auth/github/callback`, Google `{BASE_URL}/api/auth/google/callback`, Microsoft `{BASE_URL}/api/auth/microsoft/callback`, Custom `{BASE_URL}/api/auth/custom/callback`. `BASE_URL` in `.env` muss exakt der erreichbaren URL entsprechen (inkl. Port, ohne Trailing Slash).
 - **Docker vs. Dev:**  
   - Alles auf :8000: `FRONTEND_URL` weglassen oder `=http://localhost:8000`, `BASE_URL=http://localhost:8000`.  
   - Frontend :3000, Backend :8000: `FRONTEND_URL=http://localhost:3000`, `BASE_URL=http://localhost:8000`.
 
-Ausführlich: [OAuth (GitHub & Google)](/docs/oauth/readme).
+Ausführlich: [OAuth (GitHub, Google, Microsoft, Custom)](/docs/oauth/readme).
 
 ## Pipeline erscheint nicht / wird nicht erkannt
 

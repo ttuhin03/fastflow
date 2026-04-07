@@ -70,6 +70,22 @@ interface Settings {
   notification_api_enabled?: boolean
   notification_api_rate_limit_per_minute?: number
   notification_api_keys?: NotificationApiKeyItem[]
+  s3_backup_enabled?: boolean
+  s3_endpoint_url?: string | null
+  s3_bucket?: string | null
+  s3_region?: string
+  s3_prefix?: string
+  s3_use_path_style?: boolean
+  s3_access_key?: string | null
+  s3_secret_access_key?: string | null
+  s3_clear_access_key?: boolean
+  s3_clear_secret_access_key?: boolean
+  s3_access_key_configured?: boolean
+  s3_secret_access_key_configured?: boolean
+  s3_last_test_at?: string | null
+  s3_last_test_status?: string | null
+  s3_last_test_error?: string | null
+  s3_test_on_save?: boolean
 }
 
 export default function Settings() {
@@ -264,14 +280,32 @@ export default function Settings() {
     },
   })
 
+  const testS3Mutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiClient.post('/settings/s3/test')
+      return response.data as { success: boolean; message: string }
+    },
+    onSuccess: (data) => {
+      showSuccess(data.message || t('settings.s3TestSuccess'))
+      queryClient.invalidateQueries({ queryKey: ['settings'] })
+    },
+    onError: (error: any) => {
+      showError(error.response?.data?.detail || error.message || t('settings.s3TestErrorGeneric'))
+      queryClient.invalidateQueries({ queryKey: ['settings'] })
+    },
+  })
+
   const updateSettingsMutation = useMutation({
     mutationFn: async (updatedSettings: Partial<Settings>) => {
       const response = await apiClient.put('/settings', updatedSettings)
       return response.data
     },
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       showSuccess(data.message || t('settings.saved'))
       queryClient.invalidateQueries({ queryKey: ['settings'] })
+      if (variables?.s3_test_on_save && variables?.s3_backup_enabled) {
+        testS3Mutation.mutate()
+      }
     },
     onError: (error: any) => {
       showError(t('settings.updateError', { detail: error.response?.data?.detail || error.message }))
@@ -429,7 +463,17 @@ export default function Settings() {
     
     let processedValue: number | boolean | null | string | string[]
     
-    if (field === 'auto_sync_enabled' || field === 'email_enabled' || field === 'teams_enabled' || field === 'notification_api_enabled') {
+    if (
+      field === 'auto_sync_enabled' ||
+      field === 'email_enabled' ||
+      field === 'teams_enabled' ||
+      field === 'notification_api_enabled' ||
+      field === 's3_backup_enabled' ||
+      field === 's3_use_path_style' ||
+      field === 's3_clear_access_key' ||
+      field === 's3_clear_secret_access_key' ||
+      field === 's3_test_on_save'
+    ) {
       processedValue = typeof value === 'boolean' ? value : value === 'true'
     } else if (field === 'notification_api_rate_limit_per_minute') {
       processedValue = typeof value === 'number' ? value : (typeof value === 'string' && value !== '' ? parseInt(String(value), 10) : 30)
@@ -448,7 +492,21 @@ export default function Settings() {
       if (isNaN(processedValue as number)) {
         processedValue = 587
       }
-    } else if (typeof value === 'string' && (field === 'smtp_host' || field === 'smtp_user' || field === 'smtp_from' || field === 'teams_webhook_url')) {
+    } else if (
+      typeof value === 'string' &&
+      (
+        field === 'smtp_host' ||
+        field === 'smtp_user' ||
+        field === 'smtp_from' ||
+        field === 'teams_webhook_url' ||
+        field === 's3_endpoint_url' ||
+        field === 's3_bucket' ||
+        field === 's3_region' ||
+        field === 's3_prefix' ||
+        field === 's3_access_key' ||
+        field === 's3_secret_access_key'
+      )
+    ) {
       // String-Felder direkt übernehmen
       processedValue = value === '' ? null : value
     } else if (typeof value === 'string') {
@@ -468,8 +526,17 @@ export default function Settings() {
 
   const handleSave = () => {
     if (!localSettings) return
-    // Konvertiere email_recipients Array zu komma-separiertem String für API; notification_api_keys nicht mitsenden
-    const { email_recipients, notification_api_keys: _keys, ...restSettings } = localSettings
+    // Konvertiere email_recipients Array zu komma-separiertem String für API; read-only Felder nicht mitsenden
+    const {
+      email_recipients,
+      notification_api_keys: _keys,
+      s3_access_key_configured: _ak,
+      s3_secret_access_key_configured: _sak,
+      s3_last_test_at: _lta,
+      s3_last_test_status: _lts,
+      s3_last_test_error: _lte,
+      ...restSettings
+    } = localSettings
     const settingsToSave: Partial<Omit<Settings, 'email_recipients' | 'notification_api_keys'>> & { email_recipients?: string } = {
       ...restSettings,
       email_recipients: Array.isArray(email_recipients)
@@ -1117,6 +1184,184 @@ export default function Settings() {
               </span>
               <InfoIcon content={t('settings.lastBackupInfo')} />
             </div>
+          </div>
+
+          <div className="settings-section card">
+            <h3 className="section-title">{t('settings.s3ConfigTitle')}</h3>
+            <p className="setting-hint setting-hint--flush">{t('settings.s3ConfigHint')}</p>
+            <div className="settings-grid">
+              <div className="setting-item">
+                <label className="setting-label checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={!!currentSettings.s3_backup_enabled}
+                    onChange={(e) => handleInputChange('s3_backup_enabled', e.target.checked)}
+                    className="checkbox-input"
+                    disabled={fieldDisabled}
+                  />
+                  <span>{t('settings.s3BackupEnabled')}</span>
+                </label>
+              </div>
+              <div className="setting-item">
+                <label htmlFor="s3_endpoint_url" className="setting-label">{t('settings.s3EndpointUrl')}</label>
+                <input
+                  id="s3_endpoint_url"
+                  type="url"
+                  className="form-input"
+                  value={currentSettings.s3_endpoint_url || ''}
+                  onChange={(e) => handleInputChange('s3_endpoint_url', e.target.value)}
+                  placeholder="https://s3.example.local"
+                  disabled={fieldDisabled || !currentSettings.s3_backup_enabled}
+                />
+              </div>
+              <div className="setting-item">
+                <label htmlFor="s3_bucket" className="setting-label">{t('settings.s3Bucket')}</label>
+                <input
+                  id="s3_bucket"
+                  type="text"
+                  className="form-input"
+                  value={currentSettings.s3_bucket || ''}
+                  onChange={(e) => handleInputChange('s3_bucket', e.target.value)}
+                  placeholder="fastflow-logs"
+                  disabled={fieldDisabled || !currentSettings.s3_backup_enabled}
+                />
+              </div>
+              <div className="setting-item">
+                <label htmlFor="s3_region" className="setting-label">{t('settings.s3Region')}</label>
+                <input
+                  id="s3_region"
+                  type="text"
+                  className="form-input"
+                  value={currentSettings.s3_region || 'us-east-1'}
+                  onChange={(e) => handleInputChange('s3_region', e.target.value)}
+                  placeholder="us-east-1"
+                  disabled={fieldDisabled || !currentSettings.s3_backup_enabled}
+                />
+              </div>
+              <div className="setting-item">
+                <label htmlFor="s3_prefix" className="setting-label">{t('settings.s3Prefix')}</label>
+                <input
+                  id="s3_prefix"
+                  type="text"
+                  className="form-input"
+                  value={currentSettings.s3_prefix || 'pipeline-logs'}
+                  onChange={(e) => handleInputChange('s3_prefix', e.target.value)}
+                  placeholder="pipeline-logs"
+                  disabled={fieldDisabled || !currentSettings.s3_backup_enabled}
+                />
+              </div>
+              <div className="setting-item">
+                <label className="setting-label checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={currentSettings.s3_use_path_style ?? true}
+                    onChange={(e) => handleInputChange('s3_use_path_style', e.target.checked)}
+                    className="checkbox-input"
+                    disabled={fieldDisabled || !currentSettings.s3_backup_enabled}
+                  />
+                  <span>{t('settings.s3UsePathStyle')}</span>
+                </label>
+              </div>
+              <div className="setting-item">
+                <label className="setting-label checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={!!currentSettings.s3_test_on_save}
+                    onChange={(e) => handleInputChange('s3_test_on_save', e.target.checked)}
+                    className="checkbox-input"
+                    disabled={fieldDisabled || !currentSettings.s3_backup_enabled}
+                  />
+                  <span>{t('settings.s3TestOnSave')}</span>
+                </label>
+                <p className="setting-hint settings-ui-pref-hint">{t('settings.s3TestOnSaveHint')}</p>
+              </div>
+              <div className="setting-item">
+                <label htmlFor="s3_access_key" className="setting-label">
+                  {t('settings.s3AccessKey')}
+                  <span className="setting-hint">{currentSettings.s3_access_key_configured ? t('settings.s3SecretConfigured') : t('settings.s3SecretNotConfigured')}</span>
+                </label>
+                <input
+                  id="s3_access_key"
+                  type="password"
+                  className="form-input"
+                  value={currentSettings.s3_access_key || ''}
+                  onChange={(e) => handleInputChange('s3_access_key', e.target.value)}
+                  placeholder={t('settings.s3SecretReplacePlaceholder')}
+                  disabled={fieldDisabled || !currentSettings.s3_backup_enabled}
+                />
+                <label className="setting-label checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={!!currentSettings.s3_clear_access_key}
+                    onChange={(e) => handleInputChange('s3_clear_access_key', e.target.checked)}
+                    className="checkbox-input"
+                    disabled={fieldDisabled || !currentSettings.s3_backup_enabled}
+                  />
+                  <span>{t('settings.s3ClearAccessKey')}</span>
+                </label>
+              </div>
+              <div className="setting-item">
+                <label htmlFor="s3_secret_access_key" className="setting-label">
+                  {t('settings.s3SecretAccessKey')}
+                  <span className="setting-hint">{currentSettings.s3_secret_access_key_configured ? t('settings.s3SecretConfigured') : t('settings.s3SecretNotConfigured')}</span>
+                </label>
+                <input
+                  id="s3_secret_access_key"
+                  type="password"
+                  className="form-input"
+                  value={currentSettings.s3_secret_access_key || ''}
+                  onChange={(e) => handleInputChange('s3_secret_access_key', e.target.value)}
+                  placeholder={t('settings.s3SecretReplacePlaceholder')}
+                  disabled={fieldDisabled || !currentSettings.s3_backup_enabled}
+                />
+                <label className="setting-label checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={!!currentSettings.s3_clear_secret_access_key}
+                    onChange={(e) => handleInputChange('s3_clear_secret_access_key', e.target.checked)}
+                    className="checkbox-input"
+                    disabled={fieldDisabled || !currentSettings.s3_backup_enabled}
+                  />
+                  <span>{t('settings.s3ClearSecretAccessKey')}</span>
+                </label>
+              </div>
+            </div>
+            <div className="backup-last-run">
+              <span className="setting-label">{t('settings.s3PathPreview')}</span>
+              <span className="backup-last-run-value">
+                {(currentSettings.s3_prefix || 'pipeline-logs').replace(/\/+$/, '')}/{'{pipeline_name}'}/{'{run_id}'}/run.log
+              </span>
+            </div>
+            <div className="backup-last-run">
+              <span className="setting-label">{t('settings.s3LastTest')}</span>
+              <span className="backup-last-run-value">
+                {currentSettings.s3_last_test_at
+                  ? `${new Date(currentSettings.s3_last_test_at).toLocaleString()} (${currentSettings.s3_last_test_status || 'unknown'})`
+                  : '–'}
+              </span>
+            </div>
+            {currentSettings.s3_last_test_error && (
+              <p className="setting-hint">{currentSettings.s3_last_test_error}</p>
+            )}
+            <div className="backup-last-run">
+              <span className="setting-label">{t('settings.s3Health')}</span>
+              <span className="backup-last-run-value">
+                {backupStatus?.last_backup_at
+                  ? t('settings.s3HealthOk', { count: backupStatus.failures?.length || 0 })
+                  : t('settings.s3HealthWarn', { count: backupStatus?.failures?.length || 0 })}
+              </span>
+            </div>
+            {!isReadonly && (
+              <div className="setting-item setting-item--offset-top">
+                <button
+                  onClick={() => testS3Mutation.mutate()}
+                  disabled={testS3Mutation.isPending || fieldLocked}
+                  className="btn btn-secondary"
+                >
+                  {testS3Mutation.isPending ? t('settings.sendingLabel') : t('settings.s3TestButton')}
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Runtime Settings */}

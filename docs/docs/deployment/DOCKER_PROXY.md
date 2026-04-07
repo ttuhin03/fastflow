@@ -159,9 +159,9 @@ RuntimeError: Docker-Proxy ist nicht erreichbar (http://docker-proxy:2375)
 
 **Prüfungen:**
 
-1. Proxy-Service läuft: `docker-compose ps docker-proxy`
+1. Proxy-Service läuft: `docker compose ps docker-proxy`
 2. Netzwerk-Konnektivität: Beide Services müssen im gleichen Docker-Netzwerk sein
-3. Proxy-Logs: `docker-compose logs docker-proxy`
+3. Proxy-Logs: `docker compose logs docker-proxy`
 
 ## Fehlerklassifizierung
 
@@ -198,7 +198,7 @@ Fehler, die auf Probleme mit dem Pipeline-Skript hinweisen:
 
 ### Entwicklung
 
-1. **Proxy-Logs**: Nutze `docker-compose logs -f docker-proxy` für Debugging
+1. **Proxy-Logs**: Nutze `docker compose logs -f docker-proxy` für Debugging
 2. **Health-Check**: Der Orchestrator führt beim Start einen Health-Check durch (`client.ping()`)
 3. **Fehlermeldungen**: Detaillierte Fehlermeldungen helfen bei der Diagnose
 
@@ -208,23 +208,23 @@ Fehler, die auf Probleme mit dem Pipeline-Skript hinweisen:
 
 ```bash
 # 1. Prüfe Proxy-Konfiguration
-docker-compose exec docker-proxy env | grep -E "CONTAINERS|POST|VOLUMES"
+docker compose exec docker-proxy env | grep -E "CONTAINERS|POST|VOLUMES"
 
 # 2. Prüfe Proxy-Logs
-docker-compose logs docker-proxy | grep -i "403\|forbidden"
+docker compose logs docker-proxy | grep -i "403\|forbidden"
 
 # 3. Prüfe Orchestrator-Logs
-docker-compose logs orchestrator | grep -i "infrastructure\|403"
+docker compose logs orchestrator | grep -i "infrastructure\|403"
 ```
 
 ### Metrics kommen nicht an
 
 ```bash
 # Prüfe ob STATS=1 gesetzt ist
-docker-compose exec docker-proxy env | grep STATS
+docker compose exec docker-proxy env | grep STATS
 
 # Prüfe Stats-Requests in Proxy-Logs
-docker-compose logs docker-proxy | grep -i "stats"
+docker compose logs docker-proxy | grep -i "stats"
 ```
 
 ### Proxy startet nicht
@@ -237,7 +237,7 @@ ls -la /var/run/docker.sock
 docker ps
 
 # Prüfe Proxy-Logs
-docker-compose logs docker-proxy
+docker compose logs docker-proxy
 ```
 
 ## Weitere Informationen

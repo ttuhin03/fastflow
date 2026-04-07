@@ -143,12 +143,22 @@ export default function Sync({ editLocked = false }: SyncProps) {
 
   const syncMutation = useMutation({
     mutationFn: async (branch?: string) => {
-      const response = await apiClient.post('/sync', branch ? { branch } : {})
+      // Sync kann durch Git/Pre-Heating deutlich länger dauern als normale API-Calls.
+      // Daher hier explizit ohne Axios-Timeout, um falsche "timeout"-Fehler in der UI zu vermeiden.
+      const response = await apiClient.post('/sync', branch ? { branch } : {}, { timeout: 0 })
       return response.data
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['sync-status'] })
       queryClient.invalidateQueries({ queryKey: ['pipelines'] })
+      if (data?.already_running) {
+        showSuccess(data?.message || 'Ein Sync läuft bereits.')
+        return
+      }
+      if (data?.success === false) {
+        showError(data?.message || t('sync.syncError', { detail: '' }))
+        return
+      }
       showSuccess(t('sync.syncSuccess'))
     },
     onError: (error: any) => {
@@ -441,6 +451,11 @@ export default function Sync({ editLocked = false }: SyncProps) {
       <div className="sync-actions-card">
         <h3>{t('sync.runSync')}</h3>
         <div className="sync-form">
+          {syncMutation.isPending && (
+            <p className="settings-note">
+              {t('dashboard.syncRunning')} - das kann je nach Repo/Dependencies einige Minuten dauern.
+            </p>
+          )}
           <div className="form-group">
             <label htmlFor="sync-branch">{t('sync.branchOptional')}</label>
             <input

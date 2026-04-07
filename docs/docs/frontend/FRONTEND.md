@@ -455,19 +455,20 @@ Git-Synchronisation und Repository-Verwaltung.
 
 #### `pages/Login.tsx`
 
-Login-Seite. Anmeldung **nur via GitHub OAuth**.
+Login-Seite. Anmeldung via konfigurierten OAuth-Providern (GitHub, Google, Microsoft, Custom).
 
 **Features:**
-- Button „Login mit GitHub“ (Redirect zu `/api/auth/github/authorize`)
+- Login-Buttons je nach aktivem Provider (`/api/auth/providers`)
 - Fehlerbehandlung
 - Nach Autorisierung: Redirect zu `/auth/callback#token=...`, dann zu `/`
 
 **Weitere Seiten:**
 - `pages/AuthCallback.tsx` – verarbeitet `#token=...` nach OAuth, speichert Token in sessionStorage, leitet zu `/` weiter
-- `pages/Invite.tsx` – Einladungs-Landing (`/invite?token=...`), Button „Mit GitHub registrieren“ startet OAuth mit Token im `state`
+- `pages/Invite.tsx` – Einladungs-Landing (`/invite?token=...`), Registrierung über OAuth mit Token im `state`
 
 **API-Endpoints:**
-- `GET /api/auth/github/authorize` – Login (Redirect zu GitHub)
+- `GET /api/auth/providers` – verfügbare OAuth-Provider
+- `GET /api/auth/{provider}/authorize` – Login (Redirect zum Provider)
 
 ## Authentication Context
 
@@ -501,7 +502,7 @@ function MyComponent() {
 Die Routing-Konfiguration befindet sich in `App.tsx`:
 
 - `/` - Dashboard
-- `/login` - Login (GitHub OAuth)
+- `/login` - Login (OAuth)
 - `/auth/callback` - OAuth-Callback (verarbeitet `#token=...`)
 - `/invite` - Einladungs-Seite (`?token=...`)
 - `/pipelines` - Pipeline-Übersicht
@@ -512,7 +513,7 @@ Die Routing-Konfiguration befindet sich in `App.tsx`:
 - `/secrets` - Secrets
 - `/settings` - Settings
 - `/sync` - Git-Sync
-- `/users` - Nutzerverwaltung (nur für Admins, GitHub-Einladungen)
+- `/users` - Nutzerverwaltung (nur für Admins, OAuth-Einladungen)
 
 **Protected Routes:**
 Alle Routen außer `/login`, `/auth/callback` und `/invite` sind geschützt und erfordern Authentifizierung.

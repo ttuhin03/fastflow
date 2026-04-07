@@ -67,25 +67,26 @@ Speichert sensible Daten und Parameter.
 
 ### 5. `User` (Authentifizierung)
 
-Speichert Benutzer. Login via GitHub OAuth, Google OAuth (und Einladung).
+Speichert Benutzer. Login via OAuth (GitHub, Google, Microsoft, Custom) plus Einladungs-Flow.
 
 | Spalte | Typ | Beschreibung |
 |--------|-----|--------------|
 | `id` | UUID (PK) | Eindeutige User-ID. |
 | `username` | String | Benutzername (eindeutig, indexiert). |
-| `email` | String | (Optional) E-Mail (von GitHub/Google oder manuell). |
+| `email` | String | (Optional) E-Mail (vom OAuth-Provider oder manuell). |
 | `role` | Enum | `ADMIN`, `WRITE`, `READONLY`. |
 | `blocked` | Boolean | Ob der Benutzer gesperrt ist. |
 | `github_id` | String | (Optional) GitHub OAuth ID (unique). |
 | `google_id` | String | (Optional) Google OAuth ID (unique). |
 | `avatar_url` | String | (Optional) Profilbild-URL von OAuth-Provider. |
-| `microsoft_id` | String | (Optional) für zukünftige Microsoft-Auth (unique). |
+| `microsoft_id` | String | (Optional) Microsoft OAuth ID (unique). |
+| `custom_oauth_id` | String | (Optional) Custom OAuth ID (unique). |
 | `status` | String | `active` (Zugriff), `pending` (Beitrittsanfrage), `rejected` (abgelehnt). Default: `active`. |
 | `created_at` | DateTime | Erstellungsdatum. |
 
 ### 6. `Invitation` (Einladungen)
 
-Token-Einladungen für neue User (Einlösung via GitHub OAuth oder Google OAuth).
+Token-Einladungen für neue User (Einlösung via OAuth-Provider).
 
 | Spalte | Typ | Beschreibung |
 |--------|-----|--------------|
