@@ -29,7 +29,7 @@ def log_audit(
 
     Args:
         session: SQLModel-Session (wird für commit genutzt)
-        action: Aktion (z.B. run_start, run_cancel, pipeline_stats_reset, user_invite, settings_update)
+        action: Aktion (u.a. run_start, run_cancel, settings_update, system_settings_update, user_update, user_block, user_unblock, user_delete, git_sync, sync_settings_update, sync_repo_config_save/delete, sync_deploy_key_generate, sync_repo_config_test, sync_clear_pipelines, downstream_trigger_create/delete)
         resource_type: Betroffene Ressource (pipeline, run, user, settings, secret, invite)
         resource_id: Optionale ID der Ressource (Run-ID, Pipeline-Name, User-ID, …)
         details: Optionale Zusatzdaten (z.B. {"new_run_id": "…"})

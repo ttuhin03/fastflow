@@ -13,7 +13,7 @@ Dieses Modul enthält alle REST-API-Endpoints für Nutzermanagement:
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status
@@ -383,9 +383,17 @@ async def update_user(
     session.add(user)
     session.commit()
     session.refresh(user)
-    
+
+    if request.role is not None or request.blocked is not None:
+        details: Dict[str, Any] = {}
+        if request.role is not None:
+            details["role"] = user.role.value
+        if request.blocked is not None:
+            details["blocked"] = user.blocked
+        log_audit(session, "user_update", "user", str(user_id), details, current_user)
+
     logger.info(f"Admin '{current_user.username}' hat Benutzer '{user.username}' aktualisiert")
-    
+
     return UserResponse(
         id=str(user.id),
         username=user.username,
@@ -444,12 +452,21 @@ async def block_user(
     # Alle Sessions des Benutzers löschen (Benutzer wird sofort ausgeloggt)
     deleted_sessions = delete_all_user_sessions(session, user.id)
     session.refresh(user)
-    
+
+    log_audit(
+        session,
+        "user_block",
+        "user",
+        str(user_id),
+        {"sessions_invalidated": deleted_sessions},
+        current_user,
+    )
+
     logger.info(
         f"Admin '{current_user.username}' hat Benutzer '{user.username}' blockiert. "
         f"{deleted_sessions} Sessions wurden invalidiert."
     )
-    
+
     return UserResponse(
         id=str(user.id),
         username=user.username,
@@ -499,9 +516,11 @@ async def unblock_user(
     session.add(user)
     session.commit()
     session.refresh(user)
-    
+
+    log_audit(session, "user_unblock", "user", str(user_id), None, current_user)
+
     logger.info(f"Admin '{current_user.username}' hat Benutzer '{user.username}' entblockiert")
-    
+
     return UserResponse(
         id=str(user.id),
         username=user.username,
@@ -556,7 +575,16 @@ async def delete_user(
     username = user.username
     session.delete(user)
     session.commit()
-    
+
+    log_audit(
+        session,
+        "user_delete",
+        "user",
+        str(user_id),
+        {"username": username},
+        current_user,
+    )
+
     logger.info(f"Admin '{current_user.username}' hat Benutzer '{username}' gelöscht")
-    
+
     return {"message": "Benutzer erfolgreich gelöscht"}

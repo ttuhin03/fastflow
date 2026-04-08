@@ -7,6 +7,7 @@ Dieses Modul enthält alle REST-API-Endpoints für Git-Synchronisation:
 """
 
 from typing import Optional, Dict, Any, List
+from urllib.parse import urlparse
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -20,6 +21,7 @@ from app.core.config import config
 from app.auth import require_write, require_admin, get_current_user
 from app.middleware.rate_limiting import limiter
 from app.models import User
+from app.services.audit import log_audit
 from app.services.git_sync_repo_config import (
     get_sync_repo_config_public,
     save_sync_repo_config,
@@ -86,7 +88,19 @@ async def sync(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=result.get("message", "Git-Sync fehlgeschlagen")
             )
-        
+
+        log_audit(
+            session,
+            "git_sync",
+            "settings",
+            None,
+            {
+                "branch": result.get("branch"),
+                "success": bool(result.get("success")),
+            },
+            current_user,
+        )
+
         return result
         
     except HTTPException:
@@ -177,6 +191,8 @@ async def update_sync_settings(
         apply_orchestrator_settings_to_config,
     )
     row = get_orchestrator_settings_or_default(session)
+    before_enabled = row.auto_sync_enabled
+    before_interval = row.auto_sync_interval
     if request.auto_sync_enabled is not None:
         row.auto_sync_enabled = request.auto_sync_enabled
     if request.auto_sync_interval is not None:
@@ -187,6 +203,20 @@ async def update_sync_settings(
     apply_orchestrator_settings_to_config(row)
     from app.services.git_auto_sync import schedule_git_auto_sync_job
     schedule_git_auto_sync_job()
+    changed = []
+    if request.auto_sync_enabled is not None and before_enabled != row.auto_sync_enabled:
+        changed.append("auto_sync_enabled")
+    if request.auto_sync_interval is not None and before_interval != row.auto_sync_interval:
+        changed.append("auto_sync_interval")
+    if changed:
+        log_audit(
+            session,
+            "sync_settings_update",
+            "settings",
+            None,
+            {"changed_fields": changed},
+            current_user,
+        )
     return {
         "auto_sync_enabled": config.AUTO_SYNC_ENABLED,
         "auto_sync_interval": config.AUTO_SYNC_INTERVAL,
@@ -296,6 +326,15 @@ async def save_repo_config(
             apply_orchestrator_settings_to_config,
         )
         apply_orchestrator_settings_to_config(get_orchestrator_settings_or_default(session))
+        host = urlparse(url).netloc or None
+        log_audit(
+            session,
+            "sync_repo_config_save",
+            "settings",
+            None,
+            {"repo_host": host} if host else {},
+            current_user,
+        )
         return {
             "success": True,
             "message": "Repository-Konfiguration gespeichert",
@@ -317,6 +356,7 @@ async def delete_repo_config(
     """Löscht die Sync-Repository-Konfiguration aus der DB (Env-Werte bleiben unberührt)."""
     try:
         delete_sync_repo_config(session)
+        log_audit(session, "sync_repo_config_delete", "settings", None, None, current_user)
         return {"success": True, "message": "Repository-Konfiguration gelöscht"}
     except Exception as e:
         logger.exception("Fehler beim Löschen der Repo-Config")
@@ -360,6 +400,7 @@ async def generate_deploy_key(
             apply_orchestrator_settings_to_config,
         )
         apply_orchestrator_settings_to_config(get_orchestrator_settings_or_default(session))
+        log_audit(session, "sync_deploy_key_generate", "settings", None, None, current_user)
         return {
             "success": True,
             "message": "Deploy-Key erzeugt. Öffentlichen Key bei GitHub (Settings → Deploy keys) eintragen.",
@@ -384,6 +425,14 @@ async def test_repo_config(
     """Testet die Repository-Konfiguration per git ls-remote."""
     try:
         success, message = test_sync_repo_config(session)
+        log_audit(
+            session,
+            "sync_repo_config_test",
+            "settings",
+            None,
+            {"status": "success" if success else "failed"},
+            current_user,
+        )
         return {"success": success, "message": message}
     except Exception as e:
         logger.exception("Fehler beim Testen der Repo-Config")
@@ -396,6 +445,7 @@ async def test_repo_config(
 @router.post("/clear-pipelines", response_model=Dict[str, Any])
 async def clear_pipelines(
     current_user: User = Depends(require_admin),
+    session: Session = Depends(get_session),
 ) -> Dict[str, Any]:
     """
     Leert das Pipelines-Verzeichnis vollständig (inkl. .git).
@@ -409,6 +459,7 @@ async def clear_pipelines(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=message,
             )
+        log_audit(session, "sync_clear_pipelines", "settings", None, None, current_user)
         return {"success": True, "message": message}
     except HTTPException:
         raise

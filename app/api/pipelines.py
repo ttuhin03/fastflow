@@ -928,6 +928,21 @@ async def create_downstream_trigger(
     session.add(trigger)
     session.commit()
     session.refresh(trigger)
+    log_audit(
+        session,
+        "downstream_trigger_create",
+        "pipeline",
+        name,
+        {
+            "trigger_id": str(trigger.id),
+            "downstream_pipeline": trigger.downstream_pipeline,
+            "run_config_id": trigger.run_config_id,
+            "on_success": trigger.on_success,
+            "on_failure": trigger.on_failure,
+            "on_route": trigger.on_route,
+        },
+        current_user,
+    )
     return DownstreamTriggerResponse(
         id=str(trigger.id),
         downstream_pipeline=trigger.downstream_pipeline,
@@ -967,8 +982,17 @@ async def delete_downstream_trigger(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Downstream-Trigger gehört nicht zu dieser Pipeline",
         )
+    details = {
+        "trigger_id": str(trigger.id),
+        "downstream_pipeline": trigger.downstream_pipeline,
+        "run_config_id": trigger.run_config_id,
+        "on_success": trigger.on_success,
+        "on_failure": trigger.on_failure,
+        "on_route": trigger.on_route,
+    }
     session.delete(trigger)
     session.commit()
+    log_audit(session, "downstream_trigger_delete", "pipeline", name, details, current_user)
 
 
 @router.get("/daily-stats/all", response_model=DailyStatsResponse)

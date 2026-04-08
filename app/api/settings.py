@@ -113,6 +113,96 @@ def _validate_ui_header_timezone_id(raw: Optional[str]) -> str:
     return tz
 
 
+def _system_settings_audit_snapshot(ss: Any) -> Dict[str, Any]:
+    """Vergleichswerte für Audit (keine Secrets)."""
+    return {
+        "is_setup_completed": bool(ss.is_setup_completed),
+        "enable_telemetry": bool(ss.enable_telemetry),
+        "enable_error_reporting": bool(ss.enable_error_reporting),
+        "dependency_audit_enabled": bool(getattr(ss, "dependency_audit_enabled", True)),
+        "dependency_audit_cron": (getattr(ss, "dependency_audit_cron", None) or "0 3 * * *").strip(),
+        "login_branding_logo_url": getattr(ss, "login_branding_logo_url", None),
+        "ui_show_attribution": bool(getattr(ss, "ui_show_attribution", True)),
+        "ui_show_version": bool(getattr(ss, "ui_show_version", True)),
+        "show_unconfigured_oauth_on_login": bool(getattr(ss, "show_unconfigured_oauth_on_login", True)),
+        "ui_login_background": _normalize_ui_login_background(getattr(ss, "ui_login_background", None)),
+        "ui_header_timezone_1": getattr(ss, "ui_header_timezone_1", None) or "UTC",
+        "ui_header_timezone_2": getattr(ss, "ui_header_timezone_2", None) or "Europe/Berlin",
+    }
+
+
+def _build_system_settings_audit_details(
+    before: Dict[str, Any], after: Dict[str, Any]
+) -> Optional[Dict[str, Any]]:
+    changed = sorted(k for k in before if before[k] != after[k])
+    if not changed:
+        return None
+    details: Dict[str, Any] = {"changed_fields": changed}
+    if "login_branding_logo_url" in changed:
+        details["login_branding_logo_url"] = "cleared" if not after.get("login_branding_logo_url") else "set"
+    return details
+
+
+_ORCHESTRATOR_AUDIT_KEYS = (
+    "log_retention_runs",
+    "log_retention_days",
+    "log_max_size_mb",
+    "max_concurrent_runs",
+    "container_timeout",
+    "retry_attempts",
+    "auto_sync_enabled",
+    "auto_sync_interval",
+    "email_enabled",
+    "smtp_host",
+    "smtp_port",
+    "smtp_user",
+    "smtp_from",
+    "email_recipients",
+    "teams_enabled",
+    "teams_webhook_url",
+    "notification_api_enabled",
+    "notification_api_rate_limit_per_minute",
+    "s3_backup_enabled",
+    "s3_endpoint_url",
+    "s3_bucket",
+    "s3_region",
+    "s3_prefix",
+    "s3_use_path_style",
+    "s3_test_on_save",
+)
+
+
+def _orchestrator_audit_snapshot(row: Any) -> Dict[str, Any]:
+    snap: Dict[str, Any] = {}
+    for k in _ORCHESTRATOR_AUDIT_KEYS:
+        snap[k] = getattr(row, k, None)
+    snap["smtp_password_encrypted"] = getattr(row, "smtp_password_encrypted", None)
+    snap["s3_access_key_encrypted"] = getattr(row, "s3_access_key_encrypted", None)
+    snap["s3_secret_access_key_encrypted"] = getattr(row, "s3_secret_access_key_encrypted", None)
+    return snap
+
+
+def _build_orchestrator_settings_audit_details(
+    before: Dict[str, Any], after: Dict[str, Any]
+) -> Optional[Dict[str, Any]]:
+    changed_fields: List[str] = []
+    details: Dict[str, Any] = {}
+    for k in _ORCHESTRATOR_AUDIT_KEYS:
+        if before.get(k) != after.get(k):
+            changed_fields.append(k)
+    if before.get("smtp_password_encrypted") != after.get("smtp_password_encrypted"):
+        details["smtp_password_updated"] = True
+    if before.get("s3_access_key_encrypted") != after.get("s3_access_key_encrypted"):
+        details["s3_access_key_updated"] = True
+    if before.get("s3_secret_access_key_encrypted") != after.get("s3_secret_access_key_encrypted"):
+        details["s3_secret_access_key_updated"] = True
+    if not changed_fields and not details:
+        return None
+    out: Dict[str, Any] = {"changed_fields": sorted(changed_fields)}
+    out.update(details)
+    return out
+
+
 class TelemetryStatusResponse(BaseModel):
     """Öffentliche Konfiguration für Frontend PostHog (Phase 2a: Error-Tracking). Kein Auth."""
     enable_error_reporting: bool
@@ -364,6 +454,7 @@ async def update_settings(
     Die laufende config wird sofort aktualisiert; ein Neustart ist nicht nötig.
     """
     row = get_orchestrator_settings_or_default(session)
+    orch_before = _orchestrator_audit_snapshot(row)
     if settings.log_retention_runs is not None:
         row.log_retention_runs = settings.log_retention_runs
     if settings.log_retention_days is not None:
@@ -447,7 +538,10 @@ async def update_settings(
     apply_orchestrator_settings_to_config(row)
     from app.services.git_auto_sync import schedule_git_auto_sync_job
     schedule_git_auto_sync_job()
-    log_audit(session, "settings_update", "settings", None, None, current_user)
+    orch_after = _orchestrator_audit_snapshot(row)
+    audit_details = _build_orchestrator_settings_audit_details(orch_before, orch_after)
+    if audit_details:
+        log_audit(session, "settings_update", "settings", None, audit_details, current_user)
     return {
         "message": "Einstellungen wurden gespeichert und sind sofort aktiv."
     }
@@ -565,6 +659,7 @@ async def update_system_settings_endpoint(
     Wenn enable_error_reporting auf False gesetzt wird: PostHog-Client shutdown.
     """
     ss = get_system_settings(session)
+    system_before = _system_settings_audit_snapshot(ss)
     if body.is_setup_completed is not None:
         ss.is_setup_completed = body.is_setup_completed
     if body.enable_telemetry is not None:
@@ -609,7 +704,10 @@ async def update_system_settings_endpoint(
     session.add(ss)
     session.commit()
     session.refresh(ss)
-    log_audit(session, "system_settings_update", "settings", None, None, current_user)
+    system_after = _system_settings_audit_snapshot(ss)
+    system_audit_details = _build_system_settings_audit_details(system_before, system_after)
+    if system_audit_details:
+        log_audit(session, "system_settings_update", "settings", None, system_audit_details, current_user)
     if ss.enable_error_reporting is False:
         shutdown_posthog()
     # Dependency-Audit-Job neu planen (Cron/Enabled geändert)
