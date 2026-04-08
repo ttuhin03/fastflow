@@ -685,7 +685,14 @@
     "inodeFreeOfTotal": "{{free}} frei von {{total}} Inodes",
     "database": "Datenbank",
     "sizeMb": "{{size}} MB",
-    "databasePercentOfTotal": "{{pct}}% vom Gesamtspeicher"
+    "databasePercentOfTotal": "{{pct}}% vom Gesamtspeicher",
+    "uvCacheTitle": "UV-Paketcache",
+    "uvPythonTitle": "uv-Python-Installationen",
+    "pathLabel": "Pfad",
+    "uvPercentOfTotal": "{{pct}}% vom Gesamtspeicher",
+    "preHeatOn": "Pre-Heat bei Sync: an",
+    "preHeatOff": "Pre-Heat bei Sync: aus",
+    "defaultPython": "Standard-Python: {{version}}"
   },
   "notifications": {
     "title": "Benachrichtigungen",

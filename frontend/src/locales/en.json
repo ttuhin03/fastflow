@@ -685,7 +685,14 @@
     "inodeFreeOfTotal": "{{free}} free of {{total}} inodes",
     "database": "Database",
     "sizeMb": "{{size}} MB",
-    "databasePercentOfTotal": "{{pct}}% of total storage"
+    "databasePercentOfTotal": "{{pct}}% of total storage",
+    "uvCacheTitle": "UV package cache",
+    "uvPythonTitle": "uv Python installs",
+    "pathLabel": "Path",
+    "uvPercentOfTotal": "{{pct}}% of total storage",
+    "preHeatOn": "Pre-heat on sync: on",
+    "preHeatOff": "Pre-heat on sync: off",
+    "defaultPython": "Default Python: {{version}}"
   },
   "notifications": {
     "title": "Notifications",

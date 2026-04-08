@@ -1,19 +1,28 @@
 # Docusaurus-Doku bauen und mit serve ausliefern
+#
+# Nutzt dieselbe Dependency-Auflösung wie das Haupt-Dockerfile (package-lock.json),
+# damit Webpack/Docusaurus-Versionen nicht von npm install "latest" abweichen
+# (Webpack 5.100+ validiert ProgressPlugin strikt; Canary-Docusaurus braucht passende Pins).
+
 FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-COPY docs/package.json ./
-RUN npm install
+COPY package.json package-lock.json ./
+COPY docs/package.json ./docs/
 
-COPY docs/ ./
-RUN npm run build
+RUN npm ci --workspace=docs
+
+COPY docs/ ./docs/
+
+ENV BASE_URL=/
+RUN npm run build --workspace=docs
 
 # Serve der statischen Doku (SPA-Routing)
 FROM node:20-alpine
 
 WORKDIR /app
-COPY --from=builder /app/build ./build
+COPY --from=builder /app/docs/build ./build
 
 EXPOSE 3001
 CMD ["npx", "serve", "-s", "build", "-l", "3001"]

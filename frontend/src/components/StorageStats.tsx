@@ -3,7 +3,15 @@ import { useTranslation } from 'react-i18next'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
 import { getFormatLocale } from '../utils/locale'
-import { MdStorage, MdDescription, MdDataUsage, MdArchive, MdFolder } from 'react-icons/md'
+import {
+  MdStorage,
+  MdDescription,
+  MdDataUsage,
+  MdArchive,
+  MdFolder,
+  MdInventory2,
+  MdCode,
+} from 'react-icons/md'
 import './StorageStats.css'
 
 interface StorageStatsData {
@@ -21,6 +29,14 @@ interface StorageStatsData {
   inode_free?: number
   inode_used?: number
   inode_used_percent?: number
+  uv_cache_dir?: string
+  uv_cache_size_mb?: number
+  uv_cache_percentage?: number
+  uv_python_install_dir?: string
+  uv_python_install_size_mb?: number
+  uv_python_percentage?: number
+  uv_pre_heat?: boolean
+  default_python_version?: string
 }
 
 export default function StorageStats() {
@@ -174,6 +190,84 @@ export default function StorageStats() {
                   </p>
                 </>
               )}
+            </div>
+          </div>
+        )}
+
+        {stats.uv_cache_dir !== undefined && stats.uv_cache_size_mb !== undefined && (
+          <div className="storage-stat-card card">
+            <div className="stat-icon">
+              <MdInventory2 />
+            </div>
+            <div className="stat-content">
+              <h4 className="stat-label">{t('storage.uvCacheTitle')}</h4>
+              <p className="stat-value">
+                {t('storage.sizeMb', { size: stats.uv_cache_size_mb.toFixed(2) })}
+              </p>
+              {stats.uv_cache_percentage !== undefined && (
+                <>
+                  <div className="disk-usage-bar">
+                    <div
+                      className="disk-usage-fill uv-cache"
+                      style={{
+                        width: `${Math.min(stats.uv_cache_percentage, 100).toFixed(1)}%`,
+                      }}
+                    />
+                  </div>
+                  <p className={`stat-detail percentage ${getPercentageColor(stats.uv_cache_percentage)}`}>
+                    {t('storage.uvPercentOfTotal', {
+                      pct: stats.uv_cache_percentage.toFixed(2),
+                    })}
+                  </p>
+                </>
+              )}
+              <p className="stat-detail storage-path-detail" title={stats.uv_cache_dir}>
+                {t('storage.pathLabel')}: {stats.uv_cache_dir}
+              </p>
+              {stats.uv_pre_heat !== undefined && (
+                <p className="stat-detail-small">
+                  {stats.uv_pre_heat ? t('storage.preHeatOn') : t('storage.preHeatOff')}
+                </p>
+              )}
+              {stats.default_python_version !== undefined && (
+                <p className="stat-detail-small">
+                  {t('storage.defaultPython', { version: stats.default_python_version })}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {stats.uv_python_install_dir !== undefined && stats.uv_python_install_size_mb !== undefined && (
+          <div className="storage-stat-card card">
+            <div className="stat-icon">
+              <MdCode />
+            </div>
+            <div className="stat-content">
+              <h4 className="stat-label">{t('storage.uvPythonTitle')}</h4>
+              <p className="stat-value">
+                {t('storage.sizeMb', { size: stats.uv_python_install_size_mb.toFixed(2) })}
+              </p>
+              {stats.uv_python_percentage !== undefined && (
+                <>
+                  <div className="disk-usage-bar">
+                    <div
+                      className="disk-usage-fill uv-python"
+                      style={{
+                        width: `${Math.min(stats.uv_python_percentage, 100).toFixed(1)}%`,
+                      }}
+                    />
+                  </div>
+                  <p className={`stat-detail percentage ${getPercentageColor(stats.uv_python_percentage)}`}>
+                    {t('storage.uvPercentOfTotal', {
+                      pct: stats.uv_python_percentage.toFixed(2),
+                    })}
+                  </p>
+                </>
+              )}
+              <p className="stat-detail storage-path-detail" title={stats.uv_python_install_dir}>
+                {t('storage.pathLabel')}: {stats.uv_python_install_dir}
+              </p>
             </div>
           </div>
         )}

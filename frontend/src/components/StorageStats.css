@@ -153,6 +153,23 @@
   background: linear-gradient(90deg, #6366f1, #818cf8);
 }
 
+.disk-usage-fill.uv-cache {
+  background: linear-gradient(90deg, #0ea5e9, #38bdf8);
+}
+
+.disk-usage-fill.uv-python {
+  background: linear-gradient(90deg, #059669, #34d399);
+}
+
+.storage-path-detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--font-size-xs);
+}
+
 .spinner {
   width: 40px;
   height: 40px;

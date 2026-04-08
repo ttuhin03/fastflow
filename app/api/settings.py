@@ -14,6 +14,7 @@ import os
 import secrets as secrets_module
 import shutil
 from datetime import datetime, timezone
+from pathlib import Path
 import psutil
 from typing import Optional, Dict, Any, List, Literal
 from urllib.parse import urlparse
@@ -46,6 +47,24 @@ from botocore.config import Config as BotoConfig
 import boto3
 
 logger = logging.getLogger(__name__)
+
+
+def _directory_size_bytes(root: Path) -> int:
+    """Summiert Dateigrößen unter root; fehlendes Verzeichnis oder Fehler → 0."""
+    if not root.exists():
+        return 0
+    total = 0
+    try:
+        for p in root.rglob("*"):
+            if p.is_file():
+                try:
+                    total += p.stat().st_size
+                except (OSError, PermissionError):
+                    pass
+    except (OSError, PermissionError):
+        pass
+    return total
+
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -828,6 +847,9 @@ async def get_storage_stats(
         - database_size_gb: Größe der Datenbank in GB (falls verfügbar)
         - database_percentage: Anteil der Datenbank am Gesamtspeicherplatz in Prozent (falls verfügbar)
         - inode_total, inode_free, inode_used, inode_used_percent: Inode-Statistik (nur Unix, df -i)
+        - uv_cache_dir, uv_cache_size_bytes, uv_cache_size_mb, uv_cache_percentage: UV-Paketcache
+        - uv_python_install_dir, uv_python_install_size_bytes, uv_python_install_size_mb, uv_python_percentage
+        - uv_pre_heat, default_python_version: Runner-Konfiguration (Env)
     """
     try:
         logs_dir = config.LOGS_DIR
@@ -936,7 +958,17 @@ async def get_storage_stats(
         except Exception:
             # Datenbank-Größe kann nicht ermittelt werden, überspringen
             pass
-        
+
+        uv_cache_size_bytes = _directory_size_bytes(config.UV_CACHE_DIR)
+        uv_python_install_size_bytes = _directory_size_bytes(config.UV_PYTHON_INSTALL_DIR)
+        uv_cache_size_mb = uv_cache_size_bytes / (1024 * 1024)
+        uv_python_install_size_mb = uv_python_install_size_bytes / (1024 * 1024)
+        uv_cache_percentage = 0.0
+        uv_python_percentage = 0.0
+        if total_disk_space_bytes > 0:
+            uv_cache_percentage = (uv_cache_size_bytes / total_disk_space_bytes) * 100
+            uv_python_percentage = (uv_python_install_size_bytes / total_disk_space_bytes) * 100
+
         result = {
             "log_files_count": log_files_count,
             "log_files_size_bytes": log_files_size_bytes,
@@ -948,6 +980,16 @@ async def get_storage_stats(
             "free_disk_space_bytes": free_disk_space_bytes,
             "free_disk_space_gb": round(free_disk_space_gb, 2),
             "log_files_percentage": round(log_files_percentage, 2),
+            "uv_cache_dir": str(config.UV_CACHE_DIR),
+            "uv_cache_size_bytes": uv_cache_size_bytes,
+            "uv_cache_size_mb": round(uv_cache_size_mb, 2),
+            "uv_cache_percentage": round(uv_cache_percentage, 2),
+            "uv_python_install_dir": str(config.UV_PYTHON_INSTALL_DIR),
+            "uv_python_install_size_bytes": uv_python_install_size_bytes,
+            "uv_python_install_size_mb": round(uv_python_install_size_mb, 2),
+            "uv_python_percentage": round(uv_python_percentage, 2),
+            "uv_pre_heat": config.UV_PRE_HEAT,
+            "default_python_version": config.DEFAULT_PYTHON_VERSION,
         }
         if inode_total is not None and inode_free is not None:
             result["inode_total"] = inode_total
