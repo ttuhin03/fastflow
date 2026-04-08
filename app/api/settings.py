@@ -7,6 +7,7 @@ Dieses Modul enthält alle REST-API-Endpoints für System-Einstellungen:
 - Log-Dateien-Statistiken
 """
 
+import asyncio
 import hashlib
 import logging
 import os
@@ -14,7 +15,6 @@ import secrets as secrets_module
 import shutil
 from datetime import datetime, timezone
 import psutil
-from pathlib import Path
 from typing import Optional, Dict, Any, List, Literal
 from urllib.parse import urlparse
 
@@ -22,7 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
-from app.core.database import get_session, database_url, engine
+from app.core.database import get_session, database_url
 from app.core.config import config
 from app.models import NotificationApiKey
 from app.services.cleanup import cleanup_logs, cleanup_docker_resources

@@ -7,7 +7,6 @@ Schreibt Einträge in die audit_log-Tabelle für wichtige Aktionen
 
 import logging
 from typing import Any, Dict, Optional
-from uuid import UUID
 
 from sqlmodel import Session
 

@@ -15,9 +15,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
-from fastapi.responses import JSONResponse
-from sqlmodel import Session, select, func, text
-from sqlalchemy import case, delete
+from sqlmodel import Session, select, func
+from sqlalchemy import delete
 
 from app.core.database import get_session
 from app.models import DownstreamTrigger, Pipeline, PipelineDailyStat, PipelineRun, RunStatus, User
@@ -854,7 +853,7 @@ async def get_downstream_triggers(
     stmt = (
         select(DownstreamTrigger)
         .where(DownstreamTrigger.upstream_pipeline == name)
-        .where(DownstreamTrigger.enabled == True)
+        .where(DownstreamTrigger.enabled)
     )
     for trigger in session.exec(stmt).all():
         rcid = trigger.run_config_id or None
