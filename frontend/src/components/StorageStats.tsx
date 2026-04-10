@@ -37,6 +37,8 @@ interface StorageStatsData {
   uv_python_percentage?: number
   uv_pre_heat?: boolean
   default_python_version?: string
+  /** false: UV-Cache-/Python-Größen nicht ermittelt (keine Karten) */
+  uv_storage_stats_enabled?: boolean
 }
 
 export default function StorageStats() {
@@ -194,7 +196,9 @@ export default function StorageStats() {
           </div>
         )}
 
-        {stats.uv_cache_dir !== undefined && stats.uv_cache_size_mb !== undefined && (
+        {stats.uv_storage_stats_enabled !== false &&
+          stats.uv_cache_dir !== undefined &&
+          stats.uv_cache_size_mb !== undefined && (
           <div className="storage-stat-card card">
             <div className="stat-icon">
               <MdInventory2 />
@@ -238,7 +242,9 @@ export default function StorageStats() {
           </div>
         )}
 
-        {stats.uv_python_install_dir !== undefined && stats.uv_python_install_size_mb !== undefined && (
+        {stats.uv_storage_stats_enabled !== false &&
+          stats.uv_python_install_dir !== undefined &&
+          stats.uv_python_install_size_mb !== undefined && (
           <div className="storage-stat-card card">
             <div className="stat-icon">
               <MdCode />

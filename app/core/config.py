@@ -41,6 +41,7 @@ class Config:
         WORKER_BASE_IMAGE: Docker-Image für Pipeline-Container
         UV_CACHE_DIR: Verzeichnis für UV-Package-Cache
         UV_PRE_HEAT: Automatisches Pre-Heating von Dependencies beim Git-Sync
+        UV_STORAGE_STATS: UV-Cache-/Python-Größen in /settings/storage ermitteln (teuer bei großem Cache)
         MAX_CONCURRENT_RUNS: Maximale Anzahl gleichzeitiger Pipeline-Runs
         CONTAINER_TIMEOUT: Globaler Timeout für Container in Sekunden (None = unbegrenzt)
         RETRY_ATTEMPTS: Anzahl Retry-Versuche bei fehlgeschlagenen Runs
@@ -178,6 +179,13 @@ class Config:
     um Lock-Files zu erstellen und Dependencies im Cache zu speichern. Beim Pipeline-Run
     wird dann `uv run --frozen` verwendet, um die Resolution zu überspringen und nur den Cache zu nutzen.
     Verhindert Wartezeiten beim ersten Pipeline-Start nach einem Sync.
+    """
+
+    UV_STORAGE_STATS: bool = os.getenv("UV_STORAGE_STATS", "false").lower() == "true"
+    """
+    Wenn True: GET /settings/storage ermittelt Größen für UV_CACHE_DIR und UV_PYTHON_INSTALL_DIR
+    (voller Verzeichnis-Walk). Bei großen Caches teuer; Standard aus — bei Bedarf
+    UV_STORAGE_STATS=true setzen.
     """
     
     DEFAULT_PYTHON_VERSION: str = os.getenv("DEFAULT_PYTHON_VERSION", "3.11")

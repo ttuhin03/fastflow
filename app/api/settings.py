@@ -66,6 +66,158 @@ def _directory_size_bytes(root: Path) -> int:
     return total
 
 
+def _query_database_size_bytes(session: Session) -> int:
+    """DB-Größe (SQLite-Dateien oder PostgreSQL pg_database_size). Schnell, im Request-Thread."""
+    database_size_bytes = 0
+    try:
+        if database_url.startswith("sqlite"):
+            db_path = database_url.replace("sqlite:///", "")
+            if os.path.exists(db_path):
+                database_size_bytes = os.path.getsize(db_path)
+                wal_path = f"{db_path}-wal"
+                if os.path.exists(wal_path):
+                    database_size_bytes += os.path.getsize(wal_path)
+                shm_path = f"{db_path}-shm"
+                if os.path.exists(shm_path):
+                    database_size_bytes += os.path.getsize(shm_path)
+        else:
+            try:
+                result = session.exec(text("SELECT pg_database_size(current_database())"))
+                size = result.scalar()
+                if size:
+                    database_size_bytes = size
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return database_size_bytes
+
+
+def _sync_build_storage_stats_payload(database_size_bytes: int) -> Dict[str, Any]:
+    """
+    Log-/UV-Cache-Verzeichnisgrößen und Disk-Stats — CPU-/I/O-intensiv (rglob).
+    Läuft in einem Worker-Thread, damit der Async-Event-Loop nicht blockiert.
+    """
+    logs_dir = config.LOGS_DIR
+
+    log_files_count = 0
+    log_files_size_bytes = 0
+
+    if logs_dir.exists():
+        for file_path in logs_dir.rglob("*"):
+            if file_path.is_file():
+                log_files_count += 1
+                try:
+                    log_files_size_bytes += file_path.stat().st_size
+                except (OSError, PermissionError):
+                    pass
+
+    log_files_size_mb = log_files_size_bytes / (1024 * 1024)
+
+    total_disk_space_bytes = 0
+    used_disk_space_bytes = 0
+    free_disk_space_bytes = 0
+
+    try:
+        if logs_dir.exists():
+            disk_usage = shutil.disk_usage(logs_dir)
+            total_disk_space_bytes = disk_usage.total
+            used_disk_space_bytes = disk_usage.used
+            free_disk_space_bytes = disk_usage.free
+        else:
+            disk_usage = shutil.disk_usage("/")
+            total_disk_space_bytes = disk_usage.total
+            used_disk_space_bytes = disk_usage.used
+            free_disk_space_bytes = disk_usage.free
+    except (OSError, PermissionError):
+        pass
+
+    inode_total: Optional[int] = None
+    inode_free: Optional[int] = None
+    inode_used_percent: Optional[float] = None
+    if hasattr(os, "statvfs"):
+        try:
+            stat_path = str(logs_dir) if logs_dir.exists() else "/"
+            st = os.statvfs(stat_path)
+            inode_total = st.f_files
+            inode_free = getattr(st, "f_favail", st.f_ffree)
+            inode_used = inode_total - inode_free
+            inode_used_percent = (inode_used / inode_total * 100) if inode_total else None
+        except (OSError, PermissionError, AttributeError):
+            pass
+
+    total_disk_space_gb = total_disk_space_bytes / (1024 * 1024 * 1024)
+    used_disk_space_gb = used_disk_space_bytes / (1024 * 1024 * 1024)
+    free_disk_space_gb = free_disk_space_bytes / (1024 * 1024 * 1024)
+
+    log_files_percentage = 0.0
+    if total_disk_space_bytes > 0:
+        log_files_percentage = (log_files_size_bytes / total_disk_space_bytes) * 100
+
+    database_size_mb = 0.0
+    database_size_gb = 0.0
+    database_percentage = 0.0
+    if database_size_bytes > 0:
+        database_size_mb = database_size_bytes / (1024 * 1024)
+        database_size_gb = database_size_bytes / (1024 * 1024 * 1024)
+        if total_disk_space_bytes > 0:
+            database_percentage = (database_size_bytes / total_disk_space_bytes) * 100
+
+    if config.UV_STORAGE_STATS:
+        uv_cache_size_bytes = _directory_size_bytes(config.UV_CACHE_DIR)
+        uv_python_install_size_bytes = _directory_size_bytes(config.UV_PYTHON_INSTALL_DIR)
+    else:
+        uv_cache_size_bytes = 0
+        uv_python_install_size_bytes = 0
+    uv_cache_size_mb = uv_cache_size_bytes / (1024 * 1024)
+    uv_python_install_size_mb = uv_python_install_size_bytes / (1024 * 1024)
+    uv_cache_percentage = 0.0
+    uv_python_percentage = 0.0
+    if total_disk_space_bytes > 0:
+        uv_cache_percentage = (uv_cache_size_bytes / total_disk_space_bytes) * 100
+        uv_python_percentage = (uv_python_install_size_bytes / total_disk_space_bytes) * 100
+
+    result: Dict[str, Any] = {
+        "log_files_count": log_files_count,
+        "log_files_size_bytes": log_files_size_bytes,
+        "log_files_size_mb": round(log_files_size_mb, 2),
+        "total_disk_space_bytes": total_disk_space_bytes,
+        "total_disk_space_gb": round(total_disk_space_gb, 2),
+        "used_disk_space_bytes": used_disk_space_bytes,
+        "used_disk_space_gb": round(used_disk_space_gb, 2),
+        "free_disk_space_bytes": free_disk_space_bytes,
+        "free_disk_space_gb": round(free_disk_space_gb, 2),
+        "log_files_percentage": round(log_files_percentage, 2),
+        "uv_cache_dir": str(config.UV_CACHE_DIR),
+        "uv_cache_size_bytes": uv_cache_size_bytes,
+        "uv_cache_size_mb": round(uv_cache_size_mb, 2),
+        "uv_cache_percentage": round(uv_cache_percentage, 2),
+        "uv_python_install_dir": str(config.UV_PYTHON_INSTALL_DIR),
+        "uv_python_install_size_bytes": uv_python_install_size_bytes,
+        "uv_python_install_size_mb": round(uv_python_install_size_mb, 2),
+        "uv_python_percentage": round(uv_python_percentage, 2),
+        "uv_pre_heat": config.UV_PRE_HEAT,
+        "default_python_version": config.DEFAULT_PYTHON_VERSION,
+        "uv_storage_stats_enabled": config.UV_STORAGE_STATS,
+    }
+    if inode_total is not None and inode_free is not None:
+        result["inode_total"] = inode_total
+        result["inode_free"] = inode_free
+        result["inode_used"] = inode_total - inode_free
+        if inode_used_percent is not None:
+            result["inode_used_percent"] = round(inode_used_percent, 2)
+
+    if database_size_bytes > 0:
+        result.update({
+            "database_size_bytes": database_size_bytes,
+            "database_size_mb": round(database_size_mb, 2),
+            "database_size_gb": round(database_size_gb, 2),
+            "database_percentage": round(database_percentage, 2),
+        })
+
+    return result
+
+
 router = APIRouter(prefix="/settings", tags=["settings"])
 
 _UI_LOGIN_BG_ALLOWED: frozenset[str] = frozenset({"video", "game_of_life"})
@@ -847,167 +999,15 @@ async def get_storage_stats(
         - database_size_gb: Größe der Datenbank in GB (falls verfügbar)
         - database_percentage: Anteil der Datenbank am Gesamtspeicherplatz in Prozent (falls verfügbar)
         - inode_total, inode_free, inode_used, inode_used_percent: Inode-Statistik (nur Unix, df -i)
-        - uv_cache_dir, uv_cache_size_bytes, uv_cache_size_mb, uv_cache_percentage: UV-Paketcache
-        - uv_python_install_dir, uv_python_install_size_bytes, uv_python_install_size_mb, uv_python_percentage
+        - uv_cache_dir, uv_cache_size_*, uv_cache_percentage: UV-Paketcache (Größen nur wenn UV_STORAGE_STATS=true)
+        - uv_python_install_dir, uv_python_install_size_*, uv_python_percentage: UV-Python-Installs (ebenfalls)
+        - uv_storage_stats_enabled: ob Größen ermittelt wurden (Env UV_STORAGE_STATS)
         - uv_pre_heat, default_python_version: Runner-Konfiguration (Env)
     """
     try:
-        logs_dir = config.LOGS_DIR
-        
-        # Log-Dateien zählen und Größe berechnen
-        log_files_count = 0
-        log_files_size_bytes = 0
-        
-        if logs_dir.exists():
-            for file_path in logs_dir.rglob('*'):
-                if file_path.is_file():
-                    log_files_count += 1
-                    try:
-                        log_files_size_bytes += file_path.stat().st_size
-                    except (OSError, PermissionError):
-                        # Datei kann nicht gelesen werden, überspringen
-                        pass
-        
-        log_files_size_mb = log_files_size_bytes / (1024 * 1024)
-        
-        # Gesamten Speicherplatz ermitteln
-        total_disk_space_bytes = 0
-        used_disk_space_bytes = 0
-        free_disk_space_bytes = 0
-        
-        try:
-            # Versuche Speicherplatz-Informationen zu erhalten
-            # shutil.disk_usage gibt (total, used, free) zurück
-            if logs_dir.exists():
-                disk_usage = shutil.disk_usage(logs_dir)
-                total_disk_space_bytes = disk_usage.total
-                used_disk_space_bytes = disk_usage.used
-                free_disk_space_bytes = disk_usage.free
-            else:
-                # Fallback: Root-Verzeichnis
-                disk_usage = shutil.disk_usage('/')
-                total_disk_space_bytes = disk_usage.total
-                used_disk_space_bytes = disk_usage.used
-                free_disk_space_bytes = disk_usage.free
-        except (OSError, PermissionError):
-            # Kann nicht ermittelt werden
-            pass
-
-        # Inodes (df -i): oft Problem bei vielen kleinen Dateien
-        inode_total: Optional[int] = None
-        inode_free: Optional[int] = None
-        inode_used_percent: Optional[float] = None
-        if hasattr(os, "statvfs"):
-            try:
-                stat_path = str(logs_dir) if logs_dir.exists() else "/"
-                st = os.statvfs(stat_path)
-                inode_total = st.f_files
-                inode_free = getattr(st, "f_favail", st.f_ffree)
-                inode_used = inode_total - inode_free
-                inode_used_percent = (inode_used / inode_total * 100) if inode_total else None
-            except (OSError, PermissionError, AttributeError):
-                pass
-
-        total_disk_space_gb = total_disk_space_bytes / (1024 * 1024 * 1024)
-        used_disk_space_gb = used_disk_space_bytes / (1024 * 1024 * 1024)
-        free_disk_space_gb = free_disk_space_bytes / (1024 * 1024 * 1024)
-        
-        # Anteil der Log-Dateien am Gesamtspeicherplatz
-        log_files_percentage = 0.0
-        if total_disk_space_bytes > 0:
-            log_files_percentage = (log_files_size_bytes / total_disk_space_bytes) * 100
-        
-        # Datenbank-Größe ermitteln
-        database_size_bytes = 0
-        database_size_mb = 0.0
-        database_size_gb = 0.0
-        database_percentage = 0.0
-        
-        try:
-            if database_url.startswith("sqlite"):
-                # SQLite: Dateigröße direkt ermitteln
-                db_path = database_url.replace("sqlite:///", "")
-                if os.path.exists(db_path):
-                    database_size_bytes = os.path.getsize(db_path)
-                    # Auch WAL-Datei berücksichtigen
-                    wal_path = f"{db_path}-wal"
-                    if os.path.exists(wal_path):
-                        database_size_bytes += os.path.getsize(wal_path)
-                    # Auch SHM-Datei berücksichtigen
-                    shm_path = f"{db_path}-shm"
-                    if os.path.exists(shm_path):
-                        database_size_bytes += os.path.getsize(shm_path)
-            else:
-                # PostgreSQL: Query für Datenbankgröße
-                try:
-                    result = session.exec(text(
-                        "SELECT pg_database_size(current_database())"
-                    ))
-                    size = result.scalar()
-                    if size:
-                        database_size_bytes = size
-                except Exception:
-                    # Falls Query fehlschlägt, überspringen
-                    pass
-            
-            if database_size_bytes > 0:
-                database_size_mb = database_size_bytes / (1024 * 1024)
-                database_size_gb = database_size_bytes / (1024 * 1024 * 1024)
-                if total_disk_space_bytes > 0:
-                    database_percentage = (database_size_bytes / total_disk_space_bytes) * 100
-        except Exception:
-            # Datenbank-Größe kann nicht ermittelt werden, überspringen
-            pass
-
-        uv_cache_size_bytes = _directory_size_bytes(config.UV_CACHE_DIR)
-        uv_python_install_size_bytes = _directory_size_bytes(config.UV_PYTHON_INSTALL_DIR)
-        uv_cache_size_mb = uv_cache_size_bytes / (1024 * 1024)
-        uv_python_install_size_mb = uv_python_install_size_bytes / (1024 * 1024)
-        uv_cache_percentage = 0.0
-        uv_python_percentage = 0.0
-        if total_disk_space_bytes > 0:
-            uv_cache_percentage = (uv_cache_size_bytes / total_disk_space_bytes) * 100
-            uv_python_percentage = (uv_python_install_size_bytes / total_disk_space_bytes) * 100
-
-        result = {
-            "log_files_count": log_files_count,
-            "log_files_size_bytes": log_files_size_bytes,
-            "log_files_size_mb": round(log_files_size_mb, 2),
-            "total_disk_space_bytes": total_disk_space_bytes,
-            "total_disk_space_gb": round(total_disk_space_gb, 2),
-            "used_disk_space_bytes": used_disk_space_bytes,
-            "used_disk_space_gb": round(used_disk_space_gb, 2),
-            "free_disk_space_bytes": free_disk_space_bytes,
-            "free_disk_space_gb": round(free_disk_space_gb, 2),
-            "log_files_percentage": round(log_files_percentage, 2),
-            "uv_cache_dir": str(config.UV_CACHE_DIR),
-            "uv_cache_size_bytes": uv_cache_size_bytes,
-            "uv_cache_size_mb": round(uv_cache_size_mb, 2),
-            "uv_cache_percentage": round(uv_cache_percentage, 2),
-            "uv_python_install_dir": str(config.UV_PYTHON_INSTALL_DIR),
-            "uv_python_install_size_bytes": uv_python_install_size_bytes,
-            "uv_python_install_size_mb": round(uv_python_install_size_mb, 2),
-            "uv_python_percentage": round(uv_python_percentage, 2),
-            "uv_pre_heat": config.UV_PRE_HEAT,
-            "default_python_version": config.DEFAULT_PYTHON_VERSION,
-        }
-        if inode_total is not None and inode_free is not None:
-            result["inode_total"] = inode_total
-            result["inode_free"] = inode_free
-            result["inode_used"] = inode_total - inode_free
-            if inode_used_percent is not None:
-                result["inode_used_percent"] = round(inode_used_percent, 2)
-
-        # Datenbank-Statistiken nur hinzufügen, wenn verfügbar
-        if database_size_bytes > 0:
-            result.update({
-                "database_size_bytes": database_size_bytes,
-                "database_size_mb": round(database_size_mb, 2),
-                "database_size_gb": round(database_size_gb, 2),
-                "database_percentage": round(database_percentage, 2),
-            })
-        
-        return result
+        database_size_bytes = _query_database_size_bytes(session)
+        # rglob über große UV-Cache-Bäume blockiert sonst den Event-Loop (Liveness / UI)
+        return await asyncio.to_thread(_sync_build_storage_stats_payload, database_size_bytes)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
