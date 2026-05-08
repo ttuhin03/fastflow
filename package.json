@@ -6,7 +6,8 @@
     "docs"
   ],
   "overrides": {
-    "lodash-es": "4.17.23",
+    "lodash": ">=4.18.0",
+    "lodash-es": ">=4.18.0",
     "esbuild": "0.27.2",
     "qs": ">=6.14.2",
     "ajv": ">=8.18.0",
