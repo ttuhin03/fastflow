@@ -6,6 +6,9 @@
     "docs"
   ],
   "overrides": {
+    "express": {
+      "path-to-regexp": "0.1.13"
+    },
     "lodash": ">=4.18.0",
     "lodash-es": ">=4.18.0",
     "esbuild": "0.27.2",
