@@ -8,7 +8,6 @@ Dieses Modul enthält alle REST-API-Endpoints für System-Einstellungen:
 """
 
 import asyncio
-import hashlib
 import logging
 import os
 import secrets as secrets_module
@@ -25,6 +24,7 @@ from sqlmodel import Session, select
 
 from app.core.database import get_session, database_url
 from app.core.config import config
+from app.core.notification_api_key_hash import digest_notification_api_token
 from app.models import NotificationApiKey
 from app.services.cleanup import cleanup_logs, cleanup_docker_resources
 from app.services.s3_backup import get_backup_failures, get_last_backup_timestamp
@@ -739,7 +739,7 @@ async def create_notification_api_key(
 ) -> CreateNotificationApiKeyResponse:
     """Erzeugt einen neuen API-Key für die Benachrichtigungs-API. Der Klartext-Key wird nur einmal zurückgegeben."""
     plain_key = secrets_module.token_urlsafe(32)
-    key_hash = hashlib.sha256(plain_key.encode("utf-8")).hexdigest()
+    key_hash = digest_notification_api_token(plain_key)
     label = (body.label if body else None) or None
     if label is not None:
         label = label.strip() or None

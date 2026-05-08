@@ -6,7 +6,6 @@ Für Skripte/CI; Keys werden in den Einstellungen erzeugt und verwaltet.
 """
 
 import asyncio
-import hashlib
 import logging
 import secrets as secrets_module
 import time
@@ -18,6 +17,7 @@ from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from app.core.config import config
+from app.core.notification_api_key_hash import digest_notification_api_token
 from app.core.database import get_session
 from app.core.errors import get_500_detail
 from app.middleware.rate_limiting import get_client_identifier
@@ -72,17 +72,11 @@ async def _consume_rate_limit(client_id: str) -> None:
         _notification_rate_limit_store[client_id] = times
 
 
-def _hash_key(key: str) -> str:
-    """Hash for storage/lookup only. Key is high-entropy (e.g. token_urlsafe(32));
-    SHA-256 is appropriate here. Not for password hashing (use bcrypt/Argon2)."""
-    return hashlib.sha256(key.encode("utf-8")).hexdigest()
-
-
 def _validate_notification_key(session: Session, provided_key: str) -> bool:
     """Constant-time Vergleich gegen alle gespeicherten Key-Hashes."""
     if not provided_key or not provided_key.strip():
         return False
-    key_hash = _hash_key(provided_key.strip())
+    key_hash = digest_notification_api_token(provided_key.strip())
     rows = session.exec(select(NotificationApiKey)).all()
     for row in rows:
         if secrets_module.compare_digest(key_hash, row.key_hash):
