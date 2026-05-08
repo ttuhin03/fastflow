@@ -14,7 +14,8 @@
     "serialize-javascript": ">=7.0.3",
     "minimatch": ">=10.2.3",
     "svgo": ">=3.3.3",
-    "dompurify": ">=3.3.2"
+    "dompurify": ">=3.3.2",
+    "protobufjs": ">=7.5.5"
   },
   "dependencies": {
     "qs": ">=6.14.2"
