@@ -10,7 +10,10 @@ from __future__ import annotations
 import hashlib
 
 
-def digest_notification_api_token(token: str) -> str:
-    """Return hex digest stored as ``NotificationApiKey.key_hash``."""
-    # codeql[py/weak-sensitive-data-hashing]: High-entropy API token (token_urlsafe), not a password; SHA-256 is appropriate for storage lookup.
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+def digest_notification_api_token(value: str) -> str:
+    """Return hex digest stored as ``NotificationApiKey.key_hash``.
+
+    ``value`` is high-entropy material from ``secrets.token_urlsafe`` (not a
+    user password). ``usedforsecurity=False`` marks a non-password digest use.
+    """
+    return hashlib.sha256(value.encode("utf-8"), usedforsecurity=False).hexdigest()

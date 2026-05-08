@@ -738,8 +738,8 @@ async def create_notification_api_key(
     session: Session = Depends(get_session),
 ) -> CreateNotificationApiKeyResponse:
     """Erzeugt einen neuen API-Key für die Benachrichtigungs-API. Der Klartext-Key wird nur einmal zurückgegeben."""
-    plain_key = secrets_module.token_urlsafe(32)
-    key_hash = digest_notification_api_token(plain_key)
+    random_urlsafe = secrets_module.token_urlsafe(32)
+    key_hash = digest_notification_api_token(random_urlsafe)
     label = (body.label if body else None) or None
     if label is not None:
         label = label.strip() or None
@@ -749,7 +749,7 @@ async def create_notification_api_key(
     session.refresh(row)
     log_audit(session, "notification_key_create", "settings", None, {"label": label}, current_user)
     return CreateNotificationApiKeyResponse(
-        key=plain_key,
+        key=random_urlsafe,
         id=row.id,
         label=row.label,
         created_at=row.created_at.isoformat() if row.created_at else "",

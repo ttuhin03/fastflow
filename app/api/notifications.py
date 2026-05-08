@@ -72,14 +72,14 @@ async def _consume_rate_limit(client_id: str) -> None:
         _notification_rate_limit_store[client_id] = times
 
 
-def _validate_notification_key(session: Session, provided_key: str) -> bool:
+def _validate_notification_key(session: Session, header_raw: str) -> bool:
     """Constant-time Vergleich gegen alle gespeicherten Key-Hashes."""
-    if not provided_key or not provided_key.strip():
+    if not header_raw or not header_raw.strip():
         return False
-    key_hash = digest_notification_api_token(provided_key.strip())
+    digest_hex = digest_notification_api_token(header_raw.strip())
     rows = session.exec(select(NotificationApiKey)).all()
     for row in rows:
-        if secrets_module.compare_digest(key_hash, row.key_hash):
+        if secrets_module.compare_digest(digest_hex, row.key_hash):
             return True
     return False
 
@@ -112,8 +112,10 @@ async def send_notification(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Benachrichtigungs-API ist deaktiviert (in Einstellungen aktivieren)",
         )
-    api_key = request.headers.get("X-Notification-Key") or request.headers.get("x-notification-key")
-    if not _validate_notification_key(session, api_key or ""):
+    notification_header_raw = request.headers.get("X-Notification-Key") or request.headers.get(
+        "x-notification-key"
+    )
+    if not _validate_notification_key(session, notification_header_raw or ""):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Ungültiger oder fehlender API-Key (Header: X-Notification-Key)",
