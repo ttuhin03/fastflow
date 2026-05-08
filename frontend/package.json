@@ -14,7 +14,7 @@
   "dependencies": {
     "@tanstack/react-query": "^5.12.2",
     "@testing-library/jest-dom": "^6.9.1",
-    "axios": ">=1.13.5",
+    "axios": ">=1.15.2",
     "i18next": "^25.8.11",
     "posthog-js": "^1.328.0",
     "react": "^18.2.0",
