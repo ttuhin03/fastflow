@@ -1,94 +1,161 @@
-/* TREK-aligned dark theme (zinc surfaces + indigo accent) */
+/* ============================================================================
+   FastFlow · Design Tokens  (variables.css)
+   Ultra-dark, flat, high-contrast. Neutral near-black surfaces (NOT blue-gray).
+   Geist for UI · JetBrains Mono for all data. Indigo-violet accent, used sparingly.
+
+   Drop-in replacement: every old token name is kept (so existing components don't
+   break) and re-pointed at the new system. New tokens are added below each group.
+   ========================================================================== */
+
 :root {
-  /* Primary — indigo (Tailwind primary.500 / 600) */
-  --color-primary: #6366f1;
-  --color-primary-dark: #4f46e5;
-  --color-primary-light: #818cf8;
+  /* ---- Surfaces · elevation by lightness, not by border --------------- */
+  --color-background:       #0A0A0C;  /* app canvas (deepest)            */
+  --color-bg-subtle:        #0D0D10;  /* sunken: header bg, table head   */
+  --color-surface:          #111114;  /* cards / panels (default)        */
+  --color-surface-variant:  #1D1D22;  /* inputs, code blocks, popovers   */
+  --color-card:             #111114;  /* alias of surface                */
+  --color-surface-2:        #17171B;  /* hover / nested surface          */
+  --color-surface-3:        #1D1D22;  /* inputs, active rows             */
+  --color-surface-4:        #26262D;  /* menus, knobs, toggles-off       */
 
-  /* Secondary — neutral CTA style (light on dark), like TREK dark buttons */
-  --color-secondary: #e4e4e7;
-  --color-secondary-dark: #d4d4d8;
-  --color-secondary-light: #f4f4f5;
+  /* ---- Borders · hairline, mostly invisible --------------------------- */
+  --color-border:           #1E1E24;  /* default hairline                */
+  --color-border-light:     #2A2A32;  /* emphasized divider / control    */
+  --color-border-soft:      #161619;  /* near-invisible row separation   */
 
-  /* Status */
-  --color-success: #22c55e;
-  --color-success-dark: #16a34a;
-  --color-error: #ef4444;
-  --color-error-dark: #dc2626;
-  --color-warning: #f59e0b;
-  --color-warning-dark: #d97706;
-  --color-info: #818cf8;
+  /* ---- Text · near-white on near-black (WCAG AA+) --------------------- */
+  --color-text-primary:     #F4F4F5;  /* 17:1 on bg                      */
+  --color-text-secondary:   #A0A0AB;  /* 6.7:1 — body/secondary          */
+  --color-text-tertiary:    #71717A;  /* 4.6:1 — muted labels            */
+  --color-text-disabled:    #52525B;  /* decorative / disabled           */
 
-  /* Surfaces — TREK dark tokens */
-  --color-background: #121215;
-  --color-surface: #1a1a1e;
-  --color-surface-variant: #1c1c21;
-  --color-card: #131316;
+  /* ---- Accent · indigo-violet (CTAs + active states ONLY) ------------- */
+  --color-primary:          #6E62F5;
+  --color-primary-dark:     #5A4FE0;  /* pressed                         */
+  --color-primary-light:    #ADA6FB;  /* accent text on dark             */
+  --color-primary-hover:    #8075F8;
+  --color-accent-subtle:    rgba(110, 98, 245, 0.12);  /* tint bg        */
+  --color-accent-border:    rgba(110, 98, 245, 0.34);
+  --color-accent-glow:      rgba(110, 98, 245, 0.40);  /* CTA hover halo  */
 
-  /* Text — zinc */
-  --color-text-primary: #f4f4f5;
-  --color-text-secondary: #d4d4d8;
-  --color-text-disabled: #71717a;
+  /* ---- Status · the primary signal language -------------------------- */
+  --color-success:          #3ECF8E;
+  --color-success-text:     #5FE0A6;
+  --color-success-subtle:   rgba(62, 207, 142, 0.12);
+  --color-success-border:   rgba(62, 207, 142, 0.30);
+  --color-success-dark:     #2BB377;
 
-  /* Borders */
-  --color-border: #27272a;
-  --color-border-light: #3f3f46;
+  --color-error:            #F1565C;
+  --color-error-text:       #FF8388;
+  --color-error-subtle:     rgba(241, 86, 92, 0.12);
+  --color-error-border:     rgba(241, 86, 92, 0.30);
+  --color-error-dark:       #D8434A;
 
-  /* Charts / data viz */
-  --chart-1: #6366f1;
-  --chart-2: #818cf8;
-  --chart-3: #a5b4fc;
-  --chart-4: #94a3b8;
-  --chart-5: #64748b;
+  --color-warning:          #F5A623;
+  --color-warning-text:     #FFC163;
+  --color-warning-subtle:   rgba(245, 166, 35, 0.12);
+  --color-warning-border:   rgba(245, 166, 35, 0.30);
+  --color-warning-dark:     #D88C12;
 
-  /* Spacing (8px baseline) */
-  --spacing-xs: 0.25rem;
-  --spacing-sm: 0.5rem;
-  --spacing-md: 1rem;
-  --spacing-lg: 1.5rem;
-  --spacing-xl: 2rem;
-  --spacing-2xl: 3rem;
+  --color-running:          #4D9CF7;  /* in-progress — distinct from accent */
+  --color-running-text:     #86C0FF;
+  --color-running-subtle:   rgba(77, 156, 247, 0.12);
+  --color-running-border:   rgba(77, 156, 247, 0.30);
 
-  /* Typography — system UI (TREK) */
-  --font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
-  --font-size-xs: 0.75rem;
-  --font-size-sm: 0.875rem;
-  --font-size-base: 1rem;
-  --font-size-lg: 1.125rem;
-  --font-size-xl: 1.25rem;
-  --font-size-2xl: 1.5rem;
-  --font-size-3xl: 2rem;
-  --font-size-4xl: 2.5rem;
+  --color-neutral:          #8B8B96;  /* queued / skipped / disabled        */
+  --color-neutral-subtle:   rgba(139, 139, 150, 0.12);
+
+  --color-info:             #4D9CF7;  /* legacy alias → running             */
+
+  /* ---- Legacy aliases (kept for existing components) */
+  --color-secondary:        #E4E4E7;
+  --color-secondary-dark:   #D4D4D8;
+  --color-secondary-light:  #F4F4F5;
+  --focus-ring-color:       var(--color-accent-subtle);
+
+  /* ---- Data viz (Recharts) · harmonized for dark --------------------- */
+  --chart-1: #6E62F5;   /* accent  */
+  --chart-2: #3ECF8E;   /* green   */
+  --chart-3: #4D9CF7;   /* blue    */
+  --chart-4: #F5A623;   /* amber   */
+  --chart-5: #C77DFF;   /* violet  */
+  --chart-grid: #1E1E24;
+  --chart-axis: #52525B;
+
+  /* ---- Typography ----------------------------------------------------- */
+  --font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono:   'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* size scale (rem). UI body sits at 13–14px for a dense-but-scannable feel */
+  --font-size-xs:   0.6875rem; /* 11 — micro labels, table head            */
+  --font-size-sm:   0.8125rem; /* 13 — table cells, secondary              */
+  --font-size-base: 0.875rem;  /* 14 — body                                */
+  --font-size-md:   0.9375rem; /* 15 — card titles                         */
+  --font-size-lg:   1.0625rem; /* 17 — sub-headers                         */
+  --font-size-xl:   1.375rem;  /* 22 — page / detail titles                */
+  --font-size-2xl:  1.5rem;    /* 24 — page H1                             */
+  --font-size-3xl:  1.875rem;  /* 30 — KPI numbers                         */
+  --font-size-4xl:  2.375rem;  /* 38 — hero (login)                        */
 
   --line-height: 1.5;
+  --line-height-tight: 1.2;
   --font-weight-normal: 400;
   --font-weight-medium: 500;
-  --font-weight-bold: 600;
+  --font-weight-bold:   600;
+  --font-weight-heavy:  700;
 
-  /* Shadows — subtler elevation */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.22);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.28);
-  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.35);
-  --shadow-xl: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --tracking-tight:  -0.02em;  /* headings        */
+  --tracking-tighter: -0.03em; /* big mono numbers */
+  --tracking-wide:    0.06em;  /* uppercase labels */
 
-  --focus-ring-color: rgba(99, 102, 241, 0.35);
+  /* ---- Spacing (4 / 8px baseline) ------------------------------------ */
+  --spacing-xs:  0.25rem;  /*  4 */
+  --spacing-sm:  0.5rem;   /*  8 */
+  --spacing-md:  1rem;     /* 16 */
+  --spacing-lg:  1.5rem;   /* 24 */
+  --spacing-xl:  2rem;     /* 32 */
+  --spacing-2xl: 3rem;     /* 48 */
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px;
+  --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px;
 
-  /* Border radius — TREK-ish */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
+  /* ---- Radii · sharper / more "engineered" --------------------------- */
+  --radius-sm:  6px;
+  --radius-md:  8px;
+  --radius-lg:  12px;
+  --radius-xl:  16px;
   --radius-full: 9999px;
 
-  --transition-fast: 150ms ease;
-  --transition-base: 200ms ease;
-  --transition-slow: 300ms ease;
+  /* ---- Shadows · reserved for FLOATING layers only ------------------- */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.40);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55);
+  --shadow-xl: 0 24px 64px rgba(0, 0, 0, 0.60);
+  --shadow-cta: 0 6px 18px var(--color-accent-glow);  /* primary button hover */
+  --focus-ring: 0 0 0 3px var(--color-accent-subtle);
 
-  --sidebar-width: 240px;
-  --sidebar-width-collapsed: 64px;
+  /* ---- Motion --------------------------------------------------------- */
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --transition-fast: 120ms var(--ease-out);
+  --transition-base: 180ms var(--ease-out);
+  --transition-slow: 280ms var(--ease-out);
 
+  /* ---- Layout --------------------------------------------------------- */
+  --sidebar-width: 248px;
+  --sidebar-width-collapsed: 68px;
+  --header-height: 56px;
+  --content-max: 1320px;
+
+  /* ---- Z-index scale -------------------------------------------------- */
+  --z-base: 0;
+  --z-sticky: 50;
   --z-sidebar: 100;
   --z-header: 90;
   --z-dropdown: 1000;
+  --z-overlay: 1500;
   --z-modal: 2000;
-  --z-tooltip: 3000;
+  --z-cmdk: 2500;
+  --z-toast: 3000;
+  --z-tooltip: 3500;
 }

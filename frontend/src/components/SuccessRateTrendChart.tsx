@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { getFormatLocale } from '../utils/locale'
+import { chart, axisProps, gridProps } from '../styles/rechartsTheme'
 import './SuccessRateTrendChart.css'
 
 interface DailyStat {
@@ -76,18 +77,16 @@ export default function SuccessRateTrendChart({ dailyStats, days = 30 }: Success
       <h4>{t('charts.successRate.title', { days })}</h4>
       <ResponsiveContainer width="100%" height={250}>
         <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#444" />
+          <CartesianGrid {...gridProps} />
           <XAxis
             dataKey="date"
-            stroke="#888"
-            style={{ fontSize: '12px' }}
+            {...axisProps}
             interval="preserveStartEnd"
           />
           <YAxis
             domain={[0, 100]}
-            stroke="#888"
-            style={{ fontSize: '12px' }}
-            label={{ value: t('charts.successRate.yAxis'), angle: -90, position: 'insideLeft', style: { fill: '#888' } }}
+            {...axisProps}
+            label={{ value: t('charts.successRate.yAxis'), angle: -90, position: 'insideLeft', style: { fill: chart.axis } }}
           />
           <Tooltip content={<CustomTooltip />} />
           <Legend />
@@ -95,9 +94,9 @@ export default function SuccessRateTrendChart({ dailyStats, days = 30 }: Success
             type="monotone"
             dataKey="successRate"
             name={t('charts.successRate.legend')}
-            stroke="#22c55e"
+            stroke={chart.c2}
             strokeWidth={2}
-            dot={{ r: 3, fill: '#22c55e' }}
+            dot={{ r: 3, fill: chart.c2 }}
             activeDot={{ r: 5 }}
           />
         </LineChart>

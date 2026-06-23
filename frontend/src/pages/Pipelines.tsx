@@ -6,7 +6,7 @@ import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import { showError } from '../utils/toast'
-import { MdInfo, MdPlayArrow, MdSchedule, MdLock, MdExtension, MdAccountTree } from 'react-icons/md'
+import { LuInfo, LuPlay, LuClock, LuLock, LuPuzzle, LuGitBranch } from 'react-icons/lu'
 import RunStatusCircles from '../components/RunStatusCircles'
 import Skeleton from '../components/Skeleton'
 import Runs from './Runs'
@@ -50,11 +50,11 @@ export default function Pipelines() {
   const [tagsFilter, setTagsFilter] = useState('')
 
   const sectionItems: { id: PipelinesSection; labelKey: string; icon: React.ReactNode }[] = [
-    { id: 'pipelines', labelKey: 'nav.pipelines', icon: <MdAccountTree /> },
-    { id: 'runs', labelKey: 'pipelines.sectionRuns', icon: <MdPlayArrow /> },
-    { id: 'scheduler', labelKey: 'pipelines.sectionScheduler', icon: <MdSchedule /> },
-    { id: 'secrets', labelKey: 'pipelines.sectionSecrets', icon: <MdLock /> },
-    { id: 'dependencies', labelKey: 'pipelines.sectionDependencies', icon: <MdExtension /> },
+    { id: 'pipelines', labelKey: 'nav.pipelines', icon: <LuGitBranch /> },
+    { id: 'runs', labelKey: 'pipelines.sectionRuns', icon: <LuPlay /> },
+    { id: 'scheduler', labelKey: 'pipelines.sectionScheduler', icon: <LuClock /> },
+    { id: 'secrets', labelKey: 'pipelines.sectionSecrets', icon: <LuLock /> },
+    { id: 'dependencies', labelKey: 'pipelines.sectionDependencies', icon: <LuPuzzle /> },
   ]
 
   const trayRef = useRef<HTMLDivElement>(null)
@@ -249,7 +249,7 @@ export default function Pipelines() {
                     className="btn btn-success"
                     disabled={!pipeline.enabled || startingPipeline === pipeline.name}
                   >
-                    <MdPlayArrow />
+                    <LuPlay />
                     {startingPipeline === pipeline.name ? t('pipelines.starting') : t('pipelines.start')}
                   </button>
                 )}
@@ -258,7 +258,7 @@ export default function Pipelines() {
                   onClick={() => navigate(`/pipelines/${pipeline.name}`)}
                   className="btn btn-outlined"
                 >
-                  <MdInfo />
+                  <LuInfo />
                   {t('pipelines.details')}
                 </button>
               </div>

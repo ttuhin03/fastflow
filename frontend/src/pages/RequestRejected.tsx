@@ -1,7 +1,7 @@
 import { useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
-import { MdBlock } from 'react-icons/md'
+import { LuBan } from 'react-icons/lu'
 import LoginAttributionFooter from '../components/LoginAttributionFooter'
 import './Login.css'
 import './RequestScreens.css'
@@ -36,7 +36,7 @@ export default function RequestRejected() {
         <div className="login-card card">
           <div className="login-header">
             <div className="login-icon login-icon--error">
-              <MdBlock />
+              <LuBan />
             </div>
             <h1>{t('requestRejected.title')}</h1>
             <p className="login-subtitle">{t('appTitle')}</p>

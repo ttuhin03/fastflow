@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { getFormatLocale } from '../utils/locale'
+import { chart, axisProps, gridProps } from '../styles/rechartsTheme'
 import './AverageRuntimeChart.css'
 
 interface Run {
@@ -133,24 +134,22 @@ export default function AverageRuntimeChart({ runs, days = 30 }: AverageRuntimeC
       <h4>{t('charts.averageRuntime.title', { days })}</h4>
       <ResponsiveContainer width="100%" height={250}>
         <BarChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#444" />
+          <CartesianGrid {...gridProps} />
           <XAxis
             dataKey="date"
-            stroke="#888"
-            style={{ fontSize: '12px' }}
+            {...axisProps}
             interval="preserveStartEnd"
           />
           <YAxis
-            stroke="#888"
-            style={{ fontSize: '12px' }}
-            label={{ value: t('charts.averageRuntime.yAxisMinutes'), angle: -90, position: 'insideLeft', style: { fill: '#888' } }}
+            {...axisProps}
+            label={{ value: t('charts.averageRuntime.yAxisMinutes'), angle: -90, position: 'insideLeft', style: { fill: chart.axis } }}
           />
           <Tooltip content={<CustomTooltip />} />
           <Legend />
           <Bar
             dataKey="avgDuration"
             name={t('charts.averageRuntime.legendName')}
-            fill="#6366f1"
+            fill={chart.c1}
             radius={[4, 4, 0, 0]}
           />
         </BarChart>

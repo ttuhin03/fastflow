@@ -1,0 +1,132 @@
+/* ============================================================================
+   FastFlow · Log Viewer  (LogViewer.css)
+   Modern terminal for the RunDetail SSE log stream.
+
+   Structure:
+     .logviewer
+       .logviewer__toolbar   (stream filter · search · # · wrap · follow · download)
+         .logviewer__search  (toggled overlay, animates in)
+       .logviewer__body      (scrollable terminal)
+         .log-line  ×N        (.log-gutter · .log-level · .log-text)
+         .log-cursor          (blinking block while run is live)
+       .logviewer__footer    (SSE status · line count)
+   ========================================================================== */
+
+.logviewer {
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: #0B0B0E;
+}
+
+/* ---- Toolbar ------------------------------------------------------------- */
+.logviewer__toolbar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  flex-wrap: wrap;
+}
+.logviewer__toolbar .spacer { flex: 1; }
+
+/* stream filter */
+.logviewer__streams {
+  display: inline-flex; gap: 2px; padding: 2px;
+  background: var(--color-bg-subtle); border: 1px solid var(--color-border); border-radius: var(--radius-md);
+}
+.logviewer__streams button {
+  height: 26px; padding: 0 11px; border: none; border-radius: var(--radius-sm);
+  background: transparent; color: var(--color-text-tertiary);
+  font-family: var(--font-family); font-size: var(--font-size-xs); font-weight: var(--font-weight-medium);
+  cursor: pointer; transition: all var(--transition-fast);
+}
+.logviewer__streams button[data-stream="stdout"],
+.logviewer__streams button[data-stream="stderr"] { font-family: var(--font-mono); }
+.logviewer__streams button.active { background: var(--color-surface-3); color: var(--color-text-primary); }
+
+/* toggle buttons (#, wrap, follow) */
+.log-toggle {
+  display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px;
+  border: 1px solid var(--color-border-light); border-radius: var(--radius-sm);
+  background: var(--color-surface-2); color: var(--color-text-tertiary);
+  font-family: var(--font-family); font-size: var(--font-size-xs); font-weight: var(--font-weight-medium);
+  cursor: pointer; transition: all var(--transition-fast);
+}
+.log-toggle:hover { color: var(--color-text-primary); background: var(--color-surface-3); }
+.log-toggle.icon { width: 30px; padding: 0; justify-content: center; }
+.log-toggle.active { background: var(--color-accent-subtle); color: var(--color-primary-light); border-color: var(--color-accent-border); }
+.log-toggle.active.follow { background: var(--color-success-subtle); color: var(--color-success-text); border-color: var(--color-success-border); }
+
+/* search overlay */
+.logviewer__search {
+  display: flex; align-items: center; gap: 8px;
+  flex: 1; max-width: 320px; height: 30px; padding: 0 11px;
+  background: var(--color-bg-subtle); border: 1px solid var(--color-accent-border);
+  border-radius: var(--radius-md);
+  animation: ff-fade var(--transition-fast);
+}
+.logviewer__search input {
+  flex: 1; background: transparent; border: none; outline: none;
+  color: var(--color-text-primary); font-family: var(--font-mono); font-size: var(--font-size-sm);
+}
+.logviewer__search .count { font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--color-text-disabled); white-space: nowrap; }
+
+/* ---- Terminal body ------------------------------------------------------- */
+.logviewer__body {
+  max-height: 430px; overflow-y: auto;
+  padding: 12px 0;
+  font-family: var(--font-mono); font-size: var(--font-size-sm); line-height: 1.7;
+  scrollbar-gutter: stable;
+}
+.log-line { display: flex; align-items: flex-start; padding: 0 14px; transition: background var(--transition-fast); }
+.log-line:hover { background: rgba(255, 255, 255, 0.03); }
+.log-line.match { background: var(--color-warning-subtle); }
+
+.log-gutter {
+  width: 42px; flex: none; text-align: right; padding-right: 14px;
+  color: var(--color-text-disabled); user-select: none; font-size: var(--font-size-xs);
+}
+.logviewer.no-linenumbers .log-gutter { display: none; }
+
+.log-level { width: 64px; flex: none; font-weight: var(--font-weight-bold); user-select: none; font-size: var(--font-size-xs); }
+.log-text { flex: 1; color: var(--color-text-secondary); white-space: pre; word-break: normal; }
+.logviewer.wrap .log-text { white-space: pre-wrap; word-break: break-word; }
+
+/* level colours */
+.log-line[data-level="INFO"]    .log-level { color: var(--color-text-secondary); }
+.log-line[data-level="DEBUG"]   .log-level { color: #6A6A76; }
+.log-line[data-level="WARN"]    .log-level { color: var(--color-warning-text); }
+.log-line[data-level="ERROR"]   .log-level { color: var(--color-error-text); }
+.log-line[data-level="SUCCESS"] .log-level { color: var(--color-success-text); }
+.log-line[data-level="ERROR"] .log-text { color: #FFB4B7; }
+.log-line[data-level="WARN"]  .log-text { color: #FFDFA6; }
+
+/* ANSI SGR → span colours */
+.ansi-black   { color: #52525B; } .ansi-red     { color: var(--color-error-text); }
+.ansi-green   { color: var(--color-success-text); } .ansi-yellow  { color: var(--color-warning-text); }
+.ansi-blue    { color: var(--color-running-text); } .ansi-magenta { color: #C77DFF; }
+.ansi-cyan    { color: #67E8F9; } .ansi-white   { color: var(--color-text-primary); }
+.ansi-bold    { font-weight: var(--font-weight-bold); }
+.ansi-dim     { opacity: 0.6; }
+
+/* live cursor */
+.log-cursor { display: flex; align-items: center; padding: 2px 14px; }
+.log-cursor .block { width: 8px; height: 15px; border-radius: 1px; background: var(--color-success); animation: ff-blink 1s step-end infinite; }
+.logviewer .log-cursor .block { margin-left: 106px; } /* gutter(42)+level(64) */
+.logviewer.no-linenumbers .log-cursor .block { margin-left: 64px; }
+
+/* ---- Footer -------------------------------------------------------------- */
+.logviewer__footer {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 14px;
+  background: var(--color-surface); border-top: 1px solid var(--color-border);
+  font-family: var(--font-mono); font-size: var(--font-size-xs);
+}
+.logviewer__sse { display: inline-flex; align-items: center; gap: 7px; color: var(--color-success-text); }
+.logviewer__sse .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-success); animation: ff-pulse 1.4s ease-in-out infinite; }
+.logviewer__sse.closed { color: var(--color-text-tertiary); }
+.logviewer__sse.closed .dot { background: var(--color-text-disabled); animation: none; }
+.logviewer__count { color: var(--color-text-tertiary); }
+
+/* empty / connecting */
+.logviewer__empty { padding: 48px 24px; text-align: center; color: var(--color-text-tertiary); font-family: var(--font-family); font-size: var(--font-size-sm); }

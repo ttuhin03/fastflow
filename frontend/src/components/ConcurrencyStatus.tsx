@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
-import { MdTrendingUp } from 'react-icons/md'
+import { LuTrendingUp } from 'react-icons/lu'
 import './ConcurrencyStatus.css'
 
 interface ConcurrencyResponse {
@@ -33,7 +33,7 @@ export default function ConcurrencyStatus() {
   return (
     <div className="concurrency-status card">
       <div className="concurrency-icon">
-        <MdTrendingUp />
+        <LuTrendingUp />
       </div>
       <div className="concurrency-content">
         <h4 className="concurrency-label">{t('concurrency.label')}</h4>

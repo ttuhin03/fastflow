@@ -36,7 +36,7 @@
   background-color: var(--color-surface-variant);
   padding: var(--spacing-xs) var(--spacing-sm);
   border-radius: var(--radius-sm);
-  font-family: 'Courier New', monospace;
+  font-family: var(--font-mono);
   font-size: var(--font-size-sm);
 }
 
@@ -50,8 +50,9 @@
 }
 
 .status-toggle.enabled {
-  background-color: var(--color-success);
-  color: #ffffff;
+  background-color: var(--color-success-subtle);
+  border: 1px solid var(--color-success-border);
+  color: var(--color-success-text);
 }
 
 .status-toggle.disabled {
@@ -152,23 +153,27 @@
 }
 
 .status-success {
-  background-color: var(--color-success);
-  color: #ffffff;
+  background-color: var(--color-success-subtle);
+  border: 1px solid var(--color-success-border);
+  color: var(--color-success-text);
 }
 
 .status-failed {
-  background-color: var(--color-error);
-  color: #ffffff;
+  background-color: var(--color-error-subtle);
+  border: 1px solid var(--color-error-border);
+  color: var(--color-error-text);
 }
 
 .status-running {
-  background-color: var(--color-primary);
-  color: #ffffff;
+  background-color: var(--color-running-subtle);
+  border: 1px solid var(--color-running-border);
+  color: var(--color-running-text);
 }
 
 .status-pending {
-  background-color: var(--color-warning);
-  color: #0f172a;
+  background-color: var(--color-warning-subtle);
+  border: 1px solid var(--color-warning-border);
+  color: var(--color-warning-text);
 }
 
 .exit-success {

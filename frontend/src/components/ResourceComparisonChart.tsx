@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import { chart, axisProps, gridProps, series } from '../styles/rechartsTheme'
 import './ResourceComparisonChart.css'
 
 interface Metric {
@@ -106,7 +107,7 @@ export default function ResourceComparisonChart({ runs, maxRuns = 5 }: ResourceC
     )
   }
 
-  const colors = ['#22c55e', '#6366f1', '#f59e0b', '#818cf8', '#ef4444', '#38bdf8', '#fcd34d']
+  const colors = series
 
   return (
     <div className="resource-comparison-chart">
@@ -116,18 +117,16 @@ export default function ResourceComparisonChart({ runs, maxRuns = 5 }: ResourceC
           <h5>{t('charts.resourceComparison.cpuTab')}</h5>
           <ResponsiveContainer width="100%" height={250}>
             <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#444" />
+              <CartesianGrid {...gridProps} />
               <XAxis
                 dataKey="timePoint"
-                stroke="#888"
-                style={{ fontSize: '12px' }}
-                label={{ value: t('charts.resourceComparison.xAxisRuntime'), position: 'insideBottom', offset: -5, style: { fill: '#888' } }}
+                {...axisProps}
+                label={{ value: t('charts.resourceComparison.xAxisRuntime'), position: 'insideBottom', offset: -5, style: { fill: chart.axis } }}
               />
               <YAxis
                 domain={[0, 100]}
-                stroke="#888"
-                style={{ fontSize: '12px' }}
-                label={{ value: t('charts.resourceComparison.yAxisCpu'), angle: -90, position: 'insideLeft', style: { fill: '#888' } }}
+                {...axisProps}
+                label={{ value: t('charts.resourceComparison.yAxisCpu'), angle: -90, position: 'insideLeft', style: { fill: chart.axis } }}
               />
               <Tooltip content={<CustomTooltip />} />
               <Legend />
@@ -155,17 +154,15 @@ export default function ResourceComparisonChart({ runs, maxRuns = 5 }: ResourceC
           <h5>{t('charts.resourceComparison.ramTab')}</h5>
           <ResponsiveContainer width="100%" height={250}>
             <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#444" />
+              <CartesianGrid {...gridProps} />
               <XAxis
                 dataKey="timePoint"
-                stroke="#888"
-                style={{ fontSize: '12px' }}
-                label={{ value: t('charts.resourceComparison.xAxisRuntime'), position: 'insideBottom', offset: -5, style: { fill: '#888' } }}
+                {...axisProps}
+                label={{ value: t('charts.resourceComparison.xAxisRuntime'), position: 'insideBottom', offset: -5, style: { fill: chart.axis } }}
               />
               <YAxis
-                stroke="#888"
-                style={{ fontSize: '12px' }}
-                label={{ value: t('charts.resourceComparison.yAxisRam'), angle: -90, position: 'insideLeft', style: { fill: '#888' } }}
+                {...axisProps}
+                label={{ value: t('charts.resourceComparison.yAxisRam'), angle: -90, position: 'insideLeft', style: { fill: chart.axis } }}
               />
               <Tooltip content={<CustomTooltip />} />
               <Legend />

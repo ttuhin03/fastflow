@@ -1,6 +1,6 @@
 import { useRef, useEffect, Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
-import { MdCode } from 'react-icons/md'
+import { LuCode } from 'react-icons/lu'
 import Tooltip from '../components/Tooltip'
 import LoginAttributionFooter from '../components/LoginAttributionFooter'
 import LoginGameOfLifeBackground from '../components/LoginGameOfLifeBackground'
@@ -172,7 +172,7 @@ export default function Login() {
               </div>
             ) : (
               <div className="login-icon">
-                <MdCode />
+                <LuCode />
               </div>
             )}
             <p className="login-eyebrow">{t('auth.loginEyebrow')}</p>

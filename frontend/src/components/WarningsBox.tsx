@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
-import { MdWarning } from 'react-icons/md'
+import { LuTriangleAlert } from 'react-icons/lu'
 import './WarningsBox.css'
 
 interface SystemStatusResponse {
@@ -127,7 +127,7 @@ export default function WarningsBox() {
   return (
     <div className="warnings-box">
       <div className="warnings-box-header">
-        <MdWarning className="warnings-box-icon" />
+        <LuTriangleAlert className="warnings-box-icon" />
         <h3 className="warnings-box-title">{t('warnings.title')}</h3>
       </div>
       <ul className="warnings-box-list">

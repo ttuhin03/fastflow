@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
 import { getFormatLocale } from '../utils/locale'
-import { MdInfo, MdCheckCircle, MdCancel, MdHourglassEmpty, MdPlayArrow, MdWarning, MdStop } from 'react-icons/md'
+import { LuInfo, LuCircleCheck, LuCircleX, LuTimer, LuPlay, LuTriangleAlert, LuOctagonX } from 'react-icons/lu'
 import Tooltip from '../components/Tooltip'
 import InfoIcon from '../components/InfoIcon'
 import './Runs.css'
@@ -158,17 +158,17 @@ export default function Runs() {
   const getStatusIcon = (status: string) => {
     switch (status.toUpperCase()) {
       case 'SUCCESS':
-        return <MdCheckCircle className="status-icon success" />
+        return <LuCircleCheck className="status-icon success" />
       case 'FAILED':
-        return <MdCancel className="status-icon error" />
+        return <LuCircleX className="status-icon error" />
       case 'RUNNING':
-        return <MdPlayArrow className="status-icon running" />
+        return <LuPlay className="status-icon running" />
       case 'PENDING':
-        return <MdHourglassEmpty className="status-icon pending" />
+        return <LuTimer className="status-icon pending" />
       case 'WARNING':
-        return <MdWarning className="status-icon warning" />
+        return <LuTriangleAlert className="status-icon warning" />
       case 'INTERRUPTED':
-        return <MdStop className="status-icon interrupted" />
+        return <LuOctagonX className="status-icon interrupted" />
       default:
         return null
     }
@@ -332,7 +332,7 @@ export default function Runs() {
                     </td>
                     <td>
                       <Link to={`/runs/${run.id}`} className="btn btn-outlined btn-sm details-link">
-                        <MdInfo />
+                        <LuInfo />
                         {t('runs.details')}
                       </Link>
                     </td>
@@ -396,7 +396,7 @@ export default function Runs() {
                 </div>
                 <div className="run-card-footer">
                   <Link to={`/runs/${run.id}`} className="btn btn-outlined btn-sm details-link">
-                    <MdInfo />
+                    <LuInfo />
                     {t('runs.details')}
                   </Link>
                 </div>

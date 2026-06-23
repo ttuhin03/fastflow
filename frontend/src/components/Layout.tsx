@@ -1,43 +1,56 @@
-import { useEffect, useState, useRef, useLayoutEffect, useMemo, useCallback } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom'
+import { Outlet, Link, useNavigate, useLocation, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import { useAuth } from '../contexts/AuthContext'
 import { useUiPreferences } from '../contexts/UiPreferencesContext'
 import apiClient from '../api/client'
 import {
-  MdDashboard,
-  MdAccountTree,
-  MdSettings,
-  MdLogout,
-  MdCircle,
-  MdMenu,
-  MdClose,
-  MdCode,
-  MdMenuBook,
-  MdHistory,
-} from 'react-icons/md'
+  LuLayoutGrid,
+  LuWorkflow,
+  LuActivity,
+  LuClock,
+  LuKeyRound,
+  LuPackage,
+  LuRefreshCw,
+  LuHistory,
+  LuSlidersHorizontal,
+  LuSearch,
+  LuLogOut,
+  LuMenu,
+  LuX,
+  LuBookOpen,
+  LuGithub,
+} from 'react-icons/lu'
 import NotificationCenter from './NotificationCenter'
-import Tooltip from './Tooltip'
 import VersionInfo from './VersionInfo'
 import HeaderTime from './HeaderTime'
 import HeaderLanguage from './HeaderLanguage'
 import SetupWizard from './SetupWizard'
 import './Layout.css'
 
-interface NavItem {
+interface NavSection {
+  label: string
+  items: NavItemDef[]
+}
+
+interface NavItemDef {
   path: string
   labelKey: string
   icon: React.ReactNode
+  adminOnly?: boolean
+  count?: number
 }
 
 export default function Layout() {
   const { t } = useTranslation()
-  const { logout, isAdmin } = useAuth()
+  const { logout, isAdmin, userRole } = useAuth()
   const { showAttribution, showVersion } = useUiPreferences()
   const navigate = useNavigate()
   const location = useLocation()
+  const params = useParams()
+
   const { data: authProviders } = useQuery({
     queryKey: ['auth/providers'],
     queryFn: async () => {
@@ -47,37 +60,62 @@ export default function Layout() {
     staleTime: 60_000,
   })
 
-  const navItems = useMemo<NavItem[]>(() => [
-    { path: '/', labelKey: 'nav.dashboard', icon: <MdDashboard /> },
-    { path: '/pipelines', labelKey: 'nav.pipelines', icon: <MdAccountTree /> },
-    { path: '/settings', labelKey: 'nav.settings', icon: <MdSettings /> },
-    ...(isAdmin ? [{ path: '/audit', labelKey: 'nav.audit', icon: <MdHistory /> }] : []),
-  ], [isAdmin])
+  const { data: userInfo } = useQuery({
+    queryKey: ['auth/me-layout'],
+    queryFn: async () => {
+      const r = await apiClient.get('/auth/me')
+      return r.data as { email?: string; avatar_url?: string }
+    },
+    staleTime: 300_000,
+  })
+
+  const navSections: NavSection[] = [
+    {
+      label: 'Overview',
+      items: [
+        { path: '/', labelKey: 'nav.dashboard', icon: <LuLayoutGrid size={16} /> },
+      ],
+    },
+    {
+      label: 'Orchestration',
+      items: [
+        { path: '/pipelines', labelKey: 'nav.pipelines', icon: <LuWorkflow size={16} /> },
+        { path: '/runs', labelKey: 'nav.runs', icon: <LuActivity size={16} /> },
+        { path: '/scheduler', labelKey: 'nav.scheduler', icon: <LuClock size={16} /> },
+      ],
+    },
+    {
+      label: 'Security',
+      items: [
+        { path: '/secrets', labelKey: 'nav.secrets', icon: <LuKeyRound size={16} /> },
+        { path: '/dependencies', labelKey: 'nav.dependencies', icon: <LuPackage size={16} /> },
+      ],
+    },
+    {
+      label: 'System',
+      items: [
+        { path: '/sync', labelKey: 'nav.sync', icon: <LuRefreshCw size={16} /> },
+        { path: '/audit', labelKey: 'nav.audit', icon: <LuHistory size={16} />, adminOnly: true },
+        { path: '/settings', labelKey: 'nav.settings', icon: <LuSlidersHorizontal size={16} /> },
+      ],
+    },
+  ]
+
   const [backendStatus, setBackendStatus] = useState<'online' | 'offline' | 'checking'>('checking')
-  const [healthPulse, setHealthPulse] = useState(false)
-  const [clickedIcons, setClickedIcons] = useState<Set<string>>(new Set())
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const previousStatusRef = useRef<'online' | 'offline' | 'checking'>('checking')
-  const navRef = useRef<HTMLElement>(null)
-  const [navIndicator, setNavIndicator] = useState({ top: 0, height: 0 })
 
   const isActive = useCallback((path: string) => {
     if (path === '/') return location.pathname === '/'
-    if (path === '/pipelines') return location.pathname.startsWith('/pipelines') || location.pathname.startsWith('/runs')
+    if (path === '/pipelines') return (
+      location.pathname.startsWith('/pipelines') &&
+      !location.pathname.startsWith('/pipelines/') ||
+      false
+    )
+    if (path === '/runs') return location.pathname.startsWith('/runs') || (
+      location.pathname.startsWith('/pipelines/') && false // runs sub-path
+    )
     return location.pathname.startsWith(path)
   }, [location.pathname])
-
-  useLayoutEffect(() => {
-    const nav = navRef.current
-    if (!nav) return
-    const activePath = navItems.find((item) => isActive(item.path))?.path
-    if (!activePath) return
-    const el = nav.querySelector<HTMLElement>(`[data-nav-path="${activePath}"]`)
-    if (!el) return
-    const nr = nav.getBoundingClientRect()
-    const er = el.getBoundingClientRect()
-    setNavIndicator({ top: er.top - nr.top, height: er.height })
-  }, [location.pathname, navItems, isActive])
 
   const healthInterval = useRefetchInterval(5000)
   const { data: health, isError, error, isFetching } = useQuery({
@@ -87,7 +125,7 @@ export default function Layout() {
       return response.data
     },
     refetchInterval: healthInterval,
-    retry: false, // Keine Retries, damit Fehler sofort erkannt werden
+    retry: false,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
     refetchOnMount: true,
@@ -107,218 +145,197 @@ export default function Layout() {
     : 0
 
   useEffect(() => {
-    const previousStatus = previousStatusRef.current
-
-    // Wenn gerade gefetched wird, Status auf 'checking' setzen (nur beim ersten Mal)
-    if (isFetching && previousStatus === 'checking') {
-      return // Beim ersten Check nichts ändern
-    }
-
-    // Wenn ein Fehler auftritt, ist der Server offline
     if (isError || error) {
-      if (previousStatus !== 'offline') {
-        setBackendStatus('offline')
-        previousStatusRef.current = 'offline'
-      }
-    }
-    // Wenn health Daten vorhanden sind, ist der Server online
-    else if (health && health.status === 'healthy') {
-      if (previousStatus !== 'online') {
-        setHealthPulse(true)
-        setTimeout(() => setHealthPulse(false), 600)
-      }
+      setBackendStatus('offline')
+    } else if (health && health.status === 'healthy') {
       setBackendStatus('online')
-      previousStatusRef.current = 'online'
-    }
-    // Wenn health undefined/null ist und kein Fehler, könnte es noch laden
-    else if (!health && !isError && !isFetching) {
-      // Wenn kein Fetch läuft und keine Daten, dann offline
-      if (previousStatus !== 'offline') {
-        setBackendStatus('offline')
-        previousStatusRef.current = 'offline'
-      }
+    } else if (!health && !isError && !isFetching) {
+      setBackendStatus('offline')
     }
   }, [health, isError, error, isFetching])
 
   useEffect(() => {
-    const activeItem = navItems.find((item) => isActive(item.path))
+    const allItems = navSections.flatMap(s => s.items)
+    const activeItem = allItems.find(item => isActive(item.path))
     document.title = activeItem ? `${t(activeItem.labelKey)} · ${t('appTitle')}` : t('appTitle')
-  }, [navItems, isActive, t])
+  }, [location.pathname, t]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleLogout = async () => {
     await logout()
     navigate('/login')
   }
 
-  const handleNavClick = (path: string) => {
-    // Icon-Animation auslösen
-    setClickedIcons(prev => {
-      const newSet = new Set(prev)
-      newSet.add(path)
-      return newSet
-    })
-    // Nach Animation wieder entfernen (länger für Runs wegen Pause-Icon)
-    const animationDuration = 600
-    setTimeout(() => {
-      setClickedIcons(prev => {
-        const newSet = new Set(prev)
-        newSet.delete(path)
-        return newSet
-      })
-    }, animationDuration)
-  }
+  const toggleSidebar = () => setSidebarOpen(v => !v)
+  const closeSidebar = () => setSidebarOpen(false)
 
-  const toggleSidebar = () => {
-    setSidebarOpen(!sidebarOpen)
-  }
+  // Breadcrumb: derive root + optional leaf from current route
+  const breadcrumb = useBreadcrumb(location.pathname, params, t, navSections)
 
-  const closeSidebar = () => {
-    setSidebarOpen(false)
-  }
+  // User display
+  const userEmail = userInfo?.email || ''
+  const userInitials = userEmail
+    ? userEmail.split('@')[0].slice(0, 2).toUpperCase()
+    : (userRole ? userRole.slice(0, 2).toUpperCase() : 'U')
+
+  const allSystemsOk = backendStatus === 'online'
 
   return (
     <div className="layout">
       <SetupWizard />
-      {/* Mobile Sidebar Overlay - always in DOM for fade transition */}
+
       <div
         className={`sidebar-overlay ${sidebarOpen ? 'visible' : ''}`}
         onClick={closeSidebar}
         aria-hidden
       />
 
-      {/* Mobile Menu Button */}
       <button className="mobile-menu-button" onClick={toggleSidebar} aria-label={t('nav.menu')}>
-        {sidebarOpen ? <MdClose /> : <MdMenu />}
+        {sidebarOpen ? <LuX size={20} /> : <LuMenu size={20} />}
       </button>
 
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
-        <div className="sidebar-header">
-          <div className="sidebar-logo-container">
-            {authProviders?.login_branding_logo_url ? (
-              <div className="sidebar-logo-icon sidebar-logo-icon--image">
-                <img src={authProviders.login_branding_logo_url} alt="" className="sidebar-logo-img" />
-              </div>
-            ) : (
-              <div className="sidebar-logo-icon">
-                <MdCode />
+        {/* Brand */}
+        <div className="sidebar__brand">
+          {authProviders?.login_branding_logo_url ? (
+            <div className="sidebar__logo sidebar__logo--image">
+              <img src={authProviders.login_branding_logo_url} alt="" />
+            </div>
+          ) : (
+            <div className="sidebar__logo">
+              <LuWorkflow size={16} />
+            </div>
+          )}
+          <div>
+            <div className="sidebar__name">{t('appTitle')}</div>
+            {showVersion && (
+              <div className="sidebar__version">
+                <VersionInfo variant="footer" />
               </div>
             )}
-            <h1 className="sidebar-logo">{t('appTitle')}</h1>
           </div>
         </div>
 
-        <nav ref={navRef} className="sidebar-nav">
-          <div
-            className="sidebar-nav-indicator"
-            style={{ top: navIndicator.top, height: navIndicator.height }}
-            aria-hidden
-          />
-          {navItems.map((item) => {
-            const iconClass = clickedIcons.has(item.path) ? 'icon-clicked' : ''
-            const iconType = item.path === '/settings' ? 'settings-icon' :
-              item.path === '/pipelines' ? 'pipelines-icon' :
-                item.path === '/' ? 'dashboard-icon' : 'default-icon'
-
-            return (
-              <Link
-                key={item.path}
-                to={item.path}
-                data-nav-path={item.path}
-                className={`nav-item ${isActive(item.path) ? 'active' : ''}`}
-                onClick={() => {
-                  handleNavClick(item.path)
-                  closeSidebar() // Close sidebar on mobile after navigation
-                }}
-              >
-                <span className={`nav-icon ${iconClass} ${iconType}`}>
-                  {item.icon}
-                </span>
-                <span className="nav-label">{t(item.labelKey)}</span>
-                {item.path === '/settings' && pendingCount > 0 && (
-                  <span className="nav-badge" title={t('nav.pendingInvites')}>
-                    {pendingCount > 99 ? '99+' : pendingCount}
-                  </span>
-                )}
-              </Link>
-            )
-          })}
+        {/* Nav */}
+        <nav className="sidebar__nav">
+          {navSections.map(section => (
+            <div key={section.label}>
+              <div className="nav-group-label">{section.label}</div>
+              {section.items
+                .filter(item => !item.adminOnly || isAdmin)
+                .map(item => (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className={`nav-item ${isActive(item.path) ? 'active' : ''}`}
+                    onClick={closeSidebar}
+                  >
+                    <span className="nav-icon">{item.icon}</span>
+                    <span className="nav-label">{t(item.labelKey)}</span>
+                    {item.path === '/settings' && pendingCount > 0 && (
+                      <span className="nav-badge">{pendingCount > 99 ? '99+' : pendingCount}</span>
+                    )}
+                  </Link>
+                ))}
+            </div>
+          ))}
         </nav>
 
-        <div className="sidebar-footer">
-          <div className={`backend-status ${backendStatus} ${healthPulse ? 'pulse' : ''}`} title={backendStatus === 'online' ? t('nav.backendOnline') : t('nav.backendOffline')}>
-            <MdCircle className="status-dot-icon" />
-            <span className="status-text">
-              {backendStatus === 'online' ? t('nav.online') : backendStatus === 'offline' ? t('nav.offline') : t('nav.checking')}
-              {health?.pipeline_executor && (
-                <span className="executor-label" style={{ marginLeft: '6px', opacity: 0.85 }}>
+        {/* Footer */}
+        <div className="sidebar__footer">
+          {/* System status chip */}
+          <div className="sidebar__status">
+            <span className={`status-dot ${allSystemsOk ? 'online' : backendStatus === 'checking' ? 'checking' : 'offline'}`} />
+            <span>
+              {allSystemsOk
+                ? t('nav.online')
+                : backendStatus === 'checking'
+                ? t('nav.checking')
+                : t('nav.offline')}
+              {health?.pipeline_executor && allSystemsOk && (
+                <span style={{ marginLeft: 6, opacity: 0.7 }}>
                   · {health.pipeline_executor === 'kubernetes' ? 'K8s' : 'Docker'}
                 </span>
               )}
             </span>
           </div>
 
+          {/* User row */}
+          <div className="sidebar__user">
+            <div className="sidebar__avatar" aria-hidden>
+              {userInitials}
+            </div>
+            <div className="sidebar__user-info">
+              <div className="sidebar__user-name" title={userEmail}>{userEmail || t('nav.user')}</div>
+              <div className="sidebar__user-role">{userRole || 'user'}</div>
+            </div>
+            <button
+              className="sidebar__logout-btn"
+              onClick={handleLogout}
+              title={t('nav.logout')}
+              aria-label={t('nav.logout')}
+            >
+              <LuLogOut size={15} />
+            </button>
+          </div>
+
+          {/* Docs + GitHub */}
           <a
             href={import.meta.env.VITE_DOCS_URL || 'http://localhost:3001'}
             target="_blank"
             rel="noopener noreferrer"
             className="sidebar-docs-link"
           >
-            <MdMenuBook style={{ flexShrink: 0, width: 16, height: 16 }} />
+            <LuBookOpen size={15} style={{ flexShrink: 0 }} />
             <span>{t('nav.docs')}</span>
           </a>
-
           <a
             href="https://github.com/ttuhin03/fastflow"
             target="_blank"
             rel="noopener noreferrer"
             className="sidebar-github-link"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}>
-              <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
-            </svg>
+            <LuGithub size={15} style={{ flexShrink: 0 }} />
             <span>{t('nav.viewOnGitHub')}</span>
           </a>
 
-          {(showAttribution || showVersion) && (
+          {showAttribution && (
             <p className="sidebar-footer-text">
-              {showAttribution && (
-                <>
-                  Made with{' '}
-                  <Tooltip content="Made with heart... and fueled by the healthy desire to never see a broken DAG again. Life is too short for over-engineering.">
-                    <span className="heart">❤️</span>
-                  </Tooltip>{' '}
-                  by <strong>ttuhin03</strong>
-                </>
-              )}
-              {showVersion && (
-                <span style={{ marginLeft: showAttribution ? '8px' : 0, opacity: 0.5, fontSize: '10px' }}>
-                  <VersionInfo variant="footer" />
-                </span>
-              )}
+              Made with <span className="heart">❤️</span> by <strong>ttuhin03</strong>
             </p>
           )}
-          <button onClick={handleLogout} className="logout-btn">
-            <MdLogout />
-            <span>{t('nav.logout')}</span>
-          </button>
         </div>
       </aside>
 
       <div className="layout-main">
         <header className="main-header">
-          <div className="header-content">
-            <h2 className="page-title">
-              {navItems.find(item => isActive(item.path)) ? t(navItems.find(item => isActive(item.path))!.labelKey) : t('nav.dashboard')}
-            </h2>
-            <div className="header-center">
-              {showVersion ? <VersionInfo variant="banner" /> : null}
-            </div>
-            <div className="header-actions">
-              <HeaderLanguage />
-              <HeaderTime />
-              <NotificationCenter />
-            </div>
-          </div>
+          {/* Breadcrumb */}
+          <nav className="breadcrumb" aria-label="breadcrumb">
+            {breadcrumb.root && (
+              <>
+                <span className="breadcrumb__root">{breadcrumb.root}</span>
+                {breadcrumb.leaf && (
+                  <>
+                    <span className="breadcrumb__sep">/</span>
+                    <span className="breadcrumb__leaf">{breadcrumb.leaf}</span>
+                  </>
+                )}
+              </>
+            )}
+          </nav>
+
+          <div className="header-spacer" />
+
+          {/* ⌘K search trigger */}
+          <button className="header-search" aria-label="Search">
+            <LuSearch size={14} />
+            <span className="label">{t('common.search') || 'Search or jump to…'}</span>
+            <kbd>⌘K</kbd>
+          </button>
+
+          {/* Header actions */}
+          <HeaderLanguage />
+          <HeaderTime />
+          <NotificationCenter />
         </header>
 
         <main className="main-content">
@@ -329,4 +346,37 @@ export default function Layout() {
       </div>
     </div>
   )
+}
+
+function useBreadcrumb(
+  pathname: string,
+  params: Record<string, string | undefined>,
+  t: (key: string) => string,
+  sections: NavSection[],
+): { root: string; leaf?: string } {
+  const allItems = sections.flatMap(s => s.items)
+
+  // Exact match first
+  const exact = allItems.find(item => item.path === pathname)
+  if (exact) return { root: t(exact.labelKey) }
+
+  // Run detail: /runs/:runId
+  if (pathname.startsWith('/runs/') && params.runId) {
+    return { root: t('nav.runs'), leaf: params.runId }
+  }
+
+  // Pipeline detail: /pipelines/:name
+  if (pathname.startsWith('/pipelines/') && params.name) {
+    return { root: t('nav.pipelines'), leaf: params.name }
+  }
+
+  // Prefix match
+  const prefix = allItems
+    .filter(i => i.path !== '/')
+    .find(i => pathname.startsWith(i.path))
+  if (prefix) return { root: t(prefix.labelKey) }
+
+  if (pathname === '/') return { root: t('nav.dashboard') }
+
+  return { root: t('appTitle') }
 }

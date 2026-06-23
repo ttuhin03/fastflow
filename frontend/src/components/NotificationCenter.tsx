@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNotifications } from '../contexts/NotificationContext'
-import { MdNotifications, MdNotificationsNone, MdClose, MdError, MdWarning, MdInfo, MdCheckCircle } from 'react-icons/md'
+import { LuBell, LuBellOff, LuX, LuCircleX, LuTriangleAlert, LuInfo, LuCircleCheck } from 'react-icons/lu'
 import { useNavigate } from 'react-router-dom'
 import { getFormatLocale } from '../utils/locale'
 import './NotificationCenter.css'
@@ -15,13 +15,13 @@ export default function NotificationCenter() {
   const getIcon = (type: string) => {
     switch (type) {
       case 'error':
-        return <MdError className="notification-icon error" />
+        return <LuCircleX className="notification-icon error" />
       case 'warning':
-        return <MdWarning className="notification-icon warning" />
+        return <LuTriangleAlert className="notification-icon warning" />
       case 'success':
-        return <MdCheckCircle className="notification-icon success" />
+        return <LuCircleCheck className="notification-icon success" />
       default:
-        return <MdInfo className="notification-icon info" />
+        return <LuInfo className="notification-icon info" />
     }
   }
 
@@ -44,11 +44,11 @@ export default function NotificationCenter() {
       >
         {unreadCount > 0 ? (
           <>
-            <MdNotifications />
+            <LuBell />
             {unreadCount > 0 && <span className="notification-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>}
           </>
         ) : (
-          <MdNotificationsNone />
+          <LuBellOff />
         )}
       </button>
 
@@ -82,7 +82,7 @@ export default function NotificationCenter() {
                   onClick={() => setIsOpen(false)}
                   aria-label={t('notifications.close')}
                 >
-                  <MdClose />
+                  <LuX />
                 </button>
               </div>
             </div>
@@ -90,7 +90,7 @@ export default function NotificationCenter() {
             <div className="notification-list">
               {notifications.length === 0 ? (
                 <div className="notification-empty">
-                  <MdNotificationsNone />
+                  <LuBellOff />
                   <p>{t('notifications.empty')}</p>
                 </div>
               ) : (
@@ -120,7 +120,7 @@ export default function NotificationCenter() {
                           }}
                           aria-label={t('notifications.delete')}
                         >
-                          <MdClose />
+                          <LuX />
                         </button>
                       </div>
                       <p className="notification-item-message">{notification.message}</p>

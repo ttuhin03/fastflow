@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getFormatLocale } from '../utils/locale'
 import apiClient from '../api/client'
 import { showError, showSuccess, showConfirm } from '../utils/toast'
-import { MdEdit, MdDelete, MdBlock, MdEmail, MdClose, MdOpenInNew, MdCheck, MdCancel } from 'react-icons/md'
+import { LuPencil, LuTrash2, LuBan, LuMail, LuX, LuExternalLink, LuCheck, LuCircleX } from 'react-icons/lu'
 import Tooltip from '../components/Tooltip'
 import InfoIcon from '../components/InfoIcon'
 import { useAuth } from '../contexts/AuthContext'
@@ -362,7 +362,7 @@ export default function Users({ editLocked = false }: UsersProps) {
               className="btn btn-primary"
               disabled={adminActionsDisabled}
             >
-              <MdEmail />
+              <LuMail />
               {t('users.sendInvite')}
             </button>
           </div>
@@ -373,7 +373,7 @@ export default function Users({ editLocked = false }: UsersProps) {
         <div className="users-form-card" style={{ marginBottom: '1rem' }}>
           <div className="users-form-header">
             <h3>{t('users.approveJoinTitle')}</h3>
-            <button onClick={() => setApproveModalUser(null)} className="close-btn"><MdClose /></button>
+            <button onClick={() => setApproveModalUser(null)} className="close-btn"><LuX /></button>
           </div>
           <p style={{ marginBottom: '1rem', color: 'var(--color-text-secondary)' }}>
             <strong>{approveModalUser.username}</strong> ({approveModalUser.email || t('users.noEmail')}) – {t('users.assignRole')}
@@ -393,7 +393,7 @@ export default function Users({ editLocked = false }: UsersProps) {
               </select>
             </div>
             <div className="form-actions">
-              <button type="submit" className="btn btn-success" disabled={adminActionsDisabled}><MdCheck /> {t('users.approve')}</button>
+              <button type="submit" className="btn btn-success" disabled={adminActionsDisabled}><LuCheck /> {t('users.approve')}</button>
               <button type="button" onClick={() => setApproveModalUser(null)} className="btn btn-secondary">{t('common.cancel')}</button>
             </div>
           </form>
@@ -412,7 +412,7 @@ export default function Users({ editLocked = false }: UsersProps) {
               }}
               className="close-btn"
             >
-              <MdClose />
+              <LuX />
             </button>
           </div>
 
@@ -531,8 +531,8 @@ export default function Users({ editLocked = false }: UsersProps) {
                     {isAdmin && (
                       <td>
                         <div className="user-actions">
-                          <button onClick={() => handleOpenApproveModal(u)} className="btn-icon" title={t('users.approve')} disabled={adminActionsDisabled}><MdCheck /></button>
-                          <button onClick={() => handleRejectUser(u.id)} className="btn-icon btn-danger" title={t('users.reject')} disabled={adminActionsDisabled}><MdCancel /></button>
+                          <button onClick={() => handleOpenApproveModal(u)} className="btn-icon" title={t('users.approve')} disabled={adminActionsDisabled}><LuCheck /></button>
+                          <button onClick={() => handleRejectUser(u.id)} className="btn-icon btn-danger" title={t('users.reject')} disabled={adminActionsDisabled}><LuCircleX /></button>
                         </div>
                       </td>
                     )}
@@ -578,7 +578,7 @@ export default function Users({ editLocked = false }: UsersProps) {
                           title={t('users.githubTitle', { login: user.github_login })}
                         >
                           {user.username}
-                          <MdOpenInNew className="icon-external" />
+                          <LuExternalLink className="icon-external" />
                         </a>
                       ) : (
                         user.username
@@ -634,7 +634,7 @@ export default function Users({ editLocked = false }: UsersProps) {
                             title={t('users.edit')}
                             disabled={adminActionsDisabled}
                           >
-                            <MdEdit />
+                            <LuPencil />
                           </button>
                           {user.blocked ? (
                             <button
@@ -643,7 +643,7 @@ export default function Users({ editLocked = false }: UsersProps) {
                               title={t('users.unblock')}
                               disabled={adminActionsDisabled}
                             >
-                              <MdBlock />
+                              <LuBan />
                             </button>
                           ) : (
                             <button
@@ -652,7 +652,7 @@ export default function Users({ editLocked = false }: UsersProps) {
                               title={t('users.block')}
                               disabled={adminActionsDisabled}
                             >
-                              <MdBlock />
+                              <LuBan />
                             </button>
                           )}
                           <button
@@ -661,7 +661,7 @@ export default function Users({ editLocked = false }: UsersProps) {
                             title={t('common.delete')}
                             disabled={adminActionsDisabled}
                           >
-                            <MdDelete />
+                            <LuTrash2 />
                           </button>
                         </div>
                       </td>
@@ -710,7 +710,7 @@ export default function Users({ editLocked = false }: UsersProps) {
                             title={t('users.revoke')}
                             disabled={adminActionsDisabled}
                           >
-                            <MdDelete />
+                            <LuTrash2 />
                           </button>
                         )}
                       </td>

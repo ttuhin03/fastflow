@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
-import { MdCheckCircle, MdError, MdStorage, MdFolder, MdDns, MdMemory } from 'react-icons/md'
+import { LuCircleCheck, LuCircleX, LuDatabase, LuFolder, LuServer, LuCpu } from 'react-icons/lu'
 import './SystemStatus.css'
 
 interface SystemStatusResponse {
@@ -12,12 +12,12 @@ interface SystemStatusResponse {
 }
 
 const CHECK_ICONS: Record<string, React.ReactNode> = {
-  database: <MdStorage />,
-  docker: <MdDns />,
-  kubernetes: <MdDns />,
-  uv_cache: <MdFolder />,
-  disk: <MdStorage />,
-  inodes: <MdMemory />,
+  database: <LuDatabase />,
+  docker: <LuServer />,
+  kubernetes: <LuServer />,
+  uv_cache: <LuFolder />,
+  disk: <LuDatabase />,
+  inodes: <LuCpu />,
 }
 
 function isOk(value: unknown): boolean {
@@ -48,7 +48,7 @@ export default function SystemStatus() {
   if (!data) {
     return (
       <div className="system-status error">
-        <MdError />
+        <LuCircleX />
         <span>{t('systemStatus.error')}</span>
       </div>
     )
@@ -66,7 +66,7 @@ export default function SystemStatus() {
           const label = t(`warnings.systemLabels.${key}`, { defaultValue: key })
           return (
             <div key={key} className={`system-status-item ${ok ? 'ok' : 'error'}`} title={String(value)}>
-              <span className="system-status-icon">{ok ? <MdCheckCircle /> : <MdError />}</span>
+              <span className="system-status-icon">{ok ? <LuCircleCheck /> : <LuCircleX />}</span>
               <span className="system-status-label">{label}</span>
               {!ok && <span className="system-status-detail">{String(value).slice(0, 40)}</span>}
             </div>

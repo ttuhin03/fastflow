@@ -11,8 +11,8 @@
 }
 
 .system-status.has-errors .system-status-item.error {
-  background-color: rgba(239, 68, 68, 0.08);
-  border-color: rgba(239, 68, 68, 0.3);
+  background-color: var(--color-error-subtle);
+  border-color: var(--color-error-border);
 }
 
 .system-status-grid {
@@ -32,8 +32,8 @@
 }
 
 .system-status-item.ok {
-  border-color: rgba(34, 197, 94, 0.4);
-  background-color: rgba(34, 197, 94, 0.06);
+  border-color: var(--color-success-border);
+  background-color: var(--color-success-subtle);
 }
 
 .system-status-item .system-status-icon {
@@ -42,7 +42,7 @@
 }
 
 .system-status-item.ok .system-status-icon {
-  color: var(--color-success, #22c55e);
+  color: var(--color-success);
 }
 
 .system-status-item.error .system-status-icon {

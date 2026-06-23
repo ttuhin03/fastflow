@@ -97,13 +97,13 @@
 }
 
 .run-id {
-  font-family: 'Courier New', monospace;
+  font-family: var(--font-mono);
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
 }
 
 .run-commit .commit-sha {
-  font-family: 'Courier New', monospace;
+  font-family: var(--font-mono);
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
   cursor: help;
@@ -130,7 +130,7 @@
 }
 
 .status-icon.running {
-  color: var(--color-primary);
+  color: var(--color-running);
   animation: pulse 1.5s ease-in-out infinite;
 }
 
@@ -147,33 +147,39 @@
 }
 
 .status-success {
-  background-color: rgba(34, 197, 94, 0.15);
-  color: var(--color-success);
+  background-color: var(--color-success-subtle);
+  border: 1px solid var(--color-success-border);
+  color: var(--color-success-text);
 }
 
 .status-failed {
-  background-color: rgba(239, 68, 68, 0.15);
-  color: var(--color-error);
+  background-color: var(--color-error-subtle);
+  border: 1px solid var(--color-error-border);
+  color: var(--color-error-text);
 }
 
 .status-running {
-  background-color: rgba(99, 102, 241, 0.15);
-  color: var(--color-primary);
+  background-color: var(--color-running-subtle);
+  border: 1px solid var(--color-running-border);
+  color: var(--color-running-text);
 }
 
 .status-pending {
-  background-color: rgba(255, 152, 0, 0.15);
-  color: var(--color-warning);
+  background-color: var(--color-warning-subtle);
+  border: 1px solid var(--color-warning-border);
+  color: var(--color-warning-text);
 }
 
 .status-warning {
-  background-color: rgba(255, 152, 0, 0.15);
-  color: var(--color-warning);
+  background-color: var(--color-warning-subtle);
+  border: 1px solid var(--color-warning-border);
+  color: var(--color-warning-text);
 }
 
 .status-interrupted {
-  background-color: rgba(158, 158, 158, 0.15);
-  color: var(--color-text-secondary);
+  background-color: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-tertiary);
 }
 
 /* Error Type Badges */
@@ -208,13 +214,13 @@
 .exit-success {
   color: var(--color-success);
   font-weight: var(--font-weight-medium);
-  font-family: 'Courier New', monospace;
+  font-family: var(--font-mono);
 }
 
 .exit-error {
   color: var(--color-error);
   font-weight: var(--font-weight-medium);
-  font-family: 'Courier New', monospace;
+  font-family: var(--font-mono);
 }
 
 .details-link {
@@ -368,7 +374,7 @@
 }
 
 .run-card-id-text {
-  font-family: 'Courier New', monospace;
+  font-family: var(--font-mono);
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
 }
