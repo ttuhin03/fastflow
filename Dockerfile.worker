@@ -15,4 +15,11 @@ LABEL description="Pipeline-Worker: uv + Notebook-Runner, Python via uv python i
 # Runner-Verzeichnis (nb_runner.py etc.) – in K8s gibt es keinen Host-Pfad dafür
 COPY app/runners /runner
 
-# /cache/uv_python und /root/.cache/uv werden zur Laufzeit gemountet.
+# Non-root User anlegen
+RUN groupadd -r worker && useradd -r -g worker -d /runner worker \
+    && chown -R worker:worker /runner
+
+USER worker
+
+# UV_CACHE_DIR und UV_PYTHON_INSTALL_DIR werden zur Laufzeit als Env gesetzt
+# (steuern den Cache-Pfad; nicht abhängig von /root).

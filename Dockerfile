@@ -82,6 +82,12 @@ COPY pipelines/ ./pipelines-seed/
 COPY entrypoint.sh .
 RUN chmod +x entrypoint.sh
 
+# Non-root User anlegen und Dateisystem-Besitz übertragen
+RUN groupadd -r fastflow && useradd -r -g fastflow -d /app fastflow \
+    && chown -R fastflow:fastflow /app
+
+USER fastflow
+
 # Exponiere Port für FastAPI
 EXPOSE 8000
 
