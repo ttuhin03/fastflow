@@ -21,6 +21,11 @@ spec:
         component: api
     spec:
       serviceAccountName: fastflow-executor
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001          # Kubernetes setzt Gruppe aller PVC-Mounts auf 1001
       initContainers:
         - name: wait-for-postgres
           image: postgres:16-alpine

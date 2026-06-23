@@ -15,8 +15,8 @@ LABEL description="Pipeline-Worker: uv + Notebook-Runner, Python via uv python i
 # Runner-Verzeichnis (nb_runner.py etc.) – in K8s gibt es keinen Host-Pfad dafür
 COPY app/runners /runner
 
-# Non-root User anlegen
-RUN groupadd -r worker && useradd -r -g worker -d /runner worker \
+# Non-root User anlegen (feste UID/GID 1001 passend zum Orchestrator)
+RUN groupadd -g 1001 worker && useradd -u 1001 -g worker -d /runner -s /sbin/nologin worker \
     && chown -R worker:worker /runner
 
 USER worker
