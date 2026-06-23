@@ -3,13 +3,13 @@ import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
 import { getFormatLocale } from '../utils/locale'
 import {
-  MdCheckCircle,
-  MdCancel,
-  MdWarning,
-  MdStop,
-  MdPlayArrow,
-  MdHourglassEmpty,
-} from 'react-icons/md'
+  LuCircleCheck,
+  LuCircleX,
+  LuTriangleAlert,
+  LuOctagonX,
+  LuPlay,
+  LuTimer,
+} from 'react-icons/lu'
 import './RunStatusCircles.css'
 
 interface Run {
@@ -42,17 +42,17 @@ export default function RunStatusCircles({ pipelineName }: RunStatusCirclesProps
   const getStatusIcon = (status: string) => {
     switch (status.toUpperCase()) {
       case 'SUCCESS':
-        return <MdCheckCircle className="run-status-icon" />
+        return <LuCircleCheck className="run-status-icon" />
       case 'FAILED':
-        return <MdCancel className="run-status-icon" />
+        return <LuCircleX className="run-status-icon" />
       case 'WARNING':
-        return <MdWarning className="run-status-icon" />
+        return <LuTriangleAlert className="run-status-icon" />
       case 'INTERRUPTED':
-        return <MdStop className="run-status-icon" />
+        return <LuOctagonX className="run-status-icon" />
       case 'RUNNING':
-        return <MdPlayArrow className="run-status-icon" />
+        return <LuPlay className="run-status-icon" />
       case 'PENDING':
-        return <MdHourglassEmpty className="run-status-icon" />
+        return <LuTimer className="run-status-icon" />
       default:
         return null
     }

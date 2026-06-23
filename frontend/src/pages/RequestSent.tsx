@@ -1,7 +1,7 @@
 import { useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
-import { MdHourglassEmpty } from 'react-icons/md'
+import { LuTimer } from 'react-icons/lu'
 import LoginAttributionFooter from '../components/LoginAttributionFooter'
 import './Login.css'
 import './RequestScreens.css'
@@ -36,7 +36,7 @@ export default function RequestSent() {
         <div className="login-card card">
           <div className="login-header">
             <div className="login-icon">
-              <MdHourglassEmpty />
+              <LuTimer />
             </div>
             <h1>{t('requestSent.createdTitle')}</h1>
             <p className="login-subtitle">{t('appTitle')}</p>

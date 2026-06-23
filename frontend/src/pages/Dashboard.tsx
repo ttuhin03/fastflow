@@ -4,8 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
 import { showError, showSuccess, showConfirm } from '../utils/toast'
-import { MdCheckCircle, MdCancel, MdSync, MdSchedule, MdViewList } from 'react-icons/md'
-import Tooltip from '../components/Tooltip'
+import { LuRefreshCw } from 'react-icons/lu'
 import InfoIcon from '../components/InfoIcon'
 import RunStatusCircles from '../components/RunStatusCircles'
 import StorageStats from '../components/StorageStats'
@@ -38,14 +37,49 @@ interface SyncStatus {
   status: string
 }
 
+interface DailyStat {
+  date: string
+  total_runs: number
+  successful_runs: number
+  failed_runs: number
+  success_rate: number
+}
+
+/** Inline SVG sparkline from an array of numbers */
+function Sparkline({ values, color = 'var(--color-primary)' }: { values: number[]; color?: string }) {
+  if (!values || values.length < 2) return null
+  const w = 92
+  const h = 34
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const range = max - min || 1
+  const pts = values.map((v, i) => {
+    const x = (i / (values.length - 1)) * w
+    const y = h - ((v - min) / range) * (h - 4) - 2
+    return `${x.toFixed(1)},${y.toFixed(1)}`
+  })
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="stat-spark" aria-hidden>
+      <polyline
+        points={pts.join(' ')}
+        fill="none"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        opacity="0.9"
+      />
+    </svg>
+  )
+}
+
 export default function Dashboard() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { isReadonly } = useAuth()
-  // Reduzierte Polling-Frequenz: weniger API-Last bei vielen Nutzern (Enterprise-tauglich)
-  const pipelinesInterval = useRefetchInterval(30_000, 120_000)   // sichtbar: 30s, Hintergrund: 2min
-  const syncInterval = useRefetchInterval(15_000, 120_000)        // sichtbar: 15s, Hintergrund: 2min
-  const dailyStatsInterval = useRefetchInterval(60_000, 120_000)  // sichtbar: 1min, Hintergrund: 2min
+  const pipelinesInterval = useRefetchInterval(30_000, 120_000)
+  const syncInterval = useRefetchInterval(15_000, 120_000)
+  const dailyStatsInterval = useRefetchInterval(60_000, 120_000)
 
   const { data: pipelines, isLoading } = useQuery<Pipeline[]>({
     queryKey: ['pipelines'],
@@ -54,7 +88,7 @@ export default function Dashboard() {
       return response.data
     },
     refetchInterval: pipelinesInterval,
-    staleTime: 30_000,  // 30s – vermeidet unnötige Refetches bei Tab-Wechsel
+    staleTime: 30_000,
   })
 
   useQuery<SyncStatus>({
@@ -70,18 +104,10 @@ export default function Dashboard() {
     queryKey: ['all-pipelines-daily-stats'],
     queryFn: async () => {
       const response = await apiClient.get('/pipelines/daily-stats/all?days=365')
-      return response.data as { 
-        daily_stats?: Array<{ 
-          date: string
-          total_runs: number
-          successful_runs: number
-          failed_runs: number
-          success_rate: number
-        }> 
-      }
+      return response.data as { daily_stats?: DailyStat[] }
     },
     refetchInterval: dailyStatsInterval,
-    staleTime: 120_000,  // 2min – Daily-Stats ändern sich selten
+    staleTime: 120_000,
   })
 
   const syncMutation = useMutation({
@@ -99,19 +125,16 @@ export default function Dashboard() {
     },
   })
 
-
   const handleSync = async () => {
     if (syncMutation.isPending) return
     const confirmed = await showConfirm(t('dashboard.syncConfirm'))
-    if (confirmed) {
-      syncMutation.mutate()
-    }
+    if (confirmed) syncMutation.mutate()
   }
 
   if (isLoading) {
     return (
       <div className="loading-container">
-        <div className="spinner"></div>
+        <div className="spinner" />
         <p>{t('common.loading')}</p>
       </div>
     )
@@ -119,7 +142,26 @@ export default function Dashboard() {
 
   const totalRuns = pipelines?.reduce((sum, p) => sum + p.total_runs, 0) || 0
   const totalSuccessful = pipelines?.reduce((sum, p) => sum + p.successful_runs, 0) || 0
-  const totalFailed = pipelines?.reduce((sum, p) => sum + p.failed_runs, 0) || 0
+  const successRate = totalRuns > 0 ? ((totalSuccessful / totalRuns) * 100).toFixed(1) : '—'
+
+  // Sparkline data: last ~10 days from daily stats
+  const dailyStats = allPipelinesDailyStats?.daily_stats
+  const recentDays = dailyStats?.slice(-10) ?? []
+  const sparkRuns    = recentDays.map(d => d.total_runs)
+  const sparkSuccess = recentDays.map(d => d.successful_runs)
+  const sparkRate    = recentDays.map(d => d.success_rate)
+
+  // Trend: compare last day vs 7-day average
+  const lastDay = recentDays[recentDays.length - 1]
+  const prev7   = recentDays.slice(0, -1)
+  const avgRunsPrev = prev7.length ? prev7.reduce((s, d) => s + d.total_runs, 0) / prev7.length : null
+
+  const runsTrend = avgRunsPrev != null && lastDay
+    ? lastDay.total_runs > avgRunsPrev ? 'up' : 'down'
+    : null
+  const runsDelta = avgRunsPrev != null && lastDay
+    ? Math.abs(Math.round(((lastDay.total_runs - avgRunsPrev) / Math.max(avgRunsPrev, 1)) * 100))
+    : null
 
   return (
     <div className="dashboard">
@@ -131,7 +173,7 @@ export default function Dashboard() {
             disabled={syncMutation.isPending}
             className="btn btn-primary dashboard-sync-btn"
           >
-            <MdSync />
+            <LuRefreshCw size={15} style={syncMutation.isPending ? { animation: 'ff-spin 0.8s linear infinite' } : undefined} />
             {syncMutation.isPending ? t('dashboard.syncRunning') : t('dashboard.gitSync')}
           </button>
         </div>
@@ -139,85 +181,109 @@ export default function Dashboard() {
 
       <WarningsBox />
 
+      {/* KPI cards — minimal: label + trend chip / big mono number + sparkline */}
       <div className="stats-grid">
-        <div className="stat-card card">
-          <div className="stat-icon pipelines">
-            <MdViewList />
+        <div className="stat-card">
+          <div className="stat-card__top">
+            <p className="stat-label">{t('nav.pipelines')}</p>
           </div>
-          <div className="stat-content">
-            <h3 className="stat-label">{t('nav.pipelines')}</h3>
+          <div className="stat-card__bottom">
             <p className="stat-value">{pipelines?.length || 0}</p>
+            <Sparkline values={(pipelines || []).map((_, i) => i + 1)} color="var(--chart-1)" />
           </div>
         </div>
-        
-        <div className="stat-card card">
-          <div className="stat-icon runs">
-            <MdSchedule />
+
+        <div className="stat-card">
+          <div className="stat-card__top">
+            <p className="stat-label">{t('dashboard.totalRuns')}</p>
+            {runsTrend && runsDelta != null && (
+              <span className={`stat-trend ${runsTrend}`}>
+                {runsTrend === 'up' ? '↑' : '↓'} +{runsDelta}%
+              </span>
+            )}
           </div>
-          <div className="stat-content">
-            <h3 className="stat-label">{t('dashboard.totalRuns')}</h3>
-            <p className="stat-value">{totalRuns}</p>
-          </div>
-        </div>
-        
-        <div className="stat-card card">
-          <div className="stat-icon success">
-            <MdCheckCircle />
-          </div>
-          <div className="stat-content">
-            <h3 className="stat-label">{t('dashboard.successful')}</h3>
-            <p className="stat-value success">{totalSuccessful}</p>
+          <div className="stat-card__bottom">
+            <p className="stat-value">{totalRuns.toLocaleString()}</p>
+            <Sparkline values={sparkRuns} color="var(--chart-3)" />
           </div>
         </div>
-        
-        <div className="stat-card card">
-          <div className="stat-icon error">
-            <MdCancel />
+
+        <div className="stat-card">
+          <div className="stat-card__top">
+            <p className="stat-label">{t('dashboard.successful')}</p>
+            {sparkSuccess.length > 1 && (
+              <span className="stat-trend up">↑</span>
+            )}
           </div>
-          <div className="stat-content">
-            <h3 className="stat-label">{t('common.failed')}</h3>
-            <p className="stat-value error">{totalFailed}</p>
+          <div className="stat-card__bottom">
+            <p className="stat-value success">{totalSuccessful.toLocaleString()}</p>
+            <Sparkline values={sparkSuccess} color="var(--color-success)" />
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-card__top">
+            <p className="stat-label">{t('dashboard.successRate') || 'Success rate'}</p>
+            {sparkRate.length > 1 && (
+              <span className="stat-trend up">↑</span>
+            )}
+          </div>
+          <div className="stat-card__bottom">
+            <p className="stat-value">{successRate}{typeof successRate === 'string' && successRate !== '—' ? '%' : ''}</p>
+            <Sparkline values={sparkRate} color="var(--chart-2)" />
           </div>
         </div>
       </div>
 
-      <div className="dashboard-system-section">
-        <h3 className="section-title">{t('dashboard.systemStatus')}</h3>
-        <SystemStatus />
-      </div>
-
-      <div className="dashboard-overview-grid">
-        <ConcurrencyStatus />
-        <SummaryStatsCard />
-      </div>
-
-      {allPipelinesDailyStats && allPipelinesDailyStats.daily_stats && allPipelinesDailyStats.daily_stats.length > 0 && (
-        <div className="dashboard-calendar-section">
-          <h3 className="section-title">{t('dashboard.runHistory')}</h3>
-          <div className="dashboard-calendar-wrapper">
+      {/* Row 2: Heatmap (1.6fr) + System Status (1fr) */}
+      {allPipelinesDailyStats?.daily_stats && allPipelinesDailyStats.daily_stats.length > 0 && (
+        <div className="dashboard-row-2">
+          <div className="panel">
+            <div className="panel__head">
+              <h3 className="section-title">{t('dashboard.runHistory')}</h3>
+            </div>
             <CalendarHeatmap dailyStats={allPipelinesDailyStats.daily_stats} days={365} showTitle={false} />
+          </div>
+          <div className="panel">
+            <div className="panel__head">
+              <h3 className="section-title">{t('dashboard.systemStatus')}</h3>
+            </div>
+            <SystemStatus />
           </div>
         </div>
       )}
 
-      <div className="storage-section">
-        <h3 className="section-title">{t('dashboard.storage')}</h3>
+      {/* If no daily stats yet, show system status alone */}
+      {(!allPipelinesDailyStats?.daily_stats || allPipelinesDailyStats.daily_stats.length === 0) && (
+        <div className="dashboard-system-section">
+          <h3 className="section-title">{t('dashboard.systemStatus')}</h3>
+          <SystemStatus />
+        </div>
+      )}
+
+      {/* Row 3: Summary + Concurrency + Storage */}
+      <div className="dashboard-row-3">
+        <SummaryStatsCard />
+        <ConcurrencyStatus />
         <StorageStats />
       </div>
 
+      {/* Pipeline grid */}
       <div className="pipelines-section">
         <h3 className="section-title">{t('nav.pipelines')}</h3>
         {pipelines && pipelines.length > 0 ? (
           <div className="pipeline-grid">
             {pipelines.map((pipeline, index) => (
-              <div key={pipeline.name} className="pipeline-card card" style={{ animationDelay: `${index * 0.05}s` }}>
-                <div className="pipeline-header">
+              <div
+                key={pipeline.name}
+                className="pipeline-card"
+                style={{ animationDelay: `${index * 0.04}s` }}
+              >
+                <div className="pipeline-card__head">
                   <h4 className="pipeline-name">{pipeline.name}</h4>
-                  <Tooltip content={t('dashboard.pipelineActiveTooltip')}>
-                    <span className={`badge ${pipeline.enabled ? 'badge-success' : 'badge-secondary'}`}>
-                      {pipeline.enabled ? t('common.active') : t('common.inactive')}
-                    </span>
-                  </Tooltip>
+                  <span className={`badge ${pipeline.enabled ? 'badge-success' : 'badge-secondary'}`}>
+                    {pipeline.enabled ? t('common.active') : t('common.inactive')}
+                  </span>
                 </div>
                 <div className="pipeline-recent-runs">
                   <span className="recent-runs-label">
@@ -226,11 +292,19 @@ export default function Dashboard() {
                   </span>
                   <RunStatusCircles pipelineName={pipeline.name} />
                 </div>
+                <div className="pipeline-card__foot">
+                  <span>{pipeline.total_runs} runs</span>
+                  {pipeline.total_runs > 0 && (
+                    <span style={{ color: 'var(--color-success-text)' }}>
+                      {Math.round((pipeline.successful_runs / pipeline.total_runs) * 100)}% ok
+                    </span>
+                  )}
+                </div>
               </div>
             ))}
           </div>
         ) : (
-          <div className="empty-state card">
+          <div className="empty-state">
             <p>{t('dashboard.noPipelines')}</p>
           </div>
         )}

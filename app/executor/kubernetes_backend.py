@@ -306,6 +306,12 @@ async def run_container_task(
             restart_policy="Never",
             containers=[container],
             volumes=[volume],
+            security_context=client.V1PodSecurityContext(
+                run_as_non_root=True,
+                run_as_user=1001,
+                run_as_group=1001,
+                fs_group=1001,
+            ),
         )
         template = client.V1PodTemplateSpec(
             metadata=client.V1ObjectMeta(

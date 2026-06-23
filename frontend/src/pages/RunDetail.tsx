@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useLayoutEffect, useMemo } from 'react'
+import { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
@@ -8,6 +8,8 @@ import { getFormatLocale } from '../utils/locale'
 import { showError, showSuccess } from '../utils/toast'
 import { LineChart } from '../components/LineChart'
 import { RunEnvSection } from '../components/RunEnvSection'
+import { LuSearch, LuWrapText, LuAlignJustify, LuDownload } from 'react-icons/lu'
+import '../components/LogViewer.css'
 import './RunDetail.css'
 
 interface Run {
@@ -68,6 +70,10 @@ export default function RunDetail() {
   const [activeTab, setActiveTab] = useState<'info' | 'logs' | 'metrics' | 'env'>('info')
   const [autoScroll, setAutoScroll] = useState(true)
   const [logSearch, setLogSearch] = useState('')
+  const [searchVisible, setSearchVisible] = useState(false)
+  const [wrapLogs, setWrapLogs] = useState(false)
+  const [showLineNumbers, setShowLineNumbers] = useState(true)
+  const logBodyRef = useRef<HTMLDivElement>(null)
   const logsEndRef = useRef<HTMLDivElement>(null)
   const [logs, setLogs] = useState<string[]>([])
   const [metrics, setMetrics] = useState<Metric[]>([])
@@ -434,12 +440,22 @@ export default function RunDetail() {
   // run?.status + run?.metrics_file statt run (Objekt-Referenz), um Stream-Reconnect bei jedem Poll zu verhindern
   }, [runId, run?.status, run?.metrics_file, activeTab, metricsReconnectAttempts])
 
-  // Auto-Scroll für Logs
+  // Auto-Scroll für Logs — scrollt den logviewer__body ans Ende
   useEffect(() => {
-    if (autoScroll && logsEndRef.current) {
-      logsEndRef.current.scrollIntoView({ behavior: 'smooth' })
+    if (autoScroll) {
+      const body = logBodyRef.current
+      if (body) body.scrollTop = body.scrollHeight
     }
   }, [logs, autoScroll])
+
+  // Disable follow when user scrolls up
+  const handleLogBodyScroll = useCallback(() => {
+    const body = logBodyRef.current
+    if (!body) return
+    const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 40
+    if (!atBottom && autoScroll) setAutoScroll(false)
+    if (atBottom && !autoScroll) setAutoScroll(true)
+  }, [autoScroll])
 
   const handleDownloadMetrics = () => {
     if (!metrics.length) return
@@ -681,54 +697,88 @@ export default function RunDetail() {
       </div>
 
       {activeTab === 'logs' && (
-        <div className="logs-container">
-          <div className="logs-controls">
-            <input
-              type="text"
-              placeholder={t('runDetail.searchLogs')}
-              value={logSearch}
-              onChange={(e) => setLogSearch(e.target.value)}
-              className="log-search"
-            />
-            <label className="auto-scroll-toggle">
-              <input
-                type="checkbox"
-                checked={autoScroll}
-                onChange={(e) => setAutoScroll(e.target.checked)}
-              />
-              {t('runDetail.autoScroll')}
-            </label>
-            {isRunning && (
-              <span className={`connection-status ${logConnectionStatus}`}>
-                {logConnectionStatus === 'connected' ? `✓ ${t('runDetail.connected')}` : 
-                 logConnectionStatus === 'reconnecting' ? `↻ ${t('runDetail.reconnecting')}` : 
-                 `✗ ${t('runDetail.disconnected')}`}
-              </span>
+        <div className={`logviewer${wrapLogs ? ' wrap' : ''}${!showLineNumbers ? ' no-linenumbers' : ''}`}>
+          {/* Toolbar */}
+          <div className="logviewer__toolbar">
+            <button
+              className={`log-toggle icon${searchVisible ? ' active' : ''}`}
+              onClick={() => setSearchVisible(v => !v)}
+              title={t('runDetail.searchLogs')}
+              aria-label={t('runDetail.searchLogs')}
+            >
+              <LuSearch size={13} />
+            </button>
+            {searchVisible && (
+              <div className="logviewer__search">
+                <input
+                  type="text"
+                  placeholder={t('runDetail.searchLogs')}
+                  value={logSearch}
+                  onChange={(e) => setLogSearch(e.target.value)}
+                  autoFocus
+                />
+                {logSearch && (
+                  <span className="count">{filteredLogs.length}</span>
+                )}
+              </div>
             )}
+            <button
+              className={`log-toggle icon${showLineNumbers ? ' active' : ''}`}
+              onClick={() => setShowLineNumbers(v => !v)}
+              title="Line numbers"
+            >
+              #
+            </button>
+            <button
+              className={`log-toggle icon${wrapLogs ? ' active' : ''}`}
+              onClick={() => setWrapLogs(v => !v)}
+              title="Wrap lines"
+              aria-label="Wrap lines"
+            >
+              <LuWrapText size={13} />
+            </button>
+            <button
+              className={`log-toggle${autoScroll ? ' active follow' : ''}`}
+              onClick={() => setAutoScroll(v => !v)}
+            >
+              <LuAlignJustify size={13} />
+              Follow
+            </button>
+            <span className="spacer" />
             {logsDownloadUrl ? (
               <a
                 href={logsDownloadUrl}
                 download={`run-${runId}-logs.txt`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="btn btn-secondary btn-sm"
+                className="log-toggle"
+                title={t('runDetail.downloadLogs')}
               >
+                <LuDownload size={13} />
                 {t('runDetail.downloadLogs')}
               </a>
             ) : (
               <button
-                className="btn btn-secondary btn-sm"
+                className="log-toggle"
                 disabled={!logsDownloadUrlError}
                 title={logsDownloadUrlError ? t('runDetail.retryDownload') : t('runDetail.loadingDownloadUrl')}
                 onClick={() => logsDownloadUrlError && queryClient.invalidateQueries({ queryKey: ['logs-download-url', runId] })}
               >
+                <LuDownload size={13} />
                 {logsDownloadUrlError ? t('runDetail.retryDownload') : t('runDetail.downloadLogs')}
               </button>
             )}
           </div>
-          <div className="logs-viewer">
+
+          {/* Log body */}
+          <div
+            className="logviewer__body"
+            ref={logBodyRef}
+            onScroll={handleLogBodyScroll}
+          >
             {run.cell_logs && run.cell_logs.length > 0 ? (
-              <div className="cell-logs-grouped">
+              /* Notebook cell logs — keep original structure */
+              <div className="cell-logs-grouped" style={{ padding: '12px 14px' }}>
                 {run.cell_logs.map((cell) => {
                   const isExpanded = cellExpanded[cell.cell_index] !== false
                   const toggle = () =>
@@ -774,7 +824,7 @@ export default function RunDetail() {
                             </div>
                           )}
                           {(() => {
-                            const images = cell.outputs?.images ?? [];
+                            const images = cell.outputs?.images ?? []
                             return images.length > 0 ? (
                               <div className="cell-log-images">
                                 {images.map((img, i) => (
@@ -786,9 +836,9 @@ export default function RunDetail() {
                                   />
                                 ))}
                               </div>
-                            ) : null;
+                            ) : null
                           })()}
-                          {!cell.stdout && !cell.stderr && (!cell.outputs?.images?.length) && (
+                          {!cell.stdout && !cell.stderr && !cell.outputs?.images?.length && (
                             <div className="cell-log-empty">Keine Ausgabe</div>
                           )}
                         </div>
@@ -800,13 +850,30 @@ export default function RunDetail() {
             ) : filteredLogs.length > 0 ? (
               filteredLogs.map((log, index) => (
                 <div key={index} className="log-line">
-                  {log}
+                  {showLineNumbers && <span className="log-gutter">{index + 1}</span>}
+                  <span className="log-text">{log}</span>
                 </div>
               ))
             ) : (
-              <div className="no-logs">Keine Logs gefunden</div>
+              <div className="logviewer__empty">{t('runDetail.noLogs') || 'No logs found'}</div>
             )}
+            {isRunning && <div className="log-cursor"><span className="block" /></div>}
             <div ref={logsEndRef} />
+          </div>
+
+          {/* Footer */}
+          <div className="logviewer__footer">
+            <span className={`logviewer__sse${isRunning ? '' : ' closed'}`}>
+              {isRunning && <span className="dot" />}
+              {isRunning
+                ? logConnectionStatus === 'connected'
+                  ? 'streaming via SSE'
+                  : logConnectionStatus === 'reconnecting'
+                    ? 'reconnecting…'
+                    : 'disconnected'
+                : 'stream closed'}
+            </span>
+            <span className="logviewer__count">{logs.length} lines</span>
           </div>
         </div>
       )}

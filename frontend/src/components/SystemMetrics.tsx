@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
-import { MdMemory, MdSpeed, MdStorage, MdDataUsage } from 'react-icons/md'
+import { LuCpu, LuGauge, LuDatabase, LuChartPie } from 'react-icons/lu'
 import './SystemMetrics.css'
 
 interface SystemMetrics {
@@ -76,7 +76,7 @@ export default function SystemMetrics() {
         {/* Aktive Container */}
         <div className="metric-card card">
           <div className="metric-icon">
-            <MdStorage />
+            <LuDatabase />
           </div>
           <div className="metric-content">
             <h4 className="metric-label">{t('systemMetrics.activeContainers')}</h4>
@@ -88,7 +88,7 @@ export default function SystemMetrics() {
         {/* Container RAM */}
         <div className="metric-card card">
           <div className="metric-icon">
-            <MdMemory />
+            <LuCpu />
           </div>
           <div className="metric-content">
             <h4 className="metric-label">{t('systemMetrics.containerRam')}</h4>
@@ -100,7 +100,7 @@ export default function SystemMetrics() {
         {/* Container CPU */}
         <div className="metric-card card">
           <div className="metric-icon">
-            <MdSpeed />
+            <LuGauge />
           </div>
           <div className="metric-content">
             <h4 className="metric-label">{t('systemMetrics.containerCpu')}</h4>
@@ -114,7 +114,7 @@ export default function SystemMetrics() {
         {/* API RAM */}
         <div className="metric-card card">
           <div className="metric-icon api">
-            <MdDataUsage />
+            <LuChartPie />
           </div>
           <div className="metric-content">
             <h4 className="metric-label">{t('systemMetrics.apiRam')}</h4>
@@ -126,7 +126,7 @@ export default function SystemMetrics() {
         {/* API CPU */}
         <div className="metric-card card">
           <div className="metric-icon api">
-            <MdSpeed />
+            <LuGauge />
           </div>
           <div className="metric-content">
             <h4 className="metric-label">{t('systemMetrics.apiCpu')}</h4>
@@ -140,7 +140,7 @@ export default function SystemMetrics() {
         {/* System RAM */}
         <div className="metric-card card">
           <div className="metric-icon system">
-            <MdMemory />
+            <LuCpu />
           </div>
           <div className="metric-content">
             <h4 className="metric-label">{t('systemMetrics.systemRam')}</h4>
@@ -162,7 +162,7 @@ export default function SystemMetrics() {
         {/* System CPU */}
         <div className="metric-card card">
           <div className="metric-icon system">
-            <MdSpeed />
+            <LuGauge />
           </div>
           <div className="metric-content">
             <h4 className="metric-label">{t('systemMetrics.systemCpu')}</h4>

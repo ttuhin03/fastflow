@@ -4,14 +4,14 @@ import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
 import { getFormatLocale } from '../utils/locale'
 import {
-  MdStorage,
-  MdDescription,
-  MdDataUsage,
-  MdArchive,
-  MdFolder,
-  MdInventory2,
-  MdCode,
-} from 'react-icons/md'
+  LuDatabase,
+  LuFileText,
+  LuChartPie,
+  LuArchive,
+  LuFolder,
+  LuBox,
+  LuCode,
+} from 'react-icons/lu'
 import './StorageStats.css'
 
 interface StorageStatsData {
@@ -82,7 +82,7 @@ export default function StorageStats() {
       <div className="storage-stats-grid">
         <div className="storage-stat-card card">
           <div className="stat-icon">
-            <MdDescription />
+            <LuFileText />
           </div>
           <div className="stat-content">
             <h4 className="stat-label">{t('storage.logFiles')}</h4>
@@ -95,7 +95,7 @@ export default function StorageStats() {
 
         <div className="storage-stat-card card">
           <div className="stat-icon">
-            <MdStorage />
+            <LuDatabase />
           </div>
           <div className="stat-content">
             <h4 className="stat-label">{t('storage.logShare')}</h4>
@@ -108,7 +108,7 @@ export default function StorageStats() {
 
         <div className="storage-stat-card card">
           <div className="stat-icon">
-            <MdDataUsage />
+            <LuChartPie />
           </div>
           <div className="stat-content">
             <h4 className="stat-label">{t('storage.totalStorage')}</h4>
@@ -133,7 +133,7 @@ export default function StorageStats() {
         {stats.inode_total !== undefined && stats.inode_free !== undefined && (
           <div className="storage-stat-card card">
             <div className={`stat-icon inode-icon ${(stats.inode_used_percent ?? 0) > 90 ? 'inode-warn' : ''}`}>
-              <MdFolder />
+              <LuFolder />
             </div>
             <div className="stat-content">
               <h4 className="stat-label">{t('storage.inodesDfTitle')}</h4>
@@ -163,7 +163,7 @@ export default function StorageStats() {
         {stats.database_size_bytes !== undefined && stats.database_size_bytes > 0 && (
           <div className="storage-stat-card card">
             <div className="stat-icon database-icon">
-              <MdArchive />
+              <LuArchive />
             </div>
             <div className="stat-content">
               <h4 className="stat-label">{t('storage.database')}</h4>
@@ -201,7 +201,7 @@ export default function StorageStats() {
           stats.uv_cache_size_mb !== undefined && (
           <div className="storage-stat-card card">
             <div className="stat-icon">
-              <MdInventory2 />
+              <LuBox />
             </div>
             <div className="stat-content">
               <h4 className="stat-label">{t('storage.uvCacheTitle')}</h4>
@@ -247,7 +247,7 @@ export default function StorageStats() {
           stats.uv_python_install_size_mb !== undefined && (
           <div className="storage-stat-card card">
             <div className="stat-icon">
-              <MdCode />
+              <LuCode />
             </div>
             <div className="stat-content">
               <h4 className="stat-label">{t('storage.uvPythonTitle')}</h4>

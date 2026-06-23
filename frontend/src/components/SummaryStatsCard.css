@@ -6,8 +6,8 @@
 }
 
 .summary-stats-card.low-rate {
-  border-color: rgba(255, 152, 0, 0.4);
-  background-color: rgba(255, 152, 0, 0.04);
+  border-color: var(--color-warning-border);
+  background-color: var(--color-warning-subtle);
 }
 
 .summary-stats-icon {
@@ -18,8 +18,8 @@
   align-items: center;
   justify-content: center;
   font-size: 1.5rem;
-  background-color: rgba(34, 197, 94, 0.15);
-  color: #22c55e;
+  background-color: var(--color-success-subtle);
+  color: var(--color-success);
   flex-shrink: 0;
 }
 

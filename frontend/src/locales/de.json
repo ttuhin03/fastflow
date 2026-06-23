@@ -15,13 +15,20 @@
     "runs": "Runs",
     "more": "weitere",
     "yes": "Ja",
-    "no": "Nein"
+    "no": "Nein",
+    "search": "Suchen oder springen…"
   },
   "nav": {
     "dashboard": "Dashboard",
     "pipelines": "Pipelines",
+    "runs": "Runs",
+    "scheduler": "Scheduler",
+    "secrets": "Secrets",
+    "dependencies": "Abhängigkeiten",
+    "sync": "Git Sync",
     "settings": "Einstellungen",
     "audit": "Audit-Log",
+    "user": "Benutzer",
     "menu": "Menü",
     "pendingInvites": "Offene Beitrittsanfragen",
     "backendOnline": "Backend online",
@@ -55,7 +62,8 @@
     "lastRuns": "Letzte Runs:",
     "lastRunsTooltip": "Zeigt die Status der letzten Runs (grün=erfolgreich, rot=fehlgeschlagen, gelb=läuft)",
     "pipelineActiveTooltip": "Aktiv: Pipeline kann ausgeführt werden | Inaktiv: Pipeline ist deaktiviert",
-    "systemStatus": "System-Status"
+    "systemStatus": "System-Status",
+    "successRate": "Erfolgsrate"
   },
   "auth": {
     "providerUnavailable": "Dieser Anmeldeanbieter ist nicht konfiguriert. Bitte Administrator kontaktieren.",

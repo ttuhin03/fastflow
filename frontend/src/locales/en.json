@@ -15,13 +15,20 @@
     "runs": "Runs",
     "more": "more",
     "yes": "Yes",
-    "no": "No"
+    "no": "No",
+    "search": "Search or jump to…"
   },
   "nav": {
     "dashboard": "Dashboard",
     "pipelines": "Pipelines",
+    "runs": "Runs",
+    "scheduler": "Scheduler",
+    "secrets": "Secrets",
+    "dependencies": "Dependencies",
+    "sync": "Git Sync",
     "settings": "Settings",
     "audit": "Audit log",
+    "user": "User",
     "menu": "Menu",
     "pendingInvites": "Pending invites",
     "backendOnline": "Backend online",
@@ -55,7 +62,8 @@
     "lastRuns": "Recent runs:",
     "lastRunsTooltip": "Shows status of recent runs (green=success, red=failed, yellow=running)",
     "pipelineActiveTooltip": "Active: pipeline can run | Inactive: pipeline is disabled",
-    "systemStatus": "System status"
+    "systemStatus": "System status",
+    "successRate": "Success rate"
   },
   "auth": {
     "providerUnavailable": "This login provider is not configured. Please contact the administrator.",

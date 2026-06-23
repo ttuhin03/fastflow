@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
 import { UI_DISPLAY_QUERY_KEY } from '../contexts/UiPreferencesContext'
 import apiClient from '../api/client'
-import { MdSave, MdRefresh, MdInfo, MdWarning, MdEmail, MdGroup, MdLink, MdCheck, MdPerson, MdSync, MdStorage, MdPlayCircle, MdNotifications, MdPeople, MdKey, MdContentCopy, MdDelete, MdLock, MdLockOpen } from 'react-icons/md'
+import { LuSave, LuRefreshCw, LuInfo, LuTriangleAlert, LuMail, LuUsers, LuLink, LuCheck, LuUser, LuDatabase, LuCirclePlay, LuBell, LuKey, LuCopy, LuTrash2, LuLock, LuLockOpen } from 'react-icons/lu'
 import { showError, showSuccess } from '../utils/toast'
 import { captureException } from '../utils/posthog'
 import { getApiOrigin } from '../config'
@@ -110,12 +110,12 @@ export default function Settings() {
   }
 
   const sectionItems: { id: SettingsSection; labelKey: string; icon: React.ReactNode }[] = [
-    { id: 'account', labelKey: 'settingsSections.account', icon: <MdPerson /> },
-    { id: 'system', labelKey: 'settingsSections.system', icon: <MdStorage /> },
-    { id: 'pipeline', labelKey: 'settingsSections.pipeline', icon: <MdPlayCircle /> },
-    { id: 'notifications', labelKey: 'settingsSections.notifications', icon: <MdNotifications /> },
-    { id: 'git-sync', labelKey: 'settingsSections.gitSync', icon: <MdSync /> },
-    ...(isAdmin ? [{ id: 'nutzer' as const, labelKey: 'settingsSections.nutzer', icon: <MdPeople /> }] : []),
+    { id: 'account', labelKey: 'settingsSections.account', icon: <LuUser /> },
+    { id: 'system', labelKey: 'settingsSections.system', icon: <LuDatabase /> },
+    { id: 'pipeline', labelKey: 'settingsSections.pipeline', icon: <LuCirclePlay /> },
+    { id: 'notifications', labelKey: 'settingsSections.notifications', icon: <LuBell /> },
+    { id: 'git-sync', labelKey: 'settingsSections.gitSync', icon: <LuRefreshCw /> },
+    ...(isAdmin ? [{ id: 'nutzer' as const, labelKey: 'settingsSections.nutzer', icon: <LuUsers /> }] : []),
   ]
 
   const trayRef = useRef<HTMLDivElement>(null)
@@ -670,7 +670,7 @@ export default function Settings() {
                   sensitiveSettingsLocked ? t('settings.editLockUnlockAria') : t('settings.editLockLockAria')
                 }
               >
-                {sensitiveSettingsLocked ? <MdLock /> : <MdLockOpen />}
+                {sensitiveSettingsLocked ? <LuLock /> : <LuLockOpen />}
               </button>
             </Tooltip>
           </div>
@@ -680,7 +680,7 @@ export default function Settings() {
             <div className="settings-header card">
               <h2>{t('settingsSections.account')}</h2>
               <p className="settings-info">
-                <MdInfo />
+                <LuInfo />
                 {t('settings.envOnly')}
                 {t('settings.accountRestartNote')}
               </p>
@@ -695,7 +695,7 @@ export default function Settings() {
           <div className="settings-account-row">
             <span className="settings-account-row__label">
               <strong>GitHub</strong>
-              {me?.has_github ? <MdCheck className="icon-success" aria-label={t('settings.linked')} /> : null}
+              {me?.has_github ? <LuCheck className="icon-success" aria-label={t('settings.linked')} /> : null}
             </span>
             {me?.has_github ? (
               <div className="settings-account-row__actions">
@@ -714,7 +714,7 @@ export default function Settings() {
               <span className="settings-provider-status">{t('common.loading')}</span>
             ) : authProviders.github ? (
               <a href={accountOAuthLinkUrl('/link/github')} className="btn btn-outlined btn-sm">
-                <MdLink />
+                <LuLink />
                 {t('settings.connectNow')}
               </a>
             ) : (
@@ -726,7 +726,7 @@ export default function Settings() {
           <div className="settings-account-row">
             <span className="settings-account-row__label">
               <strong>Google</strong>
-              {me?.has_google ? <MdCheck className="icon-success" aria-label={t('settings.linked')} /> : null}
+              {me?.has_google ? <LuCheck className="icon-success" aria-label={t('settings.linked')} /> : null}
             </span>
             {me?.has_google ? (
               <div className="settings-account-row__actions">
@@ -745,7 +745,7 @@ export default function Settings() {
               <span className="settings-provider-status">{t('common.loading')}</span>
             ) : authProviders.google ? (
               <a href={accountOAuthLinkUrl('/link/google')} className="btn btn-outlined btn-sm">
-                <MdLink />
+                <LuLink />
                 {t('settings.connectNow')}
               </a>
             ) : (
@@ -757,7 +757,7 @@ export default function Settings() {
           <div className="settings-account-row">
             <span className="settings-account-row__label">
               <strong>Microsoft</strong>
-              {me?.has_microsoft ? <MdCheck className="icon-success" aria-label={t('settings.linked')} /> : null}
+              {me?.has_microsoft ? <LuCheck className="icon-success" aria-label={t('settings.linked')} /> : null}
             </span>
             {me?.has_microsoft ? (
               <div className="settings-account-row__actions">
@@ -776,7 +776,7 @@ export default function Settings() {
               <span className="settings-provider-status">{t('common.loading')}</span>
             ) : authProviders.microsoft ? (
               <a href={accountOAuthLinkUrl('/link/microsoft')} className="btn btn-outlined btn-sm">
-                <MdLink />
+                <LuLink />
                 {t('settings.connectNow')}
               </a>
             ) : (
@@ -788,7 +788,7 @@ export default function Settings() {
           <div className="settings-account-row">
             <span className="settings-account-row__label">
               <strong>{customProviderName}</strong>
-              {me?.has_custom ? <MdCheck className="icon-success" aria-label={t('settings.linked')} /> : null}
+              {me?.has_custom ? <LuCheck className="icon-success" aria-label={t('settings.linked')} /> : null}
             </span>
             {me?.has_custom ? (
               <div className="settings-account-row__actions">
@@ -807,7 +807,7 @@ export default function Settings() {
               <span className="settings-provider-status">{t('common.loading')}</span>
             ) : authProviders.custom ? (
               <a href={accountOAuthLinkUrl('/link/custom')} className="btn btn-outlined btn-sm">
-                <MdLink />
+                <LuLink />
                 {t('settings.connectNow')}
               </a>
             ) : (
@@ -1430,7 +1430,7 @@ export default function Settings() {
                   disabled={updateSettingsMutation.isPending || !localSettings || fieldLocked}
                   className="btn btn-primary"
                 >
-                  <MdSave />
+                  <LuSave />
                   {t('settings.saveButton')}
                 </button>
                 <Tooltip content={t('settings.forceFlushTooltip')}>
@@ -1439,13 +1439,13 @@ export default function Settings() {
                     disabled={forceCleanupMutation.isPending || fieldLocked}
                     className="btn btn-warning"
                   >
-                    <MdRefresh />
+                    <LuRefreshCw />
                     {forceCleanupMutation.isPending ? t('common.saving') : t('settings.forceFlush')}
                   </button>
                 </Tooltip>
               </div>
               <div className="warning-box">
-                <MdWarning />
+                <LuTriangleAlert />
                 <p>
                   <strong>{t('settings.note')}</strong> {t('settings.envOnly')}
                   {t('settings.envHint')}
@@ -1471,7 +1471,7 @@ export default function Settings() {
           {/* Email Notifications */}
           <div className="settings-section card">
             <h3 className="section-title">
-              <MdEmail />
+              <LuMail />
               {t('settings.emailNotifications')}
             </h3>
             <div className="settings-grid">
@@ -1589,7 +1589,7 @@ export default function Settings() {
                     disabled={!currentSettings.email_enabled || testEmailMutation.isPending || fieldLocked}
                     className="btn btn-primary"
                   >
-                  <MdEmail />
+                  <LuMail />
                   {testEmailMutation.isPending ? t('settings.sendingLabel') : t('settings.testEmailSend')}
                   </button>
                 )}
@@ -1600,7 +1600,7 @@ export default function Settings() {
           {/* Teams Notifications */}
           <div className="settings-section card">
             <h3 className="section-title">
-              <MdGroup />
+              <LuUsers />
               {t('settings.teamsNotifications')}
             </h3>
             <div className="settings-grid">
@@ -1641,7 +1641,7 @@ export default function Settings() {
                     disabled={!currentSettings.teams_enabled || testTeamsMutation.isPending || fieldLocked}
                     className="btn btn-primary"
                   >
-                    <MdGroup />
+                    <LuUsers />
                     {testTeamsMutation.isPending ? t('settings.sendingLabel') : t('settings.testTeamsSend')}
                   </button>
                 )}
@@ -1652,7 +1652,7 @@ export default function Settings() {
           {/* Notification API (Skripte) */}
           <div className="settings-section card">
             <h3 className="section-title">
-              <MdKey />
+              <LuKey />
               {t('settings.notificationApiTitle')}
             </h3>
             <p className="setting-hint setting-hint--spaced">{t('settings.notificationApiHint')}</p>
@@ -1712,7 +1712,7 @@ export default function Settings() {
                                   disabled={deleteNotificationKeyMutation.isPending || fieldLocked}
                                   aria-label={t('settings.removeKey')}
                                 >
-                                  <MdDelete /> {t('settings.removeKey')}
+                                  <LuTrash2 /> {t('settings.removeKey')}
                                 </button>
                               )}
                             </td>
@@ -1741,7 +1741,7 @@ export default function Settings() {
                         onClick={() => createNotificationKeyMutation.mutate(newKeyLabel.trim() || undefined)}
                         disabled={createNotificationKeyMutation.isPending || fieldLocked}
                       >
-                        <MdKey /> {t('settings.generateKey')}
+                        <LuKey /> {t('settings.generateKey')}
                       </button>
                     </div>
                   )}
@@ -1756,7 +1756,7 @@ export default function Settings() {
                         className="btn btn-secondary btn-sm"
                         onClick={() => { navigator.clipboard.writeText(generatedKey.key); showSuccess(t('settings.copied')); }}
                       >
-                        <MdContentCopy /> {t('settings.copy')}
+                        <LuCopy /> {t('settings.copy')}
                       </button>
                     </div>
                     <button type="button" className="btn btn-secondary btn-sm settings-dismiss-generated" onClick={() => setGeneratedKey(null)}>
@@ -1832,7 +1832,7 @@ export default function Settings() {
               </div>
 
               <div className="cleanup-warning">
-                <MdWarning />
+                <LuTriangleAlert />
                 <p>
                   {t('settings.cleanupWarning')}
                 </p>
@@ -1850,7 +1850,7 @@ export default function Settings() {
                 onClick={confirmForceCleanup}
                 disabled={forceCleanupMutation.isPending || isReadonly}
               >
-                <MdRefresh />
+                <LuRefreshCw />
                 {forceCleanupMutation.isPending ? t('settings.cleanupRunning') : t('settings.cleanupExecute')}
               </button>
             </div>

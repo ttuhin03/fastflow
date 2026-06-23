@@ -1,4 +1,4 @@
-import { MdInfo } from 'react-icons/md'
+import { LuInfo } from 'react-icons/lu'
 import Tooltip from './Tooltip'
 import './InfoIcon.css'
 
@@ -16,7 +16,7 @@ export default function InfoIcon({
   return (
     <Tooltip content={content} position={position}>
       <span className={`info-icon ${className}`} aria-label="Information">
-        <MdInfo />
+        <LuInfo />
       </span>
     </Tooltip>
   )

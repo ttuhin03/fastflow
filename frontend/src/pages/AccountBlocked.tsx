@@ -1,7 +1,7 @@
 import { useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
-import { MdLock } from 'react-icons/md'
+import { LuLock } from 'react-icons/lu'
 import LoginAttributionFooter from '../components/LoginAttributionFooter'
 import './Login.css'
 import './RequestScreens.css'
@@ -36,7 +36,7 @@ export default function AccountBlocked() {
         <div className="login-card card">
           <div className="login-header">
             <div className="login-icon login-icon--error">
-              <MdLock />
+              <LuLock />
             </div>
             <h1>{t('accountBlocked.title')}</h1>
             <p className="login-subtitle">{t('appTitle')}</p>

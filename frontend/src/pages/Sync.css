@@ -52,18 +52,21 @@
 }
 
 .status-badge.success {
-  background-color: var(--color-success);
-  color: #ffffff;
+  background-color: var(--color-success-subtle);
+  border: 1px solid var(--color-success-border);
+  color: var(--color-success-text);
 }
 
 .status-badge.failed {
-  background-color: var(--color-error);
-  color: #ffffff;
+  background-color: var(--color-error-subtle);
+  border: 1px solid var(--color-error-border);
+  color: var(--color-error-text);
 }
 
 .status-badge.pending {
-  background-color: var(--color-warning);
-  color: #0f172a;
+  background-color: var(--color-warning-subtle);
+  border: 1px solid var(--color-warning-border);
+  color: var(--color-warning-text);
 }
 
 .sync-form {
@@ -105,8 +108,9 @@
 .cached-badge {
   display: inline-block;
   padding: var(--spacing-sm) var(--spacing-md);
-  background-color: var(--color-success);
-  color: #ffffff;
+  background-color: var(--color-success-subtle);
+  border: 1px solid var(--color-success-border);
+  color: var(--color-success-text);
   border-radius: var(--radius-sm);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
@@ -230,18 +234,21 @@
 }
 
 .log-success {
-  background-color: var(--color-success);
-  color: #ffffff;
+  background-color: var(--color-success-subtle);
+  border: 1px solid var(--color-success-border);
+  color: var(--color-success-text);
 }
 
 .log-failed {
-  background-color: var(--color-error);
-  color: #ffffff;
+  background-color: var(--color-error-subtle);
+  border: 1px solid var(--color-error-border);
+  color: var(--color-error-text);
 }
 
 .log-started {
-  background-color: var(--color-primary);
-  color: #ffffff;
+  background-color: var(--color-running-subtle);
+  border: 1px solid var(--color-running-border);
+  color: var(--color-running-text);
 }
 
 .log-unknown {

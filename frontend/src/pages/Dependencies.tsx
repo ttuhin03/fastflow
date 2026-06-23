@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
-import { MdRefresh, MdSecurity, MdSearch, MdExpandMore, MdExpandLess } from 'react-icons/md'
+import { LuRefreshCw, LuShieldCheck, LuSearch, LuChevronDown, LuChevronUp } from 'react-icons/lu'
 import Skeleton from '../components/Skeleton'
 import './Dependencies.css'
 
@@ -166,7 +166,7 @@ export default function Dependencies() {
             <span>{t('dependencies.vulnsOnly')}</span>
           </label>
           <label className="filter-group search-box">
-            <MdSearch size={18} />
+            <LuSearch size={18} />
             <input
               type="text"
               placeholder={t('dependencies.searchPackage')}
@@ -183,7 +183,7 @@ export default function Dependencies() {
             onClick={() => { refetch(); refetchAuditLast() }}
             disabled={isFetching || auditLastLoading}
           >
-            <MdRefresh size={18} />
+            <LuRefreshCw size={18} />
             {isFetching || auditLastLoading ? t('common.loading') : t('dependencies.update')}
           </button>
           <button
@@ -192,7 +192,7 @@ export default function Dependencies() {
             onClick={() => setAuditRequested(true)}
             disabled={isReadonly || isFetching}
           >
-            <MdSecurity size={18} />
+            <LuShieldCheck size={18} />
             {t('dependencies.runSecurityScan')}
           </button>
         </div>
@@ -218,7 +218,7 @@ export default function Dependencies() {
                     className="pipeline-deps-head"
                     onClick={() => toggleExpanded(d.pipeline)}
                   >
-                    {expanded ? <MdExpandLess size={20} /> : <MdExpandMore size={20} />}
+                    {expanded ? <LuChevronUp size={20} /> : <LuChevronDown size={20} />}
                     <span className="pipeline-deps-name">{d.pipeline}</span>
                     <span className="pipeline-deps-meta">
                       {packages.length === 1 ? t('dependencies.packagesCount', { count: 1 }) : t('dependencies.packagesCountPlural', { count: packages.length })}

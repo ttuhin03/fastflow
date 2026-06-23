@@ -48,8 +48,8 @@
 
 .header-time-toggle.tz-a {
   color: var(--color-info);
-  border-color: rgba(99, 102, 241, 0.3);
-  background-color: rgba(99, 102, 241, 0.1);
+  border-color: var(--color-accent-border);
+  background-color: var(--color-accent-subtle);
 }
 
 .header-time-toggle.tz-b {
@@ -80,7 +80,7 @@
 }
 
 .ht-dual-tz-a {
-  color: rgba(99, 102, 241, 0.95);
+  color: var(--color-primary);
 }
 
 .ht-dual-sep {
@@ -144,5 +144,5 @@ button.header-lang-dual-btn:focus-visible {
   opacity: 1;
   color: var(--color-primary);
   border-color: var(--color-border);
-  background: rgba(99, 102, 241, 0.08);
+  background: var(--color-accent-subtle);
 }

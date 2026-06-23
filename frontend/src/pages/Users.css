@@ -87,7 +87,7 @@
 .form-group select:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
+  box-shadow: 0 0 0 3px var(--color-accent-subtle);
 }
 
 .form-actions {
@@ -215,23 +215,27 @@
 }
 
 .badge-write {
-  background-color: var(--color-warning);
-  color: #0f172a;
+  background-color: var(--color-warning-subtle);
+  border: 1px solid var(--color-warning-border);
+  color: var(--color-warning-text);
 }
 
 .badge-admin {
-  background-color: var(--color-primary);
-  color: white;
+  background-color: var(--color-accent-subtle);
+  border: 1px solid var(--color-accent-border);
+  color: var(--color-primary-light);
 }
 
 .badge-success {
-  background-color: var(--color-success);
-  color: white;
+  background-color: var(--color-success-subtle);
+  border: 1px solid var(--color-success-border);
+  color: var(--color-success-text);
 }
 
 .badge-error {
-  background-color: var(--color-error);
-  color: white;
+  background-color: var(--color-error-subtle);
+  border: 1px solid var(--color-error-border);
+  color: var(--color-error-text);
 }
 
 .account-badges {

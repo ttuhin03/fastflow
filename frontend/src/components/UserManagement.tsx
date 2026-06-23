@@ -4,16 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../api/client'
 import { getFormatLocale } from '../utils/locale'
 import { showError, showSuccess, showConfirm } from '../utils/toast'
-import {
-  MdPeople,
-  MdAdd,
-  MdEdit,
-  MdDelete,
-  MdBlock,
-  MdLockReset,
-  MdEmail,
-  MdClose
-} from 'react-icons/md'
+import { LuUsers, LuPlus, LuPencil, LuTrash2, LuBan, LuKeyRound, LuMail, LuX } from 'react-icons/lu'
 import './UserManagement.css'
 
 interface User {
@@ -290,7 +281,7 @@ export default function UserManagement() {
         className="user-management-btn"
         title={t('users.managementTitle')}
       >
-        <MdPeople />
+        <LuUsers />
         <span>{t('users.shortLabel')}</span>
       </button>
 
@@ -314,7 +305,7 @@ export default function UserManagement() {
                 className="close-btn"
                 aria-label={t('users.closeAria')}
               >
-                <MdClose />
+                <LuX />
               </button>
             </div>
             <form onSubmit={handleResetPasswordSubmit} className="user-form">
@@ -362,7 +353,7 @@ export default function UserManagement() {
                 }}
                 className="close-btn"
               >
-                <MdClose />
+                <LuX />
               </button>
             </div>
 
@@ -375,7 +366,7 @@ export default function UserManagement() {
                 }}
                 className="btn btn-primary"
               >
-                <MdAdd />
+                <LuPlus />
                 {t('users.createUser')}
               </button>
               <button
@@ -386,7 +377,7 @@ export default function UserManagement() {
                 }}
                 className="btn btn-primary"
               >
-                <MdEmail />
+                <LuMail />
                 {t('users.sendInvite')}
               </button>
             </div>
@@ -553,14 +544,14 @@ export default function UserManagement() {
                               className="btn-icon"
                               title={t('users.edit')}
                             >
-                              <MdEdit />
+                              <LuPencil />
                             </button>
                             <button
                               onClick={() => handleResetPassword(user.id)}
                               className="btn-icon"
                               title={t('users.resetPasswordTooltip')}
                             >
-                              <MdLockReset />
+                              <LuKeyRound />
                             </button>
                             {user.blocked ? (
                               <button
@@ -568,7 +559,7 @@ export default function UserManagement() {
                                 className="btn-icon"
                                 title={t('users.unblock')}
                               >
-                                <MdBlock />
+                                <LuBan />
                               </button>
                             ) : (
                               <button
@@ -576,7 +567,7 @@ export default function UserManagement() {
                                 className="btn-icon"
                                 title={t('users.block')}
                               >
-                                <MdBlock />
+                                <LuBan />
                               </button>
                             )}
                             <button
@@ -584,7 +575,7 @@ export default function UserManagement() {
                               className="btn-icon btn-danger"
                               title={t('common.delete')}
                             >
-                              <MdDelete />
+                              <LuTrash2 />
                             </button>
                           </div>
                         </td>

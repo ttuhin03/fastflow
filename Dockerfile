@@ -82,6 +82,12 @@ COPY pipelines/ ./pipelines-seed/
 COPY entrypoint.sh .
 RUN chmod +x entrypoint.sh
 
+# Non-root User anlegen (feste UID/GID 1001 für K8s securityContext)
+RUN groupadd -g 1001 fastflow && useradd -u 1001 -g fastflow -d /app -s /sbin/nologin fastflow \
+    && chown -R fastflow:fastflow /app
+
+USER fastflow
+
 # Exponiere Port für FastAPI
 EXPOSE 8000
 

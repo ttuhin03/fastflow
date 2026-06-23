@@ -33,35 +33,35 @@
 }
 
 .storage-stat-card .stat-icon {
-  width: 56px;
-  height: 56px;
+  width: 48px;
+  height: 48px;
   border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.75rem;
-  background-color: rgba(99, 102, 241, 0.15);
+  font-size: 1.5rem;
+  background-color: var(--color-accent-subtle);
   color: var(--color-primary);
   flex-shrink: 0;
 }
 
 .storage-stat-card .stat-icon.database-icon {
-  background-color: rgba(79, 70, 229, 0.15);
-  color: #818cf8;
+  background-color: var(--color-accent-subtle);
+  color: var(--color-primary-light);
 }
 
 .storage-stat-card .stat-icon.inode-icon {
-  background-color: rgba(34, 197, 94, 0.15);
-  color: #22c55e;
+  background-color: var(--color-success-subtle);
+  color: var(--color-success);
 }
 
 .storage-stat-card .stat-icon.inode-icon.inode-warn {
-  background-color: rgba(239, 68, 68, 0.15);
+  background-color: var(--color-error-subtle);
   color: var(--color-error);
 }
 
 .disk-usage-fill.inode {
-  background: linear-gradient(90deg, #22c55e, #86efac);
+  background: linear-gradient(90deg, var(--color-success), var(--color-success-text));
 }
 
 .disk-usage-fill.inode.inode-warn {
@@ -150,15 +150,15 @@
 }
 
 .disk-usage-fill.database {
-  background: linear-gradient(90deg, #6366f1, #818cf8);
+  background: linear-gradient(90deg, var(--color-primary), var(--color-primary-light));
 }
 
 .disk-usage-fill.uv-cache {
-  background: linear-gradient(90deg, #0ea5e9, #38bdf8);
+  background: linear-gradient(90deg, var(--color-running), var(--color-running-text));
 }
 
 .disk-usage-fill.uv-python {
-  background: linear-gradient(90deg, #059669, #34d399);
+  background: linear-gradient(90deg, var(--color-success-dark), var(--color-success));
 }
 
 .storage-path-detail {
