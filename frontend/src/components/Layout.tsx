@@ -28,7 +28,10 @@ import VersionInfo from './VersionInfo'
 import HeaderTime from './HeaderTime'
 import HeaderLanguage from './HeaderLanguage'
 import SetupWizard from './SetupWizard'
+import CommandPalette from './CommandPalette'
 import './Layout.css'
+
+const openCommandPalette = () => window.dispatchEvent(new Event('open-command-palette'))
 
 interface NavSection {
   label: string
@@ -182,6 +185,7 @@ export default function Layout() {
   return (
     <div className="layout">
       <SetupWizard />
+      <CommandPalette />
 
       <div
         className={`sidebar-overlay ${sidebarOpen ? 'visible' : ''}`}
@@ -326,7 +330,7 @@ export default function Layout() {
           <div className="header-spacer" />
 
           {/* ⌘K search trigger */}
-          <button className="header-search" aria-label="Search">
+          <button className="header-search" aria-label="Search" onClick={openCommandPalette}>
             <LuSearch size={14} />
             <span className="label">{t('common.search') || 'Search or jump to…'}</span>
             <kbd>⌘K</kbd>

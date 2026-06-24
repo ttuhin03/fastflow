@@ -1170,6 +1170,272 @@
   }
 }
 
+/* ───────────────────────────────────────────────────────
+   Split layout — two-column login design
+   ─────────────────────────────────────────────────────── */
+
+/* Brand panel — hidden on small screens */
+@media (max-width: 899px) {
+  .login-brand { display: none; }
+
+  .login-container--split {
+    justify-content: center;
+    align-items: center;
+  }
+
+  /* Clean solid card on mobile (no video behind it) */
+  .login-container--split .login-card {
+    backdrop-filter: none;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    max-width: 400px;
+    width: 100%;
+    animation: ff-rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .login-container--split .login-card::after {
+    display: none;
+  }
+}
+
+/* Desktop grid */
+@media (min-width: 900px) {
+  .login-container--split {
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    align-items: stretch;
+    justify-content: initial;
+    padding: 0;
+  }
+
+  .login-container--split .login-content {
+    max-width: none;
+    width: 100%;
+    backdrop-filter: none;
+    background: var(--color-background);
+    border-left: 1px solid var(--color-border);
+    box-shadow: none;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 48px clamp(2rem, 4vw, 3rem);
+  }
+
+  .login-container--split .login-card {
+    width: 100%;
+    max-width: 340px;
+    flex: 0 0 auto;
+    justify-content: flex-start;
+    animation: ff-rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .login-container--split .login-footer {
+    margin-top: var(--spacing-2xl);
+    padding-top: 0;
+  }
+}
+
+/* Brand panel — kept translucent so the animated background shows through */
+.login-brand {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 100% at 0% 0%, rgb(from var(--color-primary) r g b / 0.16) 0%, rgb(from var(--color-primary) r g b / 0) 42%),
+    color-mix(in srgb, var(--color-surface) 78%, transparent);
+  border-right: 1px solid var(--color-border);
+  padding: clamp(2.5rem, 5vw, 3.5rem);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xl);
+}
+
+.login-brand-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--color-border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-border) 1px, transparent 1px);
+  background-size: 44px 44px;
+  opacity: 0.5;
+  mask-image: radial-gradient(80% 70% at 30% 20%, #000 0%, transparent 80%);
+  -webkit-mask-image: radial-gradient(80% 70% at 30% 20%, #000 0%, transparent 80%);
+  pointer-events: none;
+}
+
+.login-brand-logo {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  position: relative;
+  z-index: 1;
+}
+
+.login-brand-mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: linear-gradient(150deg, var(--color-primary), var(--color-primary-dark));
+  box-shadow: 0 6px 20px rgb(from var(--color-primary) r g b / 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.login-brand-name {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary);
+}
+
+.login-brand-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+  position: relative;
+  z-index: 1;
+}
+
+.login-brand-headline {
+  font-size: clamp(1.75rem, 3vw, 2.5rem);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.login-brand-sub {
+  font-size: var(--font-size-base);
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+  margin: 0;
+  max-width: 44ch;
+}
+
+/* Stat row — two mono stats split by a vertical divider (mockup) */
+.login-brand-stats {
+  display: flex;
+  align-items: stretch;
+  gap: var(--spacing-lg);
+  margin-top: var(--spacing-sm);
+}
+
+.login-brand-stat__value {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-tight);
+  color: var(--color-text-primary);
+}
+
+.login-brand-stat__label {
+  margin-top: 2px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+
+.login-brand-stat__divider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--color-border);
+}
+
+.login-brand-version {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono, monospace);
+  letter-spacing: 0.02em;
+  position: relative;
+  z-index: 1;
+  opacity: 0.5;
+}
+
+/* Auth panel heading */
+.login-welcome {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary);
+  margin: 0 0 6px;
+}
+
+.login-container--split .login-header {
+  text-align: left;
+  margin-bottom: var(--spacing-xl);
+}
+
+.login-container--split .login-subtitle {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-normal);
+  letter-spacing: 0;
+  color: var(--color-text-tertiary);
+  margin: 0 0 28px;
+  animation: none;
+}
+
+/* "Request access" hint below the auth form (mockup) */
+.login-request-access {
+  margin: 24px 0 0;
+  text-align: center;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+  line-height: 1.6;
+}
+
+.login-request-access__hint {
+  color: var(--color-primary-light);
+  font-weight: var(--font-weight-medium);
+}
+
+/* "or" separator between standard OAuth and custom OIDC */
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  margin: var(--spacing-xs) 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.login-divider::before,
+.login-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+}
+
+/* Button hierarchy per design spec */
+
+/* GitHub: slightly more prominent */
+.login-form-oauth .login-btn-github {
+  background: var(--color-surface-variant);
+  border-color: color-mix(in srgb, var(--color-border) 80%, rgba(255, 255, 255, 0.1));
+}
+
+/* Custom OIDC: accent-tinted */
+.login-form-oauth .login-btn-custom {
+  background: rgb(from var(--color-primary) r g b / 0.08);
+  border-color: rgb(from var(--color-primary) r g b / 0.35);
+  color: var(--color-primary);
+}
+
+.login-form-oauth .login-btn-custom .login-btn-custom-icon,
+.login-form-oauth .login-btn-custom svg {
+  color: var(--color-primary);
+  opacity: 1;
+}
+
 /* Landscape mobile orientation */
 @media (max-height: 500px) and (orientation: landscape) {
   .login-container {

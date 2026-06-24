@@ -21,6 +21,10 @@ interface Run {
 
 interface RunStatusCirclesProps {
   pipelineName: string
+  /** 'circles' = legacy round icons; 'strip' = dense colored last-N bar (dashboard cards) */
+  variant?: 'circles' | 'strip'
+  /** How many cells to render (strip uses up to 12) */
+  count?: number
 }
 
 function useRecentRunsPerPipeline(pipelineName: string) {
@@ -28,7 +32,7 @@ function useRecentRunsPerPipeline(pipelineName: string) {
   return useQuery<Run[]>({
     queryKey: ['recent-runs-per-pipeline'],
     queryFn: async () => {
-      const response = await apiClient.get('/runs/recent-per-pipeline?limit_per_pipeline=5')
+      const response = await apiClient.get('/runs/recent-per-pipeline?limit_per_pipeline=12')
       return response.data
     },
     refetchInterval: runsInterval,
@@ -36,7 +40,26 @@ function useRecentRunsPerPipeline(pipelineName: string) {
   })
 }
 
-export default function RunStatusCircles({ pipelineName }: RunStatusCirclesProps) {
+function getStatusClass(status: string) {
+  switch (status.toUpperCase()) {
+    case 'SUCCESS':
+      return 'status-success'
+    case 'FAILED':
+      return 'status-failed'
+    case 'WARNING':
+      return 'status-warning'
+    case 'INTERRUPTED':
+      return 'status-interrupted'
+    case 'RUNNING':
+      return 'status-running'
+    case 'PENDING':
+      return 'status-pending'
+    default:
+      return 'status-unknown'
+  }
+}
+
+export default function RunStatusCircles({ pipelineName, variant = 'circles', count }: RunStatusCirclesProps) {
   const { data: runs, isLoading } = useRecentRunsPerPipeline(pipelineName)
 
   const getStatusIcon = (status: string) => {
@@ -58,25 +81,6 @@ export default function RunStatusCircles({ pipelineName }: RunStatusCirclesProps
     }
   }
 
-  const getStatusClass = (status: string) => {
-    switch (status.toUpperCase()) {
-      case 'SUCCESS':
-        return 'status-success'
-      case 'FAILED':
-        return 'status-failed'
-      case 'WARNING':
-        return 'status-warning'
-      case 'INTERRUPTED':
-        return 'status-interrupted'
-      case 'RUNNING':
-        return 'status-running'
-      case 'PENDING':
-        return 'status-pending'
-      default:
-        return 'status-unknown'
-    }
-  }
-
   const getTooltipText = (run: Run | null) => {
     if (!run) return 'Kein Run'
     const date = new Date(run.started_at).toLocaleString(getFormatLocale())
@@ -84,6 +88,27 @@ export default function RunStatusCircles({ pipelineName }: RunStatusCirclesProps
       ? `${Math.round((new Date(run.finished_at).getTime() - new Date(run.started_at).getTime()) / 1000)}s`
       : 'Läuft...'
     return `${run.status} - ${date} (${duration})`
+  }
+
+  // Strip variant: dense last-N colored cells (oldest → newest, left → right)
+  if (variant === 'strip') {
+    const total = count ?? 12
+    const recent = (runs ?? []).slice(0, total).reverse()
+    const cells = Array.from({ length: total }, (_, i) => {
+      const offset = total - recent.length
+      return i >= offset ? recent[i - offset] : null
+    })
+    return (
+      <div className="run-strip">
+        {cells.map((run, index) => (
+          <span
+            key={run?.id || `empty-${index}`}
+            className={`run-strip__cell ${run ? getStatusClass(run.status) : 'status-empty'}`}
+            title={getTooltipText(run)}
+          />
+        ))}
+      </div>
+    )
   }
 
   const displayRuns = Array.from({ length: 5 }, (_, i) => runs?.[i] || null)

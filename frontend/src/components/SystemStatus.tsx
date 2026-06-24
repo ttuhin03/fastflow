@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
-import { LuCircleCheck, LuCircleX, LuDatabase, LuFolder, LuServer, LuCpu } from 'react-icons/lu'
+import { LuCircleX } from 'react-icons/lu'
 import './SystemStatus.css'
 
 interface SystemStatusResponse {
@@ -11,17 +11,17 @@ interface SystemStatusResponse {
   version?: string
 }
 
-const CHECK_ICONS: Record<string, React.ReactNode> = {
-  database: <LuDatabase />,
-  docker: <LuServer />,
-  kubernetes: <LuServer />,
-  uv_cache: <LuFolder />,
-  disk: <LuDatabase />,
-  inodes: <LuCpu />,
-}
+const CHECK_ORDER = ['database', 'docker', 'kubernetes', 'uv_cache', 'disk', 'inodes']
 
 function isOk(value: unknown): boolean {
   return value === 'ok' || value === 'n/a (nur Unix)'
+}
+
+/** A degraded value is a non-ok string that still looks like a soft warning (n/a, skipped, …) */
+function isDegraded(value: unknown): boolean {
+  if (isOk(value)) return false
+  const v = String(value).toLowerCase()
+  return v.includes('n/a') || v.includes('skip') || v.includes('warn') || v.includes('degraded')
 }
 
 export default function SystemStatus() {
@@ -55,24 +55,35 @@ export default function SystemStatus() {
   }
 
   const checks = data.checks as Record<string, string | number>
-  const checkKeys = Object.keys(CHECK_ICONS).filter((key) => key in checks)
+  const checkKeys = CHECK_ORDER.filter((key) => key in checks)
 
   return (
     <div className={`system-status ${data.status === 'not_ready' ? 'has-errors' : ''}`}>
-      <div className="system-status-grid">
-        {checkKeys.map((key) => {
-          const value = checks[key]
-          const ok = isOk(value)
-          const label = t(`warnings.systemLabels.${key}`, { defaultValue: key })
-          return (
-            <div key={key} className={`system-status-item ${ok ? 'ok' : 'error'}`} title={String(value)}>
-              <span className="system-status-icon">{ok ? <LuCircleCheck /> : <LuCircleX />}</span>
-              <span className="system-status-label">{label}</span>
-              {!ok && <span className="system-status-detail">{String(value).slice(0, 40)}</span>}
+      {checkKeys.map((key) => {
+        const value = checks[key]
+        const ok = isOk(value)
+        const degraded = isDegraded(value)
+        const state = ok ? 'success' : degraded ? 'degraded' : 'error'
+        const badgeVariant = ok ? 'badge-success' : degraded ? 'badge-warning' : 'badge-error'
+        const label = t(`warnings.systemLabels.${key}`, { defaultValue: key })
+        const pill = ok
+          ? t('systemStatus.operational', 'Operational')
+          : degraded
+            ? t('systemStatus.degraded', 'Degraded')
+            : t('systemStatus.down', 'Down')
+        return (
+          <div key={key} className="system-status__row">
+            <span className={`status-dot ${state}`} aria-hidden />
+            <div className="system-status__info">
+              <div className="system-status__name">{label}</div>
+              <div className="system-status__detail mono" title={String(value)}>
+                {String(value)}
+              </div>
             </div>
-          )
-        })}
-      </div>
+            <span className={`badge ${badgeVariant}`}>{pill}</span>
+          </div>
+        )
+      })}
     </div>
   )
 }

@@ -16,7 +16,14 @@
     "more": "weitere",
     "yes": "Ja",
     "no": "Nein",
+    "open": "Öffnen",
     "search": "Suchen oder springen…"
+  },
+  "cmdk": {
+    "title": "Befehlspalette",
+    "placeholder": "Pipelines, Runs, Aktionen suchen…",
+    "jumpTo": "Springe zu",
+    "noResults": "Keine Treffer"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -81,7 +88,12 @@
     "microsoftNotConfigured": "Microsoft nicht konfiguriert",
     "customNotConfigured": "Custom OAuth nicht konfiguriert",
     "viewOnGitHub": "View on GitHub",
-    "callbackError": "Anmeldung fehlgeschlagen. Bitte erneut versuchen."
+    "callbackError": "Anmeldung fehlgeschlagen. Bitte erneut versuchen.",
+    "brandHeadline": "Python-Pipelines orchestrieren, container-nativ.",
+    "brandSub": "Plane, starte und beobachte deine Daten- & ML-Workloads — mit Live-Logs, Ressourcen-Metriken und Git-synchronisierten Definitionen.",
+    "welcomeBack": "Willkommen zurück",
+    "signInWorkspace": "Melde dich in deinem FastFlow-Workspace an.",
+    "orSeparator": "oder"
   },
   "toast": {
     "ok": "OK",

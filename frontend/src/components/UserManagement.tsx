@@ -525,13 +525,13 @@ export default function UserManagement() {
                         <td>{user.username}</td>
                         <td>{user.email || '-'}</td>
                         <td>
-                          <span className={`badge badge-${user.role === 'admin' ? 'danger' : user.role === 'write' ? 'warning' : 'secondary'}`}>
+                          <span className={`badge badge-${user.role === 'admin' ? 'primary' : user.role === 'write' ? 'info' : 'secondary'}`}>
                             {user.role === 'admin' ? t('users.roleDisplayAdmin') : user.role === 'write' ? t('users.roleDisplayWrite') : t('users.roleDisplayReadonly')}
                           </span>
                         </td>
                         <td>
                           {user.blocked ? (
-                            <span className="badge badge-danger">{t('users.badgeBlocked')}</span>
+                            <span className="badge badge-error">{t('users.badgeBlocked')}</span>
                           ) : (
                             <span className="badge badge-success">{t('users.badgeActive')}</span>
                           )}

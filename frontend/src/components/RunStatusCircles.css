@@ -45,7 +45,7 @@
 
 .run-status-circle.status-running {
   background-color: var(--color-primary);
-  animation: pulse 2s ease-in-out infinite;
+  animation: ff-pulse 2s ease-in-out infinite;
 }
 
 .run-status-circle.status-pending {
@@ -64,14 +64,32 @@
   height: 16px;
   border-radius: var(--radius-full);
   background-color: var(--color-surface-variant);
-  animation: pulse 1.5s ease-in-out infinite;
+  animation: ff-pulse 1.5s ease-in-out infinite;
 }
 
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
+/* ---- Strip variant: dense last-N runs bar (dashboard pipeline cards) ------ */
+.run-strip {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  width: 100%;
 }
+
+.run-strip__cell {
+  flex: 1;
+  min-width: 6px;
+  height: 18px;
+  border-radius: 2px;
+  background: var(--color-surface-3);
+  transition: transform var(--transition-fast);
+}
+
+.run-strip__cell:hover { transform: scaleY(1.12); }
+
+.run-strip__cell.status-success     { background: var(--color-success); }
+.run-strip__cell.status-failed      { background: var(--color-error); }
+.run-strip__cell.status-warning     { background: var(--color-warning); }
+.run-strip__cell.status-interrupted { background: var(--color-neutral); }
+.run-strip__cell.status-running     { background: var(--color-running); animation: ff-pulse 1.6s ease-in-out infinite; }
+.run-strip__cell.status-pending     { background: var(--color-neutral); opacity: 0.6; }
+.run-strip__cell.status-empty       { background: var(--color-surface-3); }

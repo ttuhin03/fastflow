@@ -16,7 +16,14 @@
     "more": "more",
     "yes": "Yes",
     "no": "No",
+    "open": "Open",
     "search": "Search or jump to…"
+  },
+  "cmdk": {
+    "title": "Command palette",
+    "placeholder": "Search pipelines, runs, actions…",
+    "jumpTo": "Jump to",
+    "noResults": "No results"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -81,7 +88,12 @@
     "microsoftNotConfigured": "Microsoft not configured",
     "customNotConfigured": "Custom OAuth not configured",
     "viewOnGitHub": "View on GitHub",
-    "callbackError": "Authentication failed. Please try again."
+    "callbackError": "Authentication failed. Please try again.",
+    "brandHeadline": "Orchestrate Python pipelines, container-native.",
+    "brandSub": "Schedule, run, and observe your data & ML workloads — with live logs, resource metrics, and Git-synced definitions.",
+    "welcomeBack": "Welcome back",
+    "signInWorkspace": "Sign in to your FastFlow workspace.",
+    "orSeparator": "or"
   },
   "toast": {
     "ok": "OK",

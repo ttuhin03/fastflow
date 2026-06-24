@@ -1,58 +1,58 @@
 .summary-stats-card {
   display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-  padding: var(--spacing-lg);
+  flex-direction: column;
+  padding: 18px 20px;
 }
 
-.summary-stats-card.low-rate {
-  border-color: var(--color-warning-border);
-  background-color: var(--color-warning-subtle);
-}
+.summary-stats-card.low-rate { border-color: var(--color-warning-border); }
 
-.summary-stats-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: var(--radius-md);
+.summary-stats-title { margin: 0 0 16px; font-size: var(--font-size-base); }
+
+.summary-stats-headline {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.5rem;
-  background-color: var(--color-success-subtle);
-  color: var(--color-success);
-  flex-shrink: 0;
-}
-
-.summary-stats-content {
-  flex: 1;
-  min-width: 0;
-}
-
-.summary-stats-label {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  margin: 0 0 var(--spacing-xs) 0;
-  font-weight: var(--font-weight-medium);
+  align-items: baseline;
+  gap: 8px;
 }
 
 .summary-stats-value {
-  font-size: var(--font-size-base);
-  margin: 0 0 var(--spacing-xs) 0;
+  font-size: 28px;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-tighter);
+  color: var(--color-success-text);
+  line-height: 1;
 }
 
-.summary-stats-rate {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  margin: 0;
+.summary-stats-value.warn { color: var(--color-warning-text); }
+
+.summary-stats-sub {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
 }
 
-.summary-stats-rate.warn {
-  color: var(--color-warning);
+.summary-stats-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+  height: 42px;
+  margin: 16px 0 8px;
 }
 
-.summary-stats-warn {
-  display: inline-flex;
+.summary-bar {
+  flex: 1;
+  min-height: 6px;
+  border-radius: 3px;
+  background: var(--color-success);
+}
+
+.summary-bar.low { background: var(--color-warning); }
+
+.summary-stats-foot {
+  display: flex;
   align-items: center;
-  gap: 4px;
-  margin-left: 6px;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: var(--color-text-tertiary);
 }
+
+.summary-stats-foot .ok   { color: var(--color-success-text); }
+.summary-stats-foot .warn { color: var(--color-warning-text); }

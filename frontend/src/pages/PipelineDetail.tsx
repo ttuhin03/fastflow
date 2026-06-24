@@ -45,8 +45,9 @@ interface Pipeline {
     max_instances?: number
     webhook_key?: string
     python_version?: string
+    cron?: string
     downstream_triggers?: Array<{ pipeline: string; on_success: boolean; on_failure: boolean; run_config_id?: string }>
-    schedules?: Array<{ id?: string; webhook_key?: string }>
+    schedules?: Array<{ id?: string; webhook_key?: string; cron?: string; enabled?: boolean; env?: Record<string, string> }>
   }
 }
 
@@ -66,13 +67,31 @@ interface PipelineSourceFiles {
   pipeline_json: string | null
 }
 
+type MainTab = 'overview' | 'runs' | 'configuration' | 'environment'
+
+/** Parse a memory string like "512M" / "2G" / "2048" into a number of GB (best-effort, for bar scaling). */
+function memToGb(mem?: string): number | null {
+  if (!mem) return null
+  const m = String(mem).trim().match(/^([\d.]+)\s*([a-zA-Z]*)$/)
+  if (!m) return null
+  const val = parseFloat(m[1])
+  if (isNaN(val)) return null
+  const unit = m[2].toUpperCase()
+  if (unit.startsWith('G')) return val
+  if (unit.startsWith('M')) return val / 1024
+  if (unit.startsWith('K')) return val / (1024 * 1024)
+  // bare bytes
+  return val / (1024 * 1024 * 1024)
+}
+
 export default function PipelineDetail() {
   const { t } = useTranslation()
   const { name } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { isReadonly } = useAuth()
-  const [activeTab, setActiveTab] = useState<'python' | 'requirements' | 'json'>('python')
+  const [mainTab, setMainTab] = useState<MainTab>('overview')
+  const [sourceTab, setSourceTab] = useState<'python' | 'requirements' | 'json'>('python')
   const dailyStatsInterval = useRefetchInterval(30000, 60000)
 
   const { data: pipeline, isLoading: pipelineLoading } = useQuery<Pipeline>({
@@ -111,14 +130,14 @@ export default function PipelineDetail() {
     queryKey: ['pipeline-daily-stats', name],
     queryFn: async () => {
       const response = await apiClient.get(`/pipelines/${name}/daily-stats?days=365`)
-      return response.data as { 
-        daily_stats?: Array<{ 
+      return response.data as {
+        daily_stats?: Array<{
           date: string
           total_runs: number
           successful_runs: number
           failed_runs: number
           success_rate: number
-        }> 
+        }>
       }
     },
     enabled: !!name,
@@ -245,344 +264,573 @@ export default function PipelineDetail() {
     return <div>{t('pipelineDetail.pipelineNotFound')}</div>
   }
 
+  const md = pipeline.metadata
+  const isHealthy = pipeline.enabled
+  const pythonVersion = md.python_version || t('pipelineDetail.pythonVersionDefault')
+
+  // Build the list of schedules to render as cards. The API today typically exposes
+  // a single cron / schedule per pipeline; the redesign anticipates multiple schedules
+  // each with their own env overrides. We render whatever the API gives and fill gaps
+  // with clearly-marked placeholders.
+  const rawSchedules = md.schedules ?? []
+  const scheduleCards: Array<{
+    id: string
+    cron: string
+    enabled: boolean
+    env: Record<string, string>
+    placeholderEnv: boolean
+  }> = []
+
+  if (rawSchedules.length > 0) {
+    rawSchedules.forEach((s, i) => {
+      const env = s.env ?? {}
+      const hasEnv = Object.keys(env).length > 0
+      scheduleCards.push({
+        id: s.id || `schedule-${i + 1}`,
+        cron: s.cron || md.cron || '—',
+        enabled: s.enabled ?? pipeline.enabled,
+        // TODO(redesign): needs backend — per-schedule env overrides are not yet
+        // returned by the API. Show a couple of placeholder chips to convey the design.
+        env: hasEnv ? env : { TRAIN_MODE: 'full', N_ESTIMATORS: '400' },
+        placeholderEnv: !hasEnv,
+      })
+    })
+  } else if (md.cron) {
+    // Single pipeline-level cron, no schedule objects.
+    scheduleCards.push({
+      id: pipeline.name,
+      cron: md.cron,
+      enabled: pipeline.enabled,
+      // TODO(redesign): needs backend — env overrides per schedule not available.
+      env: { TRAIN_MODE: 'full', N_ESTIMATORS: '400' },
+      placeholderEnv: true,
+    })
+  }
+
+  // Resource limit values (with placeholders where the backend has none).
+  // TODO(redesign): needs backend — soft/hard scale is an assumption for bar widths.
+  const cpuSoft = md.cpu_soft_limit
+  const cpuHard = md.cpu_hard_limit
+  const memSoft = md.mem_soft_limit
+  const memHard = md.mem_hard_limit
+  const cpuHardN = cpuHard ?? (cpuSoft ? cpuSoft * 2 : null)
+  const cpuSoftPct = cpuHardN && cpuSoft ? Math.min(100, (cpuSoft / cpuHardN) * 100) : cpuSoft ? 50 : 0
+  const cpuHardPct = 100
+  const memHardGb = memToGb(memHard)
+  const memSoftGb = memToGb(memSoft)
+  const memSoftPct = memHardGb && memSoftGb ? Math.min(100, (memSoftGb / memHardGb) * 100) : memSoftGb ? 25 : 0
+  const hasResourceLimits =
+    cpuHard !== undefined || cpuSoft !== undefined || memHard !== undefined || memSoft !== undefined ||
+    md.timeout !== undefined || md.retry_attempts !== undefined || (md.max_instances ?? 0) > 0
+
+  const cron = md.cron || rawSchedules[0]?.cron
+
+  const renderHealthBadge = () => (
+    <span className={`badge ${isHealthy ? 'badge-success' : 'badge-secondary'}`}>
+      <span className={`status-dot ${isHealthy ? 'success' : 'disabled'}`} style={{ width: 6, height: 6 }} />
+      {isHealthy ? t('pipelineDetail.healthHealthy', 'Healthy') : t('common.inactive')}
+    </span>
+  )
+
   return (
     <div className="pipeline-detail">
-      <div className="pipeline-detail-header">
-        <h2>{pipeline.name}</h2>
-        <button type="button" onClick={() => navigate('/pipelines')} className="btn btn-ghost btn-sm">
-          {t('pipelineDetail.backToList')}
+      {/* ── Ghost back-link ─────────────────────────────────────────── */}
+      <button type="button" onClick={() => navigate('/pipelines')} className="pd-back">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M15 6l-6 6 6 6" /></svg>
+        {t('pipelines.title', 'Pipelines')}
+      </button>
+
+      {/* ── Header ──────────────────────────────────────────────────── */}
+      <div className="pd-header">
+        <div className="pd-header-main">
+          <div className="pd-title-row">
+            <span className="pd-glow-dot">
+              <span className={`status-dot ${isHealthy ? 'success' : 'disabled'}`} />
+            </span>
+            <h1 className="pd-title mono">{pipeline.name}</h1>
+            {renderHealthBadge()}
+          </div>
+          {md.description && <p className="pd-description">{md.description}</p>}
+          <div className="pd-meta-chips">
+            <span className="pd-chip mono">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="6" cy="6" r="2.2" /><circle cx="6" cy="18" r="2.2" /><path d="M6 8v8M6 18c8 0 6-12 14-12" /><circle cx="20" cy="6" r="2.2" /></svg>
+              pipelines/{pipeline.name}.py
+            </span>
+            <span className="pd-chip mono">py {pythonVersion}</span>
+            {/* TODO(redesign): needs backend — git branch@commit not exposed by the API */}
+            <span className="pd-chip mono">main@—</span>
+            {md.tags?.map((tag) => (
+              <span key={tag} className="pd-chip mono">{tag}</span>
+            ))}
+          </div>
+        </div>
+        <div className="pd-header-actions">
+          {/* TODO(redesign): needs backend — direct trigger-run endpoint not wired here yet */}
+          <button type="button" className="btn btn-primary" disabled title={t('pipelineDetail.triggerRunHint', 'Trigger a run (configured in pipeline.json)')}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M7 5l12 7-12 7z" /></svg>
+            {t('pipelineDetail.triggerRun', 'Trigger run')}
+          </button>
+          {/* TODO(redesign): needs backend — pipelines are edited in pipeline.json */}
+          <button type="button" className="btn btn-secondary" disabled title={t('pipelineDetail.editInPipelineJson')}>
+            {t('common.edit', 'Edit')}
+          </button>
+          <button type="button" className="btn-icon" disabled aria-label={t('pipelineDetail.moreSettings')}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" /></svg>
+          </button>
+        </div>
+      </div>
+
+      {/* ── Main tabs ───────────────────────────────────────────────── */}
+      <div className="tab-strip pd-tabs">
+        <button type="button" className={`tab-strip__tab${mainTab === 'overview' ? ' active' : ''}`} onClick={() => setMainTab('overview')}>
+          {t('pipelineDetail.tabOverview', 'Overview')}
+        </button>
+        <button type="button" className={`tab-strip__tab${mainTab === 'runs' ? ' active' : ''}`} onClick={() => setMainTab('runs')}>
+          {t('pipelineDetail.tabRuns', 'Runs')}
+        </button>
+        <button type="button" className={`tab-strip__tab${mainTab === 'configuration' ? ' active' : ''}`} onClick={() => setMainTab('configuration')}>
+          {t('pipelineDetail.tabConfiguration', 'Configuration')}
+        </button>
+        <button type="button" className={`tab-strip__tab${mainTab === 'environment' ? ' active' : ''}`} onClick={() => setMainTab('environment')}>
+          {t('pipelineDetail.tabEnvironment', 'Environment')}
         </button>
       </div>
 
-      <div className="pipeline-info-card">
-        <h3>{t('pipelineDetail.information')}</h3>
-        <div className="info-grid">
-        <div className="info-item">
-          <span className="info-label">{t('pipelineDetail.status')}:</span>
-          <span className={`status-badge ${pipeline.enabled ? 'enabled' : 'disabled'}`}>
-            {pipeline.enabled ? t('common.active') : t('common.inactive')}
-          </span>
-          <InfoIcon content={t('pipelineDetail.infoStatusHint')} />
-          <span className="info-hint" style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginLeft: '0.5rem' }}>
-            {t('pipelineDetail.configuredInJsonHint')}
-          </span>
-        </div>
-          <div className="info-item">
-            <span className="info-label">{t('pipelineDetail.requirementsLabel')}</span>
-            <span className="info-value">
-              {pipeline.has_requirements ? t('common.yes') : t('common.no')}
-            </span>
-            <InfoIcon content={t('pipelineDetail.requirementsInfoHint')} />
-          </div>
-          <div className="info-item">
-            <span className="info-label">{t('pipelineDetail.pythonVersionLabel')}</span>
-            <span className="info-value">
-              {pipeline.metadata.python_version || t('pipelineDetail.pythonVersionDefault')}
-            </span>
-            <InfoIcon content={t('pipelineDetail.infoPythonVersionHint')} />
-          </div>
-          {pipeline.last_cache_warmup && (
-            <div className="info-item">
-              <span className="info-label">{t('pipelineDetail.lastCacheWarmupLabel')}</span>
-              <span className="info-value">
-                {new Date(pipeline.last_cache_warmup).toLocaleString(getFormatLocale())}
-              </span>
-              <InfoIcon content={t('pipelineDetail.lastCacheWarmupTooltip')} />
+      {/* ══ OVERVIEW ══ */}
+      {mainTab === 'overview' && (
+        <div className="pd-overview">
+          {stats && (
+            <div className="card pd-stats-card">
+              <div className="pd-card-head">
+                <h3>{t('pipelineDetail.statistics')}</h3>
+                {!isReadonly && (
+                  <Tooltip content={t('pipelineDetail.resetStatsTooltip')}>
+                    <button
+                      type="button"
+                      onClick={handleResetStats}
+                      disabled={resetStatsMutation.isPending}
+                      className="btn btn-warning btn-sm"
+                    >
+                      {resetStatsMutation.isPending ? t('pipelineDetail.resetting') : t('pipelineDetail.resetStats')}
+                    </button>
+                  </Tooltip>
+                )}
+              </div>
+              <div className="pd-stats-grid">
+                <div className="pd-stat">
+                  <span className="pd-stat-label">{t('pipelineDetail.totalRuns')}</span>
+                  <span className="pd-stat-value mono">{stats.total_runs}</span>
+                </div>
+                <div className="pd-stat success">
+                  <span className="pd-stat-label">{t('pipelineDetail.successful')}</span>
+                  <span className="pd-stat-value mono">{stats.successful_runs}</span>
+                </div>
+                <div className="pd-stat error">
+                  <span className="pd-stat-label">{t('pipelineDetail.failed')}</span>
+                  <span className="pd-stat-value mono">{stats.failed_runs}</span>
+                </div>
+                <div className="pd-stat">
+                  <span className="pd-stat-label">{t('pipelineDetail.successRate')}</span>
+                  <span className="pd-stat-value mono">{stats.success_rate.toFixed(1)}%</span>
+                </div>
+                {stats.webhook_runs > 0 && (
+                  <div className="pd-stat">
+                    <span className="pd-stat-label">{t('pipelineDetail.webhookRuns')}</span>
+                    <span className="pd-stat-value mono">{stats.webhook_runs}</span>
+                  </div>
+                )}
+              </div>
             </div>
           )}
-          {pipeline.metadata.description && (
-            <div className="info-item full-width">
-              <span className="info-label">Beschreibung:</span>
-              <span className="info-value">{pipeline.metadata.description}</span>
-            </div>
+
+          {dailyStats && dailyStats.daily_stats && dailyStats.daily_stats.length > 0 && (
+            <>
+              <div className="pd-charts-grid">
+                <SuccessRateTrendChart dailyStats={dailyStats.daily_stats} days={30} />
+                {runs && runs.length > 0 && (
+                  <AverageRuntimeChart runs={runs} days={30} />
+                )}
+              </div>
+              <CalendarHeatmap dailyStats={dailyStats.daily_stats} days={365} />
+            </>
           )}
-          {pipeline.metadata.tags && pipeline.metadata.tags.length > 0 && (
-            <div className="info-item full-width">
-              <span className="info-label">{t('pipelineDetail.tagsLabel')}</span>
-              <div className="tags">
-                {pipeline.metadata.tags.map((tag) => (
-                  <span key={tag} className="tag-badge">
-                    {tag}
-                  </span>
+
+          {/* Recent runs preview */}
+          {runs && runs.length > 0 && (
+            <div className="card pd-recent-card">
+              <div className="pd-card-head">
+                <h3>{t('pipelineDetail.lastRuns')}</h3>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setMainTab('runs')}>
+                  {t('pipelineDetail.viewAll', 'View all →')}
+                </button>
+              </div>
+              <div className="pd-recent-list">
+                {runs.slice(0, 5).map((run: any) => (
+                  <div
+                    key={run.id}
+                    className="pd-recent-row clickable"
+                    onClick={() => navigate(`/runs/${run.id}`)}
+                  >
+                    <span className="mono pd-recent-id">{run.id.substring(0, 8)}…</span>
+                    <span className={`badge dot badge-${statusBadge(run.status)}`}>{run.status}</span>
+                    <span className="mono pd-recent-time">
+                      {new Date(run.started_at).toLocaleString(getFormatLocale(), { timeZone: 'UTC' })}
+                    </span>
+                    <svg className="pd-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M9 6l6 6-6 6" /></svg>
+                  </div>
                 ))}
               </div>
             </div>
           )}
         </div>
-      </div>
+      )}
 
-      {pipeline.metadata.cpu_hard_limit && (
-        <div className="resource-limits-card">
-          <h3>Resource-Limits</h3>
-          <div className="limits-grid">
-            <div className="limit-section">
-              <h4>
-                Hard Limits
-                <InfoIcon content={t('pipelineDetail.infoHardLimitsHint')} />
-              </h4>
-              <div className="limit-items">
-                <Tooltip content="Anzahl der CPU-Kerne">
-                  <div className="limit-item">
-                    <span className="limit-label">CPU:</span>
-                    <span className="limit-value">{pipeline.metadata.cpu_hard_limit}</span>
-                  </div>
-                </Tooltip>
-                {pipeline.metadata.mem_hard_limit && (
-                  <Tooltip content="Speicher-Limit (z.B. '512M', '2G')">
-                    <div className="limit-item">
-                      <span className="limit-label">RAM:</span>
-                      <span className="limit-value">{pipeline.metadata.mem_hard_limit}</span>
-                    </div>
-                  </Tooltip>
-                )}
+      {/* ══ RUNS ══ */}
+      {mainTab === 'runs' && (
+        runs && runs.length > 0 ? (
+          <div className="table pd-runs-table">
+            <div className="table__head pd-runs-row">
+              <span>{t('pipelineDetail.id')}</span>
+              <span>{t('pipelineDetail.status')}</span>
+              <span>{t('pipelineDetail.started')}</span>
+              <span>{t('pipelineDetail.finished')}</span>
+              <span>{t('pipelineDetail.exitCode')}</span>
+              <span>{t('pipelineDetail.actions')}</span>
+            </div>
+            {runs.map((run: any) => (
+              <div
+                key={run.id}
+                className="table__row pd-runs-row clickable"
+                onClick={() => navigate(`/runs/${run.id}`)}
+              >
+                <span className="mono">{run.id.substring(0, 8)}…</span>
+                <span>
+                  <span className={`badge dot badge-${statusBadge(run.status)}`}>{run.status}</span>
+                </span>
+                <span className="mono pd-muted">{new Date(run.started_at).toLocaleString(getFormatLocale(), { timeZone: 'UTC' })} UTC</span>
+                <span className="mono pd-muted">
+                  {run.finished_at
+                    ? `${new Date(run.finished_at).toLocaleString(getFormatLocale(), { timeZone: 'UTC' })} UTC`
+                    : '-'}
+                </span>
+                <span className="mono">
+                  {run.exit_code !== null ? (
+                    <span className={run.exit_code === 0 ? 'pd-exit-success' : 'pd-exit-error'}>{run.exit_code}</span>
+                  ) : (
+                    '-'
+                  )}
+                </span>
+                <span>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); navigate(`/runs/${run.id}`) }}
+                    className="btn btn-outlined btn-sm"
+                  >
+                    {t('pipelineDetail.details')}
+                  </button>
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="card pd-empty">{t('pipelineDetail.noRuns', 'No runs yet.')}</div>
+        )
+      )}
+
+      {/* ══ CONFIGURATION ══ */}
+      {mainTab === 'configuration' && (
+        <div className="pd-config">
+          {/* General information */}
+          <div className="card">
+            <h3>{t('pipelineDetail.information')}</h3>
+            <div className="pd-info-grid">
+              <div className="pd-info-item">
+                <span className="pd-info-label">{t('pipelineDetail.status')}:</span>
+                <span className="pd-info-value-row">
+                  <span className={`badge ${pipeline.enabled ? 'badge-success' : 'badge-secondary'}`}>
+                    {pipeline.enabled ? t('common.active') : t('common.inactive')}
+                  </span>
+                  <InfoIcon content={t('pipelineDetail.infoStatusHint')} />
+                </span>
+              </div>
+              <div className="pd-info-item">
+                <span className="pd-info-label">{t('pipelineDetail.requirementsLabel')}</span>
+                <span className="pd-info-value">
+                  {pipeline.has_requirements ? t('common.yes') : t('common.no')}
+                  <InfoIcon content={t('pipelineDetail.requirementsInfoHint')} />
+                </span>
+              </div>
+              <div className="pd-info-item">
+                <span className="pd-info-label">{t('pipelineDetail.pythonVersionLabel')}</span>
+                <span className="pd-info-value mono">
+                  {pythonVersion}
+                  <InfoIcon content={t('pipelineDetail.infoPythonVersionHint')} />
+                </span>
+              </div>
+              {pipeline.last_cache_warmup && (
+                <div className="pd-info-item">
+                  <span className="pd-info-label">{t('pipelineDetail.lastCacheWarmupLabel')}</span>
+                  <span className="pd-info-value mono">
+                    {new Date(pipeline.last_cache_warmup).toLocaleString(getFormatLocale())}
+                    <InfoIcon content={t('pipelineDetail.lastCacheWarmupTooltip')} />
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Schedules as cards */}
+          <div className="card">
+            <div className="pd-card-head">
+              <div>
+                <h3>
+                  {t('pipelineDetail.schedules', 'Schedules')}{' '}
+                  <span className="pd-count mono">{scheduleCards.length}</span>
+                </h3>
+                <p className="pd-card-sub">{t('pipelineDetail.schedulesSub', 'A pipeline can run on multiple schedules — each carries its own environment overrides on top of the base config.')}</p>
               </div>
             </div>
-            {(pipeline.metadata.cpu_soft_limit || pipeline.metadata.mem_soft_limit) && (
-              <div className="limit-section">
-                <h4>
-                  Soft Limits (Monitoring)
-                  <InfoIcon content={t('pipelineDetail.infoSoftLimitsHint')} />
-                </h4>
-                <div className="limit-items">
-                  {pipeline.metadata.cpu_soft_limit && (
-                    <Tooltip content="Anzahl der CPU-Kerne">
-                      <div className="limit-item">
-                        <span className="limit-label">CPU:</span>
-                        <span className="limit-value">{pipeline.metadata.cpu_soft_limit}</span>
+            {scheduleCards.length > 0 ? (
+              <div className="pd-schedule-list">
+                {scheduleCards.map((sc) => (
+                  <div key={sc.id} className="pd-schedule">
+                    <div className="pd-schedule-head">
+                      <span className={`status-dot ${sc.enabled ? 'success' : 'disabled'} pd-schedule-dot`} />
+                      <span className="mono pd-schedule-name">{sc.id}</span>
+                      <span className="mono pd-cron-pill">{sc.cron}</span>
+                      <div className="pd-schedule-spacer" />
+                      <label className="toggle" title={t('pipelineDetail.scheduleEnabledHint', 'Enabled (configured in pipeline.json)')}>
+                        <input type="checkbox" checked={sc.enabled} readOnly disabled />
+                        <span className="track" />
+                        <span className="knob" />
+                      </label>
+                    </div>
+                    <div className="pd-schedule-body">
+                      <div className="pd-override-head">
+                        <span className="pd-override-eyebrow">{t('pipelineDetail.envOverrides', 'Env overrides')}</span>
+                        <span className="pd-override-count mono">{Object.keys(sc.env).length}</span>
+                        <span className="pd-override-note">
+                          {t('pipelineDetail.envOverridesNote', 'on top of base variables')}
+                          {sc.placeholderEnv && (
+                            <em className="pd-placeholder-flag"> · {t('pipelineDetail.placeholderData', 'placeholder')}</em>
+                          )}
+                        </span>
                       </div>
-                    </Tooltip>
-                  )}
-                  {pipeline.metadata.mem_soft_limit && (
-                    <Tooltip content="Speicher-Limit (z.B. '512M', '2G')">
-                      <div className="limit-item">
-                        <span className="limit-label">RAM:</span>
-                        <span className="limit-value">{pipeline.metadata.mem_soft_limit}</span>
+                      <div className="pd-override-chips">
+                        {Object.entries(sc.env).map(([k, v]) => (
+                          <span key={k} className="pd-override-chip mono">
+                            <span className="pd-override-key">{k}</span>
+                            <span className="pd-override-eq">=</span>
+                            <span className="pd-override-val">{v}</span>
+                          </span>
+                        ))}
                       </div>
-                    </Tooltip>
-                  )}
-                </div>
+                    </div>
+                  </div>
+                ))}
               </div>
+            ) : (
+              <p className="pd-card-sub">{t('pipelineDetail.noSchedules', 'No schedules configured. Add a cron expression in pipeline.json.')}</p>
             )}
-            <div className="limit-section">
-              <h4>{t('pipelineDetail.moreSettings')}</h4>
-              <div className="limit-items">
-                {pipeline.metadata.timeout && (
-                  <div className="limit-item">
-                    <span className="limit-label">
+          </div>
+
+          {/* Resource limits as bars */}
+          {hasResourceLimits && (
+            <div className="card">
+              <h3>{t('pipelineDetail.resourceLimits', 'Resource limits')}</h3>
+              <p className="pd-card-sub">{t('pipelineDetail.resourceLimitsSub', 'Soft limits warn; hard limits terminate the container.')}</p>
+
+              {(cpuSoft !== undefined || cpuHard !== undefined) && (
+                <div className="pd-limit">
+                  <div className="pd-limit-head">
+                    <span className="pd-limit-label">{t('pipelineDetail.cpuCores', 'CPU cores')}</span>
+                    <span className="mono pd-limit-meta">
+                      {cpuSoft !== undefined && `soft ${cpuSoft}`}
+                      {cpuSoft !== undefined && cpuHard !== undefined && ' · '}
+                      {cpuHard !== undefined && `hard ${cpuHard}`}
+                    </span>
+                  </div>
+                  <div className="pd-bar">
+                    <div className="pd-bar-fill" style={{ width: `${cpuSoftPct}%`, background: 'var(--color-primary)' }} />
+                    {cpuHard !== undefined && <div className="pd-bar-marker" style={{ left: `${cpuHardPct}%` }} />}
+                  </div>
+                </div>
+              )}
+
+              {(memSoft !== undefined || memHard !== undefined) && (
+                <div className="pd-limit">
+                  <div className="pd-limit-head">
+                    <span className="pd-limit-label">{t('pipelineDetail.memory', 'Memory')}</span>
+                    <span className="mono pd-limit-meta">
+                      {memSoft !== undefined && `soft ${memSoft}`}
+                      {memSoft !== undefined && memHard !== undefined && ' · '}
+                      {memHard !== undefined && `hard ${memHard}`}
+                    </span>
+                  </div>
+                  <div className="pd-bar">
+                    <div className="pd-bar-fill" style={{ width: `${memSoftPct}%`, background: 'var(--color-running)' }} />
+                    {memHard !== undefined && <div className="pd-bar-marker" style={{ left: '100%' }} />}
+                  </div>
+                </div>
+              )}
+
+              <div className="pd-limit-extras">
+                {md.timeout !== undefined && (
+                  <div className="pd-limit-extra">
+                    <span className="pd-limit-label">
                       {t('pipelineDetail.timeout')}
                       <InfoIcon content={t('pipelineDetail.timeoutInfo')} />
                     </span>
-                    <span className="limit-value">{pipeline.metadata.timeout}s</span>
+                    <span className="mono pd-limit-value">{md.timeout}s</span>
                   </div>
                 )}
-                {pipeline.metadata.retry_attempts !== undefined && (
-                  <div className="limit-item">
-                    <span className="limit-label">
+                {md.retry_attempts !== undefined && (
+                  <div className="pd-limit-extra">
+                    <span className="pd-limit-label">
                       {t('pipelineDetail.retryAttempts')}
                       <InfoIcon content={t('pipelineDetail.retryAttemptsInfo')} />
                     </span>
-                    <span className="limit-value">{pipeline.metadata.retry_attempts}</span>
+                    <span className="mono pd-limit-value">{md.retry_attempts}</span>
                   </div>
                 )}
-                {pipeline.metadata.max_instances !== undefined && pipeline.metadata.max_instances > 0 && (
-                  <div className="limit-item">
-                    <span className="limit-label">
+                {md.max_instances !== undefined && md.max_instances > 0 && (
+                  <div className="pd-limit-extra">
+                    <span className="pd-limit-label">
                       {t('pipelineDetail.maxInstances')}
                       <InfoIcon content={t('pipelineDetail.maxInstancesInfo')} />
                     </span>
-                    <span className="limit-value">{pipeline.metadata.max_instances}</span>
+                    <span className="mono pd-limit-value">{md.max_instances}</span>
                   </div>
                 )}
               </div>
             </div>
-          </div>
-        </div>
-      )}
+          )}
 
-      {stats && (
-        <div className="stats-card">
-          <div className="stats-header">
-            <h3>{t('pipelineDetail.statistics')}</h3>
-            {!isReadonly && (
-              <Tooltip content={t('pipelineDetail.resetStatsTooltip')}>
-                <button
-                  type="button"
-                  onClick={handleResetStats}
-                  disabled={resetStatsMutation.isPending}
-                  className="btn btn-warning btn-sm"
-                >
-                  {resetStatsMutation.isPending ? t('pipelineDetail.resetting') : t('pipelineDetail.resetStats')}
-                </button>
-              </Tooltip>
-            )}
-          </div>
-          <div className="stats-grid">
-            <div className="stat-box">
-              <span className="stat-label">{t('pipelineDetail.totalRuns')}</span>
-              <span className="stat-value">{stats.total_runs}</span>
-            </div>
-            <div className="stat-box success">
-              <span className="stat-label">{t('pipelineDetail.successful')}</span>
-              <span className="stat-value">{stats.successful_runs}</span>
-            </div>
-            <div className="stat-box error">
-              <span className="stat-label">{t('pipelineDetail.failed')}</span>
-              <span className="stat-value">{stats.failed_runs}</span>
-            </div>
-            <div className="stat-box">
-              <span className="stat-label">{t('pipelineDetail.successRate')}</span>
-              <span className="stat-value">{stats.success_rate.toFixed(1)}%</span>
-            </div>
-            {stats.webhook_runs > 0 && (
-              <div className="stat-box">
-                <span className="stat-label">{t('pipelineDetail.webhookRuns')}</span>
-                <span className="stat-value">{stats.webhook_runs}</span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className="webhook-card">
-        <h3>{t('pipelineDetail.webhooks')}</h3>
-        {(() => {
-          const hasPipelineKey = !!pipeline?.metadata?.webhook_key
-          const scheduleWebhooks = (pipeline?.metadata?.schedules ?? []).filter(
-            (s): s is { id?: string; webhook_key: string } => !!(s.id && s.webhook_key)
-          )
-          const hasAnyWebhook = hasPipelineKey || scheduleWebhooks.length > 0
-          if (!hasAnyWebhook) {
-            return (
-              <div className="webhook-disabled">
-                <p>{t('pipelineDetail.webhooksDisabled')}</p>
-                <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)', marginTop: '0.5rem' }}>
-                  {t('pipelineDetail.webhooksEnableHint')}
-                </p>
-              </div>
-            )
-          }
-          const byConfig = stats?.webhook_runs_by_config
-          const runCountFor = (configKey: string) => (byConfig && byConfig[configKey]) ?? 0
-          return (
-            <div className="webhook-enabled">
-              <div className="webhook-status" style={{ marginBottom: '0.75rem' }}>
-                <span className="status-badge enabled">{t('pipelineDetail.webhooksEnabled')}</span>
-                <span className="info-hint" style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginLeft: '0.5rem' }}>
-                  {t('pipelineDetail.webhooksConfiguredIn')}
-                </span>
-              </div>
-              {hasPipelineKey && (
-                <div className="webhook-url-section" style={{ marginBottom: '1rem' }}>
-                  <label className="webhook-url-label">
-                    {t('pipelineDetail.pipelineStandard')}
-                    <InfoIcon content={t('pipelineDetail.webhookStandardInfo')} />
-                  </label>
-                  <div className="webhook-url-container">
-                    <code className="webhook-url">
-                      {typeof window !== 'undefined' && `${window.location.origin}/api/webhooks/${name}/${pipeline!.metadata.webhook_key}`}
-                    </code>
-                    <Tooltip content={t('pipelineDetail.copyWebhookUrl')}>
-                      <button
-                        type="button"
-                        onClick={() => handleCopyWebhookUrl(pipeline!.metadata.webhook_key!)}
-                        className="btn btn-secondary btn-sm webhook-url-copy"
-                        title={t('pipelineDetail.copyUrl')}
-                      >
-                        📋
-                      </button>
-                    </Tooltip>
+          {/* Webhooks */}
+          <div className="card">
+            <h3>{t('pipelineDetail.webhooks')}</h3>
+            {(() => {
+              const hasPipelineKey = !!pipeline?.metadata?.webhook_key
+              const scheduleWebhooks = (pipeline?.metadata?.schedules ?? []).filter(
+                (s): s is { id?: string; webhook_key: string } => !!(s.id && s.webhook_key)
+              )
+              const hasAnyWebhook = hasPipelineKey || scheduleWebhooks.length > 0
+              if (!hasAnyWebhook) {
+                return (
+                  <div className="pd-webhook-disabled">
+                    <p>{t('pipelineDetail.webhooksDisabled')}</p>
+                    <p className="pd-card-sub">{t('pipelineDetail.webhooksEnableHint')}</p>
                   </div>
-                  {runCountFor('') > 0 && (
-                    <div className="webhook-stats">
-                      <span className="webhook-stat-label">{t('pipelineDetail.trigger')}</span>
-                      <span className="webhook-stat-value">{runCountFor('')}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-              {scheduleWebhooks.map((s) => (
-                <div key={s.id!} className="webhook-url-section" style={{ marginBottom: '1rem' }}>
-                  <label className="webhook-url-label">
-                    {t('pipelineDetail.scheduleLabel', { id: s.id })}
-                    <InfoIcon content={t('pipelineDetail.webhookRunConfigInfo', { id: s.id })} />
-                  </label>
-                  <div className="webhook-url-container">
-                    <code className="webhook-url">
-                      {typeof window !== 'undefined' && `${window.location.origin}/api/webhooks/${name}/${s.webhook_key}`}
-                    </code>
-                    <Tooltip content={t('pipelineDetail.copyWebhookUrl')}>
-                      <button
-                        type="button"
-                        onClick={() => handleCopyWebhookUrl(s.webhook_key)}
-                        className="btn btn-secondary btn-sm webhook-url-copy"
-                        title={t('pipelineDetail.copyUrl')}
-                      >
-                        📋
-                      </button>
-                    </Tooltip>
+                )
+              }
+              const byConfig = stats?.webhook_runs_by_config
+              const runCountFor = (configKey: string) => (byConfig && byConfig[configKey]) ?? 0
+              return (
+                <div className="pd-webhook-enabled">
+                  <div className="pd-webhook-status">
+                    <span className="badge badge-success">{t('pipelineDetail.webhooksEnabled')}</span>
+                    <span className="pd-card-sub">{t('pipelineDetail.webhooksConfiguredIn')}</span>
                   </div>
-                  {runCountFor(s.id!) > 0 && (
-                    <div className="webhook-stats">
-                      <span className="webhook-stat-label">{t('pipelineDetail.trigger')}</span>
-                      <span className="webhook-stat-value">{runCountFor(s.id!)}</span>
-                    </div>
-                  )}
-                </div>
-              ))}
-              {stats && stats.webhook_runs > 0 && (
-                <div className="webhook-stats" style={{ marginTop: '0.5rem' }}>
-                  <span className="webhook-stat-label">{t('pipelineDetail.webhookTriggerTotal')}</span>
-                  <span className="webhook-stat-value">{stats.webhook_runs}</span>
-                </div>
-              )}
-            </div>
-          )
-        })()}
-      </div>
-
-      <div className="downstream-triggers-card">
-        <h3>
-          {t('pipelineDetail.downstreamChaining')}
-          <InfoIcon content={t('pipelineDetail.downstreamTooltip')} />
-        </h3>
-        {downstreamTriggers && downstreamTriggers.length > 0 ? (
-          <div className="downstream-triggers-list">
-            <table className="downstream-triggers-table">
-              <thead>
-                <tr>
-                  <th>{t('pipelineDetail.downstreamPipeline')}</th>
-                  <th>{t('pipelineDetail.schedule')}</th>
-                  <th>{t('pipelineDetail.onSuccess')}</th>
-                  <th>{t('pipelineDetail.onFailure')}</th>
-                  <th>
-                    {t('pipelineDetail.onRoute')}
-                    <InfoIcon content={t('pipelineDetail.onRouteTooltip')} />
-                  </th>
-                  <th>{t('pipelineDetail.source')}</th>
-                  {!isReadonly && <th></th>}
-                </tr>
-              </thead>
-              <tbody>
-                {downstreamTriggers.map((tr) => (
-                  <tr key={tr.id || `json-${tr.downstream_pipeline}-${tr.run_config_id ?? ''}`}>
-                    <td>{tr.downstream_pipeline}</td>
-                    <td>{tr.run_config_id ?? '–'}</td>
-                    <td>{tr.on_success ? '✓' : '–'}</td>
-                    <td>{tr.on_failure ? '✓' : '–'}</td>
-                    <td>
-                      {tr.on_route ? (
-                        <code style={{ fontSize: '0.8rem', background: 'var(--bg-secondary, #f4f4f4)', padding: '0.1rem 0.35rem', borderRadius: '3px' }}>
-                          {tr.on_route}
+                  {hasPipelineKey && (
+                    <div className="pd-webhook-url-section">
+                      <label className="pd-info-label">
+                        {t('pipelineDetail.pipelineStandard')}
+                        <InfoIcon content={t('pipelineDetail.webhookStandardInfo')} />
+                      </label>
+                      <div className="pd-webhook-url-container">
+                        <code className="mono pd-webhook-url">
+                          {typeof window !== 'undefined' && `${window.location.origin}/api/webhooks/${name}/${pipeline!.metadata.webhook_key}`}
                         </code>
-                      ) : '–'}
-                    </td>
-                    <td>
-                      <span className={`source-badge source-${tr.source}`}>
+                        <Tooltip content={t('pipelineDetail.copyWebhookUrl')}>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyWebhookUrl(pipeline!.metadata.webhook_key!)}
+                            className="btn btn-secondary btn-sm"
+                            title={t('pipelineDetail.copyUrl')}
+                          >
+                            {t('pipelineDetail.copyUrl')}
+                          </button>
+                        </Tooltip>
+                      </div>
+                      {runCountFor('') > 0 && (
+                        <div className="pd-webhook-stat">
+                          <span className="pd-info-label">{t('pipelineDetail.trigger')}</span>
+                          <span className="mono">{runCountFor('')}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {scheduleWebhooks.map((s) => (
+                    <div key={s.id!} className="pd-webhook-url-section">
+                      <label className="pd-info-label">
+                        {t('pipelineDetail.scheduleLabel', { id: s.id })}
+                        <InfoIcon content={t('pipelineDetail.webhookRunConfigInfo', { id: s.id })} />
+                      </label>
+                      <div className="pd-webhook-url-container">
+                        <code className="mono pd-webhook-url">
+                          {typeof window !== 'undefined' && `${window.location.origin}/api/webhooks/${name}/${s.webhook_key}`}
+                        </code>
+                        <Tooltip content={t('pipelineDetail.copyWebhookUrl')}>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyWebhookUrl(s.webhook_key)}
+                            className="btn btn-secondary btn-sm"
+                            title={t('pipelineDetail.copyUrl')}
+                          >
+                            {t('pipelineDetail.copyUrl')}
+                          </button>
+                        </Tooltip>
+                      </div>
+                      {runCountFor(s.id!) > 0 && (
+                        <div className="pd-webhook-stat">
+                          <span className="pd-info-label">{t('pipelineDetail.trigger')}</span>
+                          <span className="mono">{runCountFor(s.id!)}</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {stats && stats.webhook_runs > 0 && (
+                    <div className="pd-webhook-stat">
+                      <span className="pd-info-label">{t('pipelineDetail.webhookTriggerTotal')}</span>
+                      <span className="mono">{stats.webhook_runs}</span>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+          </div>
+
+          {/* Downstream trigger chaining */}
+          <div className="card">
+            <h3>
+              {t('pipelineDetail.downstreamChaining')}
+              <InfoIcon content={t('pipelineDetail.downstreamTooltip')} />
+            </h3>
+            {downstreamTriggers && downstreamTriggers.length > 0 ? (
+              <div className="table pd-downstream-table">
+                <div className="table__head pd-downstream-row">
+                  <span>{t('pipelineDetail.downstreamPipeline')}</span>
+                  <span>{t('pipelineDetail.schedule')}</span>
+                  <span>{t('pipelineDetail.onSuccess')}</span>
+                  <span>{t('pipelineDetail.onFailure')}</span>
+                  <span>{t('pipelineDetail.onRoute')}</span>
+                  <span>{t('pipelineDetail.source')}</span>
+                  {!isReadonly && <span></span>}
+                </div>
+                {downstreamTriggers.map((tr) => (
+                  <div className="table__row pd-downstream-row" key={tr.id || `json-${tr.downstream_pipeline}-${tr.run_config_id ?? ''}`}>
+                    <span className="mono">{tr.downstream_pipeline}</span>
+                    <span className="mono pd-muted">{tr.run_config_id ?? '–'}</span>
+                    <span>{tr.on_success ? '✓' : '–'}</span>
+                    <span>{tr.on_failure ? '✓' : '–'}</span>
+                    <span>{tr.on_route ? <code className="code-inline">{tr.on_route}</code> : '–'}</span>
+                    <span>
+                      <span className={`badge ${tr.source === 'pipeline_json' ? 'badge-success' : 'badge-primary'}`}>
                         {tr.source === 'pipeline_json' ? t('pipelineDetail.sourcePipelineJson') : t('pipelineDetail.sourceUi')}
                       </span>
-                    </td>
+                    </span>
                     {!isReadonly && (
-                      <td>
+                      <span>
                         {tr.source === 'api' && tr.id ? (
                           <button
                             type="button"
@@ -593,232 +841,201 @@ export default function PipelineDetail() {
                             {t('pipelineDetail.remove')}
                           </button>
                         ) : (
-                          <span className="info-hint" style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
-                            {t('pipelineDetail.editInPipelineJson')}
-                          </span>
+                          <span className="pd-card-sub">{t('pipelineDetail.editInPipelineJson')}</span>
                         )}
-                      </td>
+                      </span>
                     )}
-                  </tr>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)' }}>
-            {t('pipelineDetail.noDownstreamTriggered')}
-          </p>
-        )}
-        {!isReadonly && allPipelines && (
-          <div className="add-downstream-trigger">
-            <h4>{t('pipelineDetail.addTrigger')}</h4>
-            <div className="add-trigger-form">
-              <select
-                value={newTriggerPipeline}
-                onChange={(e) => {
-                  setNewTriggerPipeline(e.target.value)
-                  setNewTriggerRunConfigId('')
-                }}
-                className="trigger-select"
-              >
-                <option value="">{t('pipelineDetail.selectPipeline')}</option>
-                {allPipelines
-                  .filter((p) => p.name !== name)
-                  .map((p) => (
-                    <option key={p.name} value={p.name}>
-                      {p.name}
-                    </option>
-                  ))}
-              </select>
-              {availableSchedules.length > 0 && (
-                <select
-                  value={newTriggerRunConfigId}
-                  onChange={(e) => setNewTriggerRunConfigId(e.target.value)}
-                  className="trigger-select"
-                  title={t('pipelineDetail.scheduleDownstreamTitle')}
-                >
-                  <option value="">{t('pipelineDetail.standard')}</option>
-                  {availableSchedules.map((s) => (
-                    <option key={s.id!} value={s.id!}>
-                      {s.id}
-                    </option>
-                  ))}
-                </select>
-              )}
-              <label className="trigger-checkbox">
-                <input
-                  type="checkbox"
-                  checked={newTriggerOnSuccess}
-                  onChange={(e) => setNewTriggerOnSuccess(e.target.checked)}
-                />
-                {t('pipelineDetail.startOnSuccess')}
-              </label>
-              <label className="trigger-checkbox">
-                <input
-                  type="checkbox"
-                  checked={newTriggerOnFailure}
-                  onChange={(e) => setNewTriggerOnFailure(e.target.checked)}
-                />
-                {t('pipelineDetail.startOnFailure')}
-              </label>
-              <input
-                type="text"
-                value={newTriggerOnRoute}
-                onChange={(e) => setNewTriggerOnRoute(e.target.value)}
-                placeholder={t('pipelineDetail.onRoutePlaceholder')}
-                className="trigger-route-input"
-                maxLength={128}
-                title={t('pipelineDetail.onRouteTooltip')}
-              />
-              <button
-                type="button"
-                className="btn btn-success btn-sm"
-                onClick={handleAddDownstreamTrigger}
-                disabled={!newTriggerPipeline.trim() || createDownstreamTriggerMutation.isPending}
-              >
-                {createDownstreamTriggerMutation.isPending ? t('pipelineDetail.adding') : t('pipelineDetail.add')}
-              </button>
-            </div>
-            <p style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginTop: '0.5rem' }}>
-              {t('pipelineDetail.downstreamAltHint')}
-            </p>
-          </div>
-        )}
-      </div>
-
-      {dailyStats && dailyStats.daily_stats && dailyStats.daily_stats.length > 0 && (
-        <>
-          <div className="charts-section">
-            <SuccessRateTrendChart dailyStats={dailyStats.daily_stats} days={30} />
-            {runs && runs.length > 0 && (
-              <AverageRuntimeChart runs={runs} days={30} />
+              </div>
+            ) : (
+              <p className="pd-card-sub">{t('pipelineDetail.noDownstreamTriggered')}</p>
+            )}
+            {!isReadonly && allPipelines && (
+              <div className="pd-add-downstream">
+                <h4>{t('pipelineDetail.addTrigger')}</h4>
+                <div className="pd-add-trigger-form">
+                  <select
+                    value={newTriggerPipeline}
+                    onChange={(e) => {
+                      setNewTriggerPipeline(e.target.value)
+                      setNewTriggerRunConfigId('')
+                    }}
+                    className="form-select pd-trigger-select"
+                  >
+                    <option value="">{t('pipelineDetail.selectPipeline')}</option>
+                    {allPipelines
+                      .filter((p) => p.name !== name)
+                      .map((p) => (
+                        <option key={p.name} value={p.name}>
+                          {p.name}
+                        </option>
+                      ))}
+                  </select>
+                  {availableSchedules.length > 0 && (
+                    <select
+                      value={newTriggerRunConfigId}
+                      onChange={(e) => setNewTriggerRunConfigId(e.target.value)}
+                      className="form-select pd-trigger-select"
+                      title={t('pipelineDetail.scheduleDownstreamTitle')}
+                    >
+                      <option value="">{t('pipelineDetail.standard')}</option>
+                      {availableSchedules.map((s) => (
+                        <option key={s.id!} value={s.id!}>
+                          {s.id}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <label className="pd-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={newTriggerOnSuccess}
+                      onChange={(e) => setNewTriggerOnSuccess(e.target.checked)}
+                    />
+                    {t('pipelineDetail.startOnSuccess')}
+                  </label>
+                  <label className="pd-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={newTriggerOnFailure}
+                      onChange={(e) => setNewTriggerOnFailure(e.target.checked)}
+                    />
+                    {t('pipelineDetail.startOnFailure')}
+                  </label>
+                  <input
+                    type="text"
+                    value={newTriggerOnRoute}
+                    onChange={(e) => setNewTriggerOnRoute(e.target.value)}
+                    placeholder={t('pipelineDetail.onRoutePlaceholder')}
+                    className="form-input pd-trigger-route"
+                    maxLength={128}
+                    title={t('pipelineDetail.onRouteTooltip')}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-success btn-sm"
+                    onClick={handleAddDownstreamTrigger}
+                    disabled={!newTriggerPipeline.trim() || createDownstreamTriggerMutation.isPending}
+                  >
+                    {createDownstreamTriggerMutation.isPending ? t('pipelineDetail.adding') : t('pipelineDetail.add')}
+                  </button>
+                </div>
+                <p className="pd-card-sub">{t('pipelineDetail.downstreamAltHint')}</p>
+              </div>
             )}
           </div>
-          <CalendarHeatmap dailyStats={dailyStats.daily_stats} days={365} />
-        </>
+
+          {/* Source files */}
+          <div className="card">
+            <h3>{t('pipelineDetail.sourceFiles')}</h3>
+            <div className="tab-strip pd-source-tabs">
+              <button
+                type="button"
+                className={`tab-strip__tab${sourceTab === 'python' ? ' active' : ''}`}
+                onClick={() => setSourceTab('python')}
+              >
+                {t('pipelineDetail.tabPython')}
+              </button>
+              <button
+                type="button"
+                className={`tab-strip__tab${sourceTab === 'requirements' ? ' active' : ''}`}
+                onClick={() => setSourceTab('requirements')}
+              >
+                {t('pipelineDetail.tabRequirements')}
+              </button>
+              <button
+                type="button"
+                className={`tab-strip__tab${sourceTab === 'json' ? ' active' : ''}`}
+                onClick={() => setSourceTab('json')}
+              >
+                {t('pipelineDetail.tabJson')}
+              </button>
+            </div>
+            <div className="pd-source-content">
+              {sourceFilesLoading ? (
+                <div className="pd-code-empty">{t('pipelineDetail.codeLoading')}</div>
+              ) : (
+                <>
+                  {sourceTab === 'python' && (
+                    <div className="pd-code-container">
+                      {sourceFiles?.main_py ? (
+                        <pre className="pd-code-block"><code>{sourceFiles.main_py}</code></pre>
+                      ) : (
+                        <div className="pd-code-empty">{t('pipelineDetail.mainPyNotFound')}</div>
+                      )}
+                    </div>
+                  )}
+                  {sourceTab === 'requirements' && (
+                    <div className="pd-code-container">
+                      {sourceFiles?.requirements_txt ? (
+                        <pre className="pd-code-block"><code>{sourceFiles.requirements_txt}</code></pre>
+                      ) : (
+                        <div className="pd-code-empty">{t('pipelineDetail.requirementsNotFound')}</div>
+                      )}
+                    </div>
+                  )}
+                  {sourceTab === 'json' && (
+                    <div className="pd-code-container">
+                      {sourceFiles?.pipeline_json ? (
+                        <pre className="pd-code-block"><code>{(() => {
+                          try {
+                            return JSON.stringify(JSON.parse(sourceFiles.pipeline_json), null, 2)
+                          } catch {
+                            return sourceFiles.pipeline_json
+                          }
+                        })()}</code></pre>
+                      ) : (
+                        <div className="pd-code-empty">{t('pipelineDetail.pipelineJsonNotFound')}</div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
-      {runs && runs.length > 0 && (
-        <div className="runs-card">
-          <h3>{t('pipelineDetail.lastRuns')}</h3>
-          <table className="runs-table">
-            <thead>
-              <tr>
-                <th>{t('pipelineDetail.id')}</th>
-                <th>{t('pipelineDetail.status')}</th>
-                <th>{t('pipelineDetail.started')}</th>
-                <th>{t('pipelineDetail.finished')}</th>
-                <th>{t('pipelineDetail.exitCode')}</th>
-                <th>{t('pipelineDetail.actions')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {runs.map((run: any) => (
-                <tr key={run.id}>
-                  <td>{run.id.substring(0, 8)}...</td>
-                  <td>
-                    <span className={`status status-${run.status.toLowerCase()}`}>
-                      {run.status}
-                    </span>
-                  </td>
-                  <td>{new Date(run.started_at).toLocaleString(getFormatLocale(), { timeZone: 'UTC' })} UTC</td>
-                  <td>
-                    {run.finished_at
-                      ? `${new Date(run.finished_at).toLocaleString(getFormatLocale(), { timeZone: 'UTC' })} UTC`
-                      : '-'}
-                  </td>
-                  <td>
-                    {run.exit_code !== null ? (
-                      <span className={run.exit_code === 0 ? 'exit-success' : 'exit-error'}>
-                        {run.exit_code}
-                      </span>
-                    ) : (
-                      '-'
-                    )}
-                  </td>
-                  <td>
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/runs/${run.id}`)}
-                      className="btn btn-outlined btn-sm"
-                    >
-                      {t('pipelineDetail.details')}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* ══ ENVIRONMENT ══ */}
+      {mainTab === 'environment' && (
+        <div className="card">
+          <div className="pd-card-head">
+            <div>
+              <h3>{t('pipelineDetail.environmentVariables', 'Environment variables')}</h3>
+              <p className="pd-card-sub">{t('pipelineDetail.environmentSub', 'Injected into the container at runtime. Secrets are encrypted at rest.')}</p>
+            </div>
+          </div>
+          {/* TODO(redesign): needs backend — base environment variables are not yet
+              exposed by the API. Schedules carry their own overrides (Configuration tab).
+              Showing tags + cron as the available environment-level metadata for now. */}
+          {md.tags && md.tags.length > 0 ? (
+            <div className="pd-env-meta">
+              <span className="pd-info-label">{t('pipelineDetail.tagsLabel')}</span>
+              <div className="pd-override-chips">
+                {md.tags.map((tag) => (
+                  <span key={tag} className="pd-override-chip mono"><span className="pd-override-key">{tag}</span></span>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          <p className="pd-card-sub">
+            {cron
+              ? t('pipelineDetail.environmentCronHint', 'Schedule-level environment overrides are listed in the Configuration tab.')
+              : t('pipelineDetail.environmentEmpty', 'No environment variables exposed by the API yet.')}
+          </p>
         </div>
       )}
-
-      <div className="source-files-card">
-        <h3>{t('pipelineDetail.sourceFiles')}</h3>
-        <div className="tab-strip">
-          <button
-            type="button"
-            className={`tab-strip__tab${activeTab === 'python' ? ' active' : ''}`}
-            onClick={() => setActiveTab('python')}
-          >
-            {t('pipelineDetail.tabPython')}
-          </button>
-          <button
-            type="button"
-            className={`tab-strip__tab${activeTab === 'requirements' ? ' active' : ''}`}
-            onClick={() => setActiveTab('requirements')}
-          >
-            {t('pipelineDetail.tabRequirements')}
-          </button>
-          <button
-            type="button"
-            className={`tab-strip__tab${activeTab === 'json' ? ' active' : ''}`}
-            onClick={() => setActiveTab('json')}
-          >
-            {t('pipelineDetail.tabJson')}
-          </button>
-        </div>
-        <div className="tab-content">
-          {sourceFilesLoading ? (
-            <div className="code-loading">{t('pipelineDetail.codeLoading')}</div>
-          ) : (
-            <>
-              {activeTab === 'python' && (
-                <div className="code-container">
-                  {sourceFiles?.main_py ? (
-                    <pre className="code-block"><code>{sourceFiles.main_py}</code></pre>
-                  ) : (
-                    <div className="code-empty">{t('pipelineDetail.mainPyNotFound')}</div>
-                  )}
-                </div>
-              )}
-              {activeTab === 'requirements' && (
-                <div className="code-container">
-                  {sourceFiles?.requirements_txt ? (
-                    <pre className="code-block"><code>{sourceFiles.requirements_txt}</code></pre>
-                  ) : (
-                    <div className="code-empty">{t('pipelineDetail.requirementsNotFound')}</div>
-                  )}
-                </div>
-              )}
-              {activeTab === 'json' && (
-                <div className="code-container">
-                  {sourceFiles?.pipeline_json ? (
-                    <pre className="code-block"><code>{(() => {
-                      try {
-                        return JSON.stringify(JSON.parse(sourceFiles.pipeline_json), null, 2)
-                      } catch {
-                        return sourceFiles.pipeline_json
-                      }
-                    })()}</code></pre>
-                  ) : (
-                    <div className="code-empty">{t('pipelineDetail.pipelineJsonNotFound')}</div>
-                  )}
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </div>
     </div>
   )
+}
+
+/** Map a run status string to a badge color variant. */
+function statusBadge(status: string): string {
+  const s = (status || '').toLowerCase()
+  if (s === 'success' || s === 'succeeded') return 'success'
+  if (s === 'failed' || s === 'error') return 'error'
+  if (s === 'running') return 'running'
+  if (s === 'pending' || s === 'queued') return 'warning'
+  return 'secondary'
 }

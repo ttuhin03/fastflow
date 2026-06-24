@@ -2,64 +2,80 @@
   display: flex;
   flex-direction: column;
   gap: var(--spacing-lg);
+  max-width: var(--content-max);
+  margin: 0 auto;
 }
 
-.dependencies-header h1 {
-  margin: 0 0 var(--spacing-xs) 0;
-  font-size: var(--font-size-xl);
+.dependencies-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+}
+
+.dependencies-title {
+  margin: 0;
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-tight);
   color: var(--color-text-primary);
 }
 
 .dependencies-subtitle {
-  margin: 0;
+  margin: 5px 0 0;
   font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
+  color: var(--color-text-tertiary);
 }
 
 .dependencies-subtitle-error {
   color: var(--color-error);
 }
 
-.dependencies-audit-last {
-  padding: var(--spacing-md);
-  background: var(--color-surface-variant);
+/* ---- CVE summary KPI row ------------------------------------------------- */
+.deps-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
 }
 
-.dependencies-audit-last-title {
-  margin: 0 0 var(--spacing-sm) 0;
-  font-size: var(--font-size-lg);
-  color: var(--color-text-primary);
+.deps-kpi {
+  padding: 15px 17px;
 }
 
-.dependencies-audit-last-msg {
-  margin: 0.25rem 0;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-primary);
+.deps-kpi-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-tertiary);
 }
 
-.dependencies-audit-last-msg.muted {
-  color: var(--color-text-secondary);
+.deps-sev-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
 }
 
-.dependencies-audit-last-msg.error {
-  color: var(--color-error);
+.deps-sev-dot--critical { background: var(--color-error); }
+.deps-sev-dot--high     { background: var(--color-warning); }
+.deps-sev-dot--medium   { background: var(--color-running); }
+.deps-sev-dot--low      { background: var(--color-neutral); }
+
+.deps-kpi-count {
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-tighter);
+  margin-top: 8px;
 }
 
-.dependencies-audit-last-list {
-  margin: 0.5rem 0 0;
-  padding-left: 1.25rem;
-  font-size: var(--font-size-sm);
-}
+.deps-kpi-count--critical { color: var(--color-error); }
+.deps-kpi-count--high     { color: var(--color-warning); }
+.deps-kpi-count--medium   { color: var(--color-running); }
+.deps-kpi-count--low      { color: var(--color-neutral); }
 
-.dependencies-audit-last-list li {
-  margin: 2px 0;
-}
-
-.dependencies-audit-last .btn-sm {
-  font-size: var(--font-size-xs);
-  padding: 0.25rem 0.5rem;
-}
-
+/* ---- Filters / actions --------------------------------------------------- */
 .dependencies-actions {
   display: flex;
   flex-wrap: wrap;
@@ -91,9 +107,9 @@
 .filter-select,
 .filter-input {
   padding: var(--spacing-xs) var(--spacing-sm);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-light);
   border-radius: var(--radius-sm);
-  background: var(--color-surface-variant);
+  background: var(--color-bg-subtle);
   color: var(--color-text-primary);
   font-size: var(--font-size-sm);
   min-width: 140px;
@@ -126,11 +142,7 @@
   gap: var(--spacing-sm);
 }
 
-.dependencies-table-wrap {
-  padding: var(--spacing-md);
-  overflow-x: auto;
-}
-
+/* ---- Pipeline accordion -------------------------------------------------- */
 .dependencies-empty {
   text-align: center;
   padding: var(--spacing-xl);
@@ -145,8 +157,9 @@
 
 .pipeline-deps-block {
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   overflow: hidden;
+  background: var(--color-surface);
 }
 
 .pipeline-deps-head {
@@ -155,7 +168,7 @@
   gap: var(--spacing-sm);
   width: 100%;
   padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--color-surface-variant);
+  background: var(--color-bg-subtle);
   border: none;
   cursor: pointer;
   font-size: var(--font-size-base);
@@ -165,7 +178,7 @@
 }
 
 .pipeline-deps-head:hover {
-  background: var(--color-surface);
+  background: var(--color-surface-2);
 }
 
 .pipeline-deps-name {
@@ -174,26 +187,11 @@
 }
 
 .pipeline-deps-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-}
-
-.vuln-badge {
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-xs);
-}
-
-.vuln-yes {
-  background: var(--color-error-subtle);
-  border: 1px solid var(--color-error-border);
-  color: var(--color-error-text);
-}
-
-.vuln-no {
-  background: var(--color-success-subtle);
-  border: 1px solid var(--color-success-border);
-  color: var(--color-success-text);
+  color: var(--color-text-tertiary);
 }
 
 .pipeline-deps-body {
@@ -212,51 +210,50 @@
   color: var(--color-error-text);
 }
 
-.deps-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--font-size-sm);
+/* ---- Package table grid -------------------------------------------------- */
+.deps-table .table__head,
+.deps-table .deps-row {
+  display: grid;
+  grid-template-columns: minmax(170px, 1fr) 120px 120px 200px 110px;
+  align-items: center;
+  gap: var(--spacing-sm);
 }
 
-.deps-table th,
-.deps-table td {
-  padding: var(--spacing-xs) var(--spacing-sm);
-  text-align: left;
-  border-bottom: 1px solid var(--color-border);
+.deps-row {
+  min-height: 48px;
 }
 
-.deps-table th {
-  color: var(--color-text-secondary);
+.deps-pkg {
+  font-size: 13px;
   font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
 }
 
-.deps-table code {
-  font-family: var(--font-mono, monospace);
-  font-size: 0.9em;
-  background: var(--color-surface-variant);
-  padding: 2px 6px;
-  border-radius: var(--radius-sm);
+.deps-version {
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
 }
 
-.vuln-list {
-  margin: 0;
-  padding-left: var(--spacing-md);
-  list-style: disc;
+.deps-latest {
+  font-size: 12.5px;
+  color: var(--color-text-tertiary);
 }
 
-.vuln-list li {
-  margin: 2px 0;
+.deps-cve {
+  font-size: 11.5px;
+  color: var(--color-text-tertiary);
 }
 
-.vuln-list a {
+.deps-cve-link {
   color: var(--color-primary-light);
   text-decoration: none;
 }
 
-.vuln-list a:hover {
+.deps-cve-link:hover {
   text-decoration: underline;
 }
 
+/* ---- Vulnerability summary ----------------------------------------------- */
 .vuln-summary {
   margin-top: var(--spacing-md);
   padding-top: var(--spacing-md);

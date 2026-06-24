@@ -8,7 +8,7 @@ import { getFormatLocale } from '../utils/locale'
 import { showError, showSuccess } from '../utils/toast'
 import { LineChart } from '../components/LineChart'
 import { RunEnvSection } from '../components/RunEnvSection'
-import { LuSearch, LuWrapText, LuAlignJustify, LuDownload } from 'react-icons/lu'
+import { LuSearch, LuWrapText, LuArrowDown, LuDownload, LuHash } from 'react-icons/lu'
 import '../components/LogViewer.css'
 import './RunDetail.css'
 
@@ -67,12 +67,13 @@ export default function RunDetail() {
   const { runId } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [activeTab, setActiveTab] = useState<'info' | 'logs' | 'metrics' | 'env'>('info')
+  const [activeTab, setActiveTab] = useState<'info' | 'logs' | 'metrics' | 'env'>('logs')
   const [autoScroll, setAutoScroll] = useState(true)
   const [logSearch, setLogSearch] = useState('')
   const [searchVisible, setSearchVisible] = useState(false)
   const [wrapLogs, setWrapLogs] = useState(false)
   const [showLineNumbers, setShowLineNumbers] = useState(true)
+  const [logStream, setLogStream] = useState<'all' | 'stdout' | 'stderr'>('all')
   const logBodyRef = useRef<HTMLDivElement>(null)
   const logsEndRef = useRef<HTMLDivElement>(null)
   const [logs, setLogs] = useState<string[]>([])
@@ -471,10 +472,31 @@ export default function RunDetail() {
     URL.revokeObjectURL(url)
   }
 
-  const filteredLogs = useMemo(
-    () => logs.filter((log) => log.toLowerCase().includes(logSearch.toLowerCase())),
-    [logs, logSearch]
-  )
+  // Parse a log level out of the raw line text (best-effort, for data-level colouring)
+  const parseLogLevel = (line: string): 'ERROR' | 'WARN' | 'INFO' | 'DEBUG' | 'SUCCESS' | '' => {
+    const m = line.match(/\b(ERROR|ERR|CRITICAL|FATAL|WARN(?:ING)?|INFO|DEBUG|TRACE|SUCCESS)\b/i)
+    if (!m) return ''
+    const lvl = m[1].toUpperCase()
+    if (lvl === 'ERR' || lvl === 'CRITICAL' || lvl === 'FATAL') return 'ERROR'
+    if (lvl === 'WARNING') return 'WARN'
+    if (lvl === 'TRACE') return 'DEBUG'
+    return lvl as 'ERROR' | 'WARN' | 'INFO' | 'DEBUG' | 'SUCCESS'
+  }
+
+  // Structured, search- and stream-filtered log lines for rendering
+  const visibleLogs = useMemo(() => {
+    const search = logSearch.toLowerCase()
+    return logs
+      .map((text, i) => {
+        const level = parseLogLevel(text)
+        // stderr lines are conventionally the error/warn ones; stdout = the rest.
+        // (Backend does not yet tag the stream per line — see TODO in the toolbar.)
+        const stream: 'stdout' | 'stderr' = level === 'ERROR' || level === 'WARN' ? 'stderr' : 'stdout'
+        return { n: i + 1, text, level, stream }
+      })
+      .filter((l) => (logStream === 'all' ? true : l.stream === logStream))
+      .filter((l) => (search ? l.text.toLowerCase().includes(search) : true))
+  }, [logs, logSearch, logStream])
 
   const getDuration = () => {
     if (!run) return '-'
@@ -491,6 +513,28 @@ export default function RunDetail() {
     return `${hours}h ${remainingMinutes}m`
   }
 
+  // Map run status to .badge variant + .status-dot kind for the redesigned pill
+  const statusBadgeClass = (status: string) => {
+    switch (status.toUpperCase()) {
+      case 'SUCCESS': return 'badge-success'
+      case 'FAILED': return 'badge-error'
+      case 'RUNNING': return 'badge-running'
+      case 'PENDING':
+      case 'WARNING': return 'badge-warning'
+      default: return 'badge-secondary'
+    }
+  }
+  const statusDotKind = (status: string) => {
+    switch (status.toUpperCase()) {
+      case 'SUCCESS': return 'success'
+      case 'FAILED': return 'failed'
+      case 'RUNNING': return 'running'
+      case 'PENDING': return 'checking'
+      case 'WARNING': return 'degraded'
+      default: return 'queued'
+    }
+  }
+
   if (isLoading) {
     return <div>{t('common.loading')}</div>
   }
@@ -505,7 +549,29 @@ export default function RunDetail() {
   return (
     <div className="run-detail">
       <div className="run-detail-header">
-        <h2>{t('runDetail.title')}</h2>
+        <div className="run-detail-head-main">
+          <div className="run-detail-title-row">
+            <h1 className="run-detail-title mono">{run.id.substring(0, 8)}</h1>
+            <span className={`badge dot ${statusBadgeClass(run.status)} run-detail-status`}>
+              <span className={`status-dot ${statusDotKind(run.status)}`} />
+              {run.status}
+            </span>
+          </div>
+          <div className="run-detail-meta">
+            <span className="run-detail-meta-label">{t('runDetail.pipelineLabel')}</span>
+            <span className="run-detail-meta-pipeline mono">{run.pipeline_name}</span>
+            <span className="run-detail-meta-sep">·</span>
+            <span>{t('runDetail.started')} <span className="run-detail-meta-strong">{new Date(run.started_at).toLocaleString(getFormatLocale(), { timeZone: 'UTC' })} UTC</span></span>
+            <span className="run-detail-meta-sep">·</span>
+            <span>{t('runDetail.durationLabel')} <span className="run-detail-meta-strong mono">{getDuration()}</span></span>
+            {run.exit_code !== null && (
+              <>
+                <span className="run-detail-meta-sep">·</span>
+                <span>{t('runDetail.exitCodeLabel')} <span className={`mono ${run.exit_code === 0 ? 'exit-success' : 'exit-error'}`}>{run.exit_code}</span></span>
+              </>
+            )}
+          </div>
+        </div>
         <div className="run-actions">
           {isRunning && (
             <button
@@ -528,6 +594,7 @@ export default function RunDetail() {
         </div>
       </div>
 
+      {activeTab === 'info' && (
       <div className="run-info-card">
         <div className="info-row">
           <span className="info-label">{t('runDetail.idLabel')}</span>
@@ -655,29 +722,14 @@ export default function RunDetail() {
           </div>
         )}
       </div>
+      )}
 
-      <div ref={tabsRef} className="tab-strip tab-strip--indicator">
+      <div ref={tabsRef} className="tab-strip tab-strip--indicator run-tabs">
         <div
           className="tab-strip__indicator"
           style={{ left: tabIndicator.left, width: tabIndicator.width }}
           aria-hidden
         />
-        <button
-          type="button"
-          data-tab="info"
-          className={`tab-strip__tab${activeTab === 'info' ? ' active' : ''}`}
-          onClick={() => setActiveTab('info')}
-        >
-          {t('runDetail.info')}
-        </button>
-        <button
-          type="button"
-          data-tab="env"
-          className={`tab-strip__tab${activeTab === 'env' ? ' active' : ''}`}
-          onClick={() => setActiveTab('env')}
-        >
-          {t('runDetail.env')}
-        </button>
         <button
           type="button"
           data-tab="logs"
@@ -694,12 +746,55 @@ export default function RunDetail() {
         >
           {t('runDetail.metrics')} {metrics.length > 0 && `(${metrics.length})`}
         </button>
+        <button
+          type="button"
+          data-tab="env"
+          className={`tab-strip__tab${activeTab === 'env' ? ' active' : ''}`}
+          onClick={() => setActiveTab('env')}
+        >
+          {t('runDetail.env')}
+        </button>
+        <button
+          type="button"
+          data-tab="info"
+          className={`tab-strip__tab${activeTab === 'info' ? ' active' : ''}`}
+          onClick={() => setActiveTab('info')}
+        >
+          {t('runDetail.info')}
+        </button>
       </div>
 
       {activeTab === 'logs' && (
         <div className={`logviewer${wrapLogs ? ' wrap' : ''}${!showLineNumbers ? ' no-linenumbers' : ''}`}>
           {/* Toolbar */}
           <div className="logviewer__toolbar">
+            {/* Stream filter — All is functional; stdout/stderr split on parsed level.
+                TODO(redesign): needs a per-line stream field from the backend SSE payload. */}
+            <div className="segmented logviewer__streams" role="group" aria-label={t('runDetail.streamFilter', 'Stream')}>
+              <button
+                type="button"
+                className={logStream === 'all' ? 'active' : ''}
+                onClick={() => setLogStream('all')}
+              >
+                {t('runDetail.streamAll', 'All')}
+              </button>
+              <button
+                type="button"
+                data-stream="stdout"
+                className={logStream === 'stdout' ? 'active' : ''}
+                onClick={() => setLogStream('stdout')}
+              >
+                stdout
+              </button>
+              <button
+                type="button"
+                data-stream="stderr"
+                className={logStream === 'stderr' ? 'active' : ''}
+                onClick={() => setLogStream('stderr')}
+              >
+                stderr
+              </button>
+            </div>
             <button
               className={`log-toggle icon${searchVisible ? ' active' : ''}`}
               onClick={() => setSearchVisible(v => !v)}
@@ -710,6 +805,7 @@ export default function RunDetail() {
             </button>
             {searchVisible && (
               <div className="logviewer__search">
+                <LuSearch size={13} className="logviewer__search-icon" />
                 <input
                   type="text"
                   placeholder={t('runDetail.searchLogs')}
@@ -718,33 +814,35 @@ export default function RunDetail() {
                   autoFocus
                 />
                 {logSearch && (
-                  <span className="count">{filteredLogs.length}</span>
+                  <span className="count">{t('runDetail.searchHits', '{{n}} hits', { n: visibleLogs.length })}</span>
                 )}
               </div>
             )}
+            <span className="spacer" />
             <button
               className={`log-toggle icon${showLineNumbers ? ' active' : ''}`}
               onClick={() => setShowLineNumbers(v => !v)}
-              title="Line numbers"
+              title={t('runDetail.lineNumbers', 'Line numbers')}
+              aria-label={t('runDetail.lineNumbers', 'Line numbers')}
             >
-              #
+              <LuHash size={13} />
             </button>
             <button
               className={`log-toggle icon${wrapLogs ? ' active' : ''}`}
               onClick={() => setWrapLogs(v => !v)}
-              title="Wrap lines"
-              aria-label="Wrap lines"
+              title={t('runDetail.wrapLines', 'Wrap lines')}
+              aria-label={t('runDetail.wrapLines', 'Wrap lines')}
             >
               <LuWrapText size={13} />
             </button>
             <button
               className={`log-toggle${autoScroll ? ' active follow' : ''}`}
               onClick={() => setAutoScroll(v => !v)}
+              title={t('runDetail.follow', 'Follow')}
             >
-              <LuAlignJustify size={13} />
-              Follow
+              <LuArrowDown size={13} />
+              {t('runDetail.follow', 'Follow')}
             </button>
-            <span className="spacer" />
             {logsDownloadUrl ? (
               <a
                 href={logsDownloadUrl}
@@ -847,15 +945,20 @@ export default function RunDetail() {
                   )
                 })}
               </div>
-            ) : filteredLogs.length > 0 ? (
-              filteredLogs.map((log, index) => (
-                <div key={index} className="log-line">
-                  {showLineNumbers && <span className="log-gutter">{index + 1}</span>}
-                  <span className="log-text">{log}</span>
+            ) : visibleLogs.length > 0 ? (
+              visibleLogs.map((l) => (
+                <div
+                  key={l.n}
+                  className={`log-line${logSearch ? ' match' : ''}`}
+                  data-level={l.level || undefined}
+                >
+                  <span className="log-gutter">{l.n}</span>
+                  <span className="log-level">{l.level}</span>
+                  <span className="log-text">{l.text}</span>
                 </div>
               ))
             ) : (
-              <div className="logviewer__empty">{t('runDetail.noLogs') || 'No logs found'}</div>
+              <div className="logviewer__empty">{t('runDetail.noLogs', 'No logs found')}</div>
             )}
             {isRunning && <div className="log-cursor"><span className="block" /></div>}
             <div ref={logsEndRef} />
@@ -863,17 +966,19 @@ export default function RunDetail() {
 
           {/* Footer */}
           <div className="logviewer__footer">
-            <span className={`logviewer__sse${isRunning ? '' : ' closed'}`}>
-              {isRunning && <span className="dot" />}
+            <span className={`logviewer__sse${isRunning && logConnectionStatus === 'connected' ? '' : ' closed'}`}>
+              <span className="dot" />
               {isRunning
                 ? logConnectionStatus === 'connected'
-                  ? 'streaming via SSE'
+                  ? t('runDetail.streamingSse', 'streaming via SSE')
                   : logConnectionStatus === 'reconnecting'
-                    ? 'reconnecting…'
-                    : 'disconnected'
-                : 'stream closed'}
+                    ? t('runDetail.reconnecting', 'reconnecting…')
+                    : t('runDetail.disconnected', 'disconnected')
+                : t('runDetail.streamClosed', 'stream closed')}
             </span>
-            <span className="logviewer__count">{logs.length} lines</span>
+            <span className="logviewer__count">
+              {t('runDetail.lineCount', '{{shown}} / {{total}} lines', { shown: visibleLogs.length, total: logs.length })}
+            </span>
           </div>
         </div>
       )}

@@ -524,7 +524,12 @@ export default function Users({ editLocked = false }: UsersProps) {
               <tbody>
                 {pendingUsers.map((u) => (
                   <tr key={u.id}>
-                    <td>{u.username}</td>
+                    <td>
+                      <span className="users-name-cell">
+                        {u.username}
+                        <span className="badge badge-pending">{t('users.badgePending', 'Pending')}</span>
+                      </span>
+                    </td>
                     <td>{u.email || '–'}</td>
                     <td>{t(providerCellKey(u))}</td>
                     <td>{new Date(u.created_at).toLocaleString(getFormatLocale())}</td>
@@ -700,7 +705,7 @@ export default function Users({ editLocked = false }: UsersProps) {
                     <td><span className={`badge badge-${normalizeRole(i.role)}`}>{normalizeRole(i.role) === 'admin' ? t('users.roleDisplayAdmin') : normalizeRole(i.role) === 'write' ? t('users.roleDisplayWrite') : t('users.roleDisplayReadonly')}</span></td>
                     <td>{new Date(i.created_at).toLocaleString(getFormatLocale())}</td>
                     <td>{new Date(i.expires_at).toLocaleString(getFormatLocale())}</td>
-                    <td>{i.is_used ? <span className="badge badge-success">{t('users.inviteStatusRedeemed')}</span> : <span className="badge">{t('users.inviteStatusOpen')}</span>}</td>
+                    <td>{i.is_used ? <span className="badge badge-success">{t('users.inviteStatusRedeemed')}</span> : <span className="badge badge-pending">{t('users.inviteStatusOpen')}</span>}</td>
                     {isAdmin && (
                       <td>
                         {!i.is_used && new Date(i.expires_at) > new Date() && (

@@ -3,8 +3,7 @@
   background-color: var(--color-surface);
   padding: var(--spacing-lg);
   border-radius: var(--radius-lg);
-  border: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--color-border);
   margin-bottom: 0;
 }
 
@@ -32,17 +31,15 @@
 .calendar-legend {
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-xs) var(--spacing-sm);
-  background: color-mix(in srgb, var(--color-surface-variant) 50%, transparent);
-  border-radius: var(--radius-md);
-  border: 1px solid color-mix(in srgb, var(--color-border) 40%, transparent);
+  gap: 6px;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
 }
 
 .legend-label {
-  font-size: var(--font-size-xs);
+  font-size: 11px;
   font-weight: 500;
-  color: var(--color-text-secondary);
+  color: var(--color-text-tertiary);
 }
 
 .legend-colors {
@@ -52,15 +49,23 @@
 }
 
 .legend-color {
-  width: 12px;
-  height: 12px;
-  border-radius: var(--radius-sm);
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
   transition: transform 0.15s ease;
 }
 
 .legend-color:hover {
   transform: scale(1.15);
 }
+
+/* Green heat ramp (shared by legend swatches and grid cells) */
+.heat-0 { background: #16161A; }
+.heat-1 { background: rgba(62, 207, 142, 0.22); }
+.heat-2 { background: rgba(62, 207, 142, 0.42); }
+.heat-3 { background: rgba(62, 207, 142, 0.68); }
+.heat-4 { background: #3ECF8E; }
+.heat-fail { background: var(--color-error); }
 
 .calendar-grid {
   display: flex;
@@ -80,40 +85,41 @@
 
 .calendar-month-labels {
   position: relative;
-  height: 22px;
-  margin-bottom: var(--spacing-xs);
-  margin-left: 32px;
+  height: 16px;
+  margin-bottom: 4px;
+  margin-left: 28px;
 }
 
 .calendar-month-label {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--color-text-disabled);
   text-align: left;
   white-space: nowrap;
   font-weight: 500;
   position: absolute;
-  transform: translateX(-50%);
 }
 
 .calendar-week-labels {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xs);
+  gap: 3px;
   padding-right: var(--spacing-sm);
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--color-text-disabled);
   justify-content: space-around;
-  min-width: 32px;
+  min-width: 28px;
 }
 
 .calendar-week-labels span {
-  height: 12px;
-  line-height: 12px;
+  height: 11px;
+  line-height: 11px;
 }
 
 .calendar-weeks {
   display: flex;
-  gap: var(--spacing-xs);
+  gap: 3px;
   flex: 1;
   position: relative;
 }
@@ -121,13 +127,13 @@
 .calendar-week {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xs);
+  gap: 3px;
 }
 
 .calendar-day {
-  width: 12px;
-  height: 12px;
-  border-radius: var(--radius-sm);
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   position: relative;
@@ -150,37 +156,15 @@
   box-shadow: 0 0 0 2px var(--color-primary), 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
-/* Intensitäts-Klassen für zusätzliche visuelle Unterscheidung */
-.calendar-day.intensity-0 {
-  opacity: 0.3;
-}
-
-.calendar-day.intensity-1 {
-  opacity: 0.5;
-}
-
-.calendar-day.intensity-2 {
-  opacity: 0.7;
-}
-
-.calendar-day.intensity-3 {
-  opacity: 0.9;
-}
-
-.calendar-day.intensity-4,
-.calendar-day.intensity-5 {
-  opacity: 1;
-}
-
 .calendar-tooltip {
   position: fixed;
-  background: color-mix(in srgb, var(--color-surface) 98%, var(--color-background));
-  border: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   padding: var(--spacing-md);
-  z-index: 1000;
+  z-index: var(--z-tooltip);
   pointer-events: none;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 12px 32px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-xl);
   min-width: 220px;
   max-width: 320px;
 }
@@ -228,7 +212,7 @@
 .tooltip-run-ids {
   margin-top: var(--spacing-sm);
   padding-top: var(--spacing-sm);
-  border-top: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent);
+  border-top: 1px solid var(--color-border-soft);
 }
 
 .tooltip-run-ids-label {
@@ -251,16 +235,16 @@
   color: var(--color-primary);
   text-decoration: none;
   padding: 4px 8px;
-  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  background: var(--color-accent-subtle);
   border-radius: var(--radius-sm);
-  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
-  transition: background 0.2s ease, border-color 0.2s ease;
-  font-family: monospace;
+  border: 1px solid var(--color-accent-border);
+  transition: background var(--transition-base), border-color var(--transition-base);
+  font-family: var(--font-mono);
   pointer-events: auto;
 }
 
 .tooltip-run-id-link:hover {
-  background: color-mix(in srgb, var(--color-primary) 22%, transparent);
+  background: var(--color-surface-variant);
   border-color: var(--color-primary);
 }
 

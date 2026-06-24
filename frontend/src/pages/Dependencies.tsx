@@ -16,6 +16,7 @@ interface PackageRow {
   name: string
   specifier: string
   version: string
+  latest?: string
 }
 
 interface VulnRow {
@@ -23,6 +24,7 @@ interface VulnRow {
   name?: string
   description?: string
   fix_versions?: string[]
+  severity?: string
   [key: string]: unknown
 }
 
@@ -31,6 +33,23 @@ interface PipelineDeps {
   packages: PackageRow[]
   vulnerabilities?: VulnRow[]
   audit_error?: string
+}
+
+type Severity = 'critical' | 'high' | 'medium' | 'low'
+const SEVERITY_ORDER: Severity[] = ['critical', 'high', 'medium', 'low']
+
+// TODO(redesign): needs backend — pip-audit results do not always include a
+// CVSS severity. Derive a best-effort severity from any `severity`/`cvss` field
+// and fall back to "high" so vulnerable packages are never silently counted as 0.
+function vulnSeverity(v: VulnRow): Severity {
+  const raw = String(
+    v.severity ?? (v as { cvss_severity?: string }).cvss_severity ?? ''
+  ).toLowerCase()
+  if (raw.includes('crit')) return 'critical'
+  if (raw.includes('high')) return 'high'
+  if (raw.includes('med') || raw.includes('moderate')) return 'medium'
+  if (raw.includes('low')) return 'low'
+  return 'high'
 }
 
 export default function Dependencies() {
@@ -78,6 +97,17 @@ export default function Dependencies() {
 
   const pipelineNames = useMemo(() => (displayData ?? []).map((d) => d.pipeline), [displayData])
 
+  // Aggregate CVE counts across all pipelines by severity for the KPI row.
+  const cveCounts = useMemo(() => {
+    const counts: Record<Severity, number> = { critical: 0, high: 0, medium: 0, low: 0 }
+    for (const d of displayData ?? []) {
+      for (const v of d.vulnerabilities ?? []) {
+        counts[vulnSeverity(v)] += 1
+      }
+    }
+    return counts
+  }, [displayData])
+
   const filtered = useMemo(() => {
     if (!displayData) return []
     let list = displayData
@@ -110,10 +140,14 @@ export default function Dependencies() {
     return (
       <div className="dependencies-page">
         <div className="dependencies-header">
-          <h1>{t('dependencies.title')}</h1>
+          <h1 className="dependencies-title">{t('dependencies.title')}</h1>
         </div>
-        <div className="dependencies-filters card">
-          <Skeleton width="100%" height="40px" />
+        <div className="deps-kpi-row">
+          {SEVERITY_ORDER.map((s) => (
+            <Skeleton key={s} width="100%" height="74px" />
+          ))}
+        </div>
+        <div className="dependencies-actions card">
           <Skeleton width="100%" height="40px" />
         </div>
         <div className="dependencies-table-wrap card">
@@ -132,14 +166,40 @@ export default function Dependencies() {
   return (
     <div className="dependencies-page">
       <div className="dependencies-header">
-        <h1>{t('dependencies.title')}</h1>
-        <p className="dependencies-subtitle">
-          {t('dependencies.intro')}{' '}
-          {auditLastError && (
-            <span className="dependencies-subtitle-error">{t('dependencies.lastScanError')}</span>
-          )}
-          {!auditLastError && subtitleText}
-        </p>
+        <div>
+          <h1 className="dependencies-title">{t('dependencies.title')}</h1>
+          <p className="dependencies-subtitle">
+            {t('dependencies.intro')}{' '}
+            {auditLastError && (
+              <span className="dependencies-subtitle-error">{t('dependencies.lastScanError')}</span>
+            )}
+            {!auditLastError && subtitleText}
+          </p>
+        </div>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => { refetch(); refetchAuditLast() }}
+          disabled={isFetching || auditLastLoading}
+        >
+          <LuRefreshCw aria-hidden />
+          {isFetching || auditLastLoading ? t('common.loading') : t('dependencies.rescan', 'Rescan')}
+        </button>
+      </div>
+
+      {/* CVE-summary KPI row */}
+      <div className="deps-kpi-row">
+        {SEVERITY_ORDER.map((sev) => (
+          <div key={sev} className="card deps-kpi">
+            <div className="deps-kpi-label">
+              <span className={`deps-sev-dot deps-sev-dot--${sev}`} aria-hidden />
+              {t(`dependencies.severity.${sev}`, capitalize(sev))}
+            </div>
+            <div className={`deps-kpi-count mono deps-kpi-count--${sev}`}>
+              {showAuditColumn ? cveCounts[sev] : 0}
+            </div>
+          </div>
+        ))}
       </div>
 
       <div className="dependencies-actions card">
@@ -179,15 +239,6 @@ export default function Dependencies() {
         <div className="dependencies-buttons">
           <button
             type="button"
-            className="btn btn-secondary"
-            onClick={() => { refetch(); refetchAuditLast() }}
-            disabled={isFetching || auditLastLoading}
-          >
-            <LuRefreshCw size={18} />
-            {isFetching || auditLastLoading ? t('common.loading') : t('dependencies.update')}
-          </button>
-          <button
-            type="button"
             className="btn btn-primary"
             onClick={() => setAuditRequested(true)}
             disabled={isReadonly || isFetching}
@@ -198,9 +249,9 @@ export default function Dependencies() {
         </div>
       </div>
 
-      <div className="dependencies-table-wrap card">
+      <div className="dependencies-table-wrap">
         {filtered.length === 0 ? (
-          <div className="dependencies-empty">
+          <div className="dependencies-empty card">
             {!displayData?.length
               ? (auditLast?.results?.length ? t('dependencies.noEntries') : t('dependencies.noPipelinesWithRequirements'))
               : t('dependencies.noEntries')}
@@ -217,18 +268,19 @@ export default function Dependencies() {
                     type="button"
                     className="pipeline-deps-head"
                     onClick={() => toggleExpanded(d.pipeline)}
+                    aria-expanded={expanded}
                   >
                     {expanded ? <LuChevronUp size={20} /> : <LuChevronDown size={20} />}
-                    <span className="pipeline-deps-name">{d.pipeline}</span>
+                    <span className="pipeline-deps-name mono">{d.pipeline}</span>
                     <span className="pipeline-deps-meta">
                       {packages.length === 1 ? t('dependencies.packagesCount', { count: 1 }) : t('dependencies.packagesCountPlural', { count: packages.length })}
                       {showAuditColumn && (
                         <>
                           {' · '}
                           {vulns.length > 0 ? (
-                            <span className="vuln-badge vuln-yes">{vulns.length} {t('dependencies.vulnerabilities').toLowerCase()}</span>
+                            <span className="badge badge-error">{vulns.length} {t('dependencies.vulnerabilities').toLowerCase()}</span>
                           ) : (
-                            <span className="vuln-badge vuln-no">{t('dependencies.vulnNone')}</span>
+                            <span className="badge badge-success">{t('dependencies.vulnNone')}</span>
                           )}
                         </>
                       )}
@@ -239,49 +291,60 @@ export default function Dependencies() {
                       {d.audit_error && (
                         <div className="audit-error">{d.audit_error}</div>
                       )}
-                      <table className="deps-table">
-                        <thead>
-                          <tr>
-                            <th>{t('dependencies.packageLabel')}</th>
-                            <th>{t('dependencies.versionLabel')}</th>
-                            {showAuditColumn && <th>{t('dependencies.vulnerabilities')}</th>}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {packages.map((p) => {
-                            const pkgVulns = vulns.filter(
-                              (v) => (v.name && v.name.toLowerCase() === (p as PackageRow).name.toLowerCase()) || (v as { package?: string }).package === (p as PackageRow).name
-                            )
-                            return (
-                              <tr key={(p as PackageRow).name}>
-                                <td><code>{(p as PackageRow).name}</code></td>
-                                <td>{(p as PackageRow).version ?? (p as PackageRow).specifier ?? '—'}</td>
-                                {showAuditColumn && (
-                                  <td>
-                                    {pkgVulns.length > 0 ? (
-                                      <ul className="vuln-list">
-                                        {pkgVulns.map((v, i) => (
-                                          <li key={i}>
-                                            {v.id ? (
-                                              <a href={`https://nvd.nist.gov/vuln/detail/${v.id}`} target="_blank" rel="noopener noreferrer">{v.id}</a>
-                                            ) : (
-                                              v.description || '—'
-                                            )}
-                                          </li>
-                                        ))}
-                                      </ul>
-                                    ) : vulns.length > 0 ? (
-                                      '—'
-                                    ) : (
-                                      '—'
-                                    )}
-                                  </td>
+                      <div className="table deps-table">
+                        <div className="table__head">
+                          <span>{t('dependencies.packageLabel')}</span>
+                          <span>{t('dependencies.installed', 'Installed')}</span>
+                          <span>{t('dependencies.latest', 'Latest')}</span>
+                          <span>{t('dependencies.status', 'Status')}</span>
+                          <span>{t('dependencies.cve', 'CVE')}</span>
+                        </div>
+                        {packages.map((p) => {
+                          const pkgVulns = vulns.filter(
+                            (v) => (v.name && v.name.toLowerCase() === p.name.toLowerCase()) || (v as { package?: string }).package === p.name
+                          )
+                          const latest = p.latest ?? pkgVulns.find((v) => v.fix_versions?.length)?.fix_versions?.[0]
+                          const status = pkgVulns.length > 0
+                            ? 'vulnerable'
+                            : latest && latest !== p.version
+                              ? 'outdated'
+                              : 'uptodate'
+                          return (
+                            <div key={p.name} className="table__row deps-row">
+                              <span className="mono deps-pkg">{p.name}</span>
+                              <span className="mono deps-version">{p.version ?? p.specifier ?? '—'}</span>
+                              {/* TODO(redesign): needs backend — latest version is
+                                  not provided; inferred from fix_versions when present. */}
+                              <span className="mono deps-latest">{latest ?? '—'}</span>
+                              <span>
+                                {showAuditColumn ? (
+                                  <span className={`badge dot ${statusBadge(status)}`}>
+                                    {t(`dependencies.statusLabel.${status}`, statusFallback(status))}
+                                  </span>
+                                ) : (
+                                  '—'
                                 )}
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
+                              </span>
+                              <span className="mono deps-cve">
+                                {pkgVulns.length > 0 ? (
+                                  pkgVulns.map((v, i) => (
+                                    <span key={i}>
+                                      {i > 0 && ', '}
+                                      {v.id ? (
+                                        <a href={`https://nvd.nist.gov/vuln/detail/${v.id}`} target="_blank" rel="noopener noreferrer" className="deps-cve-link">{v.id}</a>
+                                      ) : (
+                                        '—'
+                                      )}
+                                    </span>
+                                  ))
+                                ) : (
+                                  '—'
+                                )}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
                       {showAuditColumn && vulns.length > 0 && (
                         <div className="vuln-summary">
                           <strong>{t('dependencies.foundVulns')}</strong>
@@ -308,4 +371,30 @@ export default function Dependencies() {
       </div>
     </div>
   )
+}
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
+function statusBadge(status: string): string {
+  switch (status) {
+    case 'vulnerable':
+      return 'badge-error'
+    case 'outdated':
+      return 'badge-warning'
+    default:
+      return 'badge-success'
+  }
+}
+
+function statusFallback(status: string): string {
+  switch (status) {
+    case 'vulnerable':
+      return 'vulnerable'
+    case 'outdated':
+      return 'outdated'
+    default:
+      return 'up-to-date'
+  }
 }

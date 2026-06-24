@@ -1,4 +1,4 @@
-import { useRef, useEffect, Fragment } from 'react'
+import { useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { LuCode } from 'react-icons/lu'
 import Tooltip from '../components/Tooltip'
@@ -123,7 +123,12 @@ export default function Login() {
                 loading="lazy"
                 decoding="async"
               />
-            ) : null}
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <rect x="3" y="11" width="18" height="11" rx="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+            )}
             {providers.custom
               ? t('auth.signInNamedProvider', {
                   name: providers.custom_display_name || t('auth.customProviderFallback'),
@@ -136,9 +141,15 @@ export default function Login() {
     }
   }
 
+  const standardIds = orderedProviderIds.filter((id): id is 'github' | 'google' | 'microsoft' => id !== 'custom')
+  const hasCustom = orderedProviderIds.includes('custom')
+  const showDivider = standardIds.length > 0 && hasCustom
+
   return (
-    <div className="login-container">
-      <div className="login-background">
+    <div className="login-container login-container--split">
+
+      {/* Animated background (kept by design decision) — sits behind the brand panel */}
+      <div className="login-background" aria-hidden="true">
         {loginBackground === 'video' ? (
           <video
             ref={videoRef}
@@ -157,51 +168,91 @@ export default function Login() {
         <div className="login-background-overlay" />
       </div>
 
+      {/* LEFT: Brand Panel */}
+      <div className="login-brand" aria-hidden="true">
+        <div className="login-brand-grid" />
+
+        <div className="login-brand-logo">
+          <div className="login-brand-mark">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 5l5 7-5 7"/>
+              <path d="M13 12h6"/>
+            </svg>
+          </div>
+          <span className="login-brand-name">FastFlow</span>
+        </div>
+
+        <div className="login-brand-body">
+          <h1 className="login-brand-headline">{t('auth.brandHeadline')}</h1>
+          <p className="login-brand-sub">{t('auth.brandSub')}</p>
+          <div className="login-brand-stats">
+            <div className="login-brand-stat">
+              <div className="login-brand-stat__value">{t('auth.brandStatOneValue', 'Container-native')}</div>
+              <div className="login-brand-stat__label">{t('auth.brandStatOneLabel', 'Execution model')}</div>
+            </div>
+            <div className="login-brand-stat__divider" />
+            <div className="login-brand-stat">
+              <div className="login-brand-stat__value">{t('auth.brandStatTwoValue', 'Git-synced')}</div>
+              <div className="login-brand-stat__label">{t('auth.brandStatTwoLabel', 'Pipeline definitions')}</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="login-brand-version">
+          <LuCode size={13} />
+          <span>container-native · open source</span>
+        </div>
+      </div>
+
+      {/* RIGHT: Auth Panel */}
       <div className="login-content">
         <div className="login-card">
+          {providers.login_branding_logo_url ? (
+            <div className="login-branding-logo-wrap">
+              <img
+                src={providers.login_branding_logo_url}
+                alt=""
+                className="login-branding-logo"
+                loading="lazy"
+                decoding="async"
+              />
+            </div>
+          ) : null}
+
           <div className="login-header">
-            {providers.login_branding_logo_url ? (
-              <div className="login-branding-logo-wrap">
-                <img
-                  src={providers.login_branding_logo_url}
-                  alt=""
-                  className="login-branding-logo"
-                  loading="lazy"
-                  decoding="async"
-                />
-              </div>
-            ) : (
-              <div className="login-icon">
-                <LuCode />
-              </div>
-            )}
-            <p className="login-eyebrow">{t('auth.loginEyebrow')}</p>
-            <h1>{t('appTitle')}</h1>
-            <p className="login-subtitle">{t('auth.subtitle')}</p>
+            <h2 className="login-welcome">{t('auth.welcomeBack')}</h2>
+            <p className="login-subtitle">{t('auth.signInWorkspace')}</p>
           </div>
 
           <div className="login-form login-form-oauth">
-            {orderedProviderIds.map((id, idx) => {
-              const active = providers[id] === true
-              const prevActive = idx > 0 ? providers[orderedProviderIds[idx - 1]!] === true : false
-              const showInactiveSection = idx > 0 && prevActive && !active
+            {standardIds.map((id) => (
+              <div
+                key={id}
+                className={`login-provider-row${providers[id] === true ? ' login-provider-row--active' : ' login-provider-row--inactive'}`}
+              >
+                {renderProvider(id)}
+              </div>
+            ))}
 
-              return (
-                <Fragment key={id}>
-                  {showInactiveSection ? (
-                    <div className="login-oauth-section-label" role="presentation">
-                      <span>{t('auth.oauthSectionInactive')}</span>
-                    </div>
-                  ) : null}
-                  <div
-                    className={`login-provider-row${active ? ' login-provider-row--active' : ' login-provider-row--inactive'}`}
-                  >
-                    {renderProvider(id)}
-                  </div>
-                </Fragment>
-              )
-            })}
+            {showDivider && (
+              <div className="login-divider" role="presentation">
+                <span>{t('auth.orSeparator')}</span>
+              </div>
+            )}
+
+            {hasCustom && (
+              <div className={`login-provider-row${providers.custom === true ? ' login-provider-row--active' : ' login-provider-row--inactive'}`}>
+                {renderProvider('custom')}
+              </div>
+            )}
           </div>
+
+          <p className="login-request-access">
+            {t('auth.noAccountYet', 'No account yet?')}{' '}
+            <span className="login-request-access__hint">
+              {t('auth.requestAccessHint', 'Sign in with a provider to request access.')}
+            </span>
+          </p>
         </div>
 
         <div className="login-footer">

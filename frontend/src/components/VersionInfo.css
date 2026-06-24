@@ -4,23 +4,17 @@
   align-items: center;
   gap: var(--spacing-sm);
   padding: var(--spacing-xs) var(--spacing-md);
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--color-warning) 22%, var(--color-surface)),
-    color-mix(in srgb, var(--color-warning-dark) 18%, var(--color-surface))
-  );
-  border: 1px solid color-mix(in srgb, var(--color-warning) 50%, transparent);
+  background: var(--color-warning-subtle);
+  border: 1px solid var(--color-warning-border);
   border-radius: var(--radius-full);
   color: var(--color-text-primary);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
-  box-shadow: 0 1px 4px rgba(255, 152, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  transition: box-shadow var(--transition-base), border-color var(--transition-base);
+  transition: border-color var(--transition-base);
 }
 
 .version-update-banner:hover {
-  box-shadow: 0 2px 8px rgba(255, 152, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  border-color: color-mix(in srgb, var(--color-warning) 70%, transparent);
+  border-color: var(--color-warning);
 }
 
 .version-update-banner-icon {
