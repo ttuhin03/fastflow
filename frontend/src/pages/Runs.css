@@ -119,7 +119,7 @@
 /* Shared grid template for head + rows (mockup columns) */
 .runs-table {
   display: grid;
-  grid-template-columns: 150px minmax(180px, 1fr) 120px 110px 120px 110px 24px;
+  grid-template-columns: 150px minmax(180px, 1fr) 120px 110px 120px 110px 20px;
   align-items: center;
   gap: var(--spacing-md);
 }

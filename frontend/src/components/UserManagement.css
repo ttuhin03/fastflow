@@ -5,7 +5,7 @@
   gap: var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-md);
   background-color: var(--color-primary);
-  color: var(--color-bg);
+  color: var(--color-background);
   border: 1px solid var(--color-primary-dark);
   border-radius: var(--radius-md);
   cursor: pointer;

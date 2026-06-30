@@ -136,15 +136,6 @@
 .recent-runs-label { font-size: var(--font-size-xs); color: var(--color-text-secondary); font-weight: var(--font-weight-medium); }
 .pipeline-actions { display: flex; gap: 4px; }
 
-/* Toggle (legacy .toggle-switch) */
-.toggle-switch { position: relative; display: inline-block; width: 38px; height: 22px; flex: none; }
-.toggle-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
-.toggle-slider { position: absolute; cursor: pointer; inset: 0; background: var(--color-surface-4); border-radius: var(--radius-full); transition: background var(--transition-base); }
-.toggle-slider:before { position: absolute; content: ''; height: 18px; width: 18px; left: 2px; bottom: 2px; background: #fff; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.4); transition: left var(--transition-base) var(--ease-spring); }
-.toggle-switch input:checked + .toggle-slider { background: var(--color-success); }
-.toggle-switch input:checked + .toggle-slider:before { left: 18px; }
-.toggle-switch input:disabled + .toggle-slider { opacity: 0.5; cursor: not-allowed; }
-
 /* ---- Spinner ------------------------------------------------------------- */
 .spinner {
   width: 32px; height: 32px; border-radius: 50%;

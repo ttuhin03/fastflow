@@ -30,7 +30,7 @@
   top: 2px;
   right: 2px;
   background: var(--color-error);
-  color: var(--color-bg);
+  color: var(--color-background);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-bold);
   border-radius: 10px;
@@ -269,7 +269,7 @@
 
 .notification-item-action:hover {
   background: var(--color-primary);
-  color: var(--color-bg);
+  color: var(--color-background);
 }
 
 /* Mobile */

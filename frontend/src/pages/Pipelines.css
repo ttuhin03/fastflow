@@ -369,3 +369,6 @@
   border-radius: var(--radius-full);
   animation: ff-spin 0.8s linear infinite;
 }
+
+/* Read-only enable indicator (no enable/disable endpoint yet) */
+.toggle.toggle--readonly { cursor: default; }

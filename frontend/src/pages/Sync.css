@@ -735,7 +735,7 @@
 .github-form input[type='file']::file-selector-button {
   padding: var(--spacing-sm) var(--spacing-md);
   background-color: var(--color-primary);
-  color: var(--color-bg);
+  color: var(--color-background);
   border: none;
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -785,7 +785,7 @@
 .connect-github-button {
   padding: var(--spacing-md) var(--spacing-xl);
   background-color: var(--color-primary);
-  color: var(--color-bg);
+  color: var(--color-background);
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;

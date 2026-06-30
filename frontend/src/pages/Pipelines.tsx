@@ -335,10 +335,10 @@ export default function Pipelines() {
               {t('pipelines.trigger', 'Trigger')}
             </button>
           )}
-          <button type="button" className="btn btn-sm btn-outlined" onClick={handleBulkEnable}>
+          <button type="button" className="btn btn-sm btn-outlined" onClick={handleBulkEnable} disabled title={t('common.notAvailableYet', 'Not available yet')}>
             {t('pipelines.enable', 'Enable')}
           </button>
-          <button type="button" className="btn btn-sm btn-outlined" onClick={handleBulkDisable}>
+          <button type="button" className="btn btn-sm btn-outlined" onClick={handleBulkDisable} disabled title={t('common.notAvailableYet', 'Not available yet')}>
             {t('pipelines.disable', 'Disable')}
           </button>
           <div className="pipelines-toolbar-spacer" />
@@ -418,12 +418,13 @@ export default function Pipelines() {
                 {/* TODO(redesign): needs backend — cron/schedule not in pipeline list API */}
                 <span className="mono pipelines-cell-cron">—</span>
                 <span className="pipelines-cell-actions" onClick={(e) => e.stopPropagation()}>
-                  <label className="toggle" title={t('dashboard.pipelineActiveTooltip')}>
+                  {/* TODO(redesign): needs backend — no enable/disable endpoint; toggle reflects state read-only */}
+                  <label className="toggle toggle--readonly" title={t('dashboard.pipelineActiveTooltip')}>
                     <input
                       type="checkbox"
                       checked={pipeline.enabled}
                       onChange={() => handleToggleEnable(pipeline.name)}
-                      disabled={isReadonly}
+                      disabled
                       aria-label={t('dashboard.pipelineActiveTooltip')}
                     />
                     <span className="track" />
