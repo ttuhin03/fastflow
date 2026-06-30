@@ -533,7 +533,7 @@
 
 .sync-repo-card .section-title {
   font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-bold);
   color: var(--color-warning-text);
   margin: 0;
   padding-bottom: var(--spacing-sm);
