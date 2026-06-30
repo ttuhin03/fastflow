@@ -184,6 +184,14 @@
   gap: var(--spacing-lg);
 }
 
+/* Placeholder while the lazy recharts charts load */
+.pd-chart-loading {
+  height: 240px;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+}
+
 /* Recent runs preview */
 .pd-recent-list { display: flex; flex-direction: column; }
 .pd-recent-row {

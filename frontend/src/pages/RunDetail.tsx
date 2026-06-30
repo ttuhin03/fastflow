@@ -62,6 +62,11 @@ interface CellLog {
   outputs?: { images?: Array<{ mime: string; data: string }> }
 }
 
+// Begrenzt die im Speicher/DOM gehaltenen Live-Log-Zeilen (Ring-Buffer). Lange Runs
+// können via SSE zehntausende Zeilen liefern — ohne Cap wächst State + DOM unbegrenzt
+// und das Rendern ruckelt. Vollständige Logs sind weiterhin per Download verfügbar.
+const MAX_LOG_LINES = 5000
+
 export default function RunDetail() {
   const { t } = useTranslation()
   const { runId } = useParams()
@@ -297,11 +302,15 @@ export default function RunDetail() {
                   if (data.line) {
                     setLogs((prev) => {
                       if (prev.length > 0 && prev[prev.length - 1] === data.line) return prev
-                      return [...prev, data.line]
+                      const next = [...prev, data.line]
+                      return next.length > MAX_LOG_LINES ? next.slice(-MAX_LOG_LINES) : next
                     })
                   } else if (data.error) console.error('Log stream error from server:', data.error)
                 } catch {
-                  if (payload) setLogs((prev) => [...prev, payload])
+                  if (payload) setLogs((prev) => {
+                    const next = [...prev, payload]
+                    return next.length > MAX_LOG_LINES ? next.slice(-MAX_LOG_LINES) : next
+                  })
                 }
               }
             }

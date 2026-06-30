@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, lazy, Suspense } from 'react'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
@@ -11,8 +11,10 @@ import { LuExternalLink } from 'react-icons/lu'
 import Tooltip from '../components/Tooltip'
 import InfoIcon from '../components/InfoIcon'
 import CalendarHeatmap from '../components/CalendarHeatmap'
-import SuccessRateTrendChart from '../components/SuccessRateTrendChart'
-import AverageRuntimeChart from '../components/AverageRuntimeChart'
+// recharts-basierte Charts lazy laden — hält die schwere recharts-Lib (~108kB gzip)
+// aus dem PipelineDetail-Hauptchunk; Header/Stats/Tabs werden sofort interaktiv.
+const SuccessRateTrendChart = lazy(() => import('../components/SuccessRateTrendChart'))
+const AverageRuntimeChart = lazy(() => import('../components/AverageRuntimeChart'))
 import './PipelineDetail.css'
 
 interface PipelineStats {
@@ -520,12 +522,14 @@ export default function PipelineDetail() {
 
           {dailyStats && dailyStats.daily_stats && dailyStats.daily_stats.length > 0 && (
             <>
-              <div className="pd-charts-grid">
-                <SuccessRateTrendChart dailyStats={dailyStats.daily_stats} days={30} />
-                {runs && runs.length > 0 && (
-                  <AverageRuntimeChart runs={runs} days={30} />
-                )}
-              </div>
+              <Suspense fallback={<div className="pd-charts-grid"><div className="pd-chart-loading" /><div className="pd-chart-loading" /></div>}>
+                <div className="pd-charts-grid">
+                  <SuccessRateTrendChart dailyStats={dailyStats.daily_stats} days={30} />
+                  {runs && runs.length > 0 && (
+                    <AverageRuntimeChart runs={runs} days={30} />
+                  )}
+                </div>
+              </Suspense>
               <CalendarHeatmap dailyStats={dailyStats.daily_stats} days={365} />
             </>
           )}

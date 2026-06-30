@@ -40,9 +40,12 @@ function actionKind(action: string): { kind: string; cls: string } {
   return { kind: 'EVT', cls: 'kind-evt' }
 }
 
-/** Quote a CSV field, escaping embedded quotes. */
+/** Quote a CSV field, escaping embedded quotes and neutralizing formula injection. */
 function csvCell(value: unknown): string {
-  const s = value == null ? '' : String(value)
+  let s = value == null ? '' : String(value)
+  // CSV/formula injection: Excel/Sheets execute cells starting with = + - @ (or tab/CR).
+  // Prefix with a single quote so the value is treated as text.
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`
   return `"${s.replace(/"/g, '""')}"`
 }
 

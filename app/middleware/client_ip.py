@@ -5,6 +5,7 @@ Legt die Client-IP des aktuellen Requests in einer ContextVar ab, damit
 tiefer liegende Services (z.B. log_audit) sie ohne Request-Objekt lesen können.
 """
 
+import ipaddress
 import logging
 from contextvars import ContextVar
 from typing import Optional
@@ -24,18 +25,33 @@ def get_client_ip() -> Optional[str]:
     return _client_ip_var.get()
 
 
+def _valid_ip(value: Optional[str]) -> Optional[str]:
+    """Akzeptiert nur syntaktisch gültige IPv4/IPv6-Adressen (verhindert, dass
+    beliebiger, vom Client kontrollierter Header-Text im Audit-Log landet)."""
+    if not value:
+        return None
+    candidate = value.strip()
+    try:
+        return str(ipaddress.ip_address(candidate))
+    except ValueError:
+        return None
+
+
 def _extract_ip(request: Request) -> Optional[str]:
     # Hinter einem Reverse-Proxy steht die echte Client-IP im ersten Hop von X-Forwarded-For.
+    # Hinweis: X-Forwarded-For ist client-spoofbar, wenn die App nicht ausschließlich hinter
+    # einem vertrauenswürdigen Proxy läuft — daher wird der Wert strikt als IP validiert und
+    # dient nur informativ im Audit-Log.
     xff = request.headers.get("x-forwarded-for")
     if xff:
-        first = xff.split(",")[0].strip()
-        if first:
-            return first[:64]
-    real_ip = request.headers.get("x-real-ip")
-    if real_ip and real_ip.strip():
-        return real_ip.strip()[:64]
+        ip = _valid_ip(xff.split(",")[0])
+        if ip:
+            return ip
+    ip = _valid_ip(request.headers.get("x-real-ip"))
+    if ip:
+        return ip
     if request.client and request.client.host:
-        return request.client.host[:64]
+        return _valid_ip(request.client.host)
     return None
 
 
