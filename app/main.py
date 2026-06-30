@@ -162,6 +162,10 @@ app.add_middleware(
 from app.middleware.body_limit import BodyLimitMiddleware
 app.add_middleware(BodyLimitMiddleware)
 
+# Client-IP für Audit-Log in ContextVar ablegen (vor Request-ID, damit innerhalb verfügbar)
+from app.middleware.client_ip import ClientIPMiddleware
+app.add_middleware(ClientIPMiddleware)
+
 # Request-ID: zuletzt hinzufügen = läuft zuerst (outermost)
 from app.middleware.request_id import RequestIDMiddleware
 app.add_middleware(RequestIDMiddleware)

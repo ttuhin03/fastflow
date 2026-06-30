@@ -15,6 +15,7 @@ interface AuditEntry {
   resource_type: string
   resource_id: string | null
   details: Record<string, unknown> | null
+  ip_address: string | null
 }
 
 interface AuditResponse {
@@ -103,7 +104,7 @@ export default function Audit() {
       e.action,
       e.resource_type,
       e.resource_id || '',
-      '', // TODO(redesign): needs backend — no IP address in the audit API
+      e.ip_address || '',
       e.details && Object.keys(e.details).length > 0 ? JSON.stringify(e.details) : '',
     ])
     const csv = [header, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n')
@@ -183,7 +184,7 @@ export default function Audit() {
               <span>{t('audit.user')}</span>
               <span>{t('audit.action')}</span>
               <span>{t('audit.target', 'Target')}</span>
-              <span className="audit-col-ip" title={t('audit.ipNotCaptured', 'IP address is not captured yet')}>{t('audit.ip', 'IP')}</span>
+              <span className="audit-col-ip">{t('audit.ip', 'IP')}</span>
             </div>
             {data.entries.map((entry) => {
               const { kind, cls } = actionKind(entry.action)
@@ -207,8 +208,7 @@ export default function Audit() {
                     <span className="mono audit-cell-target" title={entry.resource_id || undefined}>
                       {entry.resource_id || `${entry.resource_type}`}
                     </span>
-                    {/* TODO(redesign): needs backend — IP address is not present in the audit API */}
-                    <span className="mono audit-cell-ip">—</span>
+                    <span className="mono audit-cell-ip" title={entry.ip_address || undefined}>{entry.ip_address || '—'}</span>
                   </div>
                   {isOpen && hasDetails && (
                     <div className="audit-details-row">
