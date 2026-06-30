@@ -44,6 +44,33 @@
   text-transform: capitalize;
 }
 
+/* Subtle inline copy button next to the mono run-id title (no layout shift) */
+.run-id-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition: color var(--transition-fast), background-color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.run-id-copy:hover {
+  color: var(--color-text-primary);
+  background-color: var(--color-surface-3);
+  border-color: var(--color-border);
+}
+
+.run-id-copy:active {
+  transform: translateY(0.5px);
+}
+
 .run-detail-meta {
   display: flex;
   align-items: center;

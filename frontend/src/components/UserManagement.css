@@ -174,9 +174,26 @@
   font-size: var(--font-size-sm);
 }
 
+.user-management-modal .users-table tbody tr {
+  transition: background-color var(--transition-base);
+}
+
+.user-management-modal .users-table tbody tr:hover {
+  background: var(--color-surface-2);
+}
+
 .user-management-modal .users-table tr.blocked {
   opacity: 0.65;
   background: var(--color-surface-3);
+}
+
+.user-management-modal .users-email-cell {
+  display: inline-block;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
 }
 
 .user-management-modal .user-actions {

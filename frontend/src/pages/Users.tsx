@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getFormatLocale } from '../utils/locale'
 import apiClient from '../api/client'
 import { showError, showSuccess, showConfirm } from '../utils/toast'
-import { LuPencil, LuTrash2, LuBan, LuMail, LuX, LuExternalLink, LuCheck, LuCircleX } from 'react-icons/lu'
+import { LuPencil, LuTrash2, LuBan, LuShieldCheck, LuMail, LuX, LuExternalLink, LuCheck, LuCircleX } from 'react-icons/lu'
 import Tooltip from '../components/Tooltip'
 import InfoIcon from '../components/InfoIcon'
 import { useAuth } from '../contexts/AuthContext'
@@ -373,7 +373,7 @@ export default function Users({ editLocked = false }: UsersProps) {
         <div className="users-form-card" style={{ marginBottom: '1rem' }}>
           <div className="users-form-header">
             <h3>{t('users.approveJoinTitle')}</h3>
-            <button onClick={() => setApproveModalUser(null)} className="close-btn"><LuX /></button>
+            <button onClick={() => setApproveModalUser(null)} className="close-btn" aria-label={t('common.close', 'Close')}><LuX /></button>
           </div>
           <p style={{ marginBottom: '1rem', color: 'var(--color-text-secondary)' }}>
             <strong>{approveModalUser.username}</strong> ({approveModalUser.email || t('users.noEmail')}) – {t('users.assignRole')}
@@ -411,6 +411,7 @@ export default function Users({ editLocked = false }: UsersProps) {
                 resetInviteForm()
               }}
               className="close-btn"
+              aria-label={t('common.close', 'Close')}
             >
               <LuX />
             </button>
@@ -530,7 +531,9 @@ export default function Users({ editLocked = false }: UsersProps) {
                         <span className="badge badge-pending">{t('users.badgePending', 'Pending')}</span>
                       </span>
                     </td>
-                    <td>{u.email || '–'}</td>
+                    <td>
+                      <span className="users-email-cell" title={u.email || undefined}>{u.email || '–'}</span>
+                    </td>
                     <td>{t(providerCellKey(u))}</td>
                     <td>{new Date(u.created_at).toLocaleString(getFormatLocale())}</td>
                     {isAdmin && (
@@ -589,7 +592,9 @@ export default function Users({ editLocked = false }: UsersProps) {
                         user.username
                       )}
                     </td>
-                    <td>{user.email || '-'}</td>
+                    <td>
+                      <span className="users-email-cell" title={user.email || undefined}>{user.email || '-'}</span>
+                    </td>
                     <td>
                       <div className="account-badges">
                         {linkedProviderKeys(user).length > 0 ? (
@@ -648,7 +653,7 @@ export default function Users({ editLocked = false }: UsersProps) {
                               title={t('users.unblock')}
                               disabled={adminActionsDisabled}
                             >
-                              <LuBan />
+                              <LuShieldCheck />
                             </button>
                           ) : (
                             <button

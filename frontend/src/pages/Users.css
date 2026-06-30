@@ -178,7 +178,16 @@
 }
 
 .users-table tbody tr:hover {
-  background-color: var(--color-surface-variant);
+  background-color: var(--color-surface-2);
+}
+
+.users-email-cell {
+  display: inline-block;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
 }
 
 .users-table tbody tr:last-child td:first-child {

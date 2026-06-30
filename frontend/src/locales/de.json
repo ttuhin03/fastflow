@@ -466,6 +466,9 @@
     "testMessagePrefixFail": "✗ "
   },
   "dependencies": {
+    "refresh": "Aktualisieren",
+    "runSecurityScanConfirm": "Ein Sicherheits-Scan kann eine Weile dauern. Fortfahren?",
+    "runSecurityScanHint": "Führt einen Live-pip-audit-Scan aus — ratenbegrenzt und ggf. langsam",
     "intro": "Libraries und Versionen aller Pipelines mit requirements.txt.",
     "update": "Aktualisieren",
     "noEntries": "Keine Einträge passen zu den Filtern.",
@@ -489,6 +492,18 @@
     "foundVulns": "Gefundene Schwachstellen:"
   },
   "pipelineDetail": {
+    "editInGithub": "In GitHub bearbeiten",
+    "editInGithubHint": "pipeline.json in GitHub bearbeiten",
+    "editInPipelineJsonLabel": "In pipeline.json bearbeiten",
+    "runStarted": "Run gestartet",
+    "runStarting": "Startet…",
+    "triggerRunHint": "Run mit der Basis-Konfiguration starten",
+    "triggerRunDisabledHint": "Pipeline ist deaktiviert",
+    "runConcurrencyLimit": "Concurrency-Limit erreicht — bitte später erneut versuchen.",
+    "runSchedule": "Starten",
+    "runScheduleHint": "Jetzt mit den Env-Overrides dieser Schedule starten",
+    "everyNSeconds": "alle {{n}}s",
+    "noEnvOverrides": "Keine Overrides — nutzt die Basis-Umgebung.",
     "moreSettings": "Weitere Einstellungen",
     "lastCacheWarmupTooltip": "Zeitpunkt des letzten Pre-Heating. Pipelines mit Cache starten schneller.",
     "downstreamTooltip": "Wenn diese Pipeline fertig ist, können andere Pipelines automatisch gestartet werden. Konfigurierbar in pipeline.json oder per UI.",
@@ -676,6 +691,11 @@
     "toastInviteCreatedWithLink": "Einladungslink erstellt und in Zwischenablage kopiert: {{link}}"
   },
   "scheduler": {
+    "newScheduleInGithub": "Neue Schedule in GitHub",
+    "newScheduleHint": "Schedules werden in pipeline.json definiert — öffnet GitHub zum Hinzufügen",
+    "editInGithub": "In GitHub bearbeiten",
+    "editInGithubHint": "pipeline.json in GitHub bearbeiten (Schedules dort hinzufügen/entfernen)",
+    "editDisabledHint": "GitHub-Repository nicht konfiguriert — pipeline.json im Repo bearbeiten",
     "title": "Scheduler",
     "loading": "Laden...",
     "pipeline": "Pipeline",
@@ -872,6 +892,9 @@
     }
   },
   "audit": {
+    "adminOnlyTitle": "Nur für Administratoren",
+    "adminOnlyBody": "Das Audit-Log ist auf Administratoren beschränkt. Wende dich an einen Admin, falls du Zugriff brauchst.",
+    "ipNotCaptured": "IP-Adresse wird noch nicht erfasst",
     "title": "Audit-Log",
     "description": "Protokoll aller relevanten Aktionen (nur für Admins sichtbar).",
     "action": "Aktion",
@@ -889,6 +912,9 @@
     "next": "Weiter"
   },
   "runDetail": {
+    "copyRunId": "Run-ID kopieren",
+    "idCopied": "Run-ID kopiert",
+    "idCopyError": "Run-ID konnte nicht kopiert werden",
     "title": "Run Details",
     "retry": "Wiederholen",
     "info": "Info",

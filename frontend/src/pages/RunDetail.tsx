@@ -8,7 +8,7 @@ import { getFormatLocale } from '../utils/locale'
 import { showError, showSuccess } from '../utils/toast'
 import { LineChart } from '../components/LineChart'
 import { RunEnvSection } from '../components/RunEnvSection'
-import { LuSearch, LuWrapText, LuArrowDown, LuDownload, LuHash } from 'react-icons/lu'
+import { LuSearch, LuWrapText, LuArrowDown, LuDownload, LuHash, LuCopy, LuCheck } from 'react-icons/lu'
 import '../components/LogViewer.css'
 import './RunDetail.css'
 
@@ -85,6 +85,7 @@ export default function RunDetail() {
   const [logConnectionStatus, setLogConnectionStatus] = useState<'connected' | 'disconnected' | 'reconnecting'>('connected')
   const [metricsConnectionStatus, setMetricsConnectionStatus] = useState<'connected' | 'disconnected' | 'reconnecting'>('connected')
   const [cellExpanded, setCellExpanded] = useState<Record<number, boolean>>({})
+  const [idCopied, setIdCopied] = useState(false)
   const tabsRef = useRef<HTMLDivElement>(null)
   const [tabIndicator, setTabIndicator] = useState({ left: 0, width: 0 })
   const runPollInterval = useRefetchInterval(2000)
@@ -472,6 +473,18 @@ export default function RunDetail() {
     URL.revokeObjectURL(url)
   }
 
+  const handleCopyRunId = useCallback(async () => {
+    if (!run?.id) return
+    try {
+      await navigator.clipboard.writeText(run.id)
+      showSuccess(t('runDetail.idCopied', 'Run ID copied'))
+      setIdCopied(true)
+      setTimeout(() => setIdCopied(false), 1500)
+    } catch {
+      showError(t('runDetail.idCopyError', 'Could not copy run ID'))
+    }
+  }, [run?.id, t])
+
   // Parse a log level out of the raw line text (best-effort, for data-level colouring)
   const parseLogLevel = (line: string): 'ERROR' | 'WARN' | 'INFO' | 'DEBUG' | 'SUCCESS' | '' => {
     const m = line.match(/\b(ERROR|ERR|CRITICAL|FATAL|WARN(?:ING)?|INFO|DEBUG|TRACE|SUCCESS)\b/i)
@@ -552,6 +565,15 @@ export default function RunDetail() {
         <div className="run-detail-head-main">
           <div className="run-detail-title-row">
             <h1 className="run-detail-title mono">{run.id.substring(0, 8)}</h1>
+            <button
+              type="button"
+              className="run-id-copy"
+              onClick={handleCopyRunId}
+              title={t('runDetail.copyRunId', 'Copy run ID')}
+              aria-label={t('runDetail.copyRunId', 'Copy run ID')}
+            >
+              {idCopied ? <LuCheck size={13} /> : <LuCopy size={13} />}
+            </button>
             <span className={`badge dot ${statusBadgeClass(run.status)} run-detail-status`}>
               <span className={`status-dot ${statusDotKind(run.status)}`} />
               {run.status}

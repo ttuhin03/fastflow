@@ -3,6 +3,12 @@
   margin: 0 auto;
 }
 
+/* Small trailing icon on GitHub edit links — signals the control opens GitHub. */
+.scheduler .icon-external {
+  font-size: 0.85em;
+  opacity: 0.8;
+}
+
 .scheduler-header {
   display: flex;
   align-items: flex-end;

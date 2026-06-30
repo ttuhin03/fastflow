@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
+import { showConfirm } from '../utils/toast'
 import { LuRefreshCw, LuShieldCheck, LuSearch, LuChevronDown, LuChevronUp } from 'react-icons/lu'
 import Skeleton from '../components/Skeleton'
 import './Dependencies.css'
@@ -127,6 +128,14 @@ export default function Dependencies() {
     return list
   }, [displayData, filterPipeline, filterVulnsOnly, searchPackage])
 
+  // The live pip-audit scan is rate-limited and expensive, so confirm first.
+  const handleRunSecurityScan = async () => {
+    const confirmed = await showConfirm(
+      t('dependencies.runSecurityScanConfirm', 'Running a security scan can take a while. Continue?')
+    )
+    if (confirmed) setAuditRequested(true)
+  }
+
   const toggleExpanded = (name: string) => {
     setExpandedPipelines((prev) => {
       const next = new Set(prev)
@@ -183,7 +192,7 @@ export default function Dependencies() {
           disabled={isFetching || auditLastLoading}
         >
           <LuRefreshCw aria-hidden />
-          {isFetching || auditLastLoading ? t('common.loading') : t('dependencies.rescan', 'Rescan')}
+          {isFetching || auditLastLoading ? t('common.loading') : t('dependencies.refresh', 'Refresh')}
         </button>
       </div>
 
@@ -240,11 +249,12 @@ export default function Dependencies() {
           <button
             type="button"
             className="btn btn-primary"
-            onClick={() => setAuditRequested(true)}
+            onClick={handleRunSecurityScan}
             disabled={isReadonly || isFetching}
+            title={t('dependencies.runSecurityScanHint', 'Runs a live pip-audit scan — rate-limited and may take a while')}
           >
             <LuShieldCheck size={18} />
-            {t('dependencies.runSecurityScan')}
+            {t('dependencies.runSecurityScan', 'Run security scan')}
           </button>
         </div>
       </div>

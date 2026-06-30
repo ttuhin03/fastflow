@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { LuClock, LuPlus, LuChevronDown, LuChevronUp } from 'react-icons/lu'
+import { LuClock, LuPlus, LuChevronDown, LuChevronUp, LuExternalLink } from 'react-icons/lu'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import { showError } from '../utils/toast'
@@ -82,6 +82,9 @@ export default function Scheduler() {
   }
 
   const jobList = jobs ?? []
+  // Schedules live in pipeline.json on the repo, so "New schedule" links out to
+  // GitHub. We can only do that if at least one job exposes an edit URL.
+  const newScheduleUrl = jobList.find((j) => j.pipeline_json_edit_url)?.pipeline_json_edit_url ?? null
   const activeCount = jobList.filter((j) => j.enabled).length
   const pausedCount = jobList.length - activeCount
 
@@ -110,9 +113,20 @@ export default function Scheduler() {
           </p>
         </div>
         {!isReadonly && (
-          <button type="button" className="btn btn-primary" onClick={handleNewSchedule}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={handleNewSchedule}
+            disabled={!newScheduleUrl}
+            title={
+              newScheduleUrl
+                ? t('scheduler.newScheduleHint', 'Schedules are defined in pipeline.json — opens GitHub to add one')
+                : t('scheduler.editDisabledHint', 'GitHub repository not configured — edit pipeline.json in your repo')
+            }
+          >
             <LuPlus aria-hidden />
-            {t('scheduler.newSchedule', 'New schedule')}
+            {t('scheduler.newScheduleInGithub', 'New schedule in GitHub')}
+            <LuExternalLink className="icon-external" aria-hidden />
           </button>
         )}
       </div>
@@ -201,15 +215,19 @@ export default function Scheduler() {
                     <div className="scheduler-details-actions">
                       {!isReadonly && (
                         <Tooltip content={job.pipeline_json_edit_url
-                          ? "pipeline.json auf GitHub bearbeiten (Schedules dort anlegen/entfernen)"
-                          : "GitHub-Repository nicht konfiguriert"}>
+                          ? t('scheduler.editInGithubHint', 'Edit pipeline.json on GitHub (add/remove schedules there)')
+                          : t('scheduler.editDisabledHint', 'GitHub repository not configured — edit pipeline.json in your repo')}>
                           <button
                             type="button"
                             onClick={() => handleEdit(job)}
                             className="btn btn-outlined btn-sm"
                             disabled={!job.pipeline_json_edit_url}
+                            title={job.pipeline_json_edit_url
+                              ? undefined
+                              : t('scheduler.editDisabledHint', 'GitHub repository not configured — edit pipeline.json in your repo')}
                           >
-                            {t('scheduler.edit')}
+                            {t('scheduler.editInGithub', 'Edit in GitHub')}
+                            {job.pipeline_json_edit_url && <LuExternalLink className="icon-external" aria-hidden />}
                           </button>
                         </Tooltip>
                       )}

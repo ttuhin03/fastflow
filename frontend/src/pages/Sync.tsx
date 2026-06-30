@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
@@ -102,6 +102,9 @@ export default function Sync({ editLocked = false }: SyncProps) {
   })
   const [generatedPublicKey, setGeneratedPublicKey] = useState<string | null>(null)
   const [showManualDeployKey, setShowManualDeployKey] = useState(false)
+  const activityBodyRef = useRef<HTMLDivElement>(null)
+  // Tracks whether the user is pinned to the bottom of the activity log (follow mode).
+  const activityFollowRef = useRef(true)
 
   const syncInterval = useRefetchInterval(10000)
   const { data: syncStatus, isLoading } = useQuery<SyncStatus>({
@@ -146,6 +149,16 @@ export default function Sync({ editLocked = false }: SyncProps) {
       return response.data
     },
   })
+
+  // Auto-scroll the "Sync activity" terminal to the bottom when new entries arrive,
+  // but only if the user is already at (or near) the bottom — log-viewer "follow" behavior.
+  useEffect(() => {
+    const body = activityBodyRef.current
+    if (!body) return
+    if (activityFollowRef.current) {
+      body.scrollTop = body.scrollHeight
+    }
+  }, [syncLogs])
 
   useEffect(() => {
     if (repoConfig && activeTab === 'repository') {
@@ -371,6 +384,13 @@ export default function Sync({ editLocked = false }: SyncProps) {
     }
   }
 
+  const handleActivityScroll = () => {
+    const body = activityBodyRef.current
+    if (!body) return
+    // "Near bottom" threshold keeps follow active through small layout jitters.
+    activityFollowRef.current = body.scrollHeight - body.scrollTop - body.clientHeight < 40
+  }
+
   const handleClearPipelines = async () => {
     const confirmed = await showConfirm(t('sync.clearConfirm'))
     if (confirmed) {
@@ -549,7 +569,7 @@ export default function Sync({ editLocked = false }: SyncProps) {
                 {t('sync.pollingEvery', { seconds: 5, defaultValue: 'polling every {{seconds}}s' })}
               </span>
             </div>
-            <div className="sync-activity__body">
+            <div className="sync-activity__body" ref={activityBodyRef} onScroll={handleActivityScroll}>
               {syncLogs && syncLogs.length > 0 ? (
                 syncLogs.map((log: any, index: number) => {
                   const level = (log.status || log.event || 'info').toLowerCase()

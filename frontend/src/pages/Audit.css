@@ -223,6 +223,24 @@
   color: var(--color-text-secondary);
 }
 
+.audit-admin-only {
+  padding: var(--spacing-xl);
+  text-align: center;
+}
+
+.audit-admin-only-title {
+  margin: 0 0 var(--spacing-xs);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+}
+
+.audit-admin-only-body {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
 @media (max-width: 820px) {
   .audit-table__head,
   .audit-table__row {

@@ -466,6 +466,9 @@
     "testMessagePrefixFail": "✗ "
   },
   "dependencies": {
+    "refresh": "Refresh",
+    "runSecurityScanConfirm": "Running a security scan can take a while. Continue?",
+    "runSecurityScanHint": "Runs a live pip-audit scan — rate-limited and may take a while",
     "intro": "Libraries and versions of all pipelines with requirements.txt.",
     "update": "Update",
     "noEntries": "No entries match the filters.",
@@ -489,6 +492,18 @@
     "foundVulns": "Vulnerabilities found:"
   },
   "pipelineDetail": {
+    "editInGithub": "Edit in GitHub",
+    "editInGithubHint": "Edit pipeline.json on GitHub",
+    "editInPipelineJsonLabel": "Edit in pipeline.json",
+    "runStarted": "Run started",
+    "runStarting": "Starting…",
+    "triggerRunHint": "Trigger a run with the base configuration",
+    "triggerRunDisabledHint": "Pipeline is disabled",
+    "runConcurrencyLimit": "Concurrency limit reached — try again later.",
+    "runSchedule": "Run",
+    "runScheduleHint": "Run now with this schedule's environment overrides",
+    "everyNSeconds": "every {{n}}s",
+    "noEnvOverrides": "No overrides — uses the base environment.",
     "moreSettings": "More settings",
     "lastCacheWarmupTooltip": "Time of last pre-heating. Pipelines with cache start faster.",
     "downstreamTooltip": "When this pipeline finishes, other pipelines can be started automatically. Configurable in pipeline.json or via UI.",
@@ -676,6 +691,11 @@
     "toastInviteCreatedWithLink": "Invitation link created and copied to clipboard: {{link}}"
   },
   "scheduler": {
+    "newScheduleInGithub": "New schedule in GitHub",
+    "newScheduleHint": "Schedules are defined in pipeline.json — opens GitHub to add one",
+    "editInGithub": "Edit in GitHub",
+    "editInGithubHint": "Edit pipeline.json on GitHub (add/remove schedules there)",
+    "editDisabledHint": "GitHub repository not configured — edit pipeline.json in your repo",
     "title": "Scheduler",
     "loading": "Loading...",
     "pipeline": "Pipeline",
@@ -872,6 +892,9 @@
     }
   },
   "audit": {
+    "adminOnlyTitle": "Admin access only",
+    "adminOnlyBody": "The audit log is restricted to administrators. Ask an admin if you need access.",
+    "ipNotCaptured": "IP address is not captured yet",
     "title": "Audit log",
     "description": "Log of all relevant actions (visible to admins only).",
     "action": "Action",
@@ -889,6 +912,9 @@
     "next": "Next"
   },
   "runDetail": {
+    "copyRunId": "Copy run ID",
+    "idCopied": "Run ID copied",
+    "idCopyError": "Could not copy run ID",
     "title": "Run details",
     "retry": "Retry",
     "info": "Info",

@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import { getFormatLocale } from '../utils/locale'
 import { showError, showSuccess, showConfirm } from '../utils/toast'
+import { LuExternalLink } from 'react-icons/lu'
 import Tooltip from '../components/Tooltip'
 import InfoIcon from '../components/InfoIcon'
 import CalendarHeatmap from '../components/CalendarHeatmap'
@@ -46,8 +47,18 @@ interface Pipeline {
     webhook_key?: string
     python_version?: string
     cron?: string
+    /** GitHub edit URL for the repo's pipeline.json, when the API exposes it (GitOps). */
+    pipeline_json_edit_url?: string | null
     downstream_triggers?: Array<{ pipeline: string; on_success: boolean; on_failure: boolean; run_config_id?: string }>
-    schedules?: Array<{ id?: string; webhook_key?: string; cron?: string; enabled?: boolean; env?: Record<string, string> }>
+    schedules?: Array<{
+      id?: string
+      webhook_key?: string
+      schedule_cron?: string
+      schedule_interval_seconds?: number
+      enabled?: boolean
+      default_env?: Record<string, string>
+      encrypted_env?: Record<string, string>
+    }>
   }
 }
 
@@ -187,6 +198,32 @@ export default function PipelineDetail() {
     }
   }
 
+  // Manual trigger — optionally with a specific schedule's run config (applies that
+  // schedule's env/limit overrides, exactly like the scheduler would).
+  const runMutation = useMutation({
+    mutationFn: async (runConfigId?: string) => {
+      const response = await apiClient.post(`/pipelines/${name}/run`, runConfigId ? { run_config_id: runConfigId } : {})
+      return response.data as { id: string }
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['pipeline-runs', name] })
+      showSuccess(t('pipelineDetail.runStarted', 'Run started'))
+      if (data?.id) navigate(`/runs/${data.id}`)
+    },
+    onError: (error: any) => {
+      const status = error?.response?.status
+      if (status === 429) {
+        showError(t('pipelineDetail.runConcurrencyLimit', 'Concurrency limit reached — try again later.'))
+      } else {
+        showError(error?.response?.data?.detail || error.message)
+      }
+    },
+  })
+  const handleRunPipeline = (runConfigId?: string) => {
+    if (isReadonly || !pipeline?.enabled || runMutation.isPending) return
+    runMutation.mutate(runConfigId)
+  }
+
 
   const { data: allPipelines } = useQuery<Pipeline[]>({
     queryKey: ['pipelines'],
@@ -268,42 +305,51 @@ export default function PipelineDetail() {
   const isHealthy = pipeline.enabled
   const pythonVersion = md.python_version || t('pipelineDetail.pythonVersionDefault')
 
-  // Build the list of schedules to render as cards. The API today typically exposes
-  // a single cron / schedule per pipeline; the redesign anticipates multiple schedules
-  // each with their own env overrides. We render whatever the API gives and fill gaps
-  // with clearly-marked placeholders.
+  // Build the list of schedules to render as cards. Each schedule from pipeline.json
+  // carries its own cron/interval plus env overrides (default_env = plain, encrypted_env
+  // = secret values, keys visible). These overrides are layered on top of the base env
+  // and can be triggered individually via run_config_id.
   const rawSchedules = md.schedules ?? []
+  interface EnvChip { key: string; value: string; secret: boolean }
   const scheduleCards: Array<{
     id: string
     cron: string
     enabled: boolean
-    env: Record<string, string>
-    placeholderEnv: boolean
+    env: EnvChip[]
+    runnable: boolean
   }> = []
+
+  const buildEnvChips = (s: { default_env?: Record<string, string>; encrypted_env?: Record<string, string> }): EnvChip[] => {
+    const chips: EnvChip[] = []
+    Object.entries(s.default_env ?? {}).forEach(([key, value]) => chips.push({ key, value, secret: false }))
+    Object.keys(s.encrypted_env ?? {}).forEach((key) => chips.push({ key, value: '••••••', secret: true }))
+    return chips
+  }
+  const scheduleCron = (s: { schedule_cron?: string; schedule_interval_seconds?: number }): string => {
+    if (s.schedule_cron) return s.schedule_cron
+    if (s.schedule_interval_seconds) return t('pipelineDetail.everyNSeconds', 'every {{n}}s', { n: s.schedule_interval_seconds })
+    return md.cron || '—'
+  }
 
   if (rawSchedules.length > 0) {
     rawSchedules.forEach((s, i) => {
-      const env = s.env ?? {}
-      const hasEnv = Object.keys(env).length > 0
+      const id = s.id || `schedule-${i + 1}`
       scheduleCards.push({
-        id: s.id || `schedule-${i + 1}`,
-        cron: s.cron || md.cron || '—',
+        id,
+        cron: scheduleCron(s),
         enabled: s.enabled ?? pipeline.enabled,
-        // TODO(redesign): needs backend — per-schedule env overrides are not yet
-        // returned by the API. Show a couple of placeholder chips to convey the design.
-        env: hasEnv ? env : { TRAIN_MODE: 'full', N_ESTIMATORS: '400' },
-        placeholderEnv: !hasEnv,
+        env: buildEnvChips(s),
+        runnable: !!s.id,
       })
     })
   } else if (md.cron) {
-    // Single pipeline-level cron, no schedule objects.
+    // Single pipeline-level cron, no schedule objects → runs with base env.
     scheduleCards.push({
       id: pipeline.name,
       cron: md.cron,
       enabled: pipeline.enabled,
-      // TODO(redesign): needs backend — env overrides per schedule not available.
-      env: { TRAIN_MODE: 'full', N_ESTIMATORS: '400' },
-      placeholderEnv: true,
+      env: [],
+      runnable: false,
     })
   }
 
@@ -323,7 +369,7 @@ export default function PipelineDetail() {
     cpuHard !== undefined || cpuSoft !== undefined || memHard !== undefined || memSoft !== undefined ||
     md.timeout !== undefined || md.retry_attempts !== undefined || (md.max_instances ?? 0) > 0
 
-  const cron = md.cron || rawSchedules[0]?.cron
+  const cron = md.cron || rawSchedules[0]?.schedule_cron
 
   const renderHealthBadge = () => (
     <span className={`badge ${isHealthy ? 'badge-success' : 'badge-secondary'}`}>
@@ -365,15 +411,44 @@ export default function PipelineDetail() {
           </div>
         </div>
         <div className="pd-header-actions">
-          {/* TODO(redesign): needs backend — direct trigger-run endpoint not wired here yet */}
-          <button type="button" className="btn btn-primary" disabled title={t('pipelineDetail.triggerRunHint', 'Trigger a run (configured in pipeline.json)')}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => handleRunPipeline()}
+            disabled={isReadonly || !pipeline.enabled || runMutation.isPending}
+            title={
+              !pipeline.enabled
+                ? t('pipelineDetail.triggerRunDisabledHint', 'Pipeline is disabled')
+                : t('pipelineDetail.triggerRunHint', 'Trigger a run with the base configuration')
+            }
+          >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M7 5l12 7-12 7z" /></svg>
-            {t('pipelineDetail.triggerRun', 'Trigger run')}
+            {runMutation.isPending ? t('pipelineDetail.runStarting', 'Starting…') : t('pipelineDetail.triggerRun', 'Trigger run')}
           </button>
-          {/* TODO(redesign): needs backend — pipelines are edited in pipeline.json */}
-          <button type="button" className="btn btn-secondary" disabled title={t('pipelineDetail.editInPipelineJson')}>
-            {t('common.edit', 'Edit')}
-          </button>
+          {/* Pipelines are defined in pipeline.json (GitOps). If the API exposes a
+              GitHub edit URL, link out to it; otherwise keep a disabled control whose
+              label/title makes the GitOps intent clear instead of looking dead. */}
+          {md.pipeline_json_edit_url ? (
+            <a
+              href={md.pipeline_json_edit_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-secondary"
+              title={t('pipelineDetail.editInGithubHint', 'Edit pipeline.json on GitHub')}
+            >
+              {t('pipelineDetail.editInGithub', 'Edit in GitHub')}
+              <LuExternalLink className="icon-external" aria-hidden />
+            </a>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled
+              title={t('pipelineDetail.editInPipelineJson')}
+            >
+              {t('pipelineDetail.editInPipelineJsonLabel', 'Edit in pipeline.json')}
+            </button>
+          )}
           <button type="button" className="btn-icon" disabled aria-label={t('pipelineDetail.moreSettings')}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" /></svg>
           </button>
@@ -599,6 +674,18 @@ export default function PipelineDetail() {
                       <span className="mono pd-schedule-name">{sc.id}</span>
                       <span className="mono pd-cron-pill">{sc.cron}</span>
                       <div className="pd-schedule-spacer" />
+                      {!isReadonly && sc.runnable && (
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-secondary pd-schedule-run"
+                          onClick={() => handleRunPipeline(sc.id)}
+                          disabled={!pipeline.enabled || runMutation.isPending}
+                          title={t('pipelineDetail.runScheduleHint', 'Run now with this schedule’s environment overrides')}
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M7 5l12 7-12 7z" /></svg>
+                          {t('pipelineDetail.runSchedule', 'Run')}
+                        </button>
+                      )}
                       <label className="toggle" title={t('pipelineDetail.scheduleEnabledHint', 'Enabled (configured in pipeline.json)')}>
                         <input type="checkbox" checked={sc.enabled} readOnly disabled />
                         <span className="track" />
@@ -608,23 +695,22 @@ export default function PipelineDetail() {
                     <div className="pd-schedule-body">
                       <div className="pd-override-head">
                         <span className="pd-override-eyebrow">{t('pipelineDetail.envOverrides', 'Env overrides')}</span>
-                        <span className="pd-override-count mono">{Object.keys(sc.env).length}</span>
-                        <span className="pd-override-note">
-                          {t('pipelineDetail.envOverridesNote', 'on top of base variables')}
-                          {sc.placeholderEnv && (
-                            <em className="pd-placeholder-flag"> · {t('pipelineDetail.placeholderData', 'placeholder')}</em>
-                          )}
-                        </span>
+                        <span className="pd-override-count mono">{sc.env.length}</span>
+                        <span className="pd-override-note">{t('pipelineDetail.envOverridesNote', 'on top of base variables')}</span>
                       </div>
-                      <div className="pd-override-chips">
-                        {Object.entries(sc.env).map(([k, v]) => (
-                          <span key={k} className="pd-override-chip mono">
-                            <span className="pd-override-key">{k}</span>
-                            <span className="pd-override-eq">=</span>
-                            <span className="pd-override-val">{v}</span>
-                          </span>
-                        ))}
-                      </div>
+                      {sc.env.length > 0 ? (
+                        <div className="pd-override-chips">
+                          {sc.env.map((chip) => (
+                            <span key={chip.key} className={`pd-override-chip mono ${chip.secret ? 'pd-override-chip--secret' : ''}`}>
+                              <span className="pd-override-key">{chip.key}</span>
+                              <span className="pd-override-eq">=</span>
+                              <span className="pd-override-val">{chip.value}</span>
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="pd-override-empty">{t('pipelineDetail.noEnvOverrides', 'No overrides — uses the base environment.')}</p>
+                      )}
                     </div>
                   </div>
                 ))}

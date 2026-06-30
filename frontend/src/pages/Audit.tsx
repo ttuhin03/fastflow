@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
-import { Navigate } from 'react-router-dom'
 import apiClient from '../api/client'
 import { getFormatLocale } from '../utils/locale'
 import './Audit.css'
@@ -71,7 +70,16 @@ export default function Audit() {
   })
 
   if (!isAdmin) {
-    return <Navigate to="/" replace />
+    return (
+      <div className="audit-page">
+        <div className="audit-admin-only card">
+          <p className="audit-admin-only-title">{t('audit.adminOnlyTitle', 'Admin access only')}</p>
+          <p className="audit-admin-only-body">
+            {t('audit.adminOnlyBody', 'The audit log is restricted to administrators. Ask an admin if you need access.')}
+          </p>
+        </div>
+      </div>
+    )
   }
 
   if (isError) {
@@ -175,7 +183,7 @@ export default function Audit() {
               <span>{t('audit.user')}</span>
               <span>{t('audit.action')}</span>
               <span>{t('audit.target', 'Target')}</span>
-              <span className="audit-col-ip">{t('audit.ip', 'IP')}</span>
+              <span className="audit-col-ip" title={t('audit.ipNotCaptured', 'IP address is not captured yet')}>{t('audit.ip', 'IP')}</span>
             </div>
             {data.entries.map((entry) => {
               const { kind, cls } = actionKind(entry.action)

@@ -211,7 +211,9 @@ export default function Secrets() {
             })}
           </div>
         ) : (
-          <p className="no-secrets">{t('secrets.noEntriesDb')}</p>
+          <div className="card secrets-empty">
+            <p className="no-secrets">{t('secrets.noEntriesDb')}</p>
+          </div>
         )}
       </section>
 
@@ -248,7 +250,9 @@ export default function Secrets() {
             ))}
           </div>
         ) : (
-          <p className="no-secrets">{t('secrets.noEntriesPipeline')}</p>
+          <div className="card secrets-empty">
+            <p className="no-secrets">{t('secrets.noEntriesPipeline')}</p>
+          </div>
         )}
       </section>
     </div>

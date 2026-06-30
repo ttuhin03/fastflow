@@ -10,6 +10,12 @@
   margin: 0 auto;
 }
 
+/* Small trailing icon on the "Edit in GitHub" link — signals it opens GitHub. */
+.pipeline-detail .icon-external {
+  font-size: 0.85em;
+  opacity: 0.8;
+}
+
 /* ── Ghost back-link ──────────────────────────────────────────────── */
 .pd-back {
   display: inline-flex;
@@ -298,6 +304,12 @@
 .pd-override-key { color: var(--color-text-secondary); }
 .pd-override-eq { color: var(--color-text-disabled); }
 .pd-override-val { color: var(--color-primary-light); font-weight: var(--font-weight-medium); }
+.pd-override-chip--secret .pd-override-val { color: var(--color-warning-text); letter-spacing: 1px; }
+.pd-override-empty { font-size: 12.5px; color: var(--color-text-tertiary); margin: 2px 0 0; }
+
+/* "Run" button on a schedule card — triggers a run with that schedule's overrides */
+.pd-schedule-run { flex: none; }
+.pd-schedule-run svg { margin-right: 2px; }
 
 /* Resource limits as bars */
 .pd-limit { margin-bottom: 18px; }

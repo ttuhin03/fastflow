@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../api/client'
 import { getFormatLocale } from '../utils/locale'
 import { showError, showSuccess, showConfirm } from '../utils/toast'
-import { LuUsers, LuPlus, LuPencil, LuTrash2, LuBan, LuKeyRound, LuMail, LuX } from 'react-icons/lu'
+import { LuUsers, LuPlus, LuPencil, LuTrash2, LuBan, LuShieldCheck, LuKeyRound, LuMail, LuX } from 'react-icons/lu'
 import './UserManagement.css'
 
 interface User {
@@ -352,6 +352,7 @@ export default function UserManagement() {
                   resetForm()
                 }}
                 className="close-btn"
+                aria-label={t('common.close', 'Close')}
               >
                 <LuX />
               </button>
@@ -523,7 +524,9 @@ export default function UserManagement() {
                     {users.map((user) => (
                       <tr key={user.id} className={user.blocked ? 'blocked' : ''}>
                         <td>{user.username}</td>
-                        <td>{user.email || '-'}</td>
+                        <td>
+                          <span className="users-email-cell" title={user.email || undefined}>{user.email || '-'}</span>
+                        </td>
                         <td>
                           <span className={`badge badge-${user.role === 'admin' ? 'primary' : user.role === 'write' ? 'info' : 'secondary'}`}>
                             {user.role === 'admin' ? t('users.roleDisplayAdmin') : user.role === 'write' ? t('users.roleDisplayWrite') : t('users.roleDisplayReadonly')}
@@ -559,7 +562,7 @@ export default function UserManagement() {
                                 className="btn-icon"
                                 title={t('users.unblock')}
                               >
-                                <LuBan />
+                                <LuShieldCheck />
                               </button>
                             ) : (
                               <button
