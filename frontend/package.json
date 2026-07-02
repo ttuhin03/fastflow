@@ -17,7 +17,7 @@
     "axios": ">=1.15.2",
     "i18next": "^25.8.11",
     "posthog-js": "^1.328.0",
-    "react": "^18.2.0",
+    "react": "^19.2.7",
     "react-dom": "^18.2.0",
     "react-hot-toast": "^2.6.0",
     "react-i18next": "^16.5.4",
@@ -28,7 +28,7 @@
   "devDependencies": {
     "@testing-library/react": "^14.1.2",
     "@testing-library/user-event": "^14.5.1",
-    "@types/react": "^18.2.43",
+    "@types/react": "^19.2.17",
     "@types/react-dom": "^18.2.17",
     "@typescript-eslint/eslint-plugin": "^6.14.0",
     "@typescript-eslint/parser": "^6.14.0",
