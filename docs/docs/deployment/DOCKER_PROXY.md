@@ -2,23 +2,23 @@
 sidebar_position: 4
 ---
 
-# Docker Socket Proxy - Sicherheitsarchitektur
+# Docker Socket Proxy - Security Architecture
 
-## Übersicht
+## Overview
 
-Fast-Flow nutzt einen **Docker Socket Proxy** (`tecnativa/docker-socket-proxy`) als Sicherheitsschicht zwischen dem Orchestrator und dem Docker-Daemon. Dies verhindert direkten Root-Zugriff auf den Docker-Socket und schränkt die verfügbaren Docker-API-Operationen ein.
+Fast-Flow uses a **Docker Socket Proxy** (`tecnativa/docker-socket-proxy`) as a security layer between the orchestrator and the Docker daemon. This prevents direct root access to the Docker socket and restricts available Docker API operations.
 
-## Warum ein Proxy?
+## Why a Proxy?
 
-Der Docker-Socket (`/var/run/docker.sock`) gibt effektiv **Root-Zugriff auf das gesamte Host-System**. Ein kompromittierter Orchestrator könnte:
+The Docker socket (`/var/run/docker.sock`) effectively grants **root access to the entire host system**. A compromised orchestrator could:
 
-- Privilegierte Container starten und das Host-System manipulieren
-- Alle Container auf dem System sehen, stoppen oder deren Daten stehlen
-- Volumes und Netzwerke manipulieren
+- Start privileged containers and manipulate the host system
+- View, stop, or steal data from all containers on the system
+- Manipulate volumes and networks
 
-Der Docker Socket Proxy **filtert und erlaubt nur konfigurierte Operationen**, wodurch das Risiko erheblich reduziert wird.
+The Docker Socket Proxy **filters and allows only configured operations**, significantly reducing risk.
 
-## Architektur
+## Architecture
 
 ```
 ┌─────────────────┐
@@ -41,13 +41,13 @@ Der Docker Socket Proxy **filtert und erlaubt nur konfigurierte Operationen**, w
 └─────────────────┘
 ```
 
-**Wichtig**: Nur der Proxy-Service hat direkten Zugriff auf den Docker-Socket. Der Orchestrator kommuniziert über HTTP mit dem Proxy.
+**Important**: Only the proxy service has direct access to the Docker socket. The orchestrator communicates with the proxy over HTTP.
 
-## Konfiguration
+## Configuration
 
 ### Docker Compose Setup
 
-Der Proxy wird automatisch in `docker-compose.yaml` konfiguriert:
+The proxy is configured automatically in `docker-compose.yaml`:
 
 ```yaml
 services:
@@ -57,21 +57,21 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
-      # Erlaubte Ressourcen
-      - CONTAINERS=1    # Container-Operationen (create, start, stop, remove, logs, stats)
-      - IMAGES=1        # Image-Pulls und -Inspektion
-      - VOLUMES=1       # Volume-Mounts (für Pipeline-Code und UV-Cache)
-      - BUILD=1         # Build-Operationen (optional, für zukünftige Features)
-      - EXEC=1           # Exec-Operationen (für Container-Inspektion)
+      # Allowed resources
+      - CONTAINERS=1    # Container operations (create, start, stop, remove, logs, stats)
+      - IMAGES=1        # Image pulls and inspection
+      - VOLUMES=1       # Volume mounts (for pipeline code and UV cache)
+      - BUILD=1         # Build operations (optional, for future features)
+      - EXEC=1           # Exec operations (for container inspection)
       
-      # HTTP-Verb-Berechtigungen (KRITISCH)
-      - POST=1           # Erlaubt Container-Erstellung (/containers/create)
-      - DELETE=1         # Erlaubt Container-Entfernung
-      - STATS=1          # Erlaubt Resource-Monitoring (/containers/{id}/stats)
+      # HTTP verb permissions (CRITICAL)
+      - POST=1           # Allows container creation (/containers/create)
+      - DELETE=1         # Allows container removal
+      - STATS=1          # Allows resource monitoring (/containers/{id}/stats)
       
-      # Deaktivierte Operationen (Sicherheit)
-      - NETWORKS=0       # Netzwerk-Management blockiert
-      - SYSTEM=0         # System-Operationen blockiert
+      # Disabled operations (security)
+      - NETWORKS=0       # Network management blocked
+      - SYSTEM=0         # System operations blocked
     networks:
       - fastflow-network
     restart: unless-stopped
@@ -79,15 +79,15 @@ services:
   orchestrator:
     # ...
     environment:
-      - DOCKER_PROXY_URL=http://docker-proxy:2375  # Proxy-URL statt direkter Socket
+      - DOCKER_PROXY_URL=http://docker-proxy:2375  # Proxy URL instead of direct socket
     networks:
       - fastflow-network
-    # KEIN Docker-Socket-Mount mehr!
+    # NO Docker socket mount anymore!
 ```
 
-### Orchestrator-Konfiguration
+### Orchestrator Configuration
 
-Der Orchestrator verbindet sich mit dem Proxy über die Environment-Variable `DOCKER_PROXY_URL`:
+The orchestrator connects to the proxy via the `DOCKER_PROXY_URL` environment variable:
 
 ```python
 # app/config.py
@@ -99,112 +99,112 @@ DOCKER_PROXY_URL: str = os.getenv("DOCKER_PROXY_URL", "http://docker-proxy:2375"
 _docker_client = docker.DockerClient(base_url=config.DOCKER_PROXY_URL)
 ```
 
-## Erlaubte Operationen
+## Allowed Operations
 
-Der Proxy erlaubt folgende Docker-API-Operationen:
+The proxy allows the following Docker API operations:
 
-### ✅ Erlaubt
+### ✅ Allowed
 
-- **Container-Management**:
-  - Container erstellen (`POST /containers/create`)
-  - Container starten (`POST /containers/{id}/start`)
-  - Container stoppen (`POST /containers/{id}/stop`)
-  - Container entfernen (`DELETE /containers/{id}`)
-  - Container-Status abfragen (`GET /containers/{id}/json`)
-  - Container-Liste abrufen (`GET /containers/json`)
+- **Container management**:
+  - Create containers (`POST /containers/create`)
+  - Start containers (`POST /containers/{id}/start`)
+  - Stop containers (`POST /containers/{id}/stop`)
+  - Remove containers (`DELETE /containers/{id}`)
+  - Query container status (`GET /containers/{id}/json`)
+  - List containers (`GET /containers/json`)
 
-- **Logs & Monitoring**:
-  - Logs streamen (`GET /containers/{id}/logs`)
-  - Resource-Stats abrufen (`GET /containers/{id}/stats`)
+- **Logs & monitoring**:
+  - Stream logs (`GET /containers/{id}/logs`)
+  - Fetch resource stats (`GET /containers/{id}/stats`)
 
 - **Images**:
-  - Images pullen (`POST /images/create`)
-  - Image-Informationen abrufen (`GET /images/{name}/json`)
+  - Pull images (`POST /images/create`)
+  - Fetch image information (`GET /images/{name}/json`)
 
 - **Volumes**:
-  - Volume-Mounts in Container-Konfiguration (für Pipeline-Code und UV-Cache)
+  - Volume mounts in container configuration (for pipeline code and UV cache)
 
-### ❌ Blockiert
+### ❌ Blocked
 
-- **Netzwerk-Management**: Netzwerke erstellen, löschen oder modifizieren
-- **System-Operationen**: System-Informationen abrufen oder konfigurieren
-- **Privilegierte Container**: Container mit `--privileged` Flag
-- **Host-Netzwerk**: Container mit `--net=host`
+- **Network management**: Create, delete, or modify networks
+- **System operations**: Fetch or configure system information
+- **Privileged containers**: Containers with `--privileged` flag
+- **Host network**: Containers with `--net=host`
 
-## Fehlerbehandlung
+## Error Handling
 
 ### 403 Forbidden
 
-Wenn der Proxy eine Operation blockiert, erhält der Orchestrator einen `403 Forbidden` Fehler:
+When the proxy blocks an operation, the orchestrator receives a `403 Forbidden` error:
 
 ```
 docker.errors.APIError: 403 Client Error for http://docker-proxy:2375/v1.49/containers/create: Forbidden
 ```
 
-**Häufige Ursachen:**
+**Common causes:**
 
-1. **POST=1 fehlt**: Container-Erstellung erfordert `POST=1` in der Proxy-Konfiguration
-2. **VOLUMES=0**: Volume-Mounts erfordern `VOLUMES=1`
-3. **STATS=0**: Resource-Monitoring erfordert `STATS=1`
+1. **POST=1 missing**: Container creation requires `POST=1` in the proxy configuration
+2. **VOLUMES=0**: Volume mounts require `VOLUMES=1`
+3. **STATS=0**: Resource monitoring requires `STATS=1`
 
-**Lösung**: Prüfe die Proxy-Konfiguration in `docker-compose.yaml` und stelle sicher, dass alle benötigten Flags gesetzt sind.
+**Solution**: Check the proxy configuration in `docker-compose.yaml` and ensure all required flags are set.
 
-### Proxy nicht erreichbar
+### Proxy unreachable
 
-Wenn der Orchestrator den Proxy nicht erreichen kann:
+When the orchestrator cannot reach the proxy:
 
 ```
-RuntimeError: Docker-Proxy ist nicht erreichbar (http://docker-proxy:2375)
+RuntimeError: Docker proxy is unreachable (http://docker-proxy:2375)
 ```
 
-**Prüfungen:**
+**Checks:**
 
-1. Proxy-Service läuft: `docker compose ps docker-proxy`
-2. Netzwerk-Konnektivität: Beide Services müssen im gleichen Docker-Netzwerk sein
-3. Proxy-Logs: `docker compose logs docker-proxy`
+1. Proxy service running: `docker compose ps docker-proxy`
+2. Network connectivity: Both services must be on the same Docker network
+3. Proxy logs: `docker compose logs docker-proxy`
 
-## Fehlerklassifizierung
+## Error Classification
 
-Fast-Flow unterscheidet zwischen zwei Fehlertypen:
+Fast-Flow distinguishes between two error types:
 
 ### Infrastructure Error
 
-Fehler, die auf Probleme mit dem Docker-Proxy oder der Infrastruktur hinweisen:
+Errors indicating problems with the Docker proxy or infrastructure:
 
-- Proxy nicht erreichbar
-- 403 Forbidden vom Proxy
-- Docker-Daemon nicht verfügbar
+- Proxy unreachable
+- 403 Forbidden from proxy
+- Docker daemon unavailable
 
-**Frontend-Anzeige**: Orange Badge "Infrastructure Error"
+**Frontend display**: Orange badge "Infrastructure Error"
 
 ### Pipeline Error
 
-Fehler, die auf Probleme mit dem Pipeline-Skript hinweisen:
+Errors indicating problems with the pipeline script:
 
-- Exit-Code != 0
+- Exit code != 0
 - OOM (Out of Memory)
-- Script-Crash
+- Script crash
 
-**Frontend-Anzeige**: Rotes Badge "Pipeline Error"
+**Frontend display**: Red badge "Pipeline Error"
 
 ## Best Practices
 
-### Produktion
+### Production
 
-1. **HTTPS**: Nutze einen Reverse-Proxy (Nginx/Traefik) mit HTTPS vor dem Orchestrator
-2. **Authentifizierung**: Stelle sicher, dass die UI immer mit Login geschützt ist
-3. **Minimale Berechtigungen**: Aktiviere nur die benötigten Proxy-Flags
-4. **Monitoring**: Überwache Proxy-Logs auf verdächtige Aktivitäten
+1. **HTTPS**: Use a reverse proxy (Nginx/Traefik) with HTTPS in front of the orchestrator
+2. **Authentication**: Ensure the UI is always protected with login
+3. **Minimal permissions**: Enable only the required proxy flags
+4. **Monitoring**: Monitor proxy logs for suspicious activity
 
-### Entwicklung
+### Development
 
-1. **Proxy-Logs**: Nutze `docker compose logs -f docker-proxy` für Debugging
-2. **Health-Check**: Der Orchestrator führt beim Start einen Health-Check durch (`client.ping()`)
-3. **Fehlermeldungen**: Detaillierte Fehlermeldungen helfen bei der Diagnose
+1. **Proxy logs**: Use `docker compose logs -f docker-proxy` for debugging
+2. **Health check**: The orchestrator runs a health check on startup (`client.ping()`)
+3. **Error messages**: Detailed error messages help with diagnosis
 
 ## Troubleshooting
 
-### Container-Erstellung schlägt fehl
+### Container creation fails
 
 ```bash
 # 1. Prüfe Proxy-Konfiguration
@@ -217,7 +217,7 @@ docker compose logs docker-proxy | grep -i "403\|forbidden"
 docker compose logs orchestrator | grep -i "infrastructure\|403"
 ```
 
-### Metrics kommen nicht an
+### Metrics not arriving
 
 ```bash
 # Prüfe ob STATS=1 gesetzt ist
@@ -227,7 +227,7 @@ docker compose exec docker-proxy env | grep STATS
 docker compose logs docker-proxy | grep -i "stats"
 ```
 
-### Proxy startet nicht
+### Proxy won't start
 
 ```bash
 # Prüfe Docker-Socket-Berechtigungen
@@ -240,7 +240,7 @@ docker ps
 docker compose logs docker-proxy
 ```
 
-## Weitere Informationen
+## Further Information
 
-- [tecnativa/docker-socket-proxy auf Docker Hub](https://hub.docker.com/r/tecnativa/docker-socket-proxy)
-- [Docker Engine API Dokumentation](https://docs.docker.com/engine/api/)
+- [tecnativa/docker-socket-proxy on Docker Hub](https://hub.docker.com/r/tecnativa/docker-socket-proxy)
+- [Docker Engine API Documentation](https://docs.docker.com/engine/api/)

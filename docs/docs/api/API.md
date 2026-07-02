@@ -2,34 +2,34 @@
 slug: api
 ---
 
-# API-Dokumentation
+# API Documentation
 
-Diese Dokumentation beschreibt alle verfügbaren REST-API-Endpoints des Fast-Flow Orchestrators.
+This documentation describes all available REST API endpoints of the Fast-Flow orchestrator.
 
-## Basis-URL
+## Base URL
 
-Alle API-Endpoints sind unter `/api` verfügbar. Die vollständige Basis-URL ist:
+All API endpoints are available under `/api`. The full base URL is:
 ```
 http://localhost:8000/api
 ```
 
-## Authentifizierung
+## Authentication
 
-Die meisten Endpoints erfordern Authentifizierung. Verwenden Sie einen Bearer-Token im Authorization-Header:
+Most endpoints require authentication. Use a Bearer token in the Authorization header:
 
 ```
 Authorization: Bearer <token>
 ```
 
-Token werden über OAuth-Provider erhalten (`GET /api/auth/{provider}/authorize`), z. B. GitHub, Google, Microsoft oder Custom OAuth; nach Autorisierung Redirect zu `/auth/callback#token=...`.
+Tokens are obtained via OAuth providers (`GET /api/auth/{provider}/authorize`), e.g. GitHub, Google, Microsoft, or Custom OAuth; after authorization redirect to `/auth/callback#token=...`.
 
 ## Endpoints
 
 ### Health Check
 
-#### `GET /health`, `GET /healthz` oder `GET /api/health`
+#### `GET /health`, `GET /healthz`, or `GET /api/health`
 
-Prüft den Status der Anwendung.
+Checks application status.
 
 **Response:**
 ```json
@@ -45,10 +45,10 @@ Prüft den Status der Anwendung.
 
 ### `GET /api/pipelines`
 
-Gibt eine Liste aller verfügbaren Pipelines zurück.
+Returns a list of all available pipelines.
 
-**Query-Parameter:**
-- `tags` (optional): Komma-getrennte Tags; es werden nur Pipelines zurückgegeben, die **mindestens einen** dieser Tags in ihrer `pipeline.json` (`metadata.tags`) haben. Beispiel: `?tags=production,experiment`
+**Query parameters:**
+- `tags` (optional): Comma-separated tags; only pipelines that have **at least one** of these tags in their `pipeline.json` (`metadata.tags`) are returned. Example: `?tags=production,experiment`
 
 **Response:**
 ```json
@@ -64,7 +64,7 @@ Gibt eine Liste aller verfügbaren Pipelines zurück.
     "metadata": {
       "cpu_hard_limit": 1.0,
       "mem_hard_limit": "512m",
-      "description": "Prozessiert täglich eingehende Daten",
+      "description": "Processes incoming data daily",
       "tags": ["data-processing", "daily"]
     }
   }
@@ -73,9 +73,9 @@ Gibt eine Liste aller verfügbaren Pipelines zurück.
 
 ### `POST /api/pipelines/{name}/run`
 
-Startet eine Pipeline manuell.
+Starts a pipeline manually.
 
-**Request Body:**
+**Request body:**
 ```json
 {
   "env_vars": {
@@ -88,7 +88,7 @@ Startet eine Pipeline manuell.
 }
 ```
 
-**Limits:** Max. 50 Einträge pro `env_vars` und `parameters`, je Wert max. 16 KB.
+**Limits:** Max. 50 entries per `env_vars` and `parameters`, max. 16 KB per value.
 
 **Response:**
 ```json
@@ -101,16 +101,16 @@ Startet eine Pipeline manuell.
 }
 ```
 
-**Fehler:**
-- `404`: Pipeline nicht gefunden oder deaktiviert
-- `429`: Concurrency-Limit erreicht
+**Errors:**
+- `404`: Pipeline not found or disabled
+- `429`: Concurrency limit reached
 
 ### `GET /api/pipelines/{name}/runs`
 
-Gibt die Run-Historie einer Pipeline zurück.
+Returns the run history of a pipeline.
 
-**Query-Parameter:**
-- `limit` (optional, Standard: 100): Maximale Anzahl Runs
+**Query parameters:**
+- `limit` (optional, default: 100): Maximum number of runs
 
 **Response:**
 ```json
@@ -130,7 +130,7 @@ Gibt die Run-Historie einer Pipeline zurück.
 
 ### `GET /api/pipelines/{name}/stats`
 
-Gibt Pipeline-Statistiken zurück.
+Returns pipeline statistics.
 
 **Response:**
 ```json
@@ -146,23 +146,23 @@ Gibt Pipeline-Statistiken zurück.
 
 ### `POST /api/pipelines/{name}/stats/reset`
 
-Setzt Pipeline-Statistiken zurück.
+Resets pipeline statistics.
 
 **Response:**
 ```json
 {
-  "message": "Statistiken für Pipeline 'pipeline_a' wurden zurückgesetzt"
+  "message": "Statistics for pipeline 'pipeline_a' have been reset"
 }
 ```
 
 ### `GET /api/pipelines/{name}/daily-stats`
 
-Gibt tägliche Pipeline-Statistiken zurück.
+Returns daily pipeline statistics.
 
-**Query-Parameter:**
-- `days` (optional, Standard: 365): Anzahl der Tage zurück
-- `start_date` (optional): Startdatum (ISO-Format: YYYY-MM-DD)
-- `end_date` (optional): Enddatum (ISO-Format: YYYY-MM-DD)
+**Query parameters:**
+- `days` (optional, default: 365): Number of days back
+- `start_date` (optional): Start date (ISO format: YYYY-MM-DD)
+- `end_date` (optional): End date (ISO format: YYYY-MM-DD)
 
 **Response:**
 ```json
@@ -181,9 +181,9 @@ Gibt tägliche Pipeline-Statistiken zurück.
 
 ### `GET /api/pipelines/daily-stats/all`
 
-Gibt tägliche Statistiken für alle Pipelines kombiniert zurück.
+Returns daily statistics for all pipelines combined.
 
-**Query-Parameter:** (gleich wie oben)
+**Query parameters:** (same as above)
 
 ---
 
@@ -191,15 +191,15 @@ Gibt tägliche Statistiken für alle Pipelines kombiniert zurück.
 
 ### `GET /api/runs`
 
-Gibt alle Runs zurück (mit Filterung und Pagination).
+Returns all runs (with filtering and pagination).
 
-**Query-Parameter:**
-- `pipeline_name` (optional): Filter nach Pipeline-Name
-- `status_filter` (optional): Filter nach Status (PENDING, RUNNING, SUCCESS, FAILED, etc.)
-- `start_date` (optional): Startdatum für Filterung (ISO-Format)
-- `end_date` (optional): Enddatum für Filterung (ISO-Format)
-- `limit` (optional, Standard: 50): Anzahl Runs pro Seite
-- `offset` (optional, Standard: 0): Offset für Pagination
+**Query parameters:**
+- `pipeline_name` (optional): Filter by pipeline name
+- `status_filter` (optional): Filter by status (PENDING, RUNNING, SUCCESS, FAILED, etc.)
+- `start_date` (optional): Start date for filtering (ISO format)
+- `end_date` (optional): End date for filtering (ISO format)
+- `limit` (optional, default: 50): Number of runs per page
+- `offset` (optional, default: 0): Offset for pagination
 
 **Response:**
 ```json
@@ -226,7 +226,7 @@ Gibt alle Runs zurück (mit Filterung und Pagination).
 
 ### `GET /api/runs/{run_id}`
 
-Gibt Details eines Runs zurück.
+Returns details of a run.
 
 **Response:**
 ```json
@@ -253,22 +253,22 @@ Gibt Details eines Runs zurück.
 
 ### `POST /api/runs/{run_id}/cancel`
 
-Bricht einen laufenden Run ab.
+Cancels a running run.
 
 **Response:**
 ```json
 {
-  "message": "Run 550e8400-e29b-41d4-a716-446655440000 wurde erfolgreich abgebrochen"
+  "message": "Run 550e8400-e29b-41d4-a716-446655440000 was cancelled successfully"
 }
 ```
 
-**Fehler:**
-- `400`: Run ist bereits beendet
-- `404`: Run nicht gefunden
+**Errors:**
+- `400`: Run has already finished
+- `404`: Run not found
 
 ### `POST /api/runs/{run_id}/retry`
 
-Startet einen neuen Run mit denselben Parametern und Env-Variablen wie der angegebene Run. Nur für beendete Runs (SUCCESS, FAILED, INTERRUPTED, WARNING) zulässig. Der neue Run wird mit `triggered_by="manual"` gestartet.
+Starts a new run with the same parameters and env variables as the specified run. Only allowed for finished runs (SUCCESS, FAILED, INTERRUPTED, WARNING). The new run is started with `triggered_by="manual"`.
 
 **Response:**
 ```json
@@ -281,15 +281,15 @@ Startet einen neuen Run mit denselben Parametern und Env-Variablen wie der angeg
 }
 ```
 
-**Fehler:**
-- `400`: Run ist nicht beendet (nur PENDING/RUNNING)
-- `404`: Run nicht gefunden oder Pipeline nicht vorhanden
-- `429`: Concurrency-Limit erreicht
-- `500`: Fehler beim Start
+**Errors:**
+- `400`: Run is not finished (PENDING/RUNNING only)
+- `404`: Run not found or pipeline does not exist
+- `429`: Concurrency limit reached
+- `500`: Error starting run
 
 ### `GET /api/runs/{run_id}/health`
 
-Gibt Container-Health-Status für einen Run zurück.
+Returns container health status for a run.
 
 **Response:**
 ```json
@@ -307,24 +307,24 @@ Gibt Container-Health-Status für einen Run zurück.
 
 ### `GET /api/runs/{run_id}/logs`
 
-Gibt Logs aus Datei zurück (für abgeschlossene Runs).
+Returns logs from file (for completed runs).
 
-**Query-Parameter:**
-- `tail` (optional): Anzahl der letzten Zeilen
+**Query parameters:**
+- `tail` (optional): Number of last lines
 
 **Response:** Plain Text (Log-Inhalt)
 
 ### `GET /api/runs/{run_id}/logs/stream`
 
-Server-Sent Events für Live-Logs (für laufende Runs).
+Server-Sent Events for live logs (for running runs).
 
 **Response:** `text/event-stream`
 
 **Format:**
 ```
-data: {"line": "Pipeline gestartet\n"}
+data: {"line": "Pipeline started\n"}
 
-data: {"line": "Verarbeite Daten...\n"}
+data: {"line": "Processing data...\n"}
 
 ```
 
@@ -334,7 +334,7 @@ data: {"line": "Verarbeite Daten...\n"}
 
 ### `GET /api/runs/{run_id}/metrics`
 
-Gibt Metrics aus Datei zurück (für abgeschlossene Runs).
+Returns metrics from file (for completed runs).
 
 **Response:**
 ```json
@@ -356,7 +356,7 @@ Gibt Metrics aus Datei zurück (für abgeschlossene Runs).
 
 ### `GET /api/runs/{run_id}/metrics/stream`
 
-Server-Sent Events für Live-Metrics (für laufende Runs).
+Server-Sent Events for live metrics (for running runs).
 
 **Response:** `text/event-stream`
 
@@ -372,7 +372,7 @@ data: {"timestamp": "2024-01-15T10:30:00", "cpu_percent": 45.2, "ram_mb": 128.5,
 
 ### `GET /api/scheduler/jobs`
 
-Gibt alle geplanten Jobs zurück.
+Returns all scheduled jobs.
 
 **Response:**
 ```json
@@ -393,13 +393,13 @@ Gibt alle geplanten Jobs zurück.
 
 ### `GET /api/scheduler/jobs/{job_id}`
 
-Gibt einen Job anhand der ID zurück.
+Returns a job by ID.
 
 ### `POST /api/scheduler/jobs`
 
-Erstellt einen neuen geplanten Job.
+Creates a new scheduled job.
 
-**Request Body:**
+**Request body:**
 ```json
 {
   "pipeline_name": "pipeline_a",
@@ -410,19 +410,19 @@ Erstellt einen neuen geplanten Job.
 ```
 
 **Trigger-Typen:**
-- `CRON`: Cron-Expression (z.B. `"0 0 * * *"` für täglich um Mitternacht)
-- `INTERVAL`: Interval in Sekunden (z.B. `"3600"` für stündlich)
+- `CRON`: Cron expression (e.g. `"0 0 * * *"` for daily at midnight)
+- `INTERVAL`: Interval in seconds (e.g. `"3600"` for hourly)
 
-**Fehler:**
-- `404`: Pipeline nicht gefunden
-- `400`: Ungültige Trigger-Expression
-- `503`: Scheduler nicht verfügbar
+**Errors:**
+- `404`: Pipeline not found
+- `400`: Invalid trigger expression
+- `503`: Scheduler not available
 
 ### `PUT /api/scheduler/jobs/{job_id}`
 
-Aktualisiert einen bestehenden Job.
+Updates an existing job.
 
-**Request Body:**
+**Request body:**
 ```json
 {
   "pipeline_name": "pipeline_b",
@@ -434,16 +434,16 @@ Aktualisiert einen bestehenden Job.
 
 ### `DELETE /api/scheduler/jobs/{job_id}`
 
-Löscht einen Job.
+Deletes a job.
 
 **Response:** `204 No Content`
 
 ### `GET /api/scheduler/jobs/{job_id}/runs`
 
-Gibt die Run-Historie für einen Job zurück.
+Returns run history for a job.
 
-**Query-Parameter:**
-- `limit` (optional, Standard: 50): Maximale Anzahl Runs
+**Query parameters:**
+- `limit` (optional, default: 50): Maximum number of runs
 
 ---
 
@@ -451,7 +451,7 @@ Gibt die Run-Historie für einen Job zurück.
 
 ### `GET /api/secrets`
 
-Gibt alle Secrets zurück.
+Returns all secrets.
 
 **Response:**
 ```json
@@ -466,19 +466,19 @@ Gibt alle Secrets zurück.
 ]
 ```
 
-**Hinweis:** Secrets werden verschlüsselt gespeichert, aber entschlüsselt zurückgegeben. Parameter (`is_parameter: true`) werden nicht verschlüsselt.
+**Note:** Secrets are stored encrypted but returned decrypted. Parameters (`is_parameter: true`) are not encrypted.
 
 ### `POST /api/secrets/encrypt-for-pipeline`
 
-Verschlüsselt einen Klartext mit dem Server-`ENCRYPTION_KEY` für manuellen Eintrag in `pipeline.json` unter `encrypted_env`. **Max. 64 KB** pro Wert.
+Encrypts plaintext with the server `ENCRYPTION_KEY` for manual entry in `pipeline.json` under `encrypted_env`. **Max. 64 KB** per value.
 
-**Request Body:** `{ "value": "klartext" }`
+**Request body:** `{ "value": "plaintext" }`
 
 ### `POST /api/secrets`
 
-Erstellt ein neues Secret.
+Creates a new secret.
 
-**Request Body:**
+**Request body:**
 ```json
 {
   "key": "API_KEY",
@@ -487,14 +487,14 @@ Erstellt ein neues Secret.
 }
 ```
 
-**Fehler:**
-- `409`: Secret existiert bereits (verwende PUT für Aktualisierung)
+**Errors:**
+- `409`: Secret already exists (use PUT to update)
 
 ### `PUT /api/secrets/{key}`
 
-Aktualisiert ein bestehendes Secret.
+Updates an existing secret.
 
-**Request Body:**
+**Request body:**
 ```json
 {
   "value": "new-secret-value",
@@ -504,12 +504,12 @@ Aktualisiert ein bestehendes Secret.
 
 ### `DELETE /api/secrets/{key}`
 
-Löscht ein Secret.
+Deletes a secret.
 
 **Response:**
 ```json
 {
-  "message": "Secret 'API_KEY' erfolgreich gelöscht.",
+  "message": "Secret 'API_KEY' deleted successfully.",
   "key": "API_KEY"
 }
 ```
@@ -520,9 +520,9 @@ Löscht ein Secret.
 
 ### `POST /api/sync`
 
-Führt Git Pull aus (mit UV Pre-Heating).
+Runs Git pull (with UV pre-heating).
 
-**Request Body:**
+**Request body:**
 ```json
 {
   "branch": "main"
@@ -533,7 +533,7 @@ Führt Git Pull aus (mit UV Pre-Heating).
 ```json
 {
   "success": true,
-  "message": "Git-Sync erfolgreich",
+  "message": "Git sync successful",
   "branch": "main",
   "commit": "abc123def456",
   "pre_heating": {
@@ -546,7 +546,7 @@ Führt Git Pull aus (mit UV Pre-Heating).
 
 ### `GET /api/sync/status`
 
-Gibt Git-Status zurück.
+Returns Git status.
 
 **Response:**
 ```json
@@ -566,7 +566,7 @@ Gibt Git-Status zurück.
 
 ### `GET /api/sync/settings`
 
-Gibt aktuelle Sync-Einstellungen zurück.
+Returns current sync settings.
 
 **Response:**
 ```json
@@ -578,9 +578,9 @@ Gibt aktuelle Sync-Einstellungen zurück.
 
 ### `PUT /api/sync/settings`
 
-Aktualisiert Sync-Einstellungen.
+Updates sync settings.
 
-**Request Body:**
+**Request body:**
 ```json
 {
   "auto_sync_enabled": true,
@@ -588,20 +588,20 @@ Aktualisiert Sync-Einstellungen.
 }
 ```
 
-**Hinweis:** Einstellungen werden nur für die laufende Instanz aktualisiert. Für persistente Änderungen muss die `.env`-Datei bearbeitet werden.
+**Note:** Settings are updated only for the running instance. For persistent changes, edit the `.env` file.
 
 ### `GET /api/sync/logs`
 
-Gibt Sync-Logs zurück.
+Returns sync logs.
 
-**Query-Parameter:**
-- `limit` (optional, Standard: 100): Maximale Anzahl Log-Einträge
+**Query parameters:**
+- `limit` (optional, default: 100): Maximum number of log entries
 
-### GitHub Apps Konfiguration
+### GitHub Apps Configuration
 
 #### `GET /api/sync/github-config`
 
-Gibt aktuelle GitHub Apps Konfiguration zurück.
+Returns current GitHub Apps configuration.
 
 **Response:**
 ```json
@@ -613,13 +613,13 @@ Gibt aktuelle GitHub Apps Konfiguration zurück.
 }
 ```
 
-**Hinweis:** Private Key wird aus Sicherheitsgründen NICHT zurückgegeben.
+**Note:** Private key is NOT returned for security reasons.
 
 #### `POST /api/sync/github-config`
 
-Speichert GitHub Apps Konfiguration.
+Saves GitHub Apps configuration.
 
-**Request Body:**
+**Request body:**
 ```json
 {
   "app_id": "123456",
@@ -630,37 +630,37 @@ Speichert GitHub Apps Konfiguration.
 
 #### `POST /api/sync/github-config/test`
 
-Testet die GitHub Apps Konfiguration.
+Tests GitHub Apps configuration.
 
 **Response:**
 ```json
 {
   "success": true,
-  "message": "Token erfolgreich generiert"
+  "message": "Token generated successfully"
 }
 ```
 
 #### `DELETE /api/sync/github-config`
 
-Löscht GitHub Apps Konfiguration.
+Deletes GitHub Apps configuration.
 
 ### GitHub App Manifest Flow
 
-**Erfordert Admin-Rechte** (authorize und exchange).
+**Requires admin rights** (authorize and exchange).
 
 #### `GET /api/sync/github-manifest/authorize`
 
-Generiert HTML-Formular für GitHub App Manifest Flow. Erfordert Admin-Login.
+Generates HTML form for GitHub App Manifest flow. Requires admin login.
 
 #### `GET /api/sync/github-manifest/callback`
 
-Callback-Endpoint für GitHub App Manifest Flow (von GitHub aufgerufen).
+Callback endpoint for GitHub App Manifest flow (called by GitHub).
 
 #### `POST /api/sync/github-manifest/exchange`
 
-Tauscht Manifest Code gegen GitHub App Credentials. Erfordert Admin-Login.
+Exchanges manifest code for GitHub App credentials. Requires admin login.
 
-**Request Body:**
+**Request body:**
 ```json
 {
   "code": "temporary-code",
@@ -674,9 +674,9 @@ Tauscht Manifest Code gegen GitHub App Credentials. Erfordert Admin-Login.
 
 ### `GET /api/settings`
 
-Gibt die aktuellen System-Einstellungen zurück (inkl. persistenter Werte aus `orchestrator_settings`, z. B. Log-Retention, Benachrichtigungen, S3-Backup).
+Returns current system settings (incl. persistent values from `orchestrator_settings`, e.g. log retention, notifications, S3 backup).
 
-**Response (Auszug):**
+**Response (excerpt):**
 ```json
 {
   "log_retention_runs": 100,
@@ -712,24 +712,24 @@ Gibt die aktuellen System-Einstellungen zurück (inkl. persistenter Werte aus `o
 
 ### `PUT /api/settings`
 
-Aktualisiert System-Einstellungen und speichert sie in der Datenbank (`orchestrator_settings`). Die laufende Konfiguration wird sofort angewendet (kein Neustart nötig). S3-Access/Secret können als Klartext mitgesendet werden (werden verschlüsselt gespeichert); mit `s3_clear_access_key` / `s3_clear_secret_access_key` können gespeicherte Keys entfernt werden.
+Updates system settings and saves them in the database (`orchestrator_settings`). Running configuration is applied immediately (no restart needed). S3 access/secret can be sent as plaintext (stored encrypted); stored keys can be removed with `s3_clear_access_key` / `s3_clear_secret_access_key`.
 
 ### `POST /api/settings/s3/test`
 
-Testet die aktuelle S3-Konfiguration (z. B. `HeadBucket`). **Nur Admin.** Speichert Zeitpunkt und Status des letzten Tests in der Datenbank.
+Tests current S3 configuration (e.g. `HeadBucket`). **Admin only.** Stores time and status of last test in the database.
 
 **Response:**
 ```json
 {
   "success": true,
-  "message": "S3-Verbindung erfolgreich getestet.",
+  "message": "S3 connection tested successfully.",
   "tested_at": "2026-04-07T12:00:00+00:00"
 }
 ```
 
 ### `GET /api/settings/storage`
 
-Gibt Speicherplatz-Statistiken zurück.
+Returns storage statistics.
 
 **Response:**
 ```json
@@ -753,41 +753,41 @@ Gibt Speicherplatz-Statistiken zurück.
 
 ### `POST /api/settings/test-email`
 
-Sendet eine Test-E-Mail.
+Sends a test email.
 
 **Response:**
 ```json
 {
   "status": "success",
-  "message": "Test-E-Mail erfolgreich an user@example.com gesendet"
+  "message": "Test email sent successfully to user@example.com"
 }
 ```
 
 ### `POST /api/settings/test-teams`
 
-Sendet eine Test-Teams-Nachricht.
+Sends a test Teams message.
 
 **Response:**
 ```json
 {
   "status": "success",
-  "message": "Test-Teams-Nachricht erfolgreich gesendet"
+  "message": "Test Teams message sent successfully"
 }
 ```
 
 ### `POST /api/settings/cleanup/force`
 
-Führt einen manuellen Force-Flush (Cleanup) durch.
+Runs a manual force flush (cleanup).
 
 **Response:**
 ```json
 {
   "status": "success",
-  "message": "Cleanup erfolgreich abgeschlossen",
+  "message": "Cleanup completed successfully",
   "summary": [
-    "10 Runs aus Datenbank gelöscht",
-    "15 Log-Dateien gelöscht",
-    "5 Docker-Container gelöscht"
+    "10 runs deleted from database",
+    "15 log files deleted",
+    "5 Docker containers deleted"
   ],
   "log_cleanup": {
     "deleted_runs": 10,
@@ -804,7 +804,7 @@ Führt einen manuellen Force-Flush (Cleanup) durch.
 
 ### `GET /api/settings/system-metrics`
 
-Gibt System-Metriken zurück.
+Returns system metrics.
 
 **Response:**
 ```json
@@ -838,16 +838,16 @@ Gibt System-Metriken zurück.
 
 ### `POST /api/webhooks/{pipeline_name}/{webhook_key}`
 
-Triggert eine Pipeline via Webhook. **Rate Limit: 30 Requests/Minute** pro IP (Bruteforce-Schutz).
+Triggers a pipeline via webhook. **Rate limit: 30 requests/minute** per IP (brute-force protection).
 
-**Hinweis:** Der `webhook_key` muss in der `pipeline.json` der Pipeline konfiguriert sein.
+**Note:** The `webhook_key` must be configured in the pipeline's `pipeline.json`.
 
-**Request Body (optional):** Bei `Content-Type: application/json` kann ein JSON-Body mit denselben Feldern wie bei `POST /api/pipelines/{name}/run` übergeben werden:
+**Request body (optional):** With `Content-Type: application/json`, a JSON body with the same fields as `POST /api/pipelines/{name}/run` can be passed:
 
-- `env_vars` (optional): Dictionary mit Environment-Variablen/Secrets für den Run
-- `parameters` (optional): Dictionary mit Pipeline-Parametern
+- `env_vars` (optional): Dictionary with environment variables/secrets for the run
+- `parameters` (optional): Dictionary with pipeline parameters
 
-**Limits:** Max. 50 Einträge pro `env_vars` und `parameters`, je Wert max. 16 KB.
+**Limits:** Max. 50 entries per `env_vars` and `parameters`, max. 16 KB per value.
 
 **Response:**
 ```json
@@ -860,18 +860,18 @@ Triggert eine Pipeline via Webhook. **Rate Limit: 30 Requests/Minute** pro IP (B
 }
 ```
 
-**Fehler:**
-- `400`: Ungültiger Request-Body (z. B. ungültiges JSON oder Verletzung der Limits für env_vars/parameters)
-- `404`: Pipeline nicht gefunden, deaktiviert oder Webhooks deaktiviert
-- `401`: Ungültiger Webhook-Schlüssel
-- `429`: Concurrency-Limit erreicht
+**Errors:**
+- `400`: Invalid request body (e.g. invalid JSON or violation of env_vars/parameters limits)
+- `404`: Pipeline not found, disabled, or webhooks disabled
+- `401`: Invalid webhook key
+- `429`: Concurrency limit reached
 
-**Beispiel (ohne Body):**
+**Example (without body):**
 ```bash
 curl -X POST http://localhost:8000/api/webhooks/pipeline_a/my-secret-key
 ```
 
-**Beispiel (mit env_vars und parameters):**
+**Example (with env_vars and parameters):**
 ```bash
 curl -X POST http://localhost:8000/api/webhooks/pipeline_a/my-secret-key \
   -H "Content-Type: application/json" \
@@ -880,13 +880,13 @@ curl -X POST http://localhost:8000/api/webhooks/pipeline_a/my-secret-key \
 
 ---
 
-## Users (Nutzerverwaltung)
+## Users (user management)
 
-Alle Endpoints erfordern Authentifizierung. `GET /api/users`, Invites, Approve, Reject, Block, Unblock, Delete und Invite erfordern **Admin**.
+All endpoints require authentication. `GET /api/users`, invites, approve, reject, block, unblock, delete, and invite require **Admin**.
 
 ### `GET /api/users`
 
-Listet alle Nutzer (inkl. `status`, `github_id`, `google_id`, `microsoft_id`, `custom_oauth_id`). Keine Filterung; Frontend gruppiert in „Aktive Nutzer“ (`status=active`) und „Beitrittsanfragen“ (`status=pending`).
+Lists all users (incl. `status`, `github_id`, `google_id`, `microsoft_id`, `custom_oauth_id`). No filtering; frontend groups into "Active users" (`status=active`) and "Join requests" (`status=pending`).
 
 **Response:**
 ```json
@@ -907,61 +907,61 @@ Listet alle Nutzer (inkl. `status`, `github_id`, `google_id`, `microsoft_id`, `c
 
 ### `GET /api/users/{user_id}`
 
-Einzelnen Nutzer abrufen.
+Get a single user.
 
 ### `PUT /api/users/{user_id}`
 
-Nutzer aktualisieren. Body: `{ "role": "READONLY|WRITE|ADMIN", "blocked": false }`. E-Mail kommt vom OAuth-Provider und wird nicht per API geändert.
+Update user. Body: `{ "role": "READONLY|WRITE|ADMIN", "blocked": false }`. Email comes from OAuth provider and is not changed via API.
 
 ### `POST /api/users/{user_id}/approve`
 
-**Beitrittsanfrage freigeben.** Nur wenn `status=pending`. Setzt `status=active`, `blocked=false`, `role` aus Body (Default: `READONLY`). Optional: E-Mail an Nutzer bei Freigabe (wenn `EMAIL_ENABLED` und `user.email`).
+**Approve join request.** Only when `status=pending`. Sets `status=active`, `blocked=false`, `role` from body (default: `READONLY`). Optional: email to user on approval (when `EMAIL_ENABLED` and `user.email`).
 
-**Request Body (optional):**
+**Request body (optional):**
 ```json
 { "role": "READONLY" }
 ```
-`role`: `READONLY`, `WRITE` oder `ADMIN`. Fehlt der Body, wird `READONLY` verwendet.
+`role`: `READONLY`, `WRITE`, or `ADMIN`. If body is omitted, `READONLY` is used.
 
-**Fehler:** `400` wenn Nutzer nicht `pending` ist.
+**Error:** `400` if user is not `pending`.
 
 ### `POST /api/users/{user_id}/reject`
 
-**Beitrittsanfrage ablehnen.** Nur wenn `status=pending`. Setzt `status=rejected`, `blocked=true`.
+**Reject join request.** Only when `status=pending`. Sets `status=rejected`, `blocked=true`.
 
-**Fehler:** `400` wenn Nutzer nicht `pending` ist.
+**Error:** `400` if user is not `pending`.
 
 ### `POST /api/users/{user_id}/block`
 
-Nutzer blockieren. Alle Sessions werden gelöscht.
+Block user. All sessions are deleted.
 
 ### `POST /api/users/{user_id}/unblock`
 
-Nutzer entblockieren.
+Unblock user.
 
 ### `DELETE /api/users/{user_id}`
 
-Nutzer löschen. Nicht erlaubt, sich selbst zu löschen.
+Delete user. Not allowed to delete yourself.
 
 ### `GET /api/users/invites`
 
-Listet alle Einladungen (Admin).
+Lists all invitations (admin).
 
 ### `POST /api/users/invite`
 
-Erstellt eine Einladung. Body: `{ "email": "...", "role": "READONLY|WRITE|ADMIN", "expires_hours": 168 }`. Response: `{ "link": "...", "expires_at": "..." }`.
+Creates an invitation. Body: `{ "email": "...", "role": "READONLY|WRITE|ADMIN", "expires_hours": 168 }`. Response: `{ "link": "...", "expires_at": "..." }`.
 
 ### `DELETE /api/users/invites/{invitation_id}`
 
-Einladung widerrufen (Admin).
+Revoke invitation (admin).
 
 ---
 
-## Authentifizierung
+## Authentication
 
 ### `GET /api/auth/providers`
 
-Liefert die aktivierten Login-Provider für die Login-Seite.
+Returns enabled login providers for the login page.
 
 **Response:**
 ```json
@@ -972,68 +972,68 @@ Liefert die aktivierten Login-Provider für die Login-Seite.
 
 ### `GET /api/auth/github/authorize`
 
-Leitet zur GitHub OAuth-Seite weiter. Nach Autorisierung: Redirect zu `{FRONTEND_URL}/auth/callback#token=...`.
+Redirects to GitHub OAuth page. After authorization: redirect to `{FRONTEND_URL}/auth/callback#token=...`.
 
-- **Query (optional):** `state` – z.B. Invitation-Token für Einladungs-Flow.
+- **Query (optional):** `state` – e.g. invitation token for invitation flow.
 
 ### `GET /api/auth/github/callback`
 
-GitHub OAuth Callback (vom Browser aufgerufen). Erstellt Session und leitet zu `{FRONTEND_URL}/auth/callback#token=...` weiter. Bei **Link-Flow:** Redirect zu `{FRONTEND_URL}/settings?linked=github`. Bei **Beitrittsanfrage (anklopfen_only):** **kein** Token, **keine** Session; Redirect zu `{FRONTEND_URL}/request-sent` (pending) oder `{FRONTEND_URL}/request-rejected` (rejected/blocked).
+GitHub OAuth callback (called from browser). Creates session and redirects to `{FRONTEND_URL}/auth/callback#token=...`. On **link flow:** redirect to `{FRONTEND_URL}/settings?linked=github`. On **join request (knock only):** **no** token, **no** session; redirect to `{FRONTEND_URL}/request-sent` (pending) or `{FRONTEND_URL}/request-rejected` (rejected/blocked).
 
 ### `GET /api/auth/google/authorize`
 
-Leitet zur Google OAuth-Seite weiter. `state` optional (Invitation-Token oder CSRF).
+Redirects to Google OAuth page. `state` optional (invitation token or CSRF).
 
 ### `GET /api/auth/google/callback`
 
-Google OAuth Callback. Verhalten wie GitHub-Callback; bei Link-Flow: `{FRONTEND_URL}/settings?linked=google`; bei anklopfen_only: `{FRONTEND_URL}/request-sent` oder `{FRONTEND_URL}/request-rejected` ohne Session.
+Google OAuth callback. Same behavior as GitHub callback; on link flow: `{FRONTEND_URL}/settings?linked=google`; on knock only: `{FRONTEND_URL}/request-sent` or `{FRONTEND_URL}/request-rejected` without session.
 
 ### `GET /api/auth/microsoft/authorize`
 
-Leitet zur Microsoft OAuth-Seite weiter. `state` optional (Invitation-Token oder CSRF).
+Redirects to Microsoft OAuth page. `state` optional (invitation token or CSRF).
 
 ### `GET /api/auth/microsoft/callback`
 
-Microsoft OAuth Callback. Verhalten wie GitHub-/Google-Callback; bei Link-Flow: `{FRONTEND_URL}/settings?linked=microsoft`; bei anklopfen_only: `{FRONTEND_URL}/request-sent` oder `{FRONTEND_URL}/request-rejected` ohne Session.
+Microsoft OAuth callback. Same behavior as GitHub/Google callback; on link flow: `{FRONTEND_URL}/settings?linked=microsoft`; on knock only: `{FRONTEND_URL}/request-sent` or `{FRONTEND_URL}/request-rejected` without session.
 
 ### `GET /api/auth/custom/authorize`
 
-Leitet zum konfigurierten Custom-OAuth-Provider weiter. `state` optional (Invitation-Token oder CSRF).
+Redirects to configured Custom OAuth provider. `state` optional (invitation token or CSRF).
 
 ### `GET /api/auth/custom/callback`
 
-Custom OAuth Callback. Verhalten wie andere Provider; bei Link-Flow: `{FRONTEND_URL}/settings?linked=custom`; bei anklopfen_only: `{FRONTEND_URL}/request-sent` oder `{FRONTEND_URL}/request-rejected` ohne Session.
+Custom OAuth callback. Same behavior as other providers; on link flow: `{FRONTEND_URL}/settings?linked=custom`; on knock only: `{FRONTEND_URL}/request-sent` or `{FRONTEND_URL}/request-rejected` without session.
 
 ### `GET /api/auth/link/google`
 
-Startet Google-OAuth zum **Verknüpfen** des Google-Kontos mit dem eingeloggten User. Erfordert Authentifizierung. Redirect zu `{FRONTEND_URL}/settings?linked=google` nach Erfolg.
+Starts Google OAuth to **link** the Google account to the logged-in user. Requires authentication. Redirect to `{FRONTEND_URL}/settings?linked=google` on success.
 
 ### `GET /api/auth/link/github`
 
-Startet GitHub-OAuth zum **Verknüpfen** des GitHub-Kontos. Erfordert Authentifizierung. Redirect zu `{FRONTEND_URL}/settings?linked=github` nach Erfolg.
+Starts GitHub OAuth to **link** the GitHub account. Requires authentication. Redirect to `{FRONTEND_URL}/settings?linked=github` on success.
 
 ### `GET /api/auth/link/microsoft`
 
-Startet Microsoft-OAuth zum **Verknüpfen** des Microsoft-Kontos. Erfordert Authentifizierung. Redirect zu `{FRONTEND_URL}/settings?linked=microsoft` nach Erfolg.
+Starts Microsoft OAuth to **link** the Microsoft account. Requires authentication. Redirect to `{FRONTEND_URL}/settings?linked=microsoft` on success.
 
 ### `GET /api/auth/link/custom`
 
-Startet Custom-OAuth zum **Verknüpfen** des Custom-Provider-Kontos. Erfordert Authentifizierung. Redirect zu `{FRONTEND_URL}/settings?linked=custom` nach Erfolg.
+Starts Custom OAuth to **link** the Custom provider account. Requires authentication. Redirect to `{FRONTEND_URL}/settings?linked=custom` on success.
 
 ### `POST /api/auth/logout`
 
-Meldet einen Benutzer ab.
+Logs out a user.
 
 **Response:**
 ```json
 {
-  "message": "Erfolgreich abgemeldet"
+  "message": "Logged out successfully"
 }
 ```
 
 ### `GET /api/auth/me`
 
-Gibt Informationen über den aktuellen Benutzer zurück (u.a. für Verknüpfte-Konten-UI).
+Returns information about the current user (incl. for linked-accounts UI).
 
 **Response:**
 ```json
@@ -1060,46 +1060,46 @@ Gibt Informationen über den aktuellen Benutzer zurück (u.a. für Verknüpfte-K
 | Token Refresh | 30/min |
 | Logout | 60/min |
 | Webhooks | 30/min |
-| Allgemein | 100/min |
+| General | 100/min |
 
-Die Client-IP wird für das Rate Limiting verwendet. Hinter einem Reverse-Proxy muss `PROXY_HEADERS_TRUSTED=true` gesetzt werden, damit `X-Forwarded-For` berücksichtigt wird (siehe [Konfiguration](/docs/deployment/CONFIGURATION)).
+Client IP is used for rate limiting. Behind a reverse proxy, set `PROXY_HEADERS_TRUSTED=true` so `X-Forwarded-For` is considered (see [Configuration](/docs/deployment/CONFIGURATION)).
 
 ---
 
 ## Status-Codes
 
-- `200 OK`: Erfolgreiche Anfrage
-- `201 Created`: Ressource erfolgreich erstellt
-- `204 No Content`: Erfolgreiche Anfrage ohne Response-Body
-- `400 Bad Request`: Ungültige Anfrage
-- `401 Unauthorized`: Authentifizierung erforderlich
-- `404 Not Found`: Ressource nicht gefunden
-- `409 Conflict`: Ressource existiert bereits
-- `429 Too Many Requests`: Rate-Limit oder Concurrency-Limit erreicht
-- `500 Internal Server Error`: Server-Fehler
-- `503 Service Unavailable`: Service nicht verfügbar (z.B. Scheduler)
+- `200 OK`: Successful request
+- `201 Created`: Resource created successfully
+- `204 No Content`: Successful request without response body
+- `400 Bad Request`: Invalid request
+- `401 Unauthorized`: Authentication required
+- `404 Not Found`: Resource not found
+- `409 Conflict`: Resource already exists
+- `429 Too Many Requests`: Rate limit or concurrency limit reached
+- `500 Internal Server Error`: Server error
+- `503 Service Unavailable`: Service unavailable (e.g. scheduler)
 
 ---
 
-## Fehlerbehandlung
+## Error handling
 
-Alle Fehler werden im folgenden Format zurückgegeben:
+All errors are returned in the following format:
 
 ```json
 {
-  "detail": "Fehlermeldung"
+  "detail": "Error message"
 }
 ```
 
-Beispiel:
+Example:
 ```json
 {
-  "detail": "Pipeline nicht gefunden: pipeline_x"
+  "detail": "Pipeline not found: pipeline_x"
 }
 ```
 
-## Siehe auch
+## See also
 
-- [OAuth (GitHub, Google, Microsoft, Custom)](/docs/oauth/readme) – Login, Token
-- [Konfiguration](/docs/deployment/CONFIGURATION) – `JWT_*`, `ENCRYPTION_KEY`
-- [Schnellstart](/docs/schnellstart) – Erste Schritte
+- [OAuth (GitHub, Google, Microsoft, Custom)](/docs/oauth/readme) – login, token
+- [Configuration](/docs/deployment/CONFIGURATION) – `JWT_*`, `ENCRYPTION_KEY`
+- [Quick Start](/docs/schnellstart) – first steps

@@ -2,32 +2,32 @@
 sidebar_position: 3
 ---
 
-# Erweiterte Pipelines
+# Advanced Pipelines
 
-Sobald die erste Pipeline läuft, geht es um Robustheit, Planung und saubere Struktur. Dieser Abschnitt behandelt Retries, Timeouts, Secrets, Scheduling, Webhooks, Ressourcen-Limits und typische Muster für aufwendigere Pipelines.
+Once your first pipeline is running, the focus shifts to robustness, scheduling, and clean structure. This section covers retries, timeouts, secrets, scheduling, webhooks, resource limits, and typical patterns for more complex pipelines.
 
 ---
 
-## 1. Code strukturieren
+## 1. Structuring code
 
-### 1.1 `main()` und klare Schritte
+### 1.1 `main()` and clear steps
 
-Auch wenn ein „flat“ Skript (alles von oben nach unten) funktioniert, helfen **Funktionen** und eine `main()` beim Lesen und Testen:
+Even though a "flat" script (everything top to bottom) works, **functions** and a `main()` help with reading and testing:
 
 ```python
 # main.py
 import sys
 
 def laden():
-    # Daten holen
+    # Fetch data
     pass
 
 def transformieren(daten):
-    # Verarbeiten
+    # Process
     pass
 
 def speichern(ergebnis):
-    # Ausgabe
+    # Output
     pass
 
 def main():
@@ -40,13 +40,13 @@ if __name__ == "__main__":
     sys.exit(main() or 0)
 ```
 
-**Vorteil:** Du kannst `laden()`, `transformieren()` usw. einzeln testen oder in anderen Pipelines wiederverwenden.
+**Benefit:** You can test `laden()`, `transformieren()`, etc. individually or reuse them in other pipelines.
 
-### 1.2 Mehrere Dateien im Pipeline-Ordner
+### 1.2 Multiple files in the pipeline folder
 
-Du darfst im selben Ordner weitere Module anlegen, z.B. `utils.py`, `config.py`. **Einstiegspunkt** ist immer `main.py`. Andere Dateien werden nur durch Imports von `main.py` aus geladen.
+You may add additional modules in the same folder, e.g. `utils.py`, `config.py`. The **entry point** is always `main.py`. Other files are loaded only through imports from `main.py`.
 
-Beispiel:
+Example:
 
 ```
 pipelines/data_job/
@@ -55,19 +55,19 @@ pipelines/data_job/
 └── requirements.txt
 ```
 
-Beachte: Der **Working Directory** im Container ist der Pipeline-Ordner. Relative Imports wie `from . import utils` oder `import utils` (wenn `utils.py` im gleichen Ordner liegt) funktionieren.
+Note: The **working directory** in the container is the pipeline folder. Relative imports like `from . import utils` or `import utils` (when `utils.py` is in the same folder) work.
 
 ---
 
-## 2. Retries und Timeout
+## 2. Retries and timeout
 
-### 2.1 Automatische Wiederholungen
+### 2.1 Automatic retries
 
-Wenn eine Pipeline **FAILED** endet (Exit-Code ≠ 0), kann Fast-Flow sie automatisch erneut starten. Die Anzahl legst du fest.
+When a pipeline ends **FAILED** (exit code ≠ 0), Fast-Flow can automatically restart it. You set the number of attempts.
 
-**Global** (für alle Pipelines) in der [Konfiguration](/docs/deployment/CONFIGURATION): `RETRY_ATTEMPTS`.
+**Global** (for all pipelines) in [Configuration](/docs/deployment/CONFIGURATION): `RETRY_ATTEMPTS`.
 
-**Pro Pipeline** in `pipeline.json`:
+**Per pipeline** in `pipeline.json`:
 
 ```json
 {
@@ -75,19 +75,19 @@ Wenn eine Pipeline **FAILED** endet (Exit-Code ≠ 0), kann Fast-Flow sie automa
 }
 ```
 
-Der Pipeline-Wert überschreibt den globalen. Bei z.B. `3` gibt es bis zu **3 Wiederholungsversuche** nach dem ersten Fehlschlag.
+The pipeline value overrides the global setting. With e.g. `3`, there are up to **3 retry attempts** after the first failure.
 
-**Typischer Anwendungsfall:** Instabile externe APIs oder kurze Netzwerkaussetzer. Bei logischen Fehlern (falsche Daten, Bugs) bringen Retries oft wenig – hier Fehlerbehandlung im Code verbessern.
+**Typical use case:** Unstable external APIs or brief network outages. For logical errors (bad data, bugs), retries often help little – improve error handling in code instead.
 
-**Retry-Strategie (`retry_strategy`):** Zusätzlich zu `retry_attempts` kannst du in `pipeline.json` festlegen, **wie lange** vor jedem erneuten Versuch gewartet wird: z.B. **Exponential Backoff** (für flatternde APIs), **Fixed Delay** (feste Sekunden) oder **Custom Schedule** (Liste von Wartezeiten). Siehe [pipeline.json Referenz – Retry-Strategien](/docs/pipelines/referenz#retry-strategien).
+**Retry strategy (`retry_strategy`):** In addition to `retry_attempts`, you can define in `pipeline.json` **how long** to wait before each retry: e.g. **Exponential Backoff** (for flaky APIs), **Fixed Delay** (fixed seconds), or **Custom Schedule** (list of wait times). See [pipeline.json reference – Retry strategies](/docs/pipelines/referenz#retry-strategien).
 
 ### 2.2 Timeout
 
-Läuft eine Pipeline zu lange, kannst du sie nach einer gewissen **Laufzeit** (Sekunden) abbrechen.
+If a pipeline runs too long, you can abort it after a certain **runtime** (seconds).
 
-**Global:** `CONTAINER_TIMEOUT` (in Sekunden).
+**Global:** `CONTAINER_TIMEOUT` (in seconds).
 
-**Pro Pipeline** in `pipeline.json`:
+**Per pipeline** in `pipeline.json`:
 
 ```json
 {
@@ -95,31 +95,31 @@ Läuft eine Pipeline zu lange, kannst du sie nach einer gewissen **Laufzeit** (S
 }
 ```
 
-`3600` = 1 Stunde. Der Pipeline-Wert hat Vorrang vor dem globalen.
+`3600` = 1 hour. The pipeline value takes precedence over the global setting.
 
-**Hinweis:** Beim Timeout wird der Container beendet. Die Pipeline endet als **FAILED** (oder vergleichbar). Große Timeouts nur setzen, wenn der Job wirklich lange laufen soll (z.B. große Dateien, viele API-Calls).
+**Note:** On timeout, the container is terminated. The pipeline ends as **FAILED** (or similar). Set large timeouts only when the job really needs to run long (e.g. large files, many API calls).
 
 ---
 
-## 3. Secrets, Parameter und `default_env`
+## 3. Secrets, parameters, and `default_env`
 
-### 3.1 Secrets vs. Parameter
+### 3.1 Secrets vs. parameters
 
-| | **Secrets** | **Parameter** |
+| | **Secrets** | **Parameters** |
 |---|-------------|----------------|
-| **Speicherung** | Verschlüsselt in der DB | Unverschlüsselt |
-| **Einsatz** | API-Keys, Passwörter, Tokens | Endpunkte, Dateinamen, Flags |
-| **In der Pipeline** | Beide als Umgebungsvariablen (`os.getenv("NAME")`) |
+| **Storage** | Encrypted in the database | Unencrypted |
+| **Use** | API keys, passwords, tokens | Endpoints, filenames, flags |
+| **In the pipeline** | Both as environment variables (`os.getenv("NAME")`) |
 
-Beides wird in der **UI** pro Pipeline (oder global, je nach Fast-Flow-Version) verwaltet. Im Code unterscheidest du nicht – alles kommt als Env-Var.
+Both are managed in the **UI** per pipeline (or globally, depending on Fast-Flow version). In code you do not distinguish – everything arrives as an env var.
 
 ### 3.2 `default_env` in `pipeline.json`
 
-Für **nicht sensible** Defaults (z.B. `LOG_LEVEL`, `API_BASE`, `DRY_RUN=false`) kannst du `default_env` in `pipeline.json` nutzen:
+For **non-sensitive** defaults (e.g. `LOG_LEVEL`, `API_BASE`, `DRY_RUN=false`) you can use `default_env` in `pipeline.json`:
 
 ```json
 {
-  "description": "ETL-Job",
+  "description": "ETL job",
   "default_env": {
     "LOG_LEVEL": "INFO",
     "API_BASE": "https://api.example.com",
@@ -128,60 +128,60 @@ Für **nicht sensible** Defaults (z.B. `LOG_LEVEL`, `API_BASE`, `DRY_RUN=false`)
 }
 ```
 
-- Diese Werte werden bei **jedem** Run gesetzt.
-- In der UI zusätzlich gesetzte Env-Vars (z.B. für einen einzelnen Run) **überschreiben** diese Defaults.
-- **Secrets nicht** in `default_env` – dafür die UI verwenden. `pipeline.json` liegt typischerweise im Git und wäre sonst ein Sicherheitsrisiko.
+- These values are set on **every** run.
+- Env vars set additionally in the UI (e.g. for a single run) **override** these defaults.
+- **Do not put secrets** in `default_env` – use the UI instead. `pipeline.json` typically lives in Git and would otherwise be a security risk.
 
 ---
 
-## 4. Scheduling: Zeitgesteuerte Ausführung
+## 4. Scheduling: Time-based execution
 
-Statt nur manuell oder per Webhook zu starten, kannst du Pipelines **nach Zeitplan** laufen lassen (Cron oder Intervall).
+Instead of starting only manually or via webhook, you can run pipelines **on a schedule** (cron or interval).
 
-### In der pipeline.json (Schedule aus Code)
+### In pipeline.json (schedule from code)
 
-Du kannst den Zeitplan **direkt in der pipeline.json** definieren: `schedule_cron` (z.B. `"0 9 * * *"`) oder `schedule_interval_seconds` (z.B. `3600`). Optional begrenzen `schedule_start` und `schedule_end` (ISO-Datum/Zeit) den Zeitraum, in dem der Schedule aktiv ist. Beim Start des Orchestrators und nach Git-Sync werden daraus automatisch Scheduler-Jobs angelegt. Siehe [pipeline.json Referenz – Schedule](/docs/pipelines/referenz#schedule-cron--intervall-in-pipelinejson).
+You can define the schedule **directly in pipeline.json**: `schedule_cron` (e.g. `"0 9 * * *"`) or `schedule_interval_seconds` (e.g. `3600`). Optionally, `schedule_start` and `schedule_end` (ISO date/time) limit the period during which the schedule is active. On orchestrator startup and after Git sync, scheduler jobs are created automatically from this. See [pipeline.json reference – Schedule](/docs/pipelines/referenz#schedule-cron--intervall-in-pipelinejson).
 
-### Mehrere Run-Konfigurationen (`schedules`)
+### Multiple run configurations (`schedules`)
 
-Pro Pipeline kannst du **mehrere** geplante Runs mit unterschiedlichen Cron/Intervall, Env-Variablen, Zeiträumen und Ressourcen definieren. Dafür dient das optionale Array **`schedules`** in der pipeline.json. Jeder Eintrag hat eine eindeutige **`id`** (z. B. `"prod"`, `"staging"`) und kann eigene Werte für `schedule_cron`/`schedule_interval_seconds`, `schedule_start`/`schedule_end`, `default_env`, optional `encrypted_env`, sowie **pro Schedule Overrides** für `cpu_hard_limit`, `mem_hard_limit`, `cpu_soft_limit`, `mem_soft_limit`, `timeout`, `retry_attempts` und `retry_strategy` haben. Die Env-Variablen werden zusammengeführt: zuerst Pipeline-`default_env`, dann der Eintrag-`default_env`; danach Pipeline-`encrypted_env`, dann Eintrag-`encrypted_env`. So kannst du dieselbe Pipeline z. B. täglich für Production mit höheren Limits und mehr Retries und stündlich für Staging mit geringeren Ressourcen laufen lassen. Details und Beispiel: [pipeline.json Referenz – schedules](/docs/pipelines/referenz#mehrere-run-konfigurationen-schedules).
+Per pipeline you can define **multiple** scheduled runs with different cron/interval, env vars, time ranges, and resources. The optional **`schedules`** array in pipeline.json serves this purpose. Each entry has a unique **`id`** (e.g. `"prod"`, `"staging"`) and can have its own values for `schedule_cron`/`schedule_interval_seconds`, `schedule_start`/`schedule_end`, `default_env`, optional `encrypted_env`, as well as **per-schedule overrides** for `cpu_hard_limit`, `mem_hard_limit`, `cpu_soft_limit`, `mem_soft_limit`, `timeout`, `retry_attempts`, and `retry_strategy`. Env vars are merged: first pipeline `default_env`, then entry `default_env`; then pipeline `encrypted_env`, then entry `encrypted_env`. This lets you run the same pipeline e.g. daily for production with higher limits and more retries, and hourly for staging with lower resources. Details and example: [pipeline.json reference – schedules](/docs/pipelines/referenz#mehrere-run-konfigurationen-schedules).
 
-### In der UI
+### In the UI
 
-Unter der jeweiligen Pipeline (oder im Scheduler-Bereich) lassen sich **Cron-Ausdrücke** oder **Intervall** (z.B. alle 6 Stunden) einrichten. Die konkreten Felder hängen von der Fast-Flow-Version ab; typisch:
+Under the respective pipeline (or in the scheduler section) you can set up **cron expressions** or **intervals** (e.g. every 6 hours). The exact fields depend on the Fast-Flow version; typical:
 
-- **Cron:** z.B. `0 2 * * *` = täglich um 2:00 Uhr
-- **Intervall:** z.B. alle 3600 Sekunden
-- **Start/Ende:** optionaler Zeitraum (ISO-Datum/Zeit)
+- **Cron:** e.g. `0 2 * * *` = daily at 2:00 AM
+- **Interval:** e.g. every 3600 seconds
+- **Start/end:** optional time range (ISO date/time)
 
-### Wofür?
+### Use cases
 
-- **Täglich:** Reports, Daten-ETL, Aufräumen.
-- **Stündlich:** Aggregationen, Prüfungen.
-- **Wöchentlich:** Große Berechnungen, Archivistierung.
+- **Daily:** Reports, data ETL, cleanup.
+- **Hourly:** Aggregations, checks.
+- **Weekly:** Large computations, archiving.
 
-Die Terminplanung wird in der Datenbank (z.B. über den APScheduler) gespeichert. Details: [API](/docs/api/api) (Scheduler-Endpoints) und [Konfiguration](/docs/deployment/CONFIGURATION).
+Scheduling is stored in the database (e.g. via APScheduler). Details: [API](/docs/api/api) (scheduler endpoints) and [Configuration](/docs/deployment/CONFIGURATION).
 
 ---
 
-## 5. Webhooks: Externer Start
+## 5. Webhooks: External trigger
 
-Über einen **Webhook** kann ein externes System (CI/CD, anderer Service, Cron auf anderem Rechner) eine Pipeline anstoßen, ohne in der Fast-Flow-UI zu sein.
+Via a **webhook**, an external system (CI/CD, another service, cron on another machine) can trigger a pipeline without being in the Fast-Flow UI.
 
-### Aktivierung: `webhook_key` in `pipeline.json`
+### Activation: `webhook_key` in `pipeline.json`
 
-Webhooks sind aktiv, wenn in `pipeline.json` ein **`webhook_key`** auf Pipeline-Ebene und/oder pro Eintrag in **`schedules[]`** gesetzt ist (nicht leer). Ohne jeden `webhook_key` sind Webhooks für diese Pipeline deaktiviert.
+Webhooks are active when a **`webhook_key`** is set at pipeline level and/or per entry in **`schedules[]`** (not empty). Without any `webhook_key`, webhooks are disabled for that pipeline.
 
-**Pipeline-Level** (ein Key für die ganze Pipeline, Run mit Standard-Config):
+**Pipeline level** (one key for the entire pipeline, run with default config):
 
 ```json
 {
-  "description": "Sync-Job",
+  "description": "Sync job",
   "webhook_key": "dein-geheimer-schluessel"
 }
 ```
 
-**Pro Schedule** (eigener Key pro Run-Konfiguration): In jedem Eintrag von `schedules[]` kann optional **`webhook_key`** stehen. Die aufgerufene URL entscheidet dann, welche Run-Konfiguration (run_config_id) verwendet wird – z. B. getrennte Keys für „prod“ und „staging“. Jeder `webhook_key` darf pro Pipeline nur **einmal** vorkommen (Pipeline-Level und alle Schedules zusammen); Duplikate führen beim Laden der pipeline.json zu einem Fehler.
+**Per schedule** (separate key per run configuration): Each entry in `schedules[]` can optionally include **`webhook_key`**. The called URL then determines which run configuration (run_config_id) is used – e.g. separate keys for "prod" and "staging". Each `webhook_key` may appear only **once** per pipeline (pipeline level and all schedules combined); duplicates cause an error when loading pipeline.json.
 
 ```json
 {
@@ -192,42 +192,42 @@ Webhooks sind aktiv, wenn in `pipeline.json` ein **`webhook_key`** auf Pipeline-
 }
 ```
 
-**Wichtig:** Schlüssel **geheim** halten – jeder, der die Webhook-URL kennt, kann die Pipeline (bzw. den zugehörigen Schedule) starten.
+**Important:** Keep keys **secret** – anyone who knows the webhook URL can start the pipeline (or the associated schedule).
 
-### Endpoint und Aufruf
+### Endpoint and invocation
 
-- **Methode:** `POST`
+- **Method:** `POST`
 - **URL:** `/api/webhooks/{pipeline_name}/{webhook_key}`
-- **Body:** optional (leer oder `{}`). Der Schlüssel steht im Pfad, ein `{"webhook_key": "..."}` im Body ist nicht nötig.
+- **Body:** optional (empty or `{}`). The key is in the path; a `{"webhook_key": "..."}` in the body is not required.
 
-Beispiel:
+Example:
 
 ```bash
 curl -X POST "https://deine-instanz.de/api/webhooks/data_sync/dein-geheimer-schluessel"
 ```
 
-**Antworten:** 200 mit Run-Infos; **401** bei falschem `webhook_key`; **404** wenn die Pipeline nicht existiert, deaktiviert ist oder Webhooks für sie aus sind.
+**Responses:** 200 with run info; **401** for wrong `webhook_key`; **404** if the pipeline does not exist, is disabled, or webhooks are off for it.
 
-Die **komplette Webhook-URL** (mit deinem Key) siehst du in der Pipeline-Detailansicht der UI und kannst sie dort kopieren. Details: [pipeline.json Referenz – Webhooks](/docs/pipelines/referenz#webhooks-pipeline-per-http-auslösen) und [API](/docs/api/api).
+The **complete webhook URL** (with your key) is shown in the pipeline detail view in the UI and can be copied there. Details: [pipeline.json reference – Webhooks](/docs/pipelines/referenz#webhooks-pipeline-per-http-auslösen) and [API](/docs/api/api).
 
-### Typische Nutzung
+### Typical usage
 
-- **CI/CD:** Nach Build oder Deploy einen Smoke-Test oder Daten-Import starten.
-- **Externe Tools:** Wenn ein anderes System „fertig“ ist, triggert es die nächste Stufe in Fast-Flow.
-- **Ereignisgesteuert:** In Kombination mit einem Message-Broker oder einer Queue (der Aufrufer liest die Queue und ruft den Webhook auf).
+- **CI/CD:** Start a smoke test or data import after build or deploy.
+- **External tools:** When another system is "done", it triggers the next stage in Fast-Flow.
+- **Event-driven:** In combination with a message broker or queue (the caller reads the queue and calls the webhook).
 
 ---
 
-## 6. Ressourcen-Limits (CPU, RAM)
+## 6. Resource limits (CPU, RAM)
 
-Damit eine Pipeline den Rest des Systems nicht überlastet, kannst du **CPU** und **RAM** begrenzen. Das passiert über die `pipeline.json` und wirkt als **Docker-Limits** im Container.
+To prevent a pipeline from overloading the rest of the system, you can limit **CPU** and **RAM**. This is done via `pipeline.json` and applies as **Docker limits** in the container.
 
-### Hard Limits
+### Hard limits
 
-- **`cpu_hard_limit`:** CPU-Kerne (z.B. `1.0` = ein Kern, `0.5` = halber Kern). Wird der Container CPU-intensiver, wird er gedrosselt.
-- **`mem_hard_limit`:** RAM, z.B. `"512m"`, `"1g"`, `"2g"`. Überschreitung führt zum **OOM-Kill** (Exit-Code 137) – die Pipeline ist **FAILED**.
+- **`cpu_hard_limit`:** CPU cores (e.g. `1.0` = one core, `0.5` = half a core). If the container becomes CPU-intensive, it is throttled.
+- **`mem_hard_limit`:** RAM, e.g. `"512m"`, `"1g"`, `"2g"`. Exceeding it leads to **OOM kill** (exit code 137) – the pipeline is **FAILED**.
 
-Beispiel:
+Example:
 
 ```json
 {
@@ -236,22 +236,22 @@ Beispiel:
 }
 ```
 
-### Soft Limits (nur Monitoring)
+### Soft limits (monitoring only)
 
-- **`cpu_soft_limit`** und **`mem_soft_limit`** werden **nicht** als harte Obergrenze durchgesetzt. Sie dienen der **Überwachung**; Überschreitungen können in der UI als Warnung erscheinen. Nützlich, um zu sehen, ob du die Hard-Limits anheben solltest.
+- **`cpu_soft_limit`** and **`mem_soft_limit`** are **not** enforced as hard caps. They serve **monitoring**; exceeding them may appear as a warning in the UI. Useful to see whether you should raise the hard limits.
 
-Ausführlich: [pipeline.json Referenz](/docs/pipelines/referenz).
+Full details: [pipeline.json reference](/docs/pipelines/referenz).
 
 ---
 
-## 7. Fehlerbehandlung und Logging
+## 7. Error handling and logging
 
-### 7.1 Exceptions und Exit-Code
+### 7.1 Exceptions and exit code
 
-- **Unbehandelte Exception** → Python beendet mit Exit-Code ≠ 0 → Run **FAILED**.
-- **`sys.exit(0)`** → Erfolg. **`sys.exit(1)`** (oder anderer Wert ≠ 0) → Fehler.
+- **Unhandled exception** → Python exits with exit code ≠ 0 → run **FAILED**.
+- **`sys.exit(0)`** → success. **`sys.exit(1)`** (or any value ≠ 0) → failure.
 
-Für bessere Logs und Kontrolle:
+For better logs and control:
 
 ```python
 import sys
@@ -259,124 +259,124 @@ import traceback
 
 def main():
     try:
-        # ... Logik ...
+        # ... logic ...
         return 0
     except ConnectionError as e:
-        print("Verbindungsfehler:", e, file=sys.stderr)
+        print("Connection error:", e, file=sys.stderr)
         traceback.print_exc()
         return 1
     except ValueError as e:
-        print("Datenfehler:", e, file=sys.stderr)
+        print("Data error:", e, file=sys.stderr)
         return 2
 
 if __name__ == "__main__":
     sys.exit(main())
 ```
 
-`traceback.print_exc()` erscheint in den **Logs** und hilft beim Debugging.
+`traceback.print_exc()` appears in the **logs** and helps with debugging.
 
-### 7.2 Logging-Modul
+### 7.2 Logging module
 
-Statt nur `print` kannst du das Standard-**`logging`**-Modul nutzen:
+Instead of only `print`, you can use the standard **`logging`** module:
 
 ```python
 import logging
 import os
 
-# Optional: LOG_LEVEL aus Env (z.B. aus default_env oder UI)
+# Optional: LOG_LEVEL from env (e.g. from default_env or UI)
 level = os.getenv("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=getattr(logging, level, logging.INFO))
 logger = logging.getLogger(__name__)
 
 def main():
-    logger.info("Starte Verarbeitung ...")
+    logger.info("Starting processing ...")
     # ...
-    logger.warning("Keine neuen Daten.")
-    logger.info("Fertig.")
+    logger.warning("No new data.")
+    logger.info("Done.")
     return 0
 ```
 
-`logging` schreibt nach **stderr**, das in den Fast-Flow-Logs erscheint. So behältst du die Logs auch bei längeren Pipelines übersichtlich.
+`logging` writes to **stderr**, which appears in Fast-Flow logs. This keeps logs manageable even for longer pipelines.
 
 ---
 
-## 8. Längere und robustere Jobs
+## 8. Longer and more robust jobs
 
-### 8.1 In kleinen Schritten (Chunks) arbeiten
+### 8.1 Work in small steps (chunks)
 
-Sehr große Datenmengen oder viele API-Calls solltest du in **Chunks** verarbeiten:
+Very large data volumes or many API calls should be processed in **chunks**:
 
-- Weniger Risiko, den Timeout zu treffen.
-- Bei Fehlern ist der Schaden begrenzt; du kannst bei einem definierten Punkt neu ansetzen.
+- Less risk of hitting the timeout.
+- On failure, damage is limited; you can resume from a defined point.
 
-Beispiel-Idee: 100.000 Zeilen → je 1.000 verarbeiten, Fortschritt loggen. Optional einen **Checkpoint** (z.B. „bis Zeile X erledigt“) in einer Datei oder DB speichern und beim nächsten Run fortfahren.
+Example idea: 100,000 rows → process 1,000 at a time, log progress. Optionally store a **checkpoint** (e.g. "up to row X done") in a file or DB and continue on the next run.
 
-### 8.2 Idempotenz
+### 8.2 Idempotency
 
-Wenn eine Pipeline **mehrmals** läuft (Retry, doppelter Webhook, geplanter Lauf), sollte das Ergebnis **idempotent** sein: Zweimal ausführen = gleicher Endzustand wie einmal. Typische Mittel:
+When a pipeline runs **multiple times** (retry, duplicate webhook, scheduled run), the result should be **idempotent**: running twice = same end state as running once. Typical approaches:
 
-- **„Upsert“** statt blindem Anhängen (z.B. in DB oder Dateisystem).
-- **Deduplizierung** über IDs oder Zeitstempel.
-- **Temporäre Dateien** mit eindeutigem Namen und Aufräumen am Ende.
+- **"Upsert"** instead of blind append (e.g. in DB or filesystem).
+- **Deduplication** via IDs or timestamps.
+- **Temporary files** with unique names and cleanup at the end.
 
-### 8.3 Externe Dienste (APIs, Datenbanken, Objektstorage)
+### 8.3 External services (APIs, databases, object storage)
 
-- **APIs:** `requests` oder `httpx`, Timeouts setzen, Retries im Code (z.B. `tenacity`) für kurze Netzeinbrüche. Secrets (API-Keys) aus `os.getenv`.
-- **Datenbanken:** Treiber in `requirements.txt` (z.B. `psycopg2`, `pymysql`, `sqlalchemy`). Connection-Strings als Secrets/Parameter.
-- **S3-ähnlicher Storage:** `boto3` oder passende Bibliothek, Credentials aus Env. Bei großen Dateien: Streaming oder Chunk-Transfer, um RAM-Limits zu beachten.
-
----
-
-## 9. Übersicht: Wann was nutzen?
-
-| Ziel | Wo / Wie |
-|------|----------|
-| **Wiederholungen bei Fehlern** | `retry_attempts` in `pipeline.json` oder `RETRY_ATTEMPTS` global |
-| **Maximale Laufzeit** | `timeout` in `pipeline.json` oder `CONTAINER_TIMEOUT` |
-| **Geheime Werte** | Secrets in der UI, `os.getenv("NAME")` im Code |
-| **Unkritische Defaults** | `default_env` in `pipeline.json` |
-| **Zeitplan** | Scheduling in der UI (Cron/Intervall) |
-| **Start von außen** | Webhook-URL, `POST`-Request |
-| **CPU/RAM begrenzen** | `cpu_hard_limit`, `mem_hard_limit` in `pipeline.json` |
-| **Struktur und Wartbarkeit** | `main()`, Module, `logging` |
-| **Große Daten / lange Läufe** | Chunks, Checkpoints, idempotente Logik |
-| **Wartezeit zwischen Retries** | `retry_strategy` in `pipeline.json` (exponential_backoff, fixed_delay, custom_schedule) |
-| **Webhook-Trigger** | `webhook_key` in `pipeline.json`, `POST /api/webhooks/{pipeline_name}/{webhook_key}` |
-| **Notebook: Retries pro Zelle** | `type: "notebook"` + `cells` in `pipeline.json` und/oder Zellen-Metadaten `fastflow`. Siehe [Notebook-Pipelines](/docs/pipelines/notebook-pipelines). |
+- **APIs:** `requests` or `httpx`, set timeouts, retries in code (e.g. `tenacity`) for brief network outages. Secrets (API keys) from `os.getenv`.
+- **Databases:** Driver in `requirements.txt` (e.g. `psycopg2`, `pymysql`, `sqlalchemy`). Connection strings as secrets/parameters.
+- **S3-like storage:** `boto3` or appropriate library, credentials from env. For large files: streaming or chunk transfer to respect RAM limits.
 
 ---
 
-## 10. Best Practices
+## 9. Overview: When to use what?
 
-- **Sauberer Code:** Halte `main.py` modular. Nutze Hilfsfunktionen und gern weitere Module im gleichen Ordner.
-- **Umgebungsvariablen:** Konfiguration und Secrets über `os.getenv("NAME")`. Geheime Werte in der **Fast-Flow-UI** als Secrets verwalten, nicht in `pipeline.json` oder im Code.
-- **Logs:** Einfach `print()` nutzen. Fast-Flow erfasst **stdout** und **stderr** und streamt sie in die UI. Für strukturiertere Ausgaben: `logging` (siehe Abschnitt 7).
+| Goal | Where / How |
+|------|-------------|
+| **Retries on failure** | `retry_attempts` in `pipeline.json` or `RETRY_ATTEMPTS` globally |
+| **Maximum runtime** | `timeout` in `pipeline.json` or `CONTAINER_TIMEOUT` |
+| **Secret values** | Secrets in the UI, `os.getenv("NAME")` in code |
+| **Non-critical defaults** | `default_env` in `pipeline.json` |
+| **Schedule** | Scheduling in the UI (cron/interval) |
+| **External trigger** | Webhook URL, `POST` request |
+| **Limit CPU/RAM** | `cpu_hard_limit`, `mem_hard_limit` in `pipeline.json` |
+| **Structure and maintainability** | `main()`, modules, `logging` |
+| **Large data / long runs** | Chunks, checkpoints, idempotent logic |
+| **Wait time between retries** | `retry_strategy` in `pipeline.json` (exponential_backoff, fixed_delay, custom_schedule) |
+| **Webhook trigger** | `webhook_key` in `pipeline.json`, `POST /api/webhooks/{pipeline_name}/{webhook_key}` |
+| **Notebook: retries per cell** | `type: "notebook"` + `cells` in `pipeline.json` and/or cell metadata `fastflow`. See [Notebook Pipelines](/docs/pipelines/notebook-pipelines). |
 
 ---
 
-## 11. Support: „Wenn es lokal läuft, läuft es in Fast-Flow“
+## 10. Best practices
 
-Fast-Flow steht dafür, dass **reines Python, das lokal läuft, auch im Orchestrator läuft** – gleiche Laufzeit (uv), keine eigenen Pipeline-Images.
+- **Clean code:** Keep `main.py` modular. Use helper functions and additional modules in the same folder.
+- **Environment variables:** Configuration and secrets via `os.getenv("NAME")`. Manage secret values in the **Fast-Flow UI** as secrets, not in `pipeline.json` or code.
+- **Logs:** Simply use `print()`. Fast-Flow captures **stdout** and **stderr** and streams them to the UI. For more structured output: `logging` (see section 7).
 
-Wenn dein Skript **lokal** durchläuft, im Orchestrator aber **nicht**, bitte melden:
+---
+
+## 11. Support: "If it runs locally, it runs in Fast-Flow"
+
+Fast-Flow stands for **plain Python that runs locally also running in the orchestrator** – same runtime (uv), no custom pipeline images.
+
+If your script **runs locally** but **not** in the orchestrator, please report:
 
 - **Fast-Flow Issues:** [GitHub Issues](https://github.com/ttuhin03/fastflow/issues)
 
-**Angaben, die helfen:**
+**Information that helps:**
 
-- `main.py` (Code)
-- `pipeline.json` und `requirements.txt`
-- Logs aus der Orchestrator-UI (Run-Logs)
+- `main.py` (code)
+- `pipeline.json` and `requirements.txt`
+- Logs from the orchestrator UI (run logs)
 
-Weitere Schritte und typische Ursachen: [Troubleshooting – Pipeline läuft lokal, im Orchestrator nicht](/docs/troubleshooting#pipeline-lokal-orchestrator-fehlt).
+Further steps and typical causes: [Troubleshooting – Pipeline runs locally, not in orchestrator](/docs/troubleshooting#pipeline-lokal-orchestrator-fehlt).
 
 ---
 
-## Siehe auch
+## See also
 
-- [pipeline.json Referenz](/docs/pipelines/referenz) – alle Felder inkl. Soft-Limits, Tags, `enabled`, `type`, `cells`
-- [Notebook-Pipelines](/docs/pipelines/notebook-pipelines) – Jupyter-Notebooks, Zellen-Retries, Logs pro Zelle
-- [Pipelines – Übersicht](/docs/pipelines/uebersicht) – Grundstruktur, `main.py`, `main.ipynb`, `requirements.txt`
-- [Erste Pipeline](/docs/pipelines/erste-pipeline) – Einstieg von null
-- [Konfiguration](/docs/deployment/CONFIGURATION) – globale Werte (`RETRY_ATTEMPTS`, `CONTAINER_TIMEOUT`, …)
-- [API](/docs/api/api) – Scheduler, Webhooks, Runs
+- [pipeline.json reference](/docs/pipelines/referenz) – all fields including soft limits, tags, `enabled`, `type`, `cells`
+- [Notebook Pipelines](/docs/pipelines/notebook-pipelines) – Jupyter notebooks, cell retries, logs per cell
+- [Pipelines – Overview](/docs/pipelines/uebersicht) – basic structure, `main.py`, `main.ipynb`, `requirements.txt`
+- [First Pipeline](/docs/pipelines/erste-pipeline) – getting started from zero
+- [Configuration](/docs/deployment/CONFIGURATION) – global values (`RETRY_ATTEMPTS`, `CONTAINER_TIMEOUT`, …)
+- [API](/docs/api/api) – scheduler, webhooks, runs

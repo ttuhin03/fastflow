@@ -1,8 +1,8 @@
 import React, {useState} from 'react';
 
 /**
- * Erzeugt einen Fernet-kompatiblen Key (32 Bytes, Base64url) im Browser
- * und zeigt ihn mit Kopieren-Button an.
+ * Generates a Fernet-compatible key (32 bytes, Base64url) in the browser
+ * and displays it with a copy button.
  */
 function generateFernetKey(): string {
   const bytes = new Uint8Array(32);
@@ -31,7 +31,7 @@ export default function GenerateEncryptionKey(): React.ReactElement {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback in älteren Browsern optional
+      // Optional fallback for older browsers
     }
   };
 
@@ -42,7 +42,7 @@ export default function GenerateEncryptionKey(): React.ReactElement {
         className="button button--primary"
         onClick={handleGenerate}
       >
-        Schlüssel erzeugen
+        Generate key
       </button>
       {key && (
         <div style={{marginTop: '0.75rem'}}>
@@ -70,7 +70,7 @@ export default function GenerateEncryptionKey(): React.ReactElement {
               className="button button--secondary button--sm"
               onClick={handleCopy}
             >
-              {copied ? 'Kopiert' : 'Kopieren'}
+              {copied ? 'Copied' : 'Copy'}
             </button>
           </div>
         </div>

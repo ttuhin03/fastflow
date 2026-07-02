@@ -2,38 +2,38 @@
 sidebar_position: 2
 ---
 
-# Schnellstart
+# Quick Start
 
-**~5 Min.** – Fast-Flow in wenigen Minuten starten.
+**~5 min.** – Get Fast-Flow running in a few minutes.
 
-## Voraussetzungen
+## Prerequisites
 
 - **Docker** & Docker Compose  
-- **Python 3.11+** (nur für lokale Entwicklung)
+- **Python 3.11+** (for local development only)
 
-## Option 1: Docker (empfohlen für Produktion)
+## Option 1: Docker (recommended for production)
 
 ```bash
-# 1. .env vorbereiten
+# 1. Prepare .env
 cp .env.example .env
 
-# 2. Encryption Key generieren (WICHTIG!)
-# Füge den ausgegebenen Key unter ENCRYPTION_KEY in .env ein.
-# Für Login: GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, INITIAL_ADMIN_EMAIL (siehe Login-Abschnitt).
+# 2. Generate encryption key (IMPORTANT!)
+# Add the output key to ENCRYPTION_KEY in .env.
+# For login: GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, INITIAL_ADMIN_EMAIL (see Login section).
 python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 
-# 3. Starten
+# 3. Start
 docker compose up -d
 
-# 4. Logs ansehen
+# 4. View logs
 docker compose logs -f orchestrator
 ```
 
 **UI:** [http://localhost:8000](http://localhost:8000)
 
-![Dashboard nach dem Start](./img/dashboard.png)
+![Dashboard after startup](./img/dashboard.png)
 
-## Option 2: Lokal (für Entwicklung)
+## Option 2: Local (for development)
 
 ```bash
 # 1. Setup
@@ -41,18 +41,18 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-# 2. Konfiguration
+# 2. Configuration
 cp .env.example .env
-# -> ENCRYPTION_KEY in .env setzen
+# -> Set ENCRYPTION_KEY in .env
 
-# 3. Starten
+# 3. Start
 # Terminal 1 – Backend:
 uvicorn app.main:app --reload
 # Terminal 2 – Frontend:
 cd frontend && npm run dev
 ```
 
-**Optional – Schnelltest mit minimaler Pipeline:** Ordner `pipelines/hello/` anlegen und `main.py` mit folgendem Inhalt (Standard `PIPELINES_DIR` ist `./pipelines`):
+**Optional – quick test with a minimal pipeline:** Create folder `pipelines/hello/` and `main.py` with the following content (default `PIPELINES_DIR` is `./pipelines`):
 
 ```python
 # pipelines/hello/main.py
@@ -60,11 +60,11 @@ if __name__ == "__main__":
     print("Hello from Fast-Flow!")
 ```
 
-Nach Neustart des Backends erscheint die Pipeline in der UI; lokal testen mit `uv run main.py` (im Ordner `pipelines/hello/`).
+After restarting the backend, the pipeline appears in the UI; test locally with `uv run main.py` (in the `pipelines/hello/` folder).
 
 ## Option 3: Kubernetes
 
-Fast-Flow läuft neben Docker auch **nativ auf Kubernetes**. Pipeline-Runs laufen dann als Kubernetes-Jobs (kein Docker-Socket nötig). Vollständige Anleitung: [Kubernetes Deployment](/docs/deployment/K8S) sowie das [k8s/README.md](https://github.com/ttuhin03/fastflow/blob/main/k8s/README.md) im Repository.
+Fast-Flow also runs **natively on Kubernetes** alongside Docker. Pipeline runs then execute as Kubernetes Jobs (no Docker socket required). Full guide: [Kubernetes Deployment](/docs/deployment/K8S) and the [k8s/README.md](https://github.com/ttuhin03/fastflow/blob/main/k8s/README.md) in the repository.
 
 ## Login (GitHub, Google, Microsoft, Custom OAuth)
 
@@ -72,19 +72,19 @@ Fast-Flow läuft neben Docker auch **nativ auf Kubernetes**. Pipeline-Runs laufe
    **Google:** Callback `{BASE_URL}/api/auth/google/callback`  
    **Microsoft:** Callback `{BASE_URL}/api/auth/microsoft/callback`  
    **Custom OAuth:** Callback `{BASE_URL}/api/auth/custom/callback`
-2. In **`.env`:** mindestens einen Provider vollständig setzen (`GITHUB_*`, `GOOGLE_*`, `MICROSOFT_*` oder `CUSTOM_OAUTH_*`) sowie `INITIAL_ADMIN_EMAIL`.
-3. **Docker (alles :8000):** `FRONTEND_URL` weglassen oder `=http://localhost:8000`, `BASE_URL=http://localhost:8000`.  
+2. In **`.env`:** configure at least one provider completely (`GITHUB_*`, `GOOGLE_*`, `MICROSOFT_*`, or `CUSTOM_OAUTH_*`) as well as `INITIAL_ADMIN_EMAIL`.
+3. **Docker (everything on :8000):** omit `FRONTEND_URL` or set `=http://localhost:8000`, `BASE_URL=http://localhost:8000`.  
    **Dev (Frontend :3000, Backend :8000):** `FRONTEND_URL=http://localhost:3000`, `BASE_URL=http://localhost:8000`.
 
 :::tip
-Ausführliche Schritte, Einladung, Konto verknüpfen, Beitrittsanfragen: [OAuth (GitHub, Google, Microsoft, Custom)](/docs/oauth/readme).
+Detailed steps, invitations, account linking, join requests: [OAuth (GitHub, Google, Microsoft, Custom)](/docs/oauth/readme).
 :::
 
-## Nächste Schritte
+## Next steps
 
-- [**Setup-Anleitung**](/docs/setup) – Ausführliche Erklärung der Env-Variablen, OAuth, Verzeichnisse
-- [**Erste Pipeline**](/docs/pipelines/erste-pipeline) – Tutorial: erste Pipeline von null an schreiben
-- [**Pipelines – Übersicht**](/docs/pipelines/uebersicht) – Struktur, `main.py`, `requirements.txt`; Volume oder Git-Sync
-- [**Pipeline-Template**](https://github.com/ttuhin03/fastflow-pipeline-template) – vorgefertigte Struktur
-- [**Architektur**](/docs/architektur) – Runner-Cache, Container-Lifecycle
-- [**Konfiguration**](/docs/deployment/CONFIGURATION) – alle Environment-Variablen (Referenz)
+- [**Setup Guide**](/docs/setup) – Detailed explanation of env variables, OAuth, directories
+- [**First Pipeline**](/docs/pipelines/erste-pipeline) – Tutorial: write your first pipeline from scratch
+- [**Pipelines – Overview**](/docs/pipelines/uebersicht) – Structure, `main.py`, `requirements.txt`; volume or Git sync
+- [**Pipeline Template**](https://github.com/ttuhin03/fastflow-pipeline-template) – pre-built structure
+- [**Architecture**](/docs/architektur) – Runner cache, container lifecycle
+- [**Configuration**](/docs/deployment/CONFIGURATION) – all environment variables (reference)

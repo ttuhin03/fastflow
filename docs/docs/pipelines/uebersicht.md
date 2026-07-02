@@ -2,34 +2,34 @@
 sidebar_position: 1
 ---
 
-# Pipelines – Übersicht
+# Pipelines – Overview
 
-Das Pipeline-Repository wird als Volume in den Orchestrator-Container gemountet (oder per Git-Sync bereitgestellt). Pipelines werden **automatisch erkannt** – **Zero-Config Discovery**: keine Registrierung in DB oder UI, Code pushen reicht.
+The pipeline repository is mounted as a volume in the orchestrator container (or provided via Git sync). Pipelines are **discovered automatically** – **Zero-Config Discovery**: no registration in the database or UI; pushing code is enough.
 
 :::tip
-Nutze das **[fastflow-pipeline-template](https://github.com/ttuhin03/fastflow-pipeline-template)** für einen schnellen Einstieg, vorgefertigte Beispiele und eine saubere Struktur.
+Use the **[fastflow-pipeline-template](https://github.com/ttuhin03/fastflow-pipeline-template)** for a quick start, ready-made examples, and a clean structure.
 :::
 
-## Pipeline hinzufügen (Zero-Config Discovery)
+## Adding a pipeline (Zero-Config Discovery)
 
-Du musst Pipelines **nicht** in einer Datenbank oder der UI anlegen. Vier Schritte:
+You do **not** need to create pipelines in a database or the UI. Four steps:
 
-1. **Ordner anlegen:** Neues Verzeichnis unter `pipelines/` (z.B. `pipelines/data_sync/`). Der **Ordnername** = **Pipeline-Name** in der UI.
-2. **Einstieg:** Entweder **`main.py`** (Skript-Pipeline) oder **`main.ipynb`** (Notebook-Pipeline, mit `"type": "notebook"` in `pipeline.json`). Fast-Flow führt Skripte bzw. das Notebook Zelle für Zelle aus.
-3. **`requirements.txt` (optional):** Externe Pakete. Bei Notebook-Pipelines mindestens `nbclient`, `nbformat`, `ipykernel`. [Notebook-Pipelines](/docs/pipelines/notebook-pipelines).
-4. **`pipeline.json` (optional):** Limits, Retries, Timeout, Beschreibung, Tags, `python_version`, `webhook_key`; bei Notebooks zusätzlich **`cells`** für Zellen-Retries. [Referenz](/docs/pipelines/referenz).
+1. **Create a folder:** New directory under `pipelines/` (e.g. `pipelines/data_sync/`). The **folder name** = **pipeline name** in the UI.
+2. **Entry point:** Either **`main.py`** (script pipeline) or **`main.ipynb`** (notebook pipeline, with `"type": "notebook"` in `pipeline.json`). Fast-Flow runs scripts or the notebook cell by cell.
+3. **`requirements.txt` (optional):** External packages. For notebook pipelines, at minimum `nbclient`, `nbformat`, `ipykernel`. [Notebook Pipelines](/docs/pipelines/notebook-pipelines).
+4. **`pipeline.json` (optional):** Limits, retries, timeout, description, tags, `python_version`, `webhook_key`; for notebooks additionally **`cells`** for cell retries. [Reference](/docs/pipelines/referenz).
 
-Nach Sync bzw. Neustart erscheint die Pipeline in der UI. Kein `docker build`, kein manueller Upload.
+After sync or restart, the pipeline appears in the UI. No `docker build`, no manual upload.
 
-**So sieht die Pipeline-Liste in der UI aus:**
+**What the pipeline list looks like in the UI:**
 
-![Pipelines-Übersicht](../img/pipelines-pipelines.png)
+![Pipelines overview](../img/pipelines-pipelines.png)
 
-**Abhängigkeiten & Sicherheit:** Welche Libraries welche Pipelines nutzen und ob bekannte Schwachstellen (CVE) vorliegen, siehst du unter **Abhängigkeiten** in der UI. Optional: [automatische tägliche Prüfung und E-Mail/Teams-Benachrichtigung bei Fund](/docs/pipelines/abhaengigkeiten-sicherheit).
+**Dependencies & security:** Which libraries each pipeline uses and whether known vulnerabilities (CVEs) exist is shown under **Dependencies** in the UI. Optional: [automatic daily checks and email/Teams notification when findings are detected](/docs/pipelines/abhaengigkeiten-sicherheit).
 
 ---
 
-## Verzeichnisstruktur
+## Directory structure
 
 ```
 pipelines/
@@ -37,119 +37,119 @@ pipelines/
 │   ├── main.py
 │   ├── requirements.txt
 │   └── pipeline.json
-├── pipeline_b/              # Eigenes JSON: {pipeline_name}.json statt pipeline.json
+├── pipeline_b/              # Custom JSON: {pipeline_name}.json instead of pipeline.json
 │   ├── main.py
 │   └── data_processor.json
-├── pipeline_c/              # Minimal: nur main.py
+├── pipeline_c/              # Minimal: main.py only
 │   └── main.py
-├── notebook_example/        # Notebook-Pipeline: main.ipynb, type: "notebook", cells für Zellen-Retries
+├── notebook_example/        # Notebook pipeline: main.ipynb, type: "notebook", cells for cell retries
 │   ├── main.ipynb
 │   ├── pipeline.json
 │   └── requirements.txt
-└── failing_pipeline/        # Beispiel: bewusst fehlerschlagend (für UI/Retry-Tests)
+└── failing_pipeline/        # Example: intentionally failing (for UI/retry tests)
     ├── main.py
     └── pipeline.json
 ```
 
-Weitere typische Szenarien (z.B. mit Verzögerung, OOM-Test, Retry-Demo) findest du im [Pipeline-Template](https://github.com/ttuhin03/fastflow-pipeline-template).
+More typical scenarios (e.g. with delay, OOM test, retry demo) are available in the [Pipeline Template](https://github.com/ttuhin03/fastflow-pipeline-template).
 
 ---
 
-## Lokal testen: „If it runs, it runs“
+## Local testing: "If it runs, it runs"
 
-Ein häufiges Problem bei Orchestratoren: **Lokal läuft alles, in der Produktionsumgebung nicht** – weil Images, Python-Versionen oder Pfade abweichen.
+A common problem with orchestrators: **everything works locally, but not in production** – because images, Python versions, or paths differ.
 
-Fast-Flow nutzt **uv** und eine einheitliche Laufzeitumgebung. **Lokal ist identisch mit dem Orchestrator.**
+Fast-Flow uses **uv** and a unified runtime environment. **Local is identical to the orchestrator.**
 
-Test in Sekunden:
+Test in seconds:
 
 ```bash
 cd pipelines/pipeline_a
-uv pip install -r requirements.txt   # oder: pip install -r requirements.txt
+uv pip install -r requirements.txt   # or: pip install -r requirements.txt
 python main.py
 ```
 
 :::important
-**Wenn das Skript hier erfolgreich durchläuft, läuft es auch im Fast-Flow-Orchestrator.** Kein separates Docker-Image für deine Pipeline nötig.
+**If the script completes successfully here, it will also run in the Fast-Flow orchestrator.** No separate Docker image for your pipeline required.
 :::
 
-Entsprechender Befehl wie im Container: `uv run --with-requirements requirements.txt main.py` (ohne vorheriges `pip install`).
+Equivalent command as in the container: `uv run --with-requirements requirements.txt main.py` (without prior `pip install`).
 
 ---
 
-## JIT-Effekt (Just-In-Time)
+## JIT effect (Just-In-Time)
 
-Fast-Flow nutzt **keine** eigenen Docker-Images pro Pipeline, sondern JIT-Containerisierung:
+Fast-Flow does **not** use its own Docker images per pipeline, but JIT containerization:
 
-| Aspekt | Beschreibung |
-|--------|--------------|
-| **Sofort live** | Kein 5‑Minuten-`docker build` und `docker push`. Nach `git push` und Sync ist der Code lauffähig. |
-| **uv** | Dependencies werden zur Laufzeit mit `uv` installiert. |
-| **Python-Version** | Beliebig pro Pipeline (z.B. 3.10, 3.11, 3.12) über `python_version` in pipeline.json. |
-| **Caching** | Projektweiter, geteilter uv-Cache → Installation oft **&lt; 500 ms** bei gecachten Paketen. |
-| **Isolation** | Jeder Run läuft in einem **sauberen, isolierten** Docker-Container (Sicherheit, Ressourcenbegrenzung). |
+| Aspect | Description |
+|--------|-------------|
+| **Live immediately** | No 5-minute `docker build` and `docker push`. After `git push` and sync, the code is runnable. |
+| **uv** | Dependencies are installed at runtime with `uv`. |
+| **Python version** | Any per pipeline (e.g. 3.10, 3.11, 3.12) via `python_version` in pipeline.json. |
+| **Caching** | Project-wide, shared uv cache → installation often **&lt; 500 ms** for cached packages. |
+| **Isolation** | Each run executes in a **clean, isolated** Docker container (security, resource limits). |
 
 ---
 
-## Beispiel-Galerie (Typische Szenarien)
+## Example gallery (typical scenarios)
 
-| Szenario | Beschreibung | Typische Dateien |
-|----------|--------------|------------------|
-| **Standard** | Env-Vars, Dependencies, Limits | `main.py`, `requirements.txt`, `pipeline.json` |
-| **Minimal** | Nur Python, keine Deps | `main.py` |
-| **Eigenes JSON** | Metadaten unter anderem Namen | `main.py`, `{pipeline_name}.json` |
-| **Fehler-Test** | Bewusst `FAILED` (z.B. für UI/Retry) | `main.py` mit `sys.exit(1)` oder Exception, optional `pipeline.json` |
-| **Laufzeit-Test** | Verzögerung (z.B. `time.sleep(20)`) zum Prüfen von Status/Logs | `main.py`, ggf. `pipeline.json` (timeout) |
-| **Retry-Demo** | Zufälliger Erfolg/Fehler zur Erprobung von `retry_attempts`/`retry_strategy` | `main.py`, `pipeline.json` |
-| **Ressourcen-Limits** | OOM- oder CPU-Test mit `mem_hard_limit`/`cpu_hard_limit` | `main.py` (z.B. Speicher allokieren), `pipeline.json` |
-| **Timeout-Demo** | Timeout pro Pipeline testen: Run wird nach X Sekunden mit INTERRUPTED beendet. Siehe [pipeline.json Referenz – timeout](/docs/pipelines/referenz#pipeline-konfiguration). | `main.py`, `pipeline.json` mit `timeout` (im Template: **`timeout_example`**) |
-| **Verschiedene Python-Versionen** | Jede Pipeline mit eigener Version (z.B. A mit 3.11, B mit 3.12) | `main.py`, `pipeline.json` mit `python_version` |
-| **Notebook-Pipeline** | Jupyter-Notebook Zelle für Zelle, Zellen-Retries, Logs pro Zelle. Siehe [Notebook-Pipelines](/docs/pipelines/notebook-pipelines). | `main.ipynb`, `pipeline.json` (`type: "notebook"`, optional `cells`) |
+| Scenario | Description | Typical files |
+|----------|-------------|-----------------|
+| **Standard** | Env vars, dependencies, limits | `main.py`, `requirements.txt`, `pipeline.json` |
+| **Minimal** | Python only, no deps | `main.py` |
+| **Custom JSON** | Metadata under a different name | `main.py`, `{pipeline_name}.json` |
+| **Failure test** | Intentionally `FAILED` (e.g. for UI/retry) | `main.py` with `sys.exit(1)` or exception, optional `pipeline.json` |
+| **Runtime test** | Delay (e.g. `time.sleep(20)`) to verify status/logs | `main.py`, optionally `pipeline.json` (timeout) |
+| **Retry demo** | Random success/failure to test `retry_attempts`/`retry_strategy` | `main.py`, `pipeline.json` |
+| **Resource limits** | OOM or CPU test with `mem_hard_limit`/`cpu_hard_limit` | `main.py` (e.g. allocate memory), `pipeline.json` |
+| **Timeout demo** | Test timeout per pipeline: run is terminated with INTERRUPTED after X seconds. See [pipeline.json reference – timeout](/docs/pipelines/referenz#pipeline-konfiguration). | `main.py`, `pipeline.json` with `timeout` (in template: **`timeout_example`**) |
+| **Different Python versions** | Each pipeline with its own version (e.g. A with 3.11, B with 3.12) | `main.py`, `pipeline.json` with `python_version` |
+| **Notebook pipeline** | Jupyter notebook cell by cell, cell retries, logs per cell. See [Notebook Pipelines](/docs/pipelines/notebook-pipelines). | `main.ipynb`, `pipeline.json` (`type: "notebook"`, optional `cells`) |
 
-Viele davon sind im [fastflow-pipeline-template](https://github.com/ttuhin03/fastflow-pipeline-template) vorkonfiguriert.
+Many of these are preconfigured in the [fastflow-pipeline-template](https://github.com/ttuhin03/fastflow-pipeline-template).
 
-## Einstieg: `main.py` oder `main.ipynb`
+## Entry point: `main.py` or `main.ipynb`
 
-**Skript-Pipeline:** Im Ordner muss **`main.py`** liegen. Fast-Flow führt sie mit `uv run` aus.
+**Script pipeline:** The folder must contain **`main.py`**. Fast-Flow runs it with `uv run`.
 
-**Notebook-Pipeline:** Im Ordner muss **`main.ipynb`** liegen und in **`pipeline.json`** muss **`"type": "notebook"`** stehen. Das Notebook wird Zelle für Zelle ausgeführt; pro Code-Zelle sind Retries und Logs konfigurierbar. Details: [Notebook-Pipelines](/docs/pipelines/notebook-pipelines).
+**Notebook pipeline:** The folder must contain **`main.ipynb`** and **`pipeline.json`** must include **`"type": "notebook"`**. The notebook is executed cell by cell; retries and logs can be configured per code cell. Details: [Notebook Pipelines](/docs/pipelines/notebook-pipelines).
 
-### `main.py` (Skript-Pipeline)
+### `main.py` (script pipeline)
 
-Jede **Skript-**Pipeline braucht eine `main.py` im eigenen Verzeichnis.
+Every **script** pipeline needs a `main.py` in its own directory.
 
-**Ausführung:** `uv run --python {version} --with-requirements {requirements.txt} {main.py}` – `{version}` kommt aus `python_version` in pipeline.json (beliebig pro Pipeline: 3.10, 3.11, 3.12, …) oder `DEFAULT_PYTHON_VERSION` (z.B. 3.11).
+**Execution:** `uv run --python {version} --with-requirements {requirements.txt} {main.py}` – `{version}` comes from `python_version` in pipeline.json (any per pipeline: 3.10, 3.11, 3.12, …) or `DEFAULT_PYTHON_VERSION` (e.g. 3.11).
 
-- Code kann von oben nach unten laufen (keine `main()` nötig).
-- Optional: `main()` mit `if __name__ == "__main__"`.
+- Code can run top to bottom (no `main()` required).
+- Optional: `main()` with `if __name__ == "__main__"`.
 
-**Einfaches Skript:**
+**Simple script:**
 
 ```python
 # main.py
 import os
-print("Pipeline gestartet")
+print("Pipeline started")
 data = os.getenv("MY_SECRET")
-print(f"Verarbeite Daten: {data}")
+print(f"Processing data: {data}")
 ```
 
-**Mit `main()` (optional):**
+**With `main()` (optional):**
 
 ```python
 # main.py
 def main():
-    print("Pipeline gestartet")
-    # ... Logik ...
+    print("Pipeline started")
+    # ... logic ...
 
 if __name__ == "__main__":
     main()
 ```
 
-**Fehler:** Unbehandelte Exceptions → Exit-Code ≠ 0 → Run wird als `FAILED` markiert.
+**Errors:** Unhandled exceptions → exit code ≠ 0 → run is marked as `FAILED`.
 
 ## `requirements.txt` (optional)
 
-Standard-Python-Format. Dependencies werden von `uv` beim Start installiert.
+Standard Python format. Dependencies are installed by `uv` at startup.
 
 ```
 requests==2.31.0
@@ -157,25 +157,25 @@ pandas==2.1.0
 numpy==1.24.3
 ```
 
-- Shared uv-Cache: bei gecachten Paketen oft < 1 Sekunde.
-- Beim Git-Sync können Dependencies vorgeladen werden (`UV_PRE_HEAT`).
+- Shared uv cache: often < 1 second for cached packages.
+- During Git sync, dependencies can be preloaded (`UV_PRE_HEAT`).
 
 ## `pipeline.json` (optional)
 
-Metadaten für Limits, Timeout, Retries, Beschreibung, Tags, `python_version` (beliebig pro Pipeline konfigurierbar) und `default_env`.
+Metadata for limits, timeout, retries, description, tags, `python_version` (configurable per pipeline) and `default_env`.
 
-- **Dateinamen:** `pipeline.json` (bevorzugt) oder `{pipeline_name}.json` (z.B. `data_processor.json`).
+- **Filenames:** `pipeline.json` (preferred) or `{pipeline_name}.json` (e.g. `data_processor.json`).
 
-Vollständige Feldbeschreibung: [pipeline.json Referenz](/docs/pipelines/referenz).
+Full field reference: [pipeline.json reference](/docs/pipelines/referenz).
 
-## Pipeline-Erkennung
+## Pipeline discovery
 
-- **Discovery:** Automatisch beim Git-Sync (oder beim Start, wenn Verzeichnis gemountet ist).
-- **Name:** Verzeichnisname = Pipeline-Name (z.B. `pipeline_a/` → `pipeline_a`).
-- **Pflicht:** Ordner muss **entweder** `main.py` (Skript) **oder** `main.ipynb` mit `"type": "notebook"` in `pipeline.json` enthalten; sonst wird er ignoriert.
-- **Keine manuelle Registrierung** nötig.
+- **Discovery:** Automatically during Git sync (or at startup when the directory is mounted).
+- **Name:** Directory name = pipeline name (e.g. `pipeline_a/` → `pipeline_a`).
+- **Required:** Folder must contain **either** `main.py` (script) **or** `main.ipynb` with `"type": "notebook"` in `pipeline.json`; otherwise it is ignored.
+- **No manual registration** required.
 
-## Vollständiges Beispiel
+## Complete example
 
 ```
 pipelines/
@@ -219,12 +219,12 @@ if __name__ == "__main__":
 requests==2.31.0
 ```
 
-**`data_processor.json`:** Siehe [Referenz](/docs/pipelines/referenz).
+**`data_processor.json`:** See [Reference](/docs/pipelines/referenz).
 
-## Nächste Schritte
+## Next steps
 
-- [**Erste Pipeline**](/docs/pipelines/erste-pipeline) – Tutorial: Von null zur ersten laufenden Pipeline
-- [**Erweiterte Pipelines**](/docs/pipelines/erweiterte-pipelines) – Retries, Timeout, Scheduling, Webhooks, Struktur
-- [**Notebook-Pipelines**](/docs/pipelines/notebook-pipelines) – Jupyter-Notebooks, Zellen-Retries, Logs pro Zelle
-- [**pipeline.json Referenz**](/docs/pipelines/referenz) – Alle Felder inkl. `type`, `cells`, Limits
-- [**Konfiguration**](/docs/deployment/CONFIGURATION) – `PIPELINES_DIR`, `UV_CACHE_DIR`, Git-Sync
+- [**First Pipeline**](/docs/pipelines/erste-pipeline) – Tutorial: From zero to your first running pipeline
+- [**Advanced Pipelines**](/docs/pipelines/erweiterte-pipelines) – Retries, timeout, scheduling, webhooks, structure
+- [**Notebook Pipelines**](/docs/pipelines/notebook-pipelines) – Jupyter notebooks, cell retries, logs per cell
+- [**pipeline.json reference**](/docs/pipelines/referenz) – All fields including `type`, `cells`, limits
+- [**Configuration**](/docs/deployment/CONFIGURATION) – `PIPELINES_DIR`, `UV_CACHE_DIR`, Git sync

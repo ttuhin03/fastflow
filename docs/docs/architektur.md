@@ -2,65 +2,65 @@
 sidebar_position: 5
 ---
 
-# Architektur: Runner-Cache & Container-Lifecycle
+# Architecture: Runner Cache & Container Lifecycle
 
-Im Gegensatz zu klassischen Orchestratoren, die oft "Dependency Hell" in ihren Worker-Umgebungen erleben, nutzt Fast-Flow eine moderne JIT-Environment-Architektur.
+Unlike classic orchestrators that often suffer from "dependency hell" in their worker environments, Fast-Flow uses a modern JIT environment architecture.
 
-## Zwei Ausführungs-Backends (`PIPELINE_EXECUTOR`)
+## Two execution backends (`PIPELINE_EXECUTOR`)
 
-Der Orchestrator startet Pipeline-Runs über **`PIPELINE_EXECUTOR`**:
+The orchestrator starts pipeline runs via **`PIPELINE_EXECUTOR`**:
 
-- **`docker`** (typisch mit Docker Compose): isolierte **Docker-Container** auf dem Host-Daemon, optional über den [Docker-Socket-Proxy](/docs/deployment/DOCKER_PROXY).
-- **`kubernetes`**: isolierte **Kubernetes Jobs** (Pods) im Cluster – ohne Docker auf den Worker-Nodes; die Standard-`k8s/`-Manifeste setzen diesen Modus.
+- **`docker`** (typical with Docker Compose): isolated **Docker containers** on the host daemon, optionally via the [Docker Socket Proxy](/docs/deployment/DOCKER_PROXY).
+- **`kubernetes`**: isolated **Kubernetes Jobs** (Pods) in the cluster – without Docker on worker nodes; the default `k8s/` manifests use this mode.
 
-In beiden Fällen gilt dasselbe **Runner-Cache**-Modell (uv, gemeinsamer Paket- und Python-Cache, kein Image pro Pipeline).
+In both cases, the same **Runner Cache** model applies (uv, shared package and Python cache, no image per pipeline).
 
-## Das "Runner-Cache"-Prinzip
+## The "Runner Cache" principle
 
-- **The Singleton Brain**: Ein einzelner FastAPI-Prozess verwaltet den Zustand, den Scheduler und den Git-Sync.
-- **Ephemeral Workers**: Jede Pipeline startet in einer isolierten **Sandbox** – entweder als Docker-Container oder als K8s-Job-Pod. Keine Seiteneffekte zwischen Runs, kein geteilter Worker-Prozess.
-- **uv-Acceleration**: Der globale uv-Cache und die uv-Python-Installationen (z.B. 3.11, 3.12) sind **persistent** (Host-Volumes bzw. PVCs) und werden in den Worker eingehängt. Dependencies und die **pro Pipeline wählbare** Python-Version (aus `pipeline.json` oder `DEFAULT_PYTHON_VERSION`) sind so in Millisekunden verfügbar – ohne festes Python im Basis-Image.
-- **Live-Streaming**: Logs und Metriken (CPU/RAM) gehen per SSE an das React-Frontend: bei **Docker** über Container-Logs und die Docker-Stats-API (über den Proxy); bei **Kubernetes** über **Pod-Logs** und optional die **Metrics-API** (metrics-server), sofern im Cluster verfügbar.
+- **The Singleton Brain**: A single FastAPI process manages state, the scheduler, and Git sync.
+- **Ephemeral Workers**: Each pipeline starts in an isolated **sandbox** – either as a Docker container or as a K8s Job Pod. No side effects between runs, no shared worker process.
+- **uv Acceleration**: The global uv cache and uv Python installations (e.g. 3.11, 3.12) are **persistent** (host volumes or PVCs) and are mounted into the worker. Dependencies and the **freely configurable per-pipeline** Python version (from `pipeline.json` or `DEFAULT_PYTHON_VERSION`) are available in milliseconds – without fixed Python in the base image.
+- **Live Streaming**: Logs and metrics (CPU/RAM) are sent to the React frontend via SSE: with **Docker** via container logs and the Docker Stats API (through the proxy); with **Kubernetes** via **Pod logs** and optionally the **Metrics API** (metrics-server), if available in the cluster.
 
-## Der Worker-Prozess & Lifecycle
+## The worker process & lifecycle
 
-Fast-Flow nutzt ein **"Disposable Worker"**-Modell. Für jede Ausführung wird ein frischer, isolierter **Container** (Docker) bzw. **Pod** (Kubernetes Job) erzeugt.
+Fast-Flow uses a **"Disposable Worker"** model. For each execution, a fresh, isolated **container** (Docker) or **Pod** (Kubernetes Job) is created.
 
-### 1. Trigger & Initialisierung
+### 1. Trigger & initialization
 
-Sobald ein Run über das React-Frontend (manuell) oder den APScheduler (geplant) ausgelöst wird:
+As soon as a run is triggered via the React frontend (manually) or APScheduler (scheduled):
 
-- Die API validiert die Pipeline-Struktur und lädt die verschlüsselten Secrets.
-- Ein neuer Eintrag in der Datenbank wird mit dem Status `PENDING` erstellt.
+- The API validates the pipeline structure and loads the encrypted secrets.
+- A new database entry is created with status `PENDING`.
 
-### 2. Die "Zero-Build" Execution
+### 2. The "Zero-Build" execution
 
-Statt ein Pipeline-spezifisches Image zu bauen, wird ein generisches **Worker-Basis-Image** gestartet (uv, optional vorinstalliertes Python):
+Instead of building a pipeline-specific image, a generic **worker base image** is started (uv, optionally pre-installed Python):
 
-- **Docker (`PIPELINE_EXECUTOR=docker`)**: Pipeline-Verzeichnis **read-only** vom Host, uv-Cache und uv-Python-Installationen werden gemountet.
-- **Kubernetes (`PIPELINE_EXECUTOR=kubernetes`)**: Der Orchestrator kopiert die Pipeline vor dem Job in ein **gemeinsames Volume** (`pipeline_runs/<Run-ID>`); uv-Cache und uv-Python liegen auf dem **Cache-PVC** und werden in den Job-Pod gemountet (Details: [Kubernetes Deployment](/docs/deployment/K8S)).
-- **Just-In-Time Environment (beide Modi)**: `uv run --python {version}` – die Version ist **beliebig pro Pipeline** konfigurierbar (`python_version` in pipeline.json, z.B. 3.10, 3.11, 3.12) oder `DEFAULT_PYTHON_VERSION`. Python stammt aus `uv python install` (Preheating), nicht aus dem Pipeline-Image.
-  - **Abhängigkeiten im Cache?** → In Millisekunden per Hardlink verknüpft.
-  - **Neue Abhängigkeiten?** → Einmalig geladen und im gemeinsamen Cache für zukünftige Runs gesichert.
-- **Preheating**: Beim Start und nach Git-Sync führt der Orchestrator `uv python install {version}` und `uv pip compile --python {version}` aus, damit der erste Run nicht auf Python- oder Paket-Downloads warten muss.
+- **Docker (`PIPELINE_EXECUTOR=docker`)**: Pipeline directory **read-only** from the host, uv cache and uv Python installations are mounted.
+- **Kubernetes (`PIPELINE_EXECUTOR=kubernetes`)**: The orchestrator copies the pipeline into a **shared volume** (`pipeline_runs/<Run-ID>`) before the Job; uv cache and uv Python live on the **cache PVC** and are mounted into the Job Pod (details: [Kubernetes Deployment](/docs/deployment/K8S)).
+- **Just-In-Time Environment (both modes)**: `uv run --python {version}` – the version is **freely configurable per pipeline** (`python_version` in pipeline.json, e.g. 3.10, 3.11, 3.12) or `DEFAULT_PYTHON_VERSION`. Python comes from `uv python install` (preheating), not from the pipeline image.
+  - **Dependencies in cache?** → Linked in milliseconds via hardlink.
+  - **New dependencies?** → Downloaded once and stored in the shared cache for future runs.
+- **Preheating**: On startup and after Git sync, the orchestrator runs `uv python install {version}` and `uv pip compile --python {version}` so the first run does not have to wait for Python or package downloads.
 
-### 3. Monitoring & Kommunikation (Headless Architecture)
+### 3. Monitoring & communication (headless architecture)
 
-Während der Worker läuft:
+While the worker is running:
 
-- **Logs**: Die API streamt **stdout/stderr** asynchron und stellt sie über einen SSE-Endpunkt bereit (Docker: Container-Logs; Kubernetes: Pod-Logs).
-- **Metrics**: Bei **Docker** liefert die Docker-Stats-API CPU- und RAM an das Dashboard (Zugriff über den Socket-Proxy). Bei **Kubernetes** nutzt der Orchestrator die **Metrics-API** für den Run-Pod, sofern eingerichtet.
-- **Security (nur Docker)**: Die API spricht über einen [Docker-Socket-Proxy](/docs/deployment/DOCKER_PROXY) (`tecnativa/docker-socket-proxy`), nicht direkt mit dem Docker-Socket. Unter Kubernetes entfällt dieser Pfad zugunsten der **Kubernetes-API** mit einer dedizierten **ServiceAccount/RBAC**-Konfiguration.
+- **Logs**: The API streams **stdout/stderr** asynchronously and serves them via an SSE endpoint (Docker: container logs; Kubernetes: Pod logs).
+- **Metrics**: With **Docker**, the Docker Stats API provides CPU and RAM to the dashboard (access via the socket proxy). With **Kubernetes**, the orchestrator uses the **Metrics API** for the run Pod, if configured.
+- **Security (Docker only)**: The API communicates via a [Docker Socket Proxy](/docs/deployment/DOCKER_PROXY) (`tecnativa/docker-socket-proxy`), not directly with the Docker socket. Under Kubernetes, this path is replaced by the **Kubernetes API** with a dedicated **ServiceAccount/RBAC** configuration.
 
-### 4. Terminierung & Cleanup
+### 4. Termination & cleanup
 
-Nach Abschluss des Python-Skripts:
+After the Python script completes:
 
-- Exit-Code wird erfasst (z.B. 137 für OOM-Fehler).
-- **Docker**: Der Container wird entfernt (`--rm`). **Kubernetes**: Der Job endet; abgeschlossene Jobs/Pods können je nach TTL und Cluster-Policy aufgeräumt werden, die Pipeline-Kopie im Volume wird vom Orchestrator bereinigt.
-- Die Logs werden für die Langzeitarchivierung persistiert.
+- Exit code is captured (e.g. 137 for OOM errors).
+- **Docker**: The container is removed (`--rm`). **Kubernetes**: The Job ends; completed Jobs/Pods may be cleaned up depending on TTL and cluster policy; the pipeline copy in the volume is cleaned up by the orchestrator.
+- Logs are persisted for long-term archiving.
 
-## Architektur-Diagramm (Datenfluss)
+## Architecture diagram (data flow)
 
 ```mermaid
 flowchart TB
@@ -115,39 +115,39 @@ flowchart TB
     B -.->|"Pod-Logs & Metrics"| L
 ```
 
-## Warum dieser Ansatz?
+## Why this approach?
 
-- **Geschwindigkeit**: Kein `docker build` – eine Pipeline startet so schnell wie ein lokaler Prozess.
-- **Isolation**: Ein Fehler in `pipeline_a` kann die Umgebung von `pipeline_b` nicht beeinflussen.
-- **Skalierbarkeit**: Controller und Worker sind entkoppelt; das System kann mit Message-Queues (z.B. Redis) auf mehrere Server verteilt werden.
+- **Speed**: No `docker build` – a pipeline starts as fast as a local process.
+- **Isolation**: An error in `pipeline_a` cannot affect the environment of `pipeline_b`.
+- **Scalability**: Controller and workers are decoupled; the system can be distributed across multiple servers with message queues (e.g. Redis).
 
-## Startup & API-Struktur
+## Startup & API structure
 
-### App-Start (Lifecycle)
+### App startup (lifecycle)
 
-Der FastAPI-Lifecycle wird in **`app/startup`** gebündelt:
+The FastAPI lifecycle is bundled in **`app/startup`**:
 
-- **`run_startup_tasks()`**: Logging, Sicherheits- und OAuth-Validierung, Verzeichnisse, Datenbank, Docker-Client, Zombie-Reconciliation, Scheduler, Cleanup, Dependency-Audit, Version-Check, Telemetry, UV Pre-Heat. Kritische Schritte werfen bei Fehler; optionale werden geloggt und übersprungen.
-- **`run_shutdown_tasks()`**: Scheduler stoppen, Graceful Shutdown (laufende Runs beenden), PostHog Flush.
+- **`run_startup_tasks()`**: Logging, security and OAuth validation, directories, database, Docker client, zombie reconciliation, scheduler, cleanup, dependency audit, version check, telemetry, UV pre-heat. Critical steps throw on error; optional ones are logged and skipped.
+- **`run_shutdown_tasks()`**: Stop scheduler, graceful shutdown (terminate running runs), PostHog flush.
 
-Die eigentliche **`lifespan`**-Funktion in `app.main` ruft nur noch diese beiden Funktionen auf.
+The actual **`lifespan`** function in `app.main` only calls these two functions.
 
-### API-Router
+### API routers
 
-Alle REST-Endpoints liegen unter dem Präfix **`/api`**. Die Router werden zentral in **`app.api`** in der Liste **`ROUTERS`** geführt und in `main.py` in einer Schleife mit `prefix="/api"` registriert. Neue API-Module werden in `app.api.__init__.py` zu `ROUTERS` hinzugefügt.
+All REST endpoints live under the prefix **`/api`**. Routers are centrally maintained in **`app.api`** in the **`ROUTERS`** list and registered in `main.py` in a loop with `prefix="/api"`. New API modules are added to `ROUTERS` in `app.api.__init__.py`.
 
-### Module-Überblick
+### Module overview
 
-- **`app/executor`**: Ausführung (Docker oder Kubernetes), Log- und Metrics-Streaming, Zombie-Reconciliation, Graceful Shutdown.
-- **`app/executor/kubernetes_backend`**: Kubernetes-Jobs (Batch API), Pod-Logs, Metrics-API, Run-Cleanup auf dem Shared-Volume.
-- **`app/git_sync`**: Git-Sync des Pipeline-Repos, GitHub-App-Token, Sync-Log, Pre-Heat.
-- **`app/startup`**: Startup-/Shutdown-Logik, OAuth- und Sicherheits-Validierung.
-- **`app/logging_config`**: Log-Level und optionales JSON-Log-Format.
+- **`app/executor`**: Execution (Docker or Kubernetes), log and metrics streaming, zombie reconciliation, graceful shutdown.
+- **`app/executor/kubernetes_backend`**: Kubernetes Jobs (Batch API), Pod logs, Metrics API, run cleanup on the shared volume.
+- **`app/git_sync`**: Git sync of the pipeline repo, GitHub App token, sync log, pre-heat.
+- **`app/startup`**: Startup/shutdown logic, OAuth and security validation.
+- **`app/logging_config`**: Log level and optional JSON log format.
 
-## Nächste Schritte
+## Next steps
 
-- [**Konzepte & Glossar**](/docs/konzepte) – Runner-Cache, uv, JIT, Disposable Worker kurz erklärt
-- [Pipelines – Übersicht](/docs/pipelines/uebersicht) – Wie du Pipelines strukturierst
-- [Git-Deployment](/docs/deployment/GIT_DEPLOYMENT) – Push-to-Deploy
-- [Docker Socket Proxy](/docs/deployment/DOCKER_PROXY) – Sicherheitslayer (nur Docker-Executor)
-- [Kubernetes Deployment](/docs/deployment/K8S) – Jobs-Executor im Cluster
+- [**Concepts & Glossary**](/docs/konzepte) – Runner cache, uv, JIT, Disposable Worker explained briefly
+- [Pipelines – Overview](/docs/pipelines/uebersicht) – How to structure pipelines
+- [Git Deployment](/docs/deployment/GIT_DEPLOYMENT) – Push-to-deploy
+- [Docker Socket Proxy](/docs/deployment/DOCKER_PROXY) – Security layer (Docker executor only)
+- [Kubernetes Deployment](/docs/deployment/K8S) – Jobs executor in the cluster

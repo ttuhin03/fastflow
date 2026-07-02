@@ -19,16 +19,16 @@ function HomepageHeader() {
         <p className="hero__subtitle">{siteConfig.tagline}</p>
         <div className={styles.buttons}>
           <Link className="button button--secondary button--lg" to="/docs/intro">
-            Übersicht
+            Overview
           </Link>
           <Link className="button button--secondary button--lg" to="/docs/schnellstart">
-            Schnellstart
+            Quick Start
           </Link>
           <Link className="button button--secondary button--lg" to="/docs/setup">
-            Setup-Anleitung
+            Setup Guide
           </Link>
           <Link className="button button--secondary button--lg" to="/docs/pipelines/erste-pipeline">
-            Erste Pipeline
+            First Pipeline
           </Link>
         </div>
       </div>
@@ -37,21 +37,21 @@ function HomepageHeader() {
 }
 
 const ThemenLinks = [
-  { to: '/docs/intro', label: 'Was ist Fast-Flow?', desc: 'Konzepte und Philosophie' },
-  { to: '/docs/setup', label: 'Setup & Konfiguration', desc: 'Env-Variablen, OAuth, Verzeichnisse' },
-  { to: '/docs/pipelines/erste-pipeline', label: 'Erste Pipeline', desc: 'Tutorial von Null an' },
-  { to: '/docs/pipelines/erweiterte-pipelines', label: 'Erweiterte Pipelines', desc: 'Retries, Secrets, Scheduling, Webhooks' },
-  { to: '/docs/architektur', label: 'Architektur', desc: 'Runner-Cache, Container-Lifecycle' },
-  { to: '/docs/troubleshooting', label: 'Troubleshooting', desc: 'Häufige Fehler und Lösungen' },
+  { to: '/docs/intro', label: 'What is Fast-Flow?', desc: 'Concepts and philosophy' },
+  { to: '/docs/setup', label: 'Setup & Configuration', desc: 'Env variables, OAuth, directories' },
+  { to: '/docs/pipelines/erste-pipeline', label: 'First Pipeline', desc: 'Tutorial from scratch' },
+  { to: '/docs/pipelines/erweiterte-pipelines', label: 'Advanced Pipelines', desc: 'Retries, secrets, scheduling, webhooks' },
+  { to: '/docs/architektur', label: 'Architecture', desc: 'Runner cache, container lifecycle' },
+  { to: '/docs/troubleshooting', label: 'Troubleshooting', desc: 'Common errors and solutions' },
 ];
 
 function HomepageThemen() {
   return (
     <section className={styles.themen}>
       <div className="container">
-        <Heading as="h2" className="text--center">Dokumentation</Heading>
+        <Heading as="h2" className="text--center">Documentation</Heading>
         <p className="text--center" style={{ marginBottom: '2rem' }}>
-          Alle Themen im Überblick – für Einsteiger und Fortgeschrittene.
+          All topics at a glance – for beginners and advanced users.
         </p>
         <div className="row">
           {ThemenLinks.map(({ to, label, desc }) => (

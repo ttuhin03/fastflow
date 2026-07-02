@@ -2,131 +2,131 @@
 sidebar_position: 1
 ---
 
-# ⚙️ Konfiguration
+# ⚙️ Configuration
 
-Fast-Flow wird primär über Environment-Variablen in einer `.env` Datei konfiguriert. Diese Datei sollte im Root-Verzeichnis des Projekts liegen (basierend auf `.env.example`).
+Fast-Flow is configured primarily via environment variables in a `.env` file. This file should live in the project root directory (based on `.env.example`).
 
-## Globale Einstellungen
+## Global Settings
 
-| Variable | Standardwert | Beschreibung |
-|----------|--------------|--------------|
-| `ENVIRONMENT` | `development` | Setzt den Modus (`development` oder `production`). In `production` werden unsichere Standardwerte (z.B. `JWT_SECRET_KEY`) blockiert. |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ENVIRONMENT` | `development` | Sets the mode (`development` or `production`). In `production`, insecure default values (e.g. `JWT_SECRET_KEY`) are blocked. |
 
-## Datenbank
+## Database
 
-| Variable | Standardwert | Beschreibung |
-|----------|--------------|--------------|
-| `DATABASE_URL` | *Leer* (SQLite) | Verbindungs-String für die Datenbank. Wenn leer, wird SQLite (`./data/fastflow.db`) verwendet. Für PostgreSQL: `postgresql://user:password@host:5432/dbname`. |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATABASE_URL` | *Empty* (SQLite) | Database connection string. If empty, SQLite (`./data/fastflow.db`) is used. For PostgreSQL: `postgresql://user:password@host:5432/dbname`. |
 
-## Verzeichnisse
+## Directories
 
-| Variable | Standardwert | Beschreibung |
-|----------|--------------|--------------|
-| `PIPELINES_DIR` | `./pipelines` | Pfad zum Git-Repository mit den Pipeline-Skripten. |
-| `LOGS_DIR` | `./logs` | Pfad für persistente Log-Dateien. |
-| `DATA_DIR` | `./data` | Pfad für SQLite-DB und andere Daten. |
-| `UV_CACHE_DIR` | `./data/uv_cache` | Pfad für den globalen `uv` Cache (shared zwischen Containern). |
-| `UV_PYTHON_INSTALL_DIR` | `{DATA_DIR}/uv_python` | Verzeichnis für `uv python install` (Python-Versionen für Worker). Muss persistent sein. |
-| `UV_PYTHON_INSTALL_HOST_DIR` | *Leer* | Host-Pfad für Worker-Volume-Mounts (optional; sonst Ableitung aus Orchestrator-Volumes). |
-| `DEFAULT_PYTHON_VERSION` | `3.11` | Standard-Python-Version, wenn `python_version` in pipeline.json fehlt. Die Python-Version ist beliebig pro Pipeline konfigurierbar (z.B. 3.10, 3.11, 3.12). |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PIPELINES_DIR` | `./pipelines` | Path to the Git repository containing pipeline scripts. |
+| `LOGS_DIR` | `./logs` | Path for persistent log files. |
+| `DATA_DIR` | `./data` | Path for SQLite DB and other data. |
+| `UV_CACHE_DIR` | `./data/uv_cache` | Path for the global `uv` cache (shared between containers). |
+| `UV_PYTHON_INSTALL_DIR` | `{DATA_DIR}/uv_python` | Directory for `uv python install` (Python versions for workers). Must be persistent. |
+| `UV_PYTHON_INSTALL_HOST_DIR` | *Empty* | Host path for worker volume mounts (optional; otherwise derived from orchestrator volumes). |
+| `DEFAULT_PYTHON_VERSION` | `3.11` | Default Python version when `python_version` is missing in pipeline.json. The Python version can be configured freely per pipeline (e.g. 3.10, 3.11, 3.12). |
 
 ## Docker & Executor
 
-| Variable | Standardwert | Beschreibung |
-|----------|--------------|--------------|
-| `WORKER_BASE_IMAGE` | `ghcr.io/astral-sh/uv:python3.11-bookworm-slim` | Basis-Image für Pipeline-Container (muss `uv` enthalten). Für minimales Setup nur mit uv: `ghcr.io/astral-sh/uv:bookworm-slim` oder eigenes Image aus `Dockerfile.worker` (dann muss Preheating Python vorhalten). |
-| `MAX_CONCURRENT_RUNS` | `10` | Maximale Anzahl gleichzeitig laufender Pipelines. |
-| `CONTAINER_TIMEOUT` | *Leer* (Kein Timeout) | Globales Timeout für Pipeline-Runs in Sekunden. |
-| `RETRY_ATTEMPTS` | `0` | Standard-Anzahl an Wiederholungsversuchen bei Fehlschlag. |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WORKER_BASE_IMAGE` | `ghcr.io/astral-sh/uv:python3.11-bookworm-slim` | Base image for pipeline containers (must include `uv`). For a minimal setup with uv only: `ghcr.io/astral-sh/uv:bookworm-slim` or a custom image from `Dockerfile.worker` (then preheating must provide Python). |
+| `MAX_CONCURRENT_RUNS` | `10` | Maximum number of pipelines running concurrently. |
+| `CONTAINER_TIMEOUT` | *Empty* (no timeout) | Global timeout for pipeline runs in seconds. |
+| `RETRY_ATTEMPTS` | `0` | Default number of retry attempts on failure. |
 
 ## Git Sync
 
-Repository-URL und Authentifizierung (PAT oder Deploy Key) können **entweder** per Umgebungsvariablen **oder** in der UI unter **Einstellungen → Git Sync → Repository** gesetzt werden. Env-Variablen haben Vorrang. Es wird **entweder** **HTTPS + Personal Access Token (PAT)** **oder** **SSH + Deploy Key** verwendet – die Methode ergibt sich aus der URL.
+Repository URL and authentication (PAT or deploy key) can be set **either** via environment variables **or** in the UI under **Settings → Git Sync → Repository**. Environment variables take precedence. **Either** **HTTPS + Personal Access Token (PAT)** **or** **SSH + Deploy Key** is used—the method is determined by the URL.
 
-| Variable | Standardwert | Beschreibung |
-|----------|--------------|--------------|
-| `GIT_REPO_URL` | *Leer* | URL des Pipeline-Repositories: HTTPS (z.B. `https://github.com/org/repo.git`) oder SSH (z.B. `git@github.com:org/repo.git`). |
-| `GIT_SYNC_TOKEN` | *Leer* | Optional: Personal Access Token (PAT) für private Repos bei **HTTPS**-URL. |
-| `GIT_SYNC_DEPLOY_KEY` | *Leer* | Optional: Inhalt des privaten SSH-Deploy-Keys bei **SSH**-URL. Sensibel – als Secret setzen. |
-| `GIT_BRANCH` | `main` | Der Git-Branch, der synchronisiert werden soll. |
-| `AUTO_SYNC_ENABLED` | `false` | Ob Pipelines automatisch synchronisiert werden sollen. |
-| `AUTO_SYNC_INTERVAL` | *Leer* | Intervall in Sekunden für den automatischen Sync. |
-| `UV_PRE_HEAT` | `true` | Ob Dependencies beim Sync automatisch vorinstalliert ("aufgewärmt") werden sollen. |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GIT_REPO_URL` | *Empty* | URL of the pipeline repository: HTTPS (e.g. `https://github.com/org/repo.git`) or SSH (e.g. `git@github.com:org/repo.git`). |
+| `GIT_SYNC_TOKEN` | *Empty* | Optional: Personal Access Token (PAT) for private repos with an **HTTPS** URL. |
+| `GIT_SYNC_DEPLOY_KEY` | *Empty* | Optional: Content of the private SSH deploy key for an **SSH** URL. Sensitive—set as a secret. |
+| `GIT_BRANCH` | `main` | The Git branch to synchronize. |
+| `AUTO_SYNC_ENABLED` | `false` | Whether pipelines should be synchronized automatically. |
+| `AUTO_SYNC_INTERVAL` | *Empty* | Interval in seconds for automatic sync. |
+| `UV_PRE_HEAT` | `true` | Whether dependencies should be preinstalled ("preheated") automatically during sync. |
 
-**Deploy Key (SSH):** Bei SSH-URL (z.B. `git@github.com:org/repo.git`) muss ein privater SSH-Key hinterlegt werden. Den Deploy Key legst du im Repository unter *Settings → Deploy keys* an; den **privaten** Key trägst du hier oder in der Sync-UI ein. **Halbautomatisch:** In der Sync-UI kann bei SSH ein Deploy-Key vom Server erzeugt werden – nur den angezeigten öffentlichen Key bei GitHub (Deploy keys) eintragen. Es wird immer nur eine Methode (PAT oder Deploy Key) genutzt – abhängig von der gewählten URL. Beim Wechsel der Methode (z.B. von HTTPS auf SSH) das Pipelines-Verzeichnis in der UI leeren und Sync erneut ausführen.
+**Deploy Key (SSH):** For an SSH URL (e.g. `git@github.com:org/repo.git`), a private SSH key must be configured. Create the deploy key in the repository under *Settings → Deploy keys*; enter the **private** key here or in the Sync UI. **Semi-automatic:** In the Sync UI, a deploy key can be generated on the server for SSH—only add the displayed public key on GitHub (Deploy keys). Only one method (PAT or deploy key) is ever used—depending on the chosen URL. When switching methods (e.g. from HTTPS to SSH), clear the pipelines directory in the UI and run sync again.
 
 ## Logs & Retention
 
-| Variable | Standardwert | Beschreibung |
-|----------|--------------|--------------|
-| `LOG_RETENTION_RUNS` | *Leer* (Unbegrenzt) | Maximale Anzahl an Runs, die pro Pipeline behalten werden. Ältere werden gelöscht. |
-| `LOG_RETENTION_DAYS` | *Leer* (Unbegrenzt) | Logs, die älter als X Tage sind, werden gelöscht. |
-| `LOG_MAX_SIZE_MB` | *Leer* (Unbegrenzt) | Maximale Größe einer Log-Datei in MB. |
-| `LOG_STREAM_RATE_LIMIT`| `100` | Maximale Anzahl an Log-Zeilen pro Sekunde für das Live-Streaming (SSE). |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LOG_RETENTION_RUNS` | *Empty* (unlimited) | Maximum number of runs kept per pipeline. Older runs are deleted. |
+| `LOG_RETENTION_DAYS` | *Empty* (unlimited) | Logs older than X days are deleted. |
+| `LOG_MAX_SIZE_MB` | *Empty* (unlimited) | Maximum size of a log file in MB. |
+| `LOG_STREAM_RATE_LIMIT`| `100` | Maximum number of log lines per second for live streaming (SSE). |
 
-## Log-Backup (S3/MinIO, optional)
+## Log Backup (S3/MinIO, optional)
 
-Pipeline-Logs werden vor der lokalen Löschung (Cleanup) auf S3/MinIO gesichert. Details: [S3 Log-Backup](S3_LOG_BACKUP.md).
+Pipeline logs are backed up to S3/MinIO before local deletion (cleanup). Details: [S3 Log Backup](S3_LOG_BACKUP.md).
 
-| Variable | Standardwert | Beschreibung |
-|----------|--------------|--------------|
-| `S3_BACKUP_ENABLED` | `false` | Aktiviert S3-Backup vor lokaler Löschung. |
-| `S3_ENDPOINT_URL` | *Leer* | S3-Endpoint (z.B. `http://minio:9000`). |
-| `S3_BUCKET` | *Leer* | Bucket-Name. |
-| `S3_ACCESS_KEY` | *Leer* | Access Key. |
-| `S3_SECRET_ACCESS_KEY` | *Leer* | Secret Access Key. |
-| `S3_REGION` | `us-east-1` | Region (MinIO oft egal). |
-| `S3_PREFIX` | `pipeline-logs` | Prefix für Objektkeys. |
-| `S3_USE_PATH_STYLE` | `true` | Path-Style-URLs (für MinIO typisch). |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `S3_BACKUP_ENABLED` | `false` | Enables S3 backup before local deletion. |
+| `S3_ENDPOINT_URL` | *Empty* | S3 endpoint (e.g. `http://minio:9000`). |
+| `S3_BUCKET` | *Empty* | Bucket name. |
+| `S3_ACCESS_KEY` | *Empty* | Access key. |
+| `S3_SECRET_ACCESS_KEY` | *Empty* | Secret access key. |
+| `S3_REGION` | `us-east-1` | Region (often irrelevant for MinIO). |
+| `S3_PREFIX` | `pipeline-logs` | Prefix for object keys. |
+| `S3_USE_PATH_STYLE` | `true` | Path-style URLs (typical for MinIO). |
 
-Alternativ (oder ergänzend) können S3-Backup-Parameter in der **Einstellungs-UI** unter **Pipeline & Runs** gepflegt werden: Werte landen in `orchestrator_settings` (Access/Secret verschlüsselt). Environment-Variablen gelten weiterhin; beim Start werden gespeicherte DB-Werte auf die laufende Konfiguration angewendet. Ein **Verbindungstest** ist per Button oder optional **nach dem Speichern** möglich (`POST /api/settings/s3/test`, nur Admin).
+Alternatively (or additionally), S3 backup parameters can be managed in the **Settings UI** under **Pipeline & Runs**: values are stored in `orchestrator_settings` (access/secret encrypted). Environment variables still apply; on startup, saved DB values are applied to the running configuration. A **connection test** is available via button or optionally **after saving** (`POST /api/settings/s3/test`, admin only).
 
-## Sicherheit & Authentifizierung
+## Security & Authentication
 
 > [!IMPORTANT]
-> Diese Werte sind KRITISCH für die Sicherheit, besonders bei Docker-Socket Zugriff.
+> These values are CRITICAL for security, especially with Docker socket access.
 
-| Variable | Standardwert | Beschreibung | Produktion |
-|----------|--------------|--------------|------------|
-| `ENCRYPTION_KEY` | *Muss gesetzt werden* | Fernet-Key zur Verschlüsselung von Secrets in der DB. Generieren mit: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` | **Pflicht** |
-| `JWT_SECRET_KEY` | `change-me-in-production` | Secret Key zum Signieren und Verifizieren der JWT-Tokens. Muss lang und zufällig sein (mind. 32 Zeichen). In Produktion: eigener Wert, `change-me-in-production` wird blockiert. | **Pflicht** |
-| `JWT_ALGORITHM` | `HS256` | Algorithmus für die JWT-Signatur (typisch: HS256). | HS256 |
-| `JWT_ACCESS_TOKEN_MINUTES` | `15` | Gültigkeitsdauer des Access-Tokens in Minuten (Laufzeit des JWT, `exp`-Claim). Kürzere Laufzeit reduziert das Risiko bei kompromittierten Tokens. | 15 |
-| `JWT_EXPIRATION_HOURS` | `24` | Gültigkeitsdauer der Session in der DB in Stunden. Nach Ablauf erscheint „Sitzung abgelaufen“; Re-Login nötig. | 24 |
-| `GITHUB_CLIENT_ID` | *Leer* | OAuth App Client ID (GitHub). | **Pflicht** (mind. ein Provider) |
-| `GITHUB_CLIENT_SECRET` | *Leer* | OAuth App Client Secret (GitHub). | **Pflicht** (mind. ein Provider) |
-| `GOOGLE_CLIENT_ID` | *Leer* | OAuth 2.0 Client ID (Google). Callback: `{BASE_URL}/api/auth/google/callback`. | Optional |
-| `GOOGLE_CLIENT_SECRET` | *Leer* | OAuth 2.0 Client Secret (Google). | Optional |
-| `MICROSOFT_CLIENT_ID` | *Leer* | OAuth Client ID (Microsoft Entra ID). Callback: `{BASE_URL}/api/auth/microsoft/callback`. | Optional |
-| `MICROSOFT_CLIENT_SECRET` | *Leer* | OAuth Client Secret (Microsoft Entra ID). | Optional |
-| `MICROSOFT_TENANT_ID` | `common` | Tenant-Scoping für Microsoft OAuth (`common`, Tenant-ID, `organizations`, `consumers`). | Optional |
-| `CUSTOM_OAUTH_CLIENT_ID` | *Leer* | OAuth Client ID für Custom Provider (z. B. Keycloak/Auth0). | Optional |
-| `CUSTOM_OAUTH_CLIENT_SECRET` | *Leer* | OAuth Client Secret für Custom Provider. | Optional |
-| `CUSTOM_OAUTH_AUTHORIZE_URL` | *Leer* | Authorize-Endpoint des Custom Providers. | Optional |
-| `CUSTOM_OAUTH_TOKEN_URL` | *Leer* | Token-Endpoint des Custom Providers. | Optional |
-| `CUSTOM_OAUTH_USERINFO_URL` | *Leer* | UserInfo-Endpoint des Custom Providers. | Optional |
-| `CUSTOM_OAUTH_SCOPES` | `openid email profile` | Scopes für Custom OAuth. | Optional |
-| `CUSTOM_OAUTH_CLAIM_ID` | `sub` | Claim für eindeutige User-ID beim Custom Provider. | Optional |
-| `CUSTOM_OAUTH_CLAIM_EMAIL` | `email` | Claim für E-Mail beim Custom Provider. | Optional |
-| `CUSTOM_OAUTH_CLAIM_NAME` | `name` | Claim für Anzeigename beim Custom Provider. | Optional |
-| `CUSTOM_OAUTH_NAME` | `Custom` | Anzeigename des Custom Providers auf der Login-Seite. | Optional |
-| `CUSTOM_OAUTH_ICON_URL` | *Leer* | Optionale Icon-URL für den Custom-Login-Button. | Optional |
-| `SKIP_OAUTH_VERIFICATION` | *Leer* | `1`/`true`: HTTP-Verifizierung der OAuth-Credentials beim Start überspringen (z.B. CI/Tests). Die Prüfung „mind. ein Provider vollständig“ bleibt aktiv. | Optional |
-| `INITIAL_ADMIN_EMAIL` | *Leer* | E-Mail des ersten Admins (Zutritt ohne Einladung, über unterstützten OAuth-Provider). | **Empfohlen** |
-| `FRONTEND_URL` / `BASE_URL` | s. [OAuth (GitHub, Google, Microsoft, Custom)](/docs/oauth/readme) | Für OAuth-Callback und Einladungs-Links. | Anpassen |
-| `PROXY_HEADERS_TRUSTED` | `false` | Wenn `true`: `X-Forwarded-For` wird für Rate Limiting verwendet. **Nur** aktivieren, wenn die App hinter einem vertrauenswürdigen Reverse-Proxy (Nginx, Traefik) läuft. Bei `false` wird `request.client.host` genutzt (Schutz vor Spoofing). | Bei Proxy: `true` |
+| Variable | Default | Description | Production |
+|----------|---------|-------------|------------|
+| `ENCRYPTION_KEY` | *Must be set* | Fernet key for encrypting secrets in the DB. Generate with: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` | **Required** |
+| `JWT_SECRET_KEY` | `change-me-in-production` | Secret key for signing and verifying JWT tokens. Must be long and random (min. 32 characters). In production: use your own value; `change-me-in-production` is blocked. | **Required** |
+| `JWT_ALGORITHM` | `HS256` | Algorithm for JWT signature (typically HS256). | HS256 |
+| `JWT_ACCESS_TOKEN_MINUTES` | `15` | Access token validity in minutes (JWT lifetime, `exp` claim). Shorter lifetime reduces risk from compromised tokens. | 15 |
+| `JWT_EXPIRATION_HOURS` | `24` | Session validity in the DB in hours. After expiry, "Session expired" appears; re-login required. | 24 |
+| `GITHUB_CLIENT_ID` | *Empty* | OAuth App Client ID (GitHub). | **Required** (at least one provider) |
+| `GITHUB_CLIENT_SECRET` | *Empty* | OAuth App Client Secret (GitHub). | **Required** (at least one provider) |
+| `GOOGLE_CLIENT_ID` | *Empty* | OAuth 2.0 Client ID (Google). Callback: `{BASE_URL}/api/auth/google/callback`. | Optional |
+| `GOOGLE_CLIENT_SECRET` | *Empty* | OAuth 2.0 Client Secret (Google). | Optional |
+| `MICROSOFT_CLIENT_ID` | *Empty* | OAuth Client ID (Microsoft Entra ID). Callback: `{BASE_URL}/api/auth/microsoft/callback`. | Optional |
+| `MICROSOFT_CLIENT_SECRET` | *Empty* | OAuth Client Secret (Microsoft Entra ID). | Optional |
+| `MICROSOFT_TENANT_ID` | `common` | Tenant scoping for Microsoft OAuth (`common`, tenant ID, `organizations`, `consumers`). | Optional |
+| `CUSTOM_OAUTH_CLIENT_ID` | *Empty* | OAuth Client ID for custom provider (e.g. Keycloak/Auth0). | Optional |
+| `CUSTOM_OAUTH_CLIENT_SECRET` | *Empty* | OAuth Client Secret for custom provider. | Optional |
+| `CUSTOM_OAUTH_AUTHORIZE_URL` | *Empty* | Authorize endpoint of the custom provider. | Optional |
+| `CUSTOM_OAUTH_TOKEN_URL` | *Empty* | Token endpoint of the custom provider. | Optional |
+| `CUSTOM_OAUTH_USERINFO_URL` | *Empty* | UserInfo endpoint of the custom provider. | Optional |
+| `CUSTOM_OAUTH_SCOPES` | `openid email profile` | Scopes for custom OAuth. | Optional |
+| `CUSTOM_OAUTH_CLAIM_ID` | `sub` | Claim for unique user ID with custom provider. | Optional |
+| `CUSTOM_OAUTH_CLAIM_EMAIL` | `email` | Claim for email with custom provider. | Optional |
+| `CUSTOM_OAUTH_CLAIM_NAME` | `name` | Claim for display name with custom provider. | Optional |
+| `CUSTOM_OAUTH_NAME` | `Custom` | Display name of the custom provider on the login page. | Optional |
+| `CUSTOM_OAUTH_ICON_URL` | *Empty* | Optional icon URL for the custom login button. | Optional |
+| `SKIP_OAUTH_VERIFICATION` | *Empty* | `1`/`true`: skip HTTP verification of OAuth credentials on startup (e.g. CI/tests). The check for "at least one provider fully configured" remains active. | Optional |
+| `INITIAL_ADMIN_EMAIL` | *Empty* | Email of the first admin (access without invitation, via supported OAuth provider). | **Recommended** |
+| `FRONTEND_URL` / `BASE_URL` | see [OAuth (GitHub, Google, Microsoft, Custom)](/docs/oauth/readme) | For OAuth callback and invitation links. | Adjust |
+| `PROXY_HEADERS_TRUSTED` | `false` | When `true`: `X-Forwarded-For` is used for rate limiting. **Only** enable when the app runs behind a trusted reverse proxy (Nginx, Traefik). When `false`, `request.client.host` is used (protection against spoofing). | With proxy: `true` |
 
-**OAuth beim Start:** Es muss mindestens ein OAuth-Provider (GitHub, Google, Microsoft oder Custom) vollständig konfiguriert sein (jeweils `CLIENT_ID` und `CLIENT_SECRET`; bei Custom zusätzlich Authorize/Token/UserInfo-URLs). Ohne dies startet die App nicht. Beim Start werden die gesetzten Credentials per Request an den jeweiligen Anbieter verifiziert; bei ungültigen Werten oder Redirect-URI-Mismatch startet die App ebenfalls nicht.
+**OAuth on startup:** At least one OAuth provider (GitHub, Google, Microsoft, or Custom) must be fully configured (each with `CLIENT_ID` and `CLIENT_SECRET`; for Custom additionally Authorize/Token/UserInfo URLs). Without this, the app will not start. On startup, configured credentials are verified via a request to the respective provider; with invalid values or redirect URI mismatch, the app will also not start.
 
-## Benachrichtigungen (Optional)
+## Notifications (Optional)
 
-| Variable | Beschreibung |
-|----------|--------------|
-| `EMAIL_ENABLED` | `true` oder `false` |
-| `SMTP_HOST` | SMTP Server Hostname |
-| `SMTP_PORT` | SMTP Port (z.B. 587) |
-| `EMAIL_RECIPIENTS` | Kommagetrennte Liste der Empfänger |
-| `TEAMS_ENABLED` | `true` oder `false` |
-| `TEAMS_WEBHOOK_URL`| Webhook URL für Microsoft Teams Channel |
+| Variable | Description |
+|----------|-------------|
+| `EMAIL_ENABLED` | `true` or `false` |
+| `SMTP_HOST` | SMTP server hostname |
+| `SMTP_PORT` | SMTP port (e.g. 587) |
+| `EMAIL_RECIPIENTS` | Comma-separated list of recipients |
+| `TEAMS_ENABLED` | `true` or `false` |
+| `TEAMS_WEBHOOK_URL`| Webhook URL for Microsoft Teams channel |
 
-Diese Einstellungen werden auch für **Benachrichtigungen bei der automatischen Sicherheitsprüfung (Abhängigkeiten-Audit)** genutzt: Wenn täglich pip-audit läuft und Schwachstellen (CVE) findet, werden E-Mail und/oder Teams wie oben konfiguriert versendet. Die Aktivierung und der Zeitpunkt (Cron) werden in der **UI unter Einstellungen → Abhängigkeiten – automatische Sicherheitsprüfung** gesetzt (nur Admins). Details: [Abhängigkeiten und Sicherheitsprüfung](/docs/pipelines/abhaengigkeiten-sicherheit).
+These settings are also used for **notifications from the automatic security scan (dependency audit)**: when pip-audit runs daily and finds vulnerabilities (CVEs), email and/or Teams notifications are sent as configured above. Activation and schedule (cron) are set in the **UI under Settings → Dependencies – automatic security scan** (admins only). Details: [Dependencies and Security Scan](/docs/pipelines/abhaengigkeiten-sicherheit).

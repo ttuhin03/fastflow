@@ -6,48 +6,48 @@ sidebar_position: 2
 
 **Push to Deploy, No Build Needed.**
 
-In Fast-Flow ist dein **Git-Repository die einzige Wahrheit**. Es gibt keinen "Upload"-Button und keinen manuellen Build-Schritt.
+In Fast-Flow, your **Git repository is the single source of truth**. There is no "Upload" button and no manual build step.
 
-## Die alte Welt (Airflow, Dagster, Mage)
+## The Old World (Airflow, Dagster, Mage)
 
-- **Image-Hell:** Jede Code-Änderung erfordert oft einen neuen Docker-Build (5–10 Minuten).
-- **Sidecar-Chaos:** Git-Sync-Sidecars oder S3-Buckets, um DAGs zu verteilen.
-- **Version-Gap:** UI und Git-Repository sind oft nicht im Einklang.
+- **Image hell:** Every code change often requires a new Docker build (5–10 minutes).
+- **Sidecar chaos:** Git-sync sidecars or S3 buckets to distribute DAGs.
+- **Version gap:** UI and Git repository are often out of sync.
 
-## Der Fast-Flow Weg: "Source of Truth"
+## The Fast-Flow Way: "Source of Truth"
 
-- **Zero-Build Deployment:** Code-Änderungen werden per Webhook oder manuellem Sync gezogen. Dank uv-JIT ist die neue Version sofort lauffähig.
-- **Vollständige Rückverfolgbarkeit:** `pipeline.json` und `requirements.txt` liegen im Git – wer hat wann Limits, Dependencies oder die **pro Pipeline wählbare** Python-Version geändert, steht im Git-Log.
-- **Atomic Sync:** Pipelines lesen keine "halben" Dateien; Änderungen werden atomar eingespielt.
+- **Zero-build deployment:** Code changes are pulled via webhook or manual sync. Thanks to uv JIT, the new version is immediately runnable.
+- **Full traceability:** `pipeline.json` and `requirements.txt` live in Git—who changed limits, dependencies, or the **per-pipeline selectable** Python version and when is recorded in the Git log.
+- **Atomic sync:** Pipelines never read "half" files; changes are applied atomically.
 
-| Feature | Traditionelle Tools | Fast-Flow |
-|---------|---------------------|-----------|
-| **Deployment-Speed** | Minuten (Build & Push) | Sekunden (Git Pull) |
-| **Versionierung** | Oft nur Code | Code, Deps & Ressourcen-Limits |
-| **Rollback** | Image-Rollback (komplex) | `git revert` (einfach) |
-| **Wahrheit** | UI vs. Git vs. Image | **Git ist Gesetz** |
+| Feature | Traditional Tools | Fast-Flow |
+|---------|-------------------|-----------|
+| **Deployment speed** | Minutes (build & push) | Seconds (Git pull) |
+| **Versioning** | Often code only | Code, deps & resource limits |
+| **Rollback** | Image rollback (complex) | `git revert` (simple) |
+| **Source of truth** | UI vs. Git vs. image | **Git is law** |
 
-## Ablauf
+## Workflow
 
-1. **Entwickeln:** Python-Skript lokal schreiben und testen.
-2. **Pushen:** `git push origin main`
-3. **Syncen:** Orchestrator holt Änderungen per Webhook oder Auto-Sync.
-4. **Laufen:** Pipeline startet mit dem neuen Code – ohne Docker-Builds.
+1. **Develop:** Write and test Python scripts locally.
+2. **Push:** `git push origin main`
+3. **Sync:** Orchestrator fetches changes via webhook or auto-sync.
+4. **Run:** Pipeline starts with the new code—without Docker builds.
 
-> "Wir haben das Deployment so langweilig wie möglich gemacht, damit du dich auf das Spannende konzentrieren kannst: Deinen Code."
+> "We made deployment as boring as possible so you can focus on what's exciting: your code."
 
-## Konfiguration
+## Configuration
 
-Relevante Variablen (siehe [Konfiguration](/docs/deployment/CONFIGURATION)):
+Relevant variables (see [Configuration](/docs/deployment/CONFIGURATION)):
 
-- `PIPELINES_DIR` – Pfad zum (geklonten) Pipeline-Repo
-- `GIT_BRANCH` – Branch für den Sync (z.B. `main`)
-- `AUTO_SYNC_ENABLED` / `AUTO_SYNC_INTERVAL` – automatischer Sync
-- `UV_PRE_HEAT` – Dependencies beim Sync vorinstallieren
-- GitHub App / Git-URL für private Repos
+- `PIPELINES_DIR` – path to the (cloned) pipeline repo
+- `GIT_BRANCH` – branch for sync (e.g. `main`)
+- `AUTO_SYNC_ENABLED` / `AUTO_SYNC_INTERVAL` – automatic sync
+- `UV_PRE_HEAT` – preinstall dependencies during sync
+- GitHub App / Git URL for private repos
 
-## Siehe auch
+## See Also
 
-- [Pipelines – Übersicht](/docs/pipelines/uebersicht)
-- [Architektur](/docs/architektur) – Runner-Cache, Zero-Build
-- [Konfiguration](/docs/deployment/CONFIGURATION)
+- [Pipelines – Overview](/docs/pipelines/uebersicht)
+- [Architecture](/docs/architektur) – runner cache, zero-build
+- [Configuration](/docs/deployment/CONFIGURATION)

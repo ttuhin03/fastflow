@@ -1,69 +1,69 @@
-# Google OAuth + Einladung
+# Google OAuth + Invitation
 
-Anleitung zum Einrichten von **Google OAuth 2.0 / OIDC** für Login, Einladung und Konto verknüpfen.
+Guide to setting up **Google OAuth 2.0 / OIDC** for login, invitation, and account linking.
 
 ---
 
-## 1. OAuth-Client in der Google Cloud Console
+## 1. OAuth client in Google Cloud Console
 
-1. [Google Cloud Console](https://console.cloud.google.com/) → Projekt wählen/erstellen
-2. **APIs & Services** → **Anmeldedaten** → **Anmeldedaten erstellen**** → **OAuth-Client-ID**
-3. Anwendungstyp: **Webanwendung**
-4. **Authorisierte Weiterleitungs-URIs** hinzufügen:
-   - `http://localhost:8000/api/auth/google/callback` (lokal)
-   - in Produktion: `https://deine-domain.de/api/auth/google/callback`
-5. **Erstellen** → **Client-ID** und **Client-Geheimnis** kopieren (Geheimnis nur einmal sichtbar).
+1. [Google Cloud Console](https://console.cloud.google.com/) → select/create project
+2. **APIs & Services** → **Credentials** → **Create credentials** → **OAuth client ID**
+3. Application type: **Web application**
+4. Add **Authorized redirect URIs**:
+   - `http://localhost:8000/api/auth/google/callback` (local)
+   - in production: `https://your-domain.com/api/auth/google/callback`
+5. **Create** → copy **Client ID** and **Client secret** (secret is only shown once).
 
 ---
 
 ## 2. .env
 
 ```env
-GOOGLE_CLIENT_ID=<Client-ID aus Schritt 1>
-GOOGLE_CLIENT_SECRET=<Client-Geheimnis>
-# INITIAL_ADMIN_EMAIL: gilt auch für Google (E-Mail von Google muss exakt passen)
-# BASE_URL / FRONTEND_URL: wie bei GitHub (Callback, Redirects)
+GOOGLE_CLIENT_ID=<Client ID from step 1>
+GOOGLE_CLIENT_SECRET=<Client secret>
+# INITIAL_ADMIN_EMAIL: also applies to Google (Google email must match exactly)
+# BASE_URL / FRONTEND_URL: same as GitHub (callback, redirects)
 ```
 
 ---
 
-## 3. Abläufe
+## 3. Flows
 
-### A) Erster Login (INITIAL_ADMIN_EMAIL)
+### A) First login (INITIAL_ADMIN_EMAIL)
 
-- `/login` → **„Sign in with Google“**  
-- E-Mail von Google muss **exakt** `INITIAL_ADMIN_EMAIL` entsprechen.
+- `/login` → **"Sign in with Google"**  
+- Google email must **exactly** match `INITIAL_ADMIN_EMAIL`.
 
-### B) Einladung einlösen
+### B) Redeem invitation
 
-- Einladungslink `/invite?token=…` → **„Mit Google registrieren“**  
-- E-Mail von Google muss der Einladungs-E-Mail (`recipient_email`) entsprechen.
+- Invitation link `/invite?token=…` → **"Register with Google"**  
+- Google email must match the invitation email (`recipient_email`).
 
-### C) Konto verknüpfen (Link Google)
+### C) Link account (Link Google)
 
-- **Einstellungen** → **Verknüpfte Konten** → bei Google **„Jetzt verbinden“**  
-- Redirect zu `/api/auth/link/google` → Google OAuth → zurück zu **/settings?linked=google**  
-- Sinnvoll, wenn GitHub- und Google-E-Mail **unterschiedlich** sind: Verknüpfung nur so möglich (kein Auto-Match über E-Mail).
+- **Settings** → **Linked accounts** → for Google **"Connect now"**  
+- Redirect to `/api/auth/link/google` → Google OAuth → back to **/settings?linked=google**  
+- Useful when GitHub and Google emails are **different**: linking is only possible this way (no auto-match via email).
 
 ---
 
 ## 4. Scopes
 
-Verwendet werden: `openid`, `email`, `profile` (über `openid email profile`).
+Used: `openid`, `email`, `profile` (via `openid email profile`).
 
 ---
 
-## 5. Häufige Fehler
+## 5. Common errors
 
-| Symptom | Prüfen |
+| Symptom | Check |
 |--------|--------|
-| **503** „Google OAuth ist nicht konfiguriert“ | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` in `.env` |
-| **403** nach Google-Login | `INITIAL_ADMIN_EMAIL` bzw. Einladungs-E-Mail entspricht nicht der Google-E-Mail; Einladung abgelaufen/bereits eingelöst |
-| Redirect-Fehler nach Authorisierung | **Weiterleitungs-URI** in der Cloud Console **exakt** `{BASE_URL}/api/auth/google/callback` (inkl. Protocol, Port, Pfad) |
+| **503** "Google OAuth is not configured" | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` in `.env` |
+| **403** after Google login | `INITIAL_ADMIN_EMAIL` or invitation email does not match Google email; invitation expired/already redeemed |
+| Redirect error after authorization | **Redirect URI** in Cloud Console **exactly** `{BASE_URL}/api/auth/google/callback` (including protocol, port, path) |
 
 ---
 
-## 6. Hinweis zu abweichenden E-Mails
+## 6. Note on different emails
 
-Wenn jemand bei **GitHub** `ich@privat.de` und bei **Google** `ich@firma.de` hat, kann das System die Accounts **nicht** automatisch anhand der E-Mail zuordnen.  
-Lösung: Zuerst mit einem Provider einloggen, dann unter **Einstellungen → Verknüpfte Konten** den anderen Provider über **„Jetzt verbinden“** verknüpfen. Die Verknüpfung erfolgt über die aktive Session (User ist schon eingeloggt), die E-Mail des zweiten Providers spielt dabei keine Rolle.
+If someone has `me@private.com` on **GitHub** and `me@company.com` on **Google**, the system **cannot** automatically match the accounts by email.  
+Solution: First log in with one provider, then under **Settings → Linked accounts** link the other provider via **"Connect now"**. Linking uses the active session (user is already logged in); the second provider's email does not matter.

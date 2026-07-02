@@ -6,7 +6,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
   title: 'Fast-Flow',
-  tagline: 'Der schlanke, Docker-native, Python-zentrische Task-Orchestrator',
+  tagline: 'The lean, Docker-native, Python-centric task orchestrator',
   favicon: 'img/favicon.ico',
 
   markdown: {
@@ -24,8 +24,8 @@ const config: Config = {
   onBrokenLinks: (process.env.BASE_URL ? 'warn' : 'throw') as const,
 
   i18n: {
-    defaultLocale: 'de',
-    locales: ['de'],
+    defaultLocale: 'en',
+    locales: ['en'],
   },
 
   presets: [
@@ -70,7 +70,7 @@ const config: Config = {
           type: 'docSidebar',
           sidebarId: 'tutorialSidebar',
           position: 'left',
-          label: 'Doku',
+          label: 'Docs',
         },
         {
           href: 'https://github.com/ttuhin03/fastflow',
@@ -83,20 +83,20 @@ const config: Config = {
       style: 'dark',
       links: [
         {
-          title: 'Doku',
+          title: 'Docs',
           items: [
             {label: 'Intro', to: '/docs/intro'},
-            {label: 'Schnellstart', to: '/docs/schnellstart'},
+            {label: 'Quick Start', to: '/docs/schnellstart'},
             {label: 'Setup', to: '/docs/setup'},
-            {label: 'Erste Pipeline', to: '/docs/pipelines/erste-pipeline'},
+            {label: 'First Pipeline', to: '/docs/pipelines/erste-pipeline'},
             {label: 'Troubleshooting', to: '/docs/troubleshooting'},
           ],
         },
         {
-          title: 'Mehr',
+          title: 'More',
           items: [
-            {label: 'Pipeline-Template', href: 'https://github.com/ttuhin03/fastflow-pipeline-template'},
-            {label: 'Konzepte & Glossar', to: '/docs/konzepte'},
+            {label: 'Pipeline Template', href: 'https://github.com/ttuhin03/fastflow-pipeline-template'},
+            {label: 'Concepts & Glossary', to: '/docs/konzepte'},
             {label: 'GitHub', href: 'https://github.com/ttuhin03/fastflow'},
             {label: 'Disclaimer', to: '/docs/disclaimer'},
           ],

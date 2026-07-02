@@ -2,34 +2,34 @@
 sidebar_position: 30
 ---
 
-# Disclaimer & Haftungsausschluss
+# Disclaimer & Liability
 
-:::caution Wichtiger Hinweis zu Sicherheit und Haftung
-Dieses Projekt befindet sich in einem **frühen Stadium / Beta-Status**. Der Orchestrator benötigt Zugriff auf den **Docker-Socket**, um Pipelines auszuführen. Bei **unsachgemäßer Konfiguration** besteht ein **Sicherheitsrisiko** für das Host-System.
+:::caution Important notice on security and liability
+This project is in an **early stage / beta status**. The orchestrator requires access to the **Docker socket** to execute pipelines. With **improper configuration**, there is a **security risk** to the host system.
 :::
 
-## Nutzung auf eigene Gefahr
+## Use at your own risk
 
-Die Software wird **„wie besehen“ (as is)** zur Verfügung gestellt. Der Autor übernimmt **keinerlei Haftung** für:
+The software is provided **"as is"**. The author assumes **no liability** for:
 
-- Schäden an Hardware
-- Datenverlust
-- Sicherheitslücken
-- Betriebsunterbrechungen
+- Hardware damage
+- Data loss
+- Security vulnerabilities
+- Service interruptions
 
-die durch die Nutzung dieser Software entstehen könnten.
+that may arise from the use of this software.
 
-## Keine Gewährleistung
+## No warranty
 
-Es besteht **keine Garantie** für:
+There is **no guarantee** for:
 
-- die **Richtigkeit** der Software,
-- ihre **Funktionsfähigkeit** oder
-- ihre **ständige Verfügbarkeit**.
+- the **correctness** of the software,
+- its **functionality**, or
+- its **continuous availability**.
 
-## Sicherheitsempfehlung
+## Security recommendation
 
-- **Nie** diesen Orchestrator **ungeschützt im öffentlichen Internet** betreiben.
-- **Immer** den empfohlenen **Docker-Socket-Proxy** und eine **starke Authentifizierung** (OAuth, sichere JWT- und Encryption-Keys) verwenden.
+- **Never** run this orchestrator **unprotected on the public internet**.
+- **Always** use the recommended **Docker socket proxy** and **strong authentication** (OAuth, secure JWT and encryption keys).
 
-Ausführlich: [Docker Socket Proxy](/docs/deployment/DOCKER_PROXY), [Setup-Anleitung](/docs/setup) (Produktions-Checkliste), [Deployment](/docs/deployment/PRODUCTION).
+Details: [Docker Socket Proxy](/docs/deployment/DOCKER_PROXY), [Setup Guide](/docs/setup) (production checklist), [Deployment](/docs/deployment/PRODUCTION).

@@ -4,41 +4,41 @@ sidebar_position: 9
 
 # Kubernetes Deployment
 
-Fast-Flow kann in einem lokalen oder produktiven Kubernetes-Cluster betrieben werden. Die API ist K8s-ready mit Liveness- (`/health`) und Readiness-Probes (`/ready`).
+Fast-Flow can be run in a local or production Kubernetes cluster. The API is K8s-ready with liveness (`/health`) and readiness probes (`/ready`).
 
-## Voraussetzungen
+## Prerequisites
 
-- **kubectl** installiert
-- **Kubernetes-Cluster** (eine der folgenden Optionen):
+- **kubectl** installed
+- **Kubernetes cluster** (one of the following options):
 
-  | Option | Empfehlung | Hinweis |
-  |--------|------------|---------|
-  | **kubeadm** | Produktion | Standard-Worker mit containerd (kein Docker für Runs nötig) |
-  | **Docker Desktop** | Lokale Entwicklung | Einstellungen → „Enable Kubernetes“ aktivieren |
-  | **Kind** (Kubernetes in Docker) | Leichtgewichtig | Projekt-Root: `kind-config.yaml` – nur nötig, wenn du **zusätzlich** Docker-Executor im Cluster nutzt (ungewöhnlich) |
-  | **Minikube** | Feature-reich | Beliebiger gangbarer Treiber |
+  | Option | Recommendation | Notes |
+  |--------|----------------|-------|
+  | **kubeadm** | Production | Standard worker with containerd (no Docker needed for runs) |
+  | **Docker Desktop** | Local development | Enable Settings → "Enable Kubernetes" |
+  | **Kind** (Kubernetes in Docker) | Lightweight | Project root: `kind-config.yaml` – only needed if you **additionally** use the Docker executor in the cluster (unusual) |
+  | **Minikube** | Feature-rich | Any workable driver |
 
-- **Docker** (lokal): nur zum **Bauen und Laden** des Orchestrator-Images (`docker build`, `kind load`, Minikube-Docker-Env). **Pipeline-Runs** laufen mit den Standard-Manifesten als **Kubernetes Jobs** (`PIPELINE_EXECUTOR=kubernetes`) – dafür ist **kein** Docker-Daemon auf den Kubernetes-Nodes erforderlich.
+- **Docker** (local): only for **building and loading** the orchestrator image (`docker build`, `kind load`, Minikube Docker env). **Pipeline runs** use **Kubernetes Jobs** with the default manifests (`PIPELINE_EXECUTOR=kubernetes`) – **no** Docker daemon on Kubernetes nodes is required.
 
-## Kind: optional Docker-Socket für den Host
+## Kind: optional Docker socket for the host
 
-Die mitgelieferten `k8s/`-Deployments starten Pipeline-Runs als **Jobs** über die Kubernetes-API. Ein **Host-Docker-Socket** in Kind ist nur relevant, wenn du den Orchestrator bewusst mit `PIPELINE_EXECUTOR=docker` betreibst und Worker-Container auf dem Docker des Hosts starten willst (nicht der empfohlene Weg für reine K8s-Umgebungen).
+The included `k8s/` deployments start pipeline runs as **Jobs** via the Kubernetes API. A **host Docker socket** in Kind is only relevant if you deliberately run the orchestrator with `PIPELINE_EXECUTOR=docker` and want to start worker containers on the host's Docker (not the recommended approach for pure K8s environments).
 
-Falls du den Socket dennoch in Kind-Nodes brauchst, kann `kind-config.yaml` im Projekt-Root **extraMounts** für `/var/run/docker.sock` setzen. Cluster erstellen:
+If you still need the socket in Kind nodes, `kind-config.yaml` in the project root can set **extraMounts** for `/var/run/docker.sock`. Create the cluster:
 
 ```bash
 kind create cluster --config kind-config.yaml
 ```
 
-## Manuelles Deployment
+## Manual Deployment
 
 ### 1. Secrets
 
-**Standard:** `k8s/secrets.yaml` enthält alle Werte (inkl. Dev-Dummy für OAuth). Einfach `kubectl apply -f k8s/` – kein manuelles Secret nötig.
+**Default:** `k8s/secrets.yaml` contains all values (including dev dummy for OAuth). Simply `kubectl apply -f k8s/` – no manual secret needed.
 
-**Produktion:** Werte in `k8s/secrets.yaml` ersetzen (ENCRYPTION_KEY, JWT_SECRET_KEY, echte OAuth-Credentials). Oder eigenes Secret verwenden und `secrets.yaml` nicht anwenden.
+**Production:** Replace values in `k8s/secrets.yaml` (ENCRYPTION_KEY, JWT_SECRET_KEY, real OAuth credentials). Or use your own secret and do not apply `secrets.yaml`.
 
-### 2. Image bauen und laden (Kind/Minikube)
+### 2. Build and load image (Kind/Minikube)
 
 ```bash
 docker build -t fastflow-orchestrator:latest .
@@ -57,143 +57,143 @@ eval $(minikube docker-env)
 docker build -t fastflow-orchestrator:latest .
 ```
 
-### 3. Manifests anwenden
+### 3. Apply manifests
 
 ```bash
 kubectl apply -f k8s/
 ```
 
-PostgreSQL wird mit deployt (Standard). Der Orchestrator wartet per Init-Container auf die DB, bevor er startet.
+PostgreSQL is deployed by default. The orchestrator waits for the DB via an init container before starting.
 
-### 4. Zugriff
+### 4. Access
 
-**Option A – NodePort (z. B. Port 30080):**
+**Option A – NodePort (e.g. port 30080):**
 
 - Docker Desktop / Minikube: `http://localhost:30080`
-- Kind: `kubectl get nodes -o wide` → Node-IP, dann `http://<node-ip>:30080`
+- Kind: `kubectl get nodes -o wide` → node IP, then `http://<node-ip>:30080`
 
-**Option B – Port-Forward:**
+**Option B – Port forward:**
 
 ```bash
 kubectl port-forward service/fastflow-orchestrator 8000:80
 ```
 
-Dann: `http://localhost:8000`
+Then: `http://localhost:8000`
 
-### 5. BASE_URL anpassen
+### 5. Adjust BASE_URL
 
-Je nach Zugriffsmethode `BASE_URL` und `FRONTEND_URL` in der ConfigMap setzen:
+Depending on access method, set `BASE_URL` and `FRONTEND_URL` in the ConfigMap:
 
-- NodePort 30080: `http://localhost:30080` (oder Ihre tatsächliche URL)
-- Port-Forward: `http://localhost:8000`
+- NodePort 30080: `http://localhost:30080` (or your actual URL)
+- Port forward: `http://localhost:8000`
 
 ```bash
 kubectl edit configmap fastflow-config
 ```
 
-Danach Pod neu starten: `kubectl rollout restart deployment/fastflow-orchestrator`
+Then restart the pod: `kubectl rollout restart deployment/fastflow-orchestrator`
 
-### 6. Wichtige URLs
+### 6. Important URLs
 
-| URL | Beschreibung |
-|-----|--------------|
-| `/` | React-Frontend (Dashboard) |
-| `/doku` | Docusaurus-Dokumentation |
-| `/docs` | FastAPI Swagger (API-Doku) |
+| URL | Description |
+|-----|-------------|
+| `/` | React frontend (dashboard) |
+| `/doku` | Docusaurus documentation |
+| `/docs` | FastAPI Swagger (API docs) |
 | `/redoc` | FastAPI ReDoc |
 
-### 7. Pipelines: PVC, Executor und DEV vs. PROD
+### 7. Pipelines: PVC, executor, and DEV vs. PROD
 
-Pipelines liegen im **`fastflow-pvc`** (Unterverzeichnis `pipelines`) – gemeinsam mit `data` und `logs` (20 GiB-Setup in den Beispiel-Manifesten).
+Pipelines live in **`fastflow-pvc`** (subdirectory `pipelines`) – together with `data` and `logs` (20 GiB setup in the example manifests).
 
-- **`PIPELINE_EXECUTOR=kubernetes`** (Standard im `k8s/deployment`): Vor jedem Run kopiert der Orchestrator die Pipeline in ein **gemeinsames Cache-Volume** (`fastflow-cache-pvc`, Mount z. B. `/shared`, Unterverzeichnis `pipeline_runs/<Run-ID>`). Die Jobs mounten dieses Volume und den uv-Cache – **kein** manuelles `PIPELINES_HOST_DIR` für Worker-Bind-Mounts nötig.
-- **`PIPELINES_HOST_DIR`**: Wird vor allem für **`PIPELINE_EXECUTOR=docker`** benötigt, wenn der Orchestrator Docker-Worker mit Host-Pfaden startet. In der typischen K8s-Jobs-Konfiguration entfällt das.
+- **`PIPELINE_EXECUTOR=kubernetes`** (default in `k8s/deployment`): Before each run, the orchestrator copies the pipeline to a **shared cache volume** (`fastflow-cache-pvc`, mount e.g. `/shared`, subdirectory `pipeline_runs/<Run-ID>`). Jobs mount this volume and the uv cache – **no** manual `PIPELINES_HOST_DIR` for worker bind mounts needed.
+- **`PIPELINES_HOST_DIR`**: Mainly needed for **`PIPELINE_EXECUTOR=docker`** when the orchestrator starts Docker workers with host paths. Not required in the typical K8s Jobs configuration.
 
-- **`ENVIRONMENT`** steuert die Befüllung:
-  - **`development`**: Beim Start werden Beispiel-Pipelines aus dem Image nach `/app/pipelines` kopiert, falls das Verzeichnis leer ist.
-  - **`production`**: Kein Kopieren. Pipelines kommen ausschließlich über [Git-Sync](./GIT_DEPLOYMENT.md) oder manuelles Befüllen des PVC.
+- **`ENVIRONMENT`** controls population:
+  - **`development`**: On startup, example pipelines from the image are copied to `/app/pipelines` if the directory is empty.
+  - **`production`**: No copying. Pipelines come exclusively via [Git Sync](./GIT_DEPLOYMENT.md) or manual population of the PVC.
 
-Für Produktion in der ConfigMap setzen:
+For production, set in the ConfigMap:
 
 ```yaml
 ENVIRONMENT: "production"
 ```
 
-## Skaffold (Dev-Workflow)
+## Skaffold (dev workflow)
 
-Mit [Skaffold](https://skaffold.dev/) wird bei Codeänderungen automatisch gebaut, deployed und Port-Forward eingerichtet.
+With [Skaffold](https://skaffold.dev/), code changes automatically trigger build, deploy, and port-forward.
 
 ```bash
 skaffold dev
 ```
 
-Skaffold übernimmt:
+Skaffold handles:
 
-- Image-Build
-- Deploy in den Cluster (inkl. `kind load` bei Kind)
-- Port-Forward auf `localhost:8000`
-- Log-Streaming
+- Image build
+- Deploy to the cluster (including `kind load` with Kind)
+- Port-forward to `localhost:8000`
+- Log streaming
 
-## Prüfen
+## Verification
 
 ```bash
 kubectl get pods
 kubectl logs -f deployment/fastflow-orchestrator -c orchestrator
 ```
 
-Health-Checks:
+Health checks:
 
 ```bash
 curl http://localhost:8000/health
 curl http://localhost:8000/ready
 ```
 
-## Datenbank
+## Database
 
-**Standard:** PostgreSQL ist enthalten (`k8s/postgres.yaml`). Der Orchestrator verbindet sich automatisch via `DATABASE_URL` aus dem `postgres-secret`.
+**Default:** PostgreSQL is included (`k8s/postgres.yaml`). The orchestrator connects automatically via `DATABASE_URL` from `postgres-secret`.
 
-**SQLite statt PostgreSQL:** Wenn Sie `k8s/postgres.yaml` nicht anwenden, nutzt der Orchestrator SQLite im `fastflow-data-pvc` (kein `postgres-secret` → keine `DATABASE_URL`).
+**SQLite instead of PostgreSQL:** If you do not apply `k8s/postgres.yaml`, the orchestrator uses SQLite on `fastflow-data-pvc` (no `postgres-secret` → no `DATABASE_URL`).
 
-**PostgreSQL-Passwort ändern (Produktion):** In `k8s/postgres.yaml` im Secret `POSTGRES_PASSWORD` und `DATABASE_URL` anpassen.
+**Change PostgreSQL password (production):** Adjust `POSTGRES_PASSWORD` and `DATABASE_URL` in the secret in `k8s/postgres.yaml`.
 
-## Architektur
+## Architecture
 
 ```mermaid
 flowchart LR
   subgraph Cluster["Kubernetes Cluster"]
     O["Deployment: FastAPI Orchestrator\n+ Frontend"]
-    J["Job pro Pipeline-Run\nWorker-Image, uv run"]
-    O -->|"Batch API:\nJob erstellen"| J
-    O -->|"Pod-Logs,\nMetrics API"| J
+    J["Job per Pipeline Run\nWorker Image, uv run"]
+    O -->|"Batch API:\nCreate Job"| J
+    O -->|"Pod Logs,\nMetrics API"| J
   end
-  U["Benutzer / Browser"] -->|"HTTPS"| O
+  U["User / Browser"] -->|"HTTPS"| O
   subgraph Vol["Persistent Volumes"]
     P1["fastflow-pvc\ndata, logs, pipelines"]
-    P2["fastflow-cache-pvc\nuv-Cache, uv-Python,\npipeline_runs pro Run"]
+    P2["fastflow-cache-pvc\nuv cache, uv Python,\npipeline_runs per run"]
   end
   O --- P1
   O --- P2
   J --- P2
 ```
 
-- **Orchestrator-Deployment**: FastAPI + React-Frontend + Docusaurus-Doku; `PIPELINE_EXECUTOR=kubernetes`; **ServiceAccount** mit RBAC für Jobs/Pods/Logs.
-- **PostgreSQL** (optional): Datenbank-Service auf Port 5432.
-- **Pipeline-Runs**: Ein **Kubernetes Job** pro Ausführung (kein Docker-Socket auf den Nodes); nach dem Lauf Bereinigung der Kopie unter `pipeline_runs/` auf dem Cache-Volume.
-- **Volumes** (typisch):
-  - **fastflow-pvc**: am **Orchestrator**: `data`, `logs`, `pipelines` (subPath)
-  - **fastflow-cache-pvc**: am **Orchestrator** (Mount z. B. `/shared`) und am **Job-Pod** (ein PVC, mehrere subPaths): **uv_cache**, **uv_python**, **pipeline_runs/&lt;Run-ID&gt;**
-  - **postgres-pvc**: bei PostgreSQL
+- **Orchestrator deployment**: FastAPI + React frontend + Docusaurus docs; `PIPELINE_EXECUTOR=kubernetes`; **ServiceAccount** with RBAC for Jobs/Pods/Logs.
+- **PostgreSQL** (optional): Database service on port 5432.
+- **Pipeline runs**: One **Kubernetes Job** per execution (no Docker socket on nodes); after the run, cleanup of the copy under `pipeline_runs/` on the cache volume.
+- **Volumes** (typical):
+  - **fastflow-pvc**: on **orchestrator**: `data`, `logs`, `pipelines` (subPath)
+  - **fastflow-cache-pvc**: on **orchestrator** (mount e.g. `/shared`) and on **job pod** (one PVC, multiple subPaths): **uv_cache**, **uv_python**, **pipeline_runs/&lt;Run-ID&gt;**
+  - **postgres-pvc**: with PostgreSQL
 
-**Hinweis:** Wer Fast-Flow mit **`PIPELINE_EXECUTOR=docker`** in einem Pod betreibt, braucht weiterhin Docker-in-Docker bzw. Socket-Mount – die Standard-`k8s/`-Manifeste sind dafür nicht ausgelegt.
+**Note:** If you run Fast-Flow with **`PIPELINE_EXECUTOR=docker`** in a pod, you still need Docker-in-Docker or a socket mount – the default `k8s/` manifests are not designed for that.
 
-## Hinweis zu `entrypoint.sh`
+## Note on `entrypoint.sh`
 
-Im Standard-Manifest `k8s/deployment.yaml` hat der Orchestrator-Container kein eigenes `command`/`args`. Dadurch verwendet Kubernetes den Image-Default aus dem `Dockerfile` (`CMD ["./entrypoint.sh"]`).
+In the default manifest `k8s/deployment.yaml`, the orchestrator container has no custom `command`/`args`. Kubernetes therefore uses the image default from the `Dockerfile` (`CMD ["./entrypoint.sh"]`).
 
-Wenn `command` oder `args` im Deployment überschrieben werden, sollte `./entrypoint.sh` weiterhin aufgerufen werden (oder die enthaltenen Init-Schritte explizit übernommen werden), damit Startlogik und Initialisierung konsistent bleiben.
+If `command` or `args` are overridden in the deployment, `./entrypoint.sh` should still be invoked (or its init steps explicitly replicated) so startup logic and initialization remain consistent.
 
-## Siehe auch
+## See Also
 
-- [Production-Checkliste](./PRODUCTION_CHECKLIST.md)
-- [Konfiguration](./CONFIGURATION.md)
+- [Production Checklist](./PRODUCTION_CHECKLIST.md)
+- [Configuration](./CONFIGURATION.md)
 - [Docker Socket Proxy](./DOCKER_PROXY.md)

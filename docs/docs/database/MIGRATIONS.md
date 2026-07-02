@@ -1,174 +1,174 @@
-# Datenbank-Migrationen
+# Database Migrations
 
-Dieses Dokument erklärt, wie Datenbank-Migrationen in Fast-Flow manuell ausgeführt werden.
+This document explains how to run database migrations in Fast-Flow manually.
 
-## Übersicht
+## Overview
 
-Fast-Flow verwendet [Alembic](https://alembic.sqlalchemy.org/) für Datenbank-Migrationen. Migrationen werden **nicht automatisch** beim Container-Start ausgeführt, sondern müssen manuell ausgeführt werden.
+Fast-Flow uses [Alembic](https://alembic.sqlalchemy.org/) for database migrations. Migrations are **not** run automatically on container start; they must be executed manually.
 
-## Migrationen ausführen
+## Running migrations
 
-### Im Docker-Container
+### In the Docker container
 
-Wenn die Anwendung in einem Docker-Container läuft:
+When the application runs in a Docker container:
 
 ```bash
-# Migrationen ausführen
+# Run migrations
 docker compose exec fastflow-orchestrator alembic upgrade head
 
-# Oder wenn der Container anders heißt:
+# Or if the container has a different name:
 docker exec <container-name> alembic upgrade head
 ```
 
-### Lokal (ohne Docker)
+### Locally (without Docker)
 
-Wenn die Anwendung lokal läuft:
+When the application runs locally:
 
 ```bash
-# Im Projektverzeichnis
+# In the project directory
 cd /path/to/fastflow
 
-# Migrationen ausführen
+# Run migrations
 alembic upgrade head
 ```
 
-## Migration-Status prüfen
+## Checking migration status
 
-Um zu sehen, welche Migrationen bereits ausgeführt wurden:
+To see which migrations have already been applied:
 
 ```bash
-# Im Container
+# In container
 docker compose exec fastflow-orchestrator alembic current
 
-# Oder lokal
+# Or locally
 alembic current
 ```
 
-Um alle verfügbaren Migrationen zu sehen:
+To see all available migrations:
 
 ```bash
-# Im Container
+# In container
 docker compose exec fastflow-orchestrator alembic history
 
-# Oder lokal
+# Or locally
 alembic history
 ```
 
-## Neue Migration erstellen
+## Creating a new migration
 
-Wenn das Datenbankschema geändert wurde (z.B. neue Felder im Model), muss eine neue Migration erstellt werden:
+When the database schema has changed (e.g. new fields in a model), a new migration must be created:
 
 ```bash
-# Im Container
-docker compose exec fastflow-orchestrator alembic revision --autogenerate -m "Beschreibung der Änderung"
+# In container
+docker compose exec fastflow-orchestrator alembic revision --autogenerate -m "Description of change"
 
-# Oder lokal
-alembic revision --autogenerate -m "Beschreibung der Änderung"
+# Or locally
+alembic revision --autogenerate -m "Description of change"
 ```
 
-Die neue Migration wird in `alembic/versions/` erstellt und sollte vor dem Ausführen überprüft werden.
+The new migration is created in `alembic/versions/` and should be reviewed before running.
 
-## Migration rückgängig machen
+## Rolling back a migration
 
-Um die letzte Migration rückgängig zu machen:
+To undo the last migration:
 
 ```bash
-# Im Container
+# In container
 docker compose exec fastflow-orchestrator alembic downgrade -1
 
-# Oder lokal
+# Or locally
 alembic downgrade -1
 ```
 
-Um zu einer spezifischen Revision zurückzukehren:
+To return to a specific revision:
 
 ```bash
-# Im Container
+# In container
 docker compose exec fastflow-orchestrator alembic downgrade <revision-id>
 
-# Oder lokal
+# Or locally
 alembic downgrade <revision-id>
 ```
 
-## Verfügbare Migrationen
+## Available migrations
 
 ### 001_add_is_parameter_to_secret
-Fügt das Feld `is_parameter` zur `secrets`-Tabelle hinzu.
+Adds the `is_parameter` field to the `secrets` table.
 
 ### 002_add_webhook_fields
-Fügt `webhook_runs` zur `pipelines`-Tabelle und `triggered_by` zur `pipeline_runs`-Tabelle hinzu.
+Adds `webhook_runs` to the `pipelines` table and `triggered_by` to the `pipeline_runs` table.
 
 ### 003_add_user_management_fields
-Fügt Nutzermanagement-Felder zur `users`-Tabelle hinzu:
+Adds user management fields to the `users` table:
 - `email` (optional)
 - `role` (READONLY, WRITE, ADMIN)
 - `blocked` (boolean)
-- `invitation_token`, `invitation_expires_at` (optional; in **006** wieder entfernt)
+- `invitation_token`, `invitation_expires_at` (optional; removed again in **006**)
 - `microsoft_id` (optional)
 
 ### 004_github_invitation
-GitHub OAuth + Token-Einladung:
-- Neue Tabelle `invitations` (recipient_email, token, is_used, expires_at, role, created_at)
-- Neue Spalte `users.github_id` (optional, unique, für GitHub-Login)
+GitHub OAuth + token invitation:
+- New table `invitations` (recipient_email, token, is_used, expires_at, role, created_at)
+- New column `users.github_id` (optional, unique, for GitHub login)
 
 ### 005_make_password_hash_nullable
-- `users.password_hash` war kurz nullable (Vorstufe für 007).
+- `users.password_hash` was briefly nullable (precursor to 007).
 
 ### 006_drop_user_invitation_columns
-- Entfernt `users.invitation_token` und `users.invitation_expires_at` (Einladungen nur noch über Tabelle `invitations`).
+- Removes `users.invitation_token` and `users.invitation_expires_at` (invitations only via `invitations` table).
 
 ### 007_drop_password_hash
-- Entfernt `users.password_hash` (Login nur noch via GitHub OAuth).
+- Removes `users.password_hash` (login only via GitHub OAuth).
 
 ### 008_add_google_avatar
-- `users.google_id` (optional, unique) für Google OAuth.
-- `users.avatar_url` (optional) für Profilbild von OAuth-Providern.
+- `users.google_id` (optional, unique) for Google OAuth.
+- `users.avatar_url` (optional) for profile image from OAuth providers.
 
 ### 009_add_user_status
-- `users.status` (String, Default `active`) für Beitrittsanfragen: `active` (voller Zugriff), `pending` (wartet auf Freigabe), `rejected` (abgelehnt, i.d.R. mit `blocked=true`). Unbekannte OAuth-Nutzer erhalten `pending` und erscheinen unter Users → Beitrittsanfragen; nach Freigabe wird `active` gesetzt.
+- `users.status` (String, default `active`) for join requests: `active` (full access), `pending` (awaiting approval), `rejected` (declined, usually with `blocked=true`). Unknown OAuth users receive `pending` and appear under Users → Join requests; after approval `active` is set.
 
-## Wichtige Hinweise
+## Important notes
 
-1. **Backup erstellen**: Vor dem Ausführen von Migrationen sollte ein Backup der Datenbank erstellt werden, besonders in Produktionsumgebungen.
+1. **Create a backup**: Before running migrations, create a database backup, especially in production environments.
 
-2. **Migrationen prüfen**: Neue Migrationen sollten immer überprüft werden, bevor sie ausgeführt werden.
+2. **Review migrations**: New migrations should always be reviewed before execution.
 
-3. **SQLite-Besonderheiten**: SQLite unterstützt einige ALTER TABLE-Operationen nicht direkt. Alembic verwendet `batch_alter_table` für SQLite, was eine Tabelle kopieren kann. Bei großen Tabellen kann dies Zeit in Anspruch nehmen.
+3. **SQLite specifics**: SQLite does not support some ALTER TABLE operations directly. Alembic uses `batch_alter_table` for SQLite, which may copy a table. For large tables this can take time.
 
-4. **Produktionsumgebungen**: In Produktionsumgebungen sollten Migrationen während eines Wartungsfensters ausgeführt werden.
+4. **Production environments**: In production, migrations should be run during a maintenance window.
 
 ## Troubleshooting
 
-### Migration hängt
-Wenn eine Migration hängt, kann es helfen:
-- Die Datenbank zu prüfen, ob sie gelockt ist
-- Den Container neu zu starten
-- Die Migration manuell zu überprüfen
+### Migration hangs
+If a migration hangs, it may help to:
+- Check whether the database is locked
+- Restart the container
+- Review the migration manually
 
-### Migration schlägt fehl
-Wenn eine Migration fehlschlägt:
-1. Prüfe die Fehlermeldung
-2. Prüfe den aktuellen Status: `alembic current`
-3. Bei Bedarf die Migration rückgängig machen: `alembic downgrade -1`
-4. Die Migration korrigieren und erneut ausführen
+### Migration fails
+If a migration fails:
+1. Check the error message
+2. Check current status: `alembic current`
+3. If needed, roll back: `alembic downgrade -1`
+4. Fix the migration and run again
 
-### Enum-Werte korrigieren
-Falls Enum-Werte in der Datenbank nicht mit dem Code übereinstimmen (z.B. 'readonly' statt 'READONLY'), werden sie automatisch beim Lesen korrigiert (`app/auth.py`, `get_current_user`).
+### Correcting enum values
+If enum values in the database do not match the code (e.g. 'readonly' instead of 'READONLY'), they are corrected automatically on read (`app/auth.py`, `get_current_user`).
 
-## Beispiel-Workflow
+## Example workflow
 
 ```bash
-# 1. Status prüfen
+# 1. Check status
 docker compose exec fastflow-orchestrator alembic current
 
-# 2. Migrationen ausführen
+# 2. Run migrations
 docker compose exec fastflow-orchestrator alembic upgrade head
 
-# 3. Status erneut prüfen
+# 3. Check status again
 docker compose exec fastflow-orchestrator alembic current
 ```
 
-## Weitere Informationen
+## Further information
 
-- [Alembic Dokumentation](https://alembic.sqlalchemy.org/)
-- [SQLModel Dokumentation](https://sqlmodel.tiangolo.com/)
+- [Alembic documentation](https://alembic.sqlalchemy.org/)
+- [SQLModel documentation](https://sqlmodel.tiangolo.com/)

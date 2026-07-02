@@ -1,8 +1,8 @@
 import React, {useState} from 'react';
 
 /**
- * Erzeugt ein zufälliges JWT-Secret (32 Bytes, Base64url) im Browser –
- * entspricht python -c "import secrets; print(secrets.token_urlsafe(32))"
+ * Generates a random JWT secret (32 bytes, Base64url) in the browser –
+ * equivalent to python -c "import secrets; print(secrets.token_urlsafe(32))"
  */
 function generateJwtSecret(): string {
   const bytes = new Uint8Array(32);
@@ -31,7 +31,7 @@ export default function GenerateJwtSecret(): React.ReactElement {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback in älteren Browsern optional
+      // Optional fallback for older browsers
     }
   };
 
@@ -42,7 +42,7 @@ export default function GenerateJwtSecret(): React.ReactElement {
         className="button button--primary"
         onClick={handleGenerate}
       >
-        JWT-Secret erzeugen
+        Generate JWT secret
       </button>
       {key && (
         <div style={{marginTop: '0.75rem'}}>
@@ -70,7 +70,7 @@ export default function GenerateJwtSecret(): React.ReactElement {
               className="button button--secondary button--sm"
               onClick={handleCopy}
             >
-              {copied ? 'Kopiert' : 'Kopieren'}
+              {copied ? 'Copied' : 'Copy'}
             </button>
           </div>
         </div>

@@ -1,79 +1,79 @@
-# Error-Tracking & Telemetrie (PostHog)
+# Error Tracking & Telemetry (PostHog)
 
-Fast-Flow nutzt **PostHog Cloud EU** (Frankfurt) für Fehlerberichte und Product Analytics. Die Nutzung ist **opt-in** und wird vom Admin gesteuert. Alle Daten sind anonym, sensible Keys werden entfernt.
+Fast-Flow uses **PostHog Cloud EU** (Frankfurt) for error reporting and product analytics. Usage is **opt-in** and controlled by the admin. All data is anonymous; sensitive keys are removed.
 
 ---
 
-## Übersicht
+## Overview
 
-| Phase   | Inhalt |
+| Phase   | Content |
 |---------|--------|
-| **Phase 1 (aktiv)** | Fehlerberichte: Backend- und Frontend-Exceptions an PostHog |
-| **Phase 2 (aktiv bei enable_telemetry)** | Product Analytics: User (Register/Login), Pipeline-Runs, Sync, instance_heartbeat inkl. Storage/RAM/CPU. distinct_id = eine UUID pro Instanz (Anzahl aktive Instanzen); total_users_bucket (1, 2-5, …) für anonyme Nutzerzahlen. **Session Recording (Replay) wird ausdrücklich nicht genutzt.** |
+| **Phase 1 (active)** | Error reporting: backend and frontend exceptions to PostHog |
+| **Phase 2 (active when enable_telemetry)** | Product analytics: user (register/login), pipeline runs, sync, instance_heartbeat including storage/RAM/CPU. distinct_id = one UUID per instance (count of active instances); total_users_bucket (1, 2-5, …) for anonymous user counts. **Session recording (replay) is explicitly not used.** |
 
 ---
 
-## Steuerung
+## Control
 
-- **`SystemSettings`** (DB, Singleton `id=1`):
-  - `is_setup_completed` – ob der First-Run-Wizard abgeschlossen ist
-  - `enable_error_reporting` – Fehlerberichte an PostHog (Phase 1)
-  - `enable_telemetry` – für Phase 2 (Product Analytics, anonyme Nutzungsstatistiken). **Session Recording wird nicht verwendet.**
-- **First-Run-Wizard**: Beim ersten Admin-Login erscheint ein Modal; dort können Fehlerberichte und Nutzungsstatistiken ein-/ausgeschaltet werden. Session Recording ist ausgeschlossen.
-- **Einstellungen → Global Privacy & Telemetry**: Admins können die Toggles jederzeit unter **Einstellungen** (nur für Admins sichtbar) anpassen. Session Recording wird nicht genutzt.
+- **`SystemSettings`** (DB, singleton `id=1`):
+  - `is_setup_completed` – whether the first-run wizard is completed
+  - `enable_error_reporting` – error reports to PostHog (Phase 1)
+  - `enable_telemetry` – for Phase 2 (product analytics, anonymous usage statistics). **Session recording is not used.**
+- **First-run wizard**: On first admin login a modal appears; error reporting and usage statistics can be toggled there. Session recording is excluded.
+- **Settings → Global Privacy & Telemetry**: Admins can adjust toggles anytime under **Settings** (visible to admins only). Session recording is not used.
 
 ---
 
 ## Backend (Python)
 
-Implementierung orientiert an der [PostHog Product Analytics Installation (Python)](https://posthog.com/docs/product-analytics/installation/python):
+Implementation follows the [PostHog Product Analytics Installation (Python)](https://posthog.com/docs/product-analytics/installation/python):
 
-- **Init**: `Posthog(project_api_key=..., host=config.POSTHOG_HOST)` (EU: `https://eu.posthog.com`). Lazy-Init bei `enable_error_reporting` **oder** `enable_telemetry`. `get_posthog_client_for_telemetry(session)` für Product Analytics.
-- **Capture**: `client.capture(event, distinct_id=..., properties=...)`. In allen Backend-Events wird `"$process_person_profile": False` mitgesendet (keine Person-Profile für Instanz-UUIDs; vgl. PostHog-Docs).
-- **Shutdown**: `shutdown_posthog()` beim App-Exit (Flush ausstehender Events) sowie bei `enable_error_reporting=false`.
-- **Product Analytics** (`app/analytics.py`): `track_event` und Wrapper. Nur aktiv bei `enable_telemetry`. Events: `user_registered`, `user_logged_in` (provider: github|google), `pipeline_run_started`, `pipeline_run_finished` (u.a. success), `sync_completed`, `sync_failed`, `instance_heartbeat` (inkl. total_users_bucket, total_pipelines, total_scheduled_jobs, db_kind, uv_pre_heat_enabled, pipelines_with_requirements, log_files_count, log_files_size_mb, database_size_mb, free_disk_gb, system_ram_total_mb, system_ram_percent, system_cpu_percent). **instance_heartbeat:** einmalig beim App-Start, danach wie geplant (täglich 03:00 UTC).
-- **Erfasste Fehler**:
-  - FastAPI-Exception-Handler: alle Exceptions, die als 500 enden; Properties: `$request_method`, `$current_url` (ohne Query), `$request_path`
-  - Exception-Autocapture des SDK (unbehandelte Exceptions)
-  - Manuell: `capture_exception(exc, session, properties=...)`
-- **Startup-Test (nur `ENVIRONMENT=development`)**: Beim Start wird immer eine Test-Exception an PostHog gesendet (unabhängig von `enable_error_reporting`), erkennbar an `$fastflow_startup_test=True`.
-- **Test-Button (nur `ENVIRONMENT=development`)**: Unter **Einstellungen → Entwicklung** können Test-Exceptions für **Backend** oder **Frontend** ausgelöst werden (erkennbar an `$fastflow_backend_test` / `$fastflow_frontend_test`).
-- **Daten**: `distinct_id` = anonyme UUID aus `SystemSettings`; Properties werden mit Scrubbing (Keys mit `password`, `secret`, `api_key`, `token`) bereinigt. Query-Strings werden in URLs nicht mitgeschickt.
+- **Init**: `Posthog(project_api_key=..., host=config.POSTHOG_HOST)` (EU: `https://eu.posthog.com`). Lazy init when `enable_error_reporting` **or** `enable_telemetry`. `get_posthog_client_for_telemetry(session)` for product analytics.
+- **Capture**: `client.capture(event, distinct_id=..., properties=...)`. All backend events include `"$process_person_profile": False` (no person profiles for instance UUIDs; see PostHog docs).
+- **Shutdown**: `shutdown_posthog()` on app exit (flush pending events) and when `enable_error_reporting=false`.
+- **Product analytics** (`app/analytics.py`): `track_event` and wrappers. Active only when `enable_telemetry`. Events: `user_registered`, `user_logged_in` (provider: github|google), `pipeline_run_started`, `pipeline_run_finished` (incl. success), `sync_completed`, `sync_failed`, `instance_heartbeat` (incl. total_users_bucket, total_pipelines, total_scheduled_jobs, db_kind, uv_pre_heat_enabled, pipelines_with_requirements, log_files_count, log_files_size_mb, database_size_mb, free_disk_gb, system_ram_total_mb, system_ram_percent, system_cpu_percent). **instance_heartbeat:** once on app start, then as scheduled (daily 03:00 UTC).
+- **Captured errors**:
+  - FastAPI exception handler: all exceptions that end as 500; properties: `$request_method`, `$current_url` (without query), `$request_path`
+  - SDK exception autocapture (unhandled exceptions)
+  - Manual: `capture_exception(exc, session, properties=...)`
+- **Startup test (only `ENVIRONMENT=development`)**: On start a test exception is always sent to PostHog (regardless of `enable_error_reporting`), identifiable by `$fastflow_startup_test=True`.
+- **Test button (only `ENVIRONMENT=development`)**: Under **Settings → Development** test exceptions can be triggered for **backend** or **frontend** (identifiable by `$fastflow_backend_test` / `$fastflow_frontend_test`).
+- **Data**: `distinct_id` = anonymous UUID from `SystemSettings`; properties are scrubbed (keys with `password`, `secret`, `api_key`, `token`). Query strings are not included in URLs.
 
 ---
 
 ## Frontend (React)
 
-- **posthog-js**: Init nur, wenn `/api/settings/telemetry-status` `enable_error_reporting: true` liefert (öffentlicher Endpoint, kein Auth).
-- **Exception-Autocapture** (`window.onerror`, `window.onunhandledrejection`) sowie **ErrorBoundary** mit `captureException` für React-Fehler.
-- **Session Recording**: wird **nicht** verwendet. In posthog-js ist `disable_session_recording: true` gesetzt; das Backend sendet nur anonyme Events (kein Replay).
-- **Hosts**: `https://eu.posthog.com`, Ingest/Scripts über `eu.i.posthog.com`, `eu-assets.i.posthog.com` (CSP in `app/middleware/security_headers.py` angepasst).
+- **posthog-js**: Init only when `/api/settings/telemetry-status` returns `enable_error_reporting: true` (public endpoint, no auth).
+- **Exception autocapture** (`window.onerror`, `window.onunhandledrejection`) and **ErrorBoundary** with `captureException` for React errors.
+- **Session recording**: **not** used. In posthog-js `disable_session_recording: true` is set; the backend sends only anonymous events (no replay).
+- **Hosts**: `https://eu.posthog.com`, ingest/scripts via `eu.i.posthog.com`, `eu-assets.i.posthog.com` (CSP adjusted in `app/middleware/security_headers.py`).
 
 ---
 
 ## API
 
-| Endpoint | Auth | Beschreibung |
+| Endpoint | Auth | Description |
 |----------|------|--------------|
-| `GET /api/settings/telemetry-status` | nein | Liefert `enable_error_reporting`, `posthog_api_key`, `posthog_host` für Frontend-Init |
+| `GET /api/settings/telemetry-status` | no | Returns `enable_error_reporting`, `posthog_api_key`, `posthog_host` for frontend init |
 | `GET /api/settings/system` | Admin | `is_setup_completed`, `enable_telemetry`, `enable_error_reporting` |
-| `PUT /api/settings/system` | Admin | Toggles und `is_setup_completed` aktualisieren; bei `enable_error_reporting=false` wird der PostHog-Client heruntergefahren |
-| `POST /api/settings/trigger-test-exception` | eingeloggt | Nur bei `ENVIRONMENT=development`; sendet Test-Exception (Backend) an PostHog |
+| `PUT /api/settings/system` | Admin | Update toggles and `is_setup_completed`; when `enable_error_reporting=false` the PostHog client is shut down |
+| `POST /api/settings/trigger-test-exception` | logged in | Only when `ENVIRONMENT=development`; sends test exception (backend) to PostHog |
 
 ---
 
 ## Content-Security-Policy (CSP)
 
-Damit PostHog laden und senden kann, sind in `app/middleware/security_headers.py` erlaubt:
+To allow PostHog to load and send, the following are allowed in `app/middleware/security_headers.py`:
 
 - **script-src**: `https://eu-assets.i.posthog.com`
 - **connect-src**: `https://eu.i.posthog.com`, `https://eu.posthog.com`, `https://eu-assets.i.posthog.com`
 
 ---
 
-## Wizard erneut anzeigen (zum Testen)
+## Show wizard again (for testing)
 
-Setze `is_setup_completed` auf `false`, danach Seite neu laden (als Admin einloggen):
+Set `is_setup_completed` to `false`, then reload the page (log in as admin):
 
 ```bash
 # SQLite
@@ -85,7 +85,7 @@ psql "$DATABASE_URL" -c "UPDATE system_settings SET is_setup_completed = false W
 
 ---
 
-## Weitere Infos
+## Further info
 
 - **PostHog**: [posthog.com](https://posthog.com)
-- **DB-Schema**: `SystemSettings` in `docs/database/SCHEMA.md` bzw. Migration `011_add_system_settings`
+- **DB schema**: `SystemSettings` in `docs/database/SCHEMA.md` or migration `011_add_system_settings`

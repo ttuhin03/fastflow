@@ -2,62 +2,62 @@
 sidebar_position: 6
 ---
 
-# Log-Backup (S3/MinIO)
+# Log Backup (S3/MinIO)
 
-Pipeline-Logs und Metrics werden vor der **lokalen Löschung** (Cleanup) auf einen S3-kompatiblen Speicher (z.B. MinIO) hochgeladen. Lokale Dateien und DB-Einträge werden **nur bei erfolgreichem S3-Upload** gelöscht. Der Upload nutzt Streams (`upload_fileobj`), um den Speicherverbrauch gering zu halten.
+Pipeline logs and metrics are uploaded to S3-compatible storage (e.g. MinIO) before **local deletion** (cleanup). Local files and DB entries are **only deleted after a successful S3 upload**. The upload uses streams (`upload_fileobj`) to keep memory usage low.
 
-## Wann wird was gesichert?
+## When is what backed up?
 
-### Was wird hochgeladen?
+### What is uploaded?
 
-- **Log-Datei** (`run.log_file`) → `{S3_PREFIX}/{pipeline_name}/{run_id}/run.log`
-- **Metrics-Datei** (`run.metrics_file`), falls vorhanden → `{S3_PREFIX}/{pipeline_name}/{run_id}/metrics.jsonl`
+- **Log file** (`run.log_file`) → `{S3_PREFIX}/{pipeline_name}/{run_id}/run.log`
+- **Metrics file** (`run.metrics_file`), if present → `{S3_PREFIX}/{pipeline_name}/{run_id}/metrics.jsonl`
 
-Zusätzlich werden Metadaten (z.B. `pipeline_name`, `run_id`, `started_at`, `status`, `triggered_by`) als S3-Objekt-Metadaten mitgegeben.
+Additionally, metadata (e.g. `pipeline_name`, `run_id`, `started_at`, `status`, `triggered_by`) is attached as S3 object metadata.
 
-### Wann läuft das Backup?
+### When does backup run?
 
-Backup (und danach lokales Löschen) erfolgt **nur**, wenn der Cleanup einen Run zur **Löschung** vorsieht – nicht beim bloßen Kürzen (Truncate) von Dateien.
+Backup (and subsequent local deletion) happens **only** when cleanup schedules a run for **deletion**—not when files are merely truncated.
 
-| Szenario | Bedingung | Ablauf |
-|----------|-----------|--------|
-| **Retention: Anzahl Runs** (`LOG_RETENTION_RUNS`) | Pro Pipeline gibt es mehr Runs als erlaubt; die **ältesten** (nach `started_at`) sollen gelöscht werden. | Pro betroffenem Run: 1) S3-Backup von Log (+ ggf. Metrics), 2) bei Erfolg: lokale Dateien löschen und DB-Eintrag entfernen. |
-| **Retention: Alter in Tagen** (`LOG_RETENTION_DAYS`) | Run ist **älter als X Tage** (`started_at` vor Cutoff). | Wie oben: Backup → bei Erfolg löschen. |
-| **Oversized Logs** (`LOG_MAX_SIZE_MB`) | Log-Datei ist **größer als X MB** und das **Kürzen (Truncate)** schlägt mit einer Exception fehl. | 1) S3-Backup, 2) bei Erfolg: lokale Dateien löschen, `log_file`/`metrics_file` in der DB auf `NULL` setzen (Run bleibt). |
+| Scenario | Condition | Flow |
+|----------|-----------|------|
+| **Retention: number of runs** (`LOG_RETENTION_RUNS`) | A pipeline has more runs than allowed; the **oldest** (by `started_at`) should be deleted. | Per affected run: 1) S3 backup of log (+ metrics if present), 2) on success: delete local files and remove DB entry. |
+| **Retention: age in days** (`LOG_RETENTION_DAYS`) | Run is **older than X days** (`started_at` before cutoff). | As above: backup → delete on success. |
+| **Oversized logs** (`LOG_MAX_SIZE_MB`) | Log file is **larger than X MB** and **truncation** fails with an exception. | 1) S3 backup, 2) on success: delete local files, set `log_file`/`metrics_file` to `NULL` in DB (run remains). |
 
-**Kein Backup** (Löschung wie bisher ohne S3):
+**No backup** (deletion as before without S3):
 
-- S3-Backup ist **deaktiviert** oder nicht konfiguriert (`S3_BACKUP_ENABLED=false` oder fehlende Endpoint/Bucket/Keys).
-- Es gibt **weder Log- noch Metrics-Datei** (nichts zu sichern).
-- Beim **Oversized-Logs**-Fall: Wenn das **Truncate gelingt**, wird nur gekürzt, nicht gelöscht → kein Backup.
+- S3 backup is **disabled** or not configured (`S3_BACKUP_ENABLED=false` or missing endpoint/bucket/keys).
+- There is **neither a log nor a metrics file** (nothing to back up).
+- In the **oversized logs** case: if **truncation succeeds**, only truncation occurs, no deletion → no backup.
 
-### Wann wird der Cleanup ausgeführt?
+### When is cleanup executed?
 
-- **Geplant:** z.B. täglich um 2:00 Uhr (Scheduler).
-- **Manuell:** `POST /api/settings/cleanup/force`.
+- **Scheduled:** e.g. daily at 2:00 AM (scheduler).
+- **Manual:** `POST /api/settings/cleanup/force`.
 
-## Fall 4: S3-Upload schlägt fehl
+## Case 4: S3 upload fails
 
-Wenn S3-Backup **aktiv und konfiguriert** ist, mindestens eine Log- oder Metrics-Datei existiert und der **S3-Upload fehlschlägt** (Netzwerk, Credentials, Bucket, 4xx/5xx):
+When S3 backup is **active and configured**, at least one log or metrics file exists, and the **S3 upload fails** (network, credentials, bucket, 4xx/5xx):
 
-- **Löschung wird nicht durchgeführt:** Weder `_delete_run_files` noch DB-Delete/Update für diesen Run. Die lokalen Dateien und der Run bleiben erhalten. Beim nächsten Cleanup-Lauf wird ein erneuter Backup-Versuch gemacht.
-- **UI-Benachrichtigung:** Die Fehlermeldung erscheint im **Benachrichtigungszentrum** (Glocke) und als **Toast**. Die Einträge stammen von `GET /api/settings/backup-failures`; die Einstellungsseite pollt diesen Endpoint in regelmäßigen Abständen.
-- **E-Mail:** Es wird eine **E-Mail an alle `EMAIL_RECIPIENTS`** gesendet (falls `EMAIL_ENABLED`, SMTP und `EMAIL_RECIPIENTS` konfiguriert sind).
-- **Microsoft Teams:** Dieselbe Meldung wird an den konfigurierten **Teams-Webhook** gesendet (falls `TEAMS_ENABLED` und `TEAMS_WEBHOOK_URL` gesetzt sind).
+- **Deletion is not performed:** Neither `_delete_run_files` nor DB delete/update for that run. Local files and the run remain. On the next cleanup run, backup is retried.
+- **UI notification:** The error message appears in the **notification center** (bell) and as a **toast**. Entries come from `GET /api/settings/backup-failures`; the settings page polls this endpoint at regular intervals.
+- **Email:** An **email is sent to all `EMAIL_RECIPIENTS`** (if `EMAIL_ENABLED`, SMTP, and `EMAIL_RECIPIENTS` are configured).
+- **Microsoft Teams:** The same message is sent to the configured **Teams webhook** (if `TEAMS_ENABLED` and `TEAMS_WEBHOOK_URL` are set).
 
-Damit E-Mails bei Backup-Fehlern an alle gehen: `EMAIL_ENABLED`, `SMTP_HOST`, `SMTP_FROM`, `EMAIL_RECIPIENTS` (und ggf. `SMTP_USER`/`SMTP_PASSWORD`). Für Teams: `TEAMS_ENABLED`, `TEAMS_WEBHOOK_URL` (siehe [Konfiguration – Benachrichtigungen](CONFIGURATION.md#benachrichtigungen-optional)).
+For emails on backup failures to reach everyone: `EMAIL_ENABLED`, `SMTP_HOST`, `SMTP_FROM`, `EMAIL_RECIPIENTS` (and optionally `SMTP_USER`/`SMTP_PASSWORD`). For Teams: `TEAMS_ENABLED`, `TEAMS_WEBHOOK_URL` (see [Configuration – Notifications](CONFIGURATION.md#benachrichtigungen-optional)).
 
-## Konfiguration
+## Configuration
 
-Siehe [Konfiguration – Log-Backup (S3/MinIO)](CONFIGURATION.md#log-backup-s3minio-optional).
+See [Configuration – Log Backup (S3/MinIO)](CONFIGURATION.md#log-backup-s3minio-optional).
 
-### Über die Einstellungs-UI
+### Via the Settings UI
 
-Unter **Einstellungen → Pipeline & Runs** können Endpoint, Bucket, Region, Prefix, Path-Style und Credentials gesetzt werden (Secrets werden verschlüsselt in der Datenbank gespeichert). Dort gibt es eine **Objektpfad-Vorschau**, Anzeige des letzten manuellen Verbindungstests und optional **„Nach dem Speichern automatisch Verbindung testen“**. Der API-Endpoint für den Test ist `POST /api/settings/s3/test` (nur Admin).
+Under **Settings → Pipeline & Runs**, you can set endpoint, bucket, region, prefix, path-style, and credentials (secrets are stored encrypted in the database). There is an **object path preview**, display of the last manual connection test, and optionally **"Automatically test connection after saving"**. The API endpoint for the test is `POST /api/settings/s3/test` (admin only).
 
-### Über `.env` / Deployment
+### Via `.env` / deployment
 
-MinIO-Beispiel in `.env`:
+MinIO example in `.env`:
 
 ```env
 S3_BACKUP_ENABLED=true
@@ -71,5 +71,5 @@ S3_USE_PATH_STYLE=true
 
 ## API
 
-- **`GET /api/settings/backup-failures`** (auth. erforderlich): Liefert die letzten S3-Backup-Fehler (`run_id`, `pipeline_name`, `error_message`, `created_at`). Wird vom Frontend für die UI-Benachrichtigungen genutzt. Die Liste ist in-memory, begrenzt und geht beim Neustart verloren.
-- **`POST /api/settings/s3/test`** (nur Admin): Prüft die aktuelle S3-Konfiguration (z. B. `HeadBucket`) und speichert Zeitpunkt/Status des letzten Tests in `orchestrator_settings`.
+- **`GET /api/settings/backup-failures`** (auth required): Returns recent S3 backup failures (`run_id`, `pipeline_name`, `error_message`, `created_at`). Used by the frontend for UI notifications. The list is in-memory, bounded, and lost on restart.
+- **`POST /api/settings/s3/test`** (admin only): Tests the current S3 configuration (e.g. `HeadBucket`) and stores timestamp/status of the last test in `orchestrator_settings`.

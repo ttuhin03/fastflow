@@ -4,52 +4,52 @@ slug: readme
 
 # OAuth (GitHub, Google, Microsoft, Custom)
 
-Fast-Flow unterstützt **GitHub OAuth**, **Google OAuth**, **Microsoft OAuth (Entra ID)** und **Custom OAuth** für Login. Provider können pro User verknüpft werden („Link-Konto“ in den Einstellungen).
+Fast-Flow supports **GitHub OAuth**, **Google OAuth**, **Microsoft OAuth (Entra ID)**, and **Custom OAuth** for login. Providers can be linked per user ("Link account" in Settings).
 
-## Übersicht
+## Overview
 
-- **Login:** `/login` → Sign in mit GitHub, Google, Microsoft oder Custom
-- **Einladung:** `/invite?token=…` → Registrierung via OAuth-Provider (E-Mail muss der Einladung entsprechen)
-- **Erster Admin:** `INITIAL_ADMIN_EMAIL` in `.env` – User mit dieser E-Mail (vom jeweiligen OAuth-Provider) wird beim ersten Login Admin
-- **Konto verknüpfen:** Einstellungen → Verknüpfte Konten → „Jetzt verbinden“ bei GitHub/Google/Microsoft/Custom.
-- **Beitrittsanfragen (Anklopfen):** Unbekannte Nutzer (ohne Einladung, ohne E-Mail-Match, ohne INITIAL_ADMIN) können sich per OAuth anmelden. Statt 403 wird eine Anfrage angelegt (Status `pending`). Sie erhalten **keine Session, keinen Token** und werden auf `/request-sent` umgeleitet. Admins sehen sie unter **Users → Beitrittsanfragen** und können **Freigeben** (Rolle wählen) oder **Ablehnen**. Bei Freigabe: `status=active`, Nutzer kann sich danach normal einloggen. Abgelehnte (`status=rejected`, `blocked=true`) bzw. noch wartende Nutzer landen bei erneutem OAuth-Login auf `/request-rejected` bzw. `/request-sent` – ebenfalls ohne Session. Optional: E-Mail an Admins bei neuer Anfrage (`EMAIL_ENABLED`, `EMAIL_RECIPIENTS`), E-Mail an Nutzer bei Freigabe.
+- **Login:** `/login` → Sign in with GitHub, Google, Microsoft, or Custom
+- **Invitation:** `/invite?token=…` → Registration via OAuth provider (email must match the invitation)
+- **First admin:** `INITIAL_ADMIN_EMAIL` in `.env` – the user with this email (from the respective OAuth provider) becomes admin on first login
+- **Link account:** Settings → Linked accounts → "Connect now" for GitHub/Google/Microsoft/Custom.
+- **Join requests (knock):** Unknown users (without invitation, without email match, without INITIAL_ADMIN) can sign in via OAuth. Instead of 403, a request is created (status `pending`). They receive **no session, no token** and are redirected to `/request-sent`. Admins see them under **Users → Join requests** and can **Approve** (choose role) or **Reject**. On approval: `status=active`, user can log in normally afterward. Rejected users (`status=rejected`, `blocked=true`) or still pending users land on `/request-rejected` or `/request-sent` respectively on repeated OAuth login – also without a session. Optional: email to admins on new request (`EMAIL_ENABLED`, `EMAIL_RECIPIENTS`), email to user on approval.
 
 ---
 
-## OAuth-Flow (Diagramm)
+## OAuth Flow (Diagram)
 
 ```mermaid
 flowchart TB
-    subgraph Einstieg[Einstiegspunkte]
-        L["/login - Sign in via OAuth-Provider"]
-        I["/invite mit token - Registrierung via OAuth-Provider"]
-        S["Einstellungen - Verknüpfte Konten - Jetzt verbinden"]
+    subgraph Entry[Entry points]
+        L["/login - Sign in via OAuth provider"]
+        I["/invite with token - Registration via OAuth provider"]
+        S["Settings - Linked accounts - Connect now"]
     end
 
-    subgraph OAuth[OAuth bei Provider]
-        G["GitHub, Google, Microsoft oder Custom - Autorisierung"]
+    subgraph OAuth[OAuth at provider]
+        G["GitHub, Google, Microsoft or Custom - Authorization"]
     end
 
-    subgraph Callback[API-Callback]
+    subgraph Callback[API callback]
         C["/api/auth/{provider}/callback"]
     end
 
-    subgraph Auswertung[process_oauth_login - Reihenfolge]
+    subgraph Evaluation[process_oauth_login - order]
         P1{"state link_<provider>"}
-        P2{"User mit dieser Provider-ID vorhanden"}
-        P3{"pending oder blocked"}
-        P4{"E-Mail-Match bei bestehendem User"}
-        P5{"E-Mail eq INITIAL_ADMIN_EMAIL"}
-        P6{"state Einladungs-token und E-Mail eq recipient"}
-        P7["Anklopfen: unbekannter Nutzer"]
+        P2{"User with this provider ID exists"}
+        P3{"pending or blocked"}
+        P4{"Email match with existing user"}
+        P5{"Email eq INITIAL_ADMIN_EMAIL"}
+        P6{"state invitation token and email eq recipient"}
+        P7["Knock: unknown user"]
     end
 
-    subgraph Ergebnis[Ergebnis]
-        R1["/settings mit linked - Konto verknüpft, kein Token"]
-        R2["/request-rejected - blocked, kein Token"]
-        R3["/request-sent - pending, kein Token"]
-        R4["/auth/callback mit token - App-Zugriff"]
-        R5["User pending anlegen, notify Admin - dann /request-sent"]
+    subgraph Result[Result]
+        R1["/settings with linked - account linked, no token"]
+        R2["/request-rejected - blocked, no token"]
+        R3["/request-sent - pending, no token"]
+        R4["/auth/callback with token - app access"]
+        R5["Create user pending, notify admin - then /request-sent"]
     end
 
     L -->|state login| G
@@ -59,50 +59,50 @@ flowchart TB
     G --> C
     C --> P1
 
-    P1 -->|ja| R1
-    P1 -->|nein| P2
+    P1 -->|yes| R1
+    P1 -->|no| P2
 
-    P2 -->|ja| P3
-    P2 -->|nein| P4
+    P2 -->|yes| P3
+    P2 -->|no| P4
 
     P3 -->|blocked rejected| R2
     P3 -->|pending| R3
-    P3 -->|nein active| R4
+    P3 -->|no active| R4
 
-    P4 -->|ja| R4
-    P4 -->|nein| P5
+    P4 -->|yes| R4
+    P4 -->|no| P5
 
-    P5 -->|ja| R4
-    P5 -->|nein| P6
+    P5 -->|yes| R4
+    P5 -->|no| P6
 
-    P6 -->|ja| R4
-    P6 -->|nein| P7
+    P6 -->|yes| R4
+    P6 -->|no| P7
 
     P7 --> R5
 ```
 
-### Kurz erklärt
+### Brief explanation
 
-| Schritt | Bedingung | Ergebnis |
+| Step | Condition | Result |
 |--------|-----------|----------|
-| **1. Link-Flow** | `state` enthält `link_<provider>` (von Einstellungen), Provider passt | Konto wird an bestehenden User gehängt → Redirect zu `/settings?linked=…` **ohne** neues Token. |
-| **2. Direkt-Match** | User hat bereits diese Provider-ID | **blocked/rejected** → `/request-rejected` (kein Token). **pending** → `/request-sent` (kein Token). **active** → Token + `/auth/callback#token=…`. |
-| **3. E-Mail-Match** | Anderer User mit gleicher E-Mail (Provider wird verknüpft) | Token + Session → App. |
-| **4. INITIAL_ADMIN_EMAIL** | E-Mail von OAuth = `INITIAL_ADMIN_EMAIL` | Erster Admin: User anlegen/verknüpfen → Token + App. |
-| **5. Einladung** | `state` = gültiger Einladungs‑Token **und** OAuth-E-Mail = `recipient_email` | User anlegen (Rolle aus Einladung) → Token + App. |
-| **6. Anklopfen** | Keine der obigen | User mit `status=pending` anlegen, Admins benachrichtigen → Redirect zu `/request-sent` **ohne** Token. |
+| **1. Link flow** | `state` contains `link_<provider>` (from Settings), provider matches | Account is attached to existing user → redirect to `/settings?linked=…` **without** a new token. |
+| **2. Direct match** | User already has this provider ID | **blocked/rejected** → `/request-rejected` (no token). **pending** → `/request-sent` (no token). **active** → token + `/auth/callback#token=…`. |
+| **3. Email match** | Another user with the same email (provider is linked) | Token + session → app. |
+| **4. INITIAL_ADMIN_EMAIL** | OAuth email = `INITIAL_ADMIN_EMAIL` | First admin: create/link user → token + app. |
+| **5. Invitation** | `state` = valid invitation token **and** OAuth email = `recipient_email` | Create user (role from invitation) → token + app. |
+| **6. Knock** | None of the above | Create user with `status=pending`, notify admins → redirect to `/request-sent` **without** token. |
 
-*Die Prüfungen in `process_oauth_login` laufen in dieser Reihenfolge; der erste Treffer bestimmt das Ergebnis.*
+*The checks in `process_oauth_login` run in this order; the first match determines the result.*
 
 ---
 
-## Dokumentation
+## Documentation
 
-- **[GitHub OAuth](GITHUB.md)** – OAuth-App, Scopes, Callback, Einladung, Link-Konto, Fehler
-- **[Google OAuth](GOOGLE.md)** – OAuth-Client, Scopes, Callback, Einladung, Link-Konto
+- **[GitHub OAuth](GITHUB.md)** – OAuth app, scopes, callback, invitation, link account, errors
+- **[Google OAuth](GOOGLE.md)** – OAuth client, scopes, callback, invitation, link account
 - **Microsoft OAuth** – Callback: `{BASE_URL}/api/auth/microsoft/callback`
 - **Custom OAuth** – Callback: `{BASE_URL}/api/auth/custom/callback`
 
-## Konfiguration
+## Configuration
 
-Siehe [CONFIGURATION.md](../deployment/CONFIGURATION.md): `GITHUB_*`, `GOOGLE_*`, `MICROSOFT_*`, `CUSTOM_OAUTH_*`, `INITIAL_ADMIN_EMAIL`, `FRONTEND_URL`, `BASE_URL`.
+See [CONFIGURATION.md](../deployment/CONFIGURATION.md): `GITHUB_*`, `GOOGLE_*`, `MICROSOFT_*`, `CUSTOM_OAUTH_*`, `INITIAL_ADMIN_EMAIL`, `FRONTEND_URL`, `BASE_URL`.

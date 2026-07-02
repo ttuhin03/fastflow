@@ -2,81 +2,81 @@
 sidebar_position: 11
 ---
 
-# Compliance & Datensicherheit (MinIO Backup)
+# Compliance & Data Security (MinIO Backup)
 
-Diese Seite erläutert die **MinIO Backup-Strategie** von Fast-Flow für Unternehmenskunden, die Wert auf Compliance, Datenhoheit und nachvollziehbare Archivierung legen.
+This page explains Fast-Flow's **MinIO backup strategy** for enterprise customers who value compliance, data sovereignty, and traceable archiving.
 
-## Einleitung
+## Introduction
 
-Pipeline-Logs und zugehörige Metadaten (Start-/Endzeiten, Status, Exit-Codes, Trigger-Quellen) sind **kritische Unternehmenswerte**: Sie belegen Abläufe, dienen der Fehleranalyse, der Nachverfolgbarkeit und oft regulatorischen oder internen Audit-Anforderungen. Ein kontrollierter Übergang von der **Live-Nutzung** in eine **Langzeit-Archivierung** – ohne Datensilos in Drittanbieter-Clouds – ist für viele Unternehmen unverzichtbar.
+Pipeline logs and associated metadata (start/end times, status, exit codes, trigger sources) are **critical business assets**: They document processes, support error analysis and traceability, and often meet regulatory or internal audit requirements. A controlled transition from **live use** to **long-term archiving** – without data silos in third-party clouds – is essential for many organizations.
 
-Fast-Flow unterstützt dafür ein **Auto-Backup vor Cleanup**: Logs und Metrics werden vor der lokalen Löschung auf einen **S3-kompatiblen Speicher (z.B. MinIO On-Premise)** hochgeladen. Die Entscheidung, ob und wo Sie MinIO betreiben, liegt allein bei Ihnen.
-
----
-
-## Feature-Übersicht: Auto-Backup vor Cleanup
-
-Das Feature **„Auto-Backup vor Cleanup“** arbeitet wie folgt:
-
-- **Zeitpunkt:** Sobald der Cleanup-Job (geplant oder manuell) Runs bzw. Log-Dateien **löschen** möchte – z.B. wegen `LOG_RETENTION_RUNS`, `LOG_RETENTION_DAYS` oder fehlgeschlagenem Truncate bei `LOG_MAX_SIZE_MB` – wird **zuerst** ein S3-Upload (MinIO) ausgelöst.
-- **Inhalt:** Pro Run werden die **Log-Datei** (`run.log`) und, falls vorhanden, die **Metrics-Datei** (`metrics.jsonl`) hochgeladen. Metadaten (Pipeline-Name, Run-ID, Zeitstempel, Status, Trigger) werden als S3-Objekt-Metadaten mitgegeben.
-- **Bedingung für Löschung:** Eine **lokale Löschung** (Dateien und ggf. Datenbank-Einträge) erfolgt **nur**, wenn der S3-Upload **erfolgreich** war. Schlägt das Backup fehl, bleiben die Daten lokal erhalten; Sie werden per E-Mail und optional Microsoft Teams informiert.
-- **Speicher:** Der Upload nutzt **Streaming** (`upload_fileobj`), sodass große Logs den Arbeitsspeicher nicht vollständig befüllen.
-
-Konfiguration und technische Details: [Log-Backup (S3/MinIO)](/docs/deployment/S3_LOG_BACKUP).
+Fast-Flow supports this with **auto-backup before cleanup**: Logs and metrics are uploaded to **S3-compatible storage (e.g. MinIO on-premise)** before local deletion. The decision whether and where you operate MinIO is entirely yours.
 
 ---
 
-## DSGVO-Konformität
+## Feature overview: Auto-backup before cleanup
 
-### Datenhoheit
+The **"Auto-backup before cleanup"** feature works as follows:
 
-:::info Datenhoheit durch On-Premise MinIO
-Wer **MinIO in der eigenen Infrastruktur** (On-Premise oder in einer Ihrer gewählten Rechenzentren) betreibt, hält Logs und Metadaten **vollständig im eigenen Rechtsraum**. Die Daten **müssen den Hoheitsbereich Ihres Unternehmens nicht verlassen**; es besteht keine Abhängigkeit von US-Cloud-Anbietern oder Dritten, die Unterauftragsverhältnisse und Datentransfers mit sich bringen.
+- **Timing:** As soon as the cleanup job (scheduled or manual) wants to **delete** runs or log files – e.g. due to `LOG_RETENTION_RUNS`, `LOG_RETENTION_DAYS`, or failed truncate at `LOG_MAX_SIZE_MB` – an S3 upload (MinIO) is triggered **first**.
+- **Content:** Per run, the **log file** (`run.log`) and, if present, the **metrics file** (`metrics.jsonl`) are uploaded. Metadata (pipeline name, run ID, timestamp, status, trigger) is included as S3 object metadata.
+- **Condition for deletion:** **Local deletion** (files and optionally database entries) occurs **only** if the S3 upload was **successful**. If backup fails, data remains locally; you are notified by email and optionally Microsoft Teams.
+- **Storage:** The upload uses **streaming** (`upload_fileobj`), so large logs do not fill memory entirely.
+
+Configuration and technical details: [Log Backup (S3/MinIO)](/docs/deployment/S3_LOG_BACKUP).
+
+---
+
+## GDPR compliance
+
+### Data sovereignty
+
+:::info Data sovereignty through on-premise MinIO
+If you operate **MinIO in your own infrastructure** (on-premise or in one of your chosen data centers), you keep logs and metadata **entirely within your own legal jurisdiction**. The data **do not need to leave your organization's territory**; there is no dependency on US cloud providers or third parties that bring sub-processor relationships and data transfers.
 :::
 
-Damit können Sie Ihre **Auftragsverarbeitung** und **technisch-organisatorischen Maßnahmen** so gestalten, dass die Verarbeitung und Speicherung im von Ihnen kontrollierten Umfeld bleibt. Dies unterstützt die Anforderungen aus **Art. 28 DSGVO** (Auftragsverarbeitung) und **Art. 44 ff. DSGVO** (Übermittlung in Drittländer), da Sie Übermittlungen in Drittländer vermeiden bzw. klar begrenzen können.
+This allows you to design your **data processing agreements** and **technical and organizational measures** so that processing and storage remain in your controlled environment. This supports requirements from **Art. 28 GDPR** (data processing) and **Art. 44 ff. GDPR** (transfers to third countries), as you can avoid or clearly limit transfers to third countries.
 
 ---
 
-### Rechenschaftspflicht (Art. 5 Abs. 2, Art. 24 DSGVO)
+### Accountability (Art. 5(2), Art. 24 GDPR)
 
-:::tip Rechenschaftspflicht und Audits
-Das Backup schafft einen **Archiv-Pfad**: Logs und Metadaten werden in einem definierten, nachvollziehbaren Schritt vor der Löschung im Live-System in Ihr MinIO überführt. Bei Audits oder behördlichen Nachfragen können Sie den **Datenfluss** (Pipeline → Datenbank → Backup → MinIO) und die **Aufbewahrungsdauer** in Ihrem eigenen Speicher dokumentieren. Die Objekt-Metadaten (u.a. Run-ID, Zeitstempel, Status) unterstützen die **Zuordenbarkeit** und **Nachvollziehbarkeit** von Verarbeitungsschritten.
-:::
-
----
-
-### Speicherbegrenzung (Art. 5 Abs. 1 lit. e DSGVO)
-
-Das Design folgt dem Grundsatz **„Speicherbegrenzung“**:
-
-1. **Live-System:** Durch `LOG_RETENTION_RUNS`, `LOG_RETENTION_DAYS` und `LOG_MAX_SIZE_MB` begrenzen Sie, **wie lange** und **in welchem Umfang** Logs im operativen System gehalten werden.
-2. **Sauberer Übergang:** Nur **nach erfolgreichem** Backup im MinIO werden die Daten im Live-System gelöscht. Es gibt **kein „Blindes Löschen“**: Ohne erfolgreiche Archivierung bleibt die lokale Kopie erhalten.
-3. **Langzeit-Archivierung:**** Aufbewahrungsfristen und Löschkonzepte für MinIO liegen in **Ihrer Verantwortung** und passen zu Ihrer Dokumentations- und Compliance-Strategie.
-
-:::caution Eigenverantwortung für Aufbewahrung und Löschung
-Die **konkreten Aufbewahrungsfristen** und **Löschregeln** in MinIO (Lifecycle-Policies, Retention) müssen Sie **selbst** festlegen und umsetzen. Fast-Flow überträgt die Daten; die Steuerung des Archivs obliegt Ihrer IT oder Ihrem Datenschutz.
+:::tip Accountability and audits
+The backup creates an **archive path**: Logs and metadata are transferred to your MinIO in a defined, traceable step before deletion in the live system. During audits or regulatory inquiries, you can document the **data flow** (pipeline → database → backup → MinIO) and **retention period** in your own storage. Object metadata (including run ID, timestamp, status) support **assignability** and **traceability** of processing steps.
 :::
 
 ---
 
-### Technische Sicherheit
+### Storage limitation (Art. 5(1)(e) GDPR)
 
-- **Rate Limiting & Proxy:** Die API nutzt Rate Limits (OAuth, Refresh, Webhooks, etc.). Für korrekte Client-IP-Erkennung hinter einem Reverse-Proxy setzen Sie `PROXY_HEADERS_TRUSTED=true`. Nur aktivieren, wenn der Proxy vertrauenswürdig ist (Schutz vor X-Forwarded-For-Spoofing). Siehe [Konfiguration](/docs/deployment/CONFIGURATION).
-- **TLS-Übertragung:** Die Kommunikation mit MinIO sollte über **HTTPS (TLS)** erfolgen. Setzen Sie `S3_ENDPOINT_URL` z.B. auf `https://minio.ihr-unternehmen.int:443`.
-- **S3 Server-Side Encryption (SSE):** MinIO unterstützt **SSE-S3** und **SSE-KMS**. Die Aktivierung und Konfiguration von Verschlüsselung at rest liegt bei Ihrer MinIO-Instanz; Fast-Flow nutzt die standardmäßige S3-API. Prüfen Sie die [MinIO-Dokumentation zu Server-Side Encryption](https://min.io/docs/minio/linux/administration/server-side-encryption.html) (SSE-S3, SSE-KMS, SSE-C).
-- **Zugriffskontrolle:** Access Keys (`S3_ACCESS_KEY`, `S3_SECRET_ACCESS_KEY`) sollten mit **minimalen Rechten** (nur Schreibzugriff auf den vorgesehenen Bucket) und über einen sicheren Secret-Manager verwaltet werden.
+The design follows the principle of **"storage limitation"**:
 
-:::info Empfehlung für produktive Umgebungen
-Für Compliance-relevante Deployments: MinIO mit **TLS**, **Verschlüsselung at rest** und **strikter Zugriffskontrolle** betreiben. Die Backup-Fehlermeldungen (E-Mail, Microsoft Teams) sollten an verantwortliche Stellen (z.B. IT, Datenschutz) adressiert werden, damit Störungen des Backups zeitnah erkannt werden.
+1. **Live system:** Via `LOG_RETENTION_RUNS`, `LOG_RETENTION_DAYS`, and `LOG_MAX_SIZE_MB` you limit **how long** and **to what extent** logs are kept in the operational system.
+2. **Clean transition:** Only **after successful** backup in MinIO are data deleted in the live system. There is **no "blind deletion"**: Without successful archiving, the local copy is retained.
+3. **Long-term archiving:** Retention periods and deletion concepts for MinIO are **your responsibility** and align with your documentation and compliance strategy.
+
+:::caution Your responsibility for retention and deletion
+The **specific retention periods** and **deletion rules** in MinIO (lifecycle policies, retention) must be **defined and implemented by you**. Fast-Flow transfers the data; control of the archive is your IT or data protection team's responsibility.
 :::
 
 ---
 
-## Datenfluss (Überblick)
+### Technical security
 
-Der folgende Ablauf skizziert den Weg der Logdaten vom Pipeline-Run bis in Ihr MinIO:
+- **Rate limiting & proxy:** The API uses rate limits (OAuth, refresh, webhooks, etc.). For correct client IP detection behind a reverse proxy, set `PROXY_HEADERS_TRUSTED=true`. Only enable if the proxy is trusted (protection against X-Forwarded-For spoofing). See [Configuration](/docs/deployment/CONFIGURATION).
+- **TLS transmission:** Communication with MinIO should use **HTTPS (TLS)**. Set `S3_ENDPOINT_URL` e.g. to `https://minio.your-company.int:443`.
+- **S3 Server-Side Encryption (SSE):** MinIO supports **SSE-S3** and **SSE-KMS**. Activation and configuration of encryption at rest is your MinIO instance's responsibility; Fast-Flow uses the standard S3 API. See the [MinIO documentation on Server-Side Encryption](https://min.io/docs/minio/linux/administration/server-side-encryption.html) (SSE-S3, SSE-KMS, SSE-C).
+- **Access control:** Access keys (`S3_ACCESS_KEY`, `S3_SECRET_ACCESS_KEY`) should be managed with **minimal privileges** (write access only to the designated bucket) via a secure secret manager.
+
+:::info Recommendation for production environments
+For compliance-relevant deployments: Operate MinIO with **TLS**, **encryption at rest**, and **strict access control**. Backup error notifications (email, Microsoft Teams) should be addressed to responsible parties (e.g. IT, data protection) so backup failures are detected promptly.
+:::
+
+---
+
+## Data flow (overview)
+
+The following flow outlines the path of log data from the pipeline run to your MinIO:
 
 ```mermaid
 flowchart LR
@@ -85,26 +85,26 @@ flowchart LR
   Backup --> MinIO[Kunden MinIO]
 ```
 
-| Stufe | Beschreibung |
+| Stage | Description |
 |-------|--------------|
-| **Pipeline-Runs** | Logs und Metrics werden während und nach der Ausführung im Live-System (Dateisystem + DB-Referenzen) gehalten. |
-| **Datenbank** | Metadaten und Pfade zu Log-/Metrics-Dateien; der Cleanup ermittelt anhand der Retention-Regeln, welche Runs zur Löschung anstehen. |
-| **Backup-Service** | Vor der Löschung: stream-basierter Upload von Log und Metrics nach S3 (MinIO) inkl. Metadaten. Nur bei Erfolg wird im Live-System gelöscht. |
-| **Kunden MinIO** | On-Premise oder in Ihrer gewählten Infrastruktur. Aufbewahrung, Verschlüsselung und Löschung unter Ihrer Kontrolle. |
+| **Pipeline runs** | Logs and metrics are held in the live system (filesystem + DB references) during and after execution. |
+| **Database** | Metadata and paths to log/metrics files; cleanup determines which runs are due for deletion based on retention rules. |
+| **Backup service** | Before deletion: stream-based upload of log and metrics to S3 (MinIO) including metadata. Deletion in the live system only on success. |
+| **Customer MinIO** | On-premise or in your chosen infrastructure. Retention, encryption, and deletion under your control. |
 
 ---
 
-## Zusammenfassung für IT-Entscheider
+## Summary for IT decision-makers
 
-| Aspekt | Nutzen |
+| Aspect | Benefit |
 |--------|--------|
-| **Datenhoheit** | MinIO On-Premise: Logs und Metadaten verlassen Ihren Rechtsraum nicht; keine Abhängigkeit von US- oder Dritt-Clouds. |
-| **Compliance** | Unterstützung von Speicherbegrenzung, Rechenschaftspflicht und sauberem Übergang von Live zu Archiv. |
-| **Risikominimierung** | Keine lokale Löschung ohne erfolgreiches Backup; bei Fehlern Benachrichtigung (E-Mail, optional Teams) und Erhalt der lokalen Daten. |
-| **Technische Sicherheit** | TLS für die Übertragung; Verschlüsselung at rest und Zugriffskontrolle über Ihre MinIO- und Betriebskonfiguration. |
+| **Data sovereignty** | MinIO on-premise: Logs and metadata do not leave your legal jurisdiction; no dependency on US or third-party clouds. |
+| **Compliance** | Support for storage limitation, accountability, and clean transition from live to archive. |
+| **Risk minimization** | No local deletion without successful backup; on failure, notification (email, optional Teams) and retention of local data. |
+| **Technical security** | TLS for transmission; encryption at rest and access control via your MinIO and operational configuration. |
 
-Fast-Flow übernimmt den **kontrollierten Transfer** in Ihr S3-kompatibles Archiv; die **rechtliche und organisatorische Steuerung** von Aufbewahrung, Löschung und Zugriff in MinIO bleibt bei Ihnen. Damit eignet sich die MinIO Backup-Strategie für Umgebungen, in denen Compliance, Datenschutz und Kontrolle über betriebskritische Logdaten im Vordergrund stehen.
+Fast-Flow handles the **controlled transfer** to your S3-compatible archive; **legal and organizational control** of retention, deletion, and access in MinIO remains with you. This makes the MinIO backup strategy suitable for environments where compliance, data protection, and control over business-critical log data are priorities.
 
 ---
 
-*Technische Konfiguration: [Log-Backup (S3/MinIO)](/docs/deployment/S3_LOG_BACKUP) · [Konfiguration](/docs/deployment/CONFIGURATION)*
+*Technical configuration: [Log Backup (S3/MinIO)](/docs/deployment/S3_LOG_BACKUP) · [Configuration](/docs/deployment/CONFIGURATION)*

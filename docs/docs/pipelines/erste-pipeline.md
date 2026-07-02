@@ -2,79 +2,79 @@
 sidebar_position: 2
 ---
 
-# Erste Pipeline schreiben
+# Writing Your First Pipeline
 
-**~10 Min.** – Dieses Tutorial führt dich von null bis zur ersten lauffähigen Pipeline – mit Erklärungen zu jedem Schritt. Du brauchst ein laufendes Fast-Flow (siehe [Schnellstart](/docs/schnellstart) oder [Setup-Anleitung](/docs/setup)).
-
----
-
-## Was ist eine Pipeline in Fast-Flow?
-
-Eine **Pipeline** ist im Kern ein **Python-Skript** in einem eigenen Ordner. Fast-Flow:
-
-- erkennt den Ordner automatisch (sobald er unter `PIPELINES_DIR` liegt oder per Git-Sync reinkommt),
-- startet das Skript in einem **isolierten Docker-Container**,
-- zeigt dir **Logs und Status** in der Oberfläche.
-
-Du musst keine DAGs, Operatoren oder speziellen Frameworks lernen. Wenn das Skript lokal mit `python main.py` (bzw. `uv run main.py`) läuft, läuft es auch in Fast-Flow – vorausgesetzt, du nutzt eine `requirements.txt` für externe Pakete.
+**~10 min.** – This tutorial walks you from zero to your first runnable pipeline – with explanations for each step. You need a running Fast-Flow instance (see [Quick Start](/docs/schnellstart) or [Setup Guide](/docs/setup)).
 
 ---
 
-## Schritt 1: Ordner und `main.py` anlegen
+## What is a pipeline in Fast-Flow?
 
-### Wo liegen die Pipelines?
+A **pipeline** is essentially a **Python script** in its own folder. Fast-Flow:
 
-Der Standardpfad ist `./pipelines` (relativ zum Fast-Flow-Projektroot). Bei Docker wird dieser Ordner in der Regel per Volume eingebunden; in `docker-compose.yaml` siehst du, welcher Host-Pfad verwendet wird.
+- discovers the folder automatically (as soon as it is under `PIPELINES_DIR` or arrives via Git sync),
+- starts the script in an **isolated Docker container**,
+- shows you **logs and status** in the UI.
 
-**Wichtig:** Der **Ordnername** = **Pipeline-Name** in der UI. Beispiel: `pipelines/hello_world/` → die Pipeline heißt `hello_world`.
+You do not need to learn DAGs, operators, or special frameworks. If the script runs locally with `python main.py` (or `uv run main.py`), it will also run in Fast-Flow – provided you use a `requirements.txt` for external packages.
 
-### Minimale Struktur
+---
 
-Jede Pipeline braucht eine Datei **`main.py`** in ihrem Ordner. Alles andere ist optional.
+## Step 1: Create folder and `main.py`
 
-Lege an:
+### Where do pipelines live?
+
+The default path is `./pipelines` (relative to the Fast-Flow project root). With Docker, this folder is usually mounted via a volume; in `docker-compose.yaml` you can see which host path is used.
+
+**Important:** The **folder name** = **pipeline name** in the UI. Example: `pipelines/hello_world/` → the pipeline is named `hello_world`.
+
+### Minimal structure
+
+Every pipeline needs a **`main.py`** file in its folder. Everything else is optional.
+
+Create:
 
 ```
 pipelines/hello_world/main.py
 ```
 
-Inhalt von `main.py`:
+Contents of `main.py`:
 
 ```python
 # main.py
-print("Hallo von Fast-Flow!")
+print("Hello from Fast-Flow!")
 ```
 
-Du kannst den Code **von oben nach unten** schreiben. Eine `main()`-Funktion oder `if __name__ == "__main__"` ist **nicht** nötig, aber erlaubt.
+You can write code **top to bottom**. A `main()` function or `if __name__ == "__main__"` is **not** required, but allowed.
 
 ---
 
-## Schritt 2: Pipeline in der UI sehen und starten
+## Step 2: See and start the pipeline in the UI
 
-### Synchronisation
+### Synchronization
 
-- **Lokales `pipelines/`-Verzeichnis:** Wenn du den Ordner direkt unter `PIPELINES_DIR` anlegst, erscheint die Pipeline nach dem nächsten **Sync** oder beim **Neustart** des Orchestrators. Bei einigen Setups wird beim Start automatisch gescannt.
-- **Git-Sync:** Wenn Pipelines aus einem Git-Repo kommen, musst du einen **manuellen Sync** auslösen (UI: Sync/Repository) oder auf den nächsten Auto-Sync warten.
+- **Local `pipelines/` directory:** If you create the folder directly under `PIPELINES_DIR`, the pipeline appears after the next **sync** or **restart** of the orchestrator. Some setups scan automatically at startup.
+- **Git sync:** If pipelines come from a Git repo, you must trigger a **manual sync** (UI: Sync/Repository) or wait for the next auto-sync.
 
-### In der UI
+### In the UI
 
-1. Öffne die Fast-Flow-Oberfläche (z.B. http://localhost:8000) und melde dich an.
-2. Gehe zu **Pipelines**. Dort solltest du **`hello_world`** sehen.
-3. Klicke auf **Run** (oder „Ausführen“), um die Pipeline einmalig zu starten.
-4. Öffne den **Run** und schau dir die **Logs** an – dort steht `Hallo von Fast-Flow!`.
+1. Open the Fast-Flow UI (e.g. http://localhost:8000) and sign in.
+2. Go to **Pipelines**. You should see **`hello_world`** there.
+3. Click **Run** to start the pipeline once.
+4. Open the **run** and check the **logs** – you will see `Hello from Fast-Flow!`.
 
-**Farben/Status:**  
-- **RUNNING** = läuft gerade  
-- **SUCCESS** = beendet mit Exit-Code 0  
-- **FAILED** = Fehler (z.B. Exception oder Exit-Code ≠ 0)
+**Colors/status:**  
+- **RUNNING** = currently running  
+- **SUCCESS** = finished with exit code 0  
+- **FAILED** = error (e.g. exception or exit code ≠ 0)
 
 ---
 
-## Schritt 3: Externe Pakete – `requirements.txt`
+## Step 3: External packages – `requirements.txt`
 
-Sobald du Bibliotheken wie `requests`, `pandas` oder `numpy` brauchst, legst du im **gleichen Pipeline-Ordner** eine `requirements.txt` an – wie bei einem normalen Python-Projekt.
+As soon as you need libraries like `requests`, `pandas`, or `numpy`, create a `requirements.txt` in the **same pipeline folder** – like in a normal Python project.
 
-### Beispiel
+### Example
 
 ```
 pipelines/hello_world/
@@ -82,70 +82,70 @@ pipelines/hello_world/
 └── requirements.txt
 ```
 
-Inhalt `requirements.txt`:
+Contents of `requirements.txt`:
 
 ```
 requests==2.31.0
 ```
 
-Inhalt `main.py`:
+Contents of `main.py`:
 
 ```python
 # main.py
 import requests
-print("Hallo von Fast-Flow!")
+print("Hello from Fast-Flow!")
 r = requests.get("https://httpbin.org/get")
 print("Status:", r.status_code)
 ```
 
-### Was passiert damit?
+### What happens with this?
 
-- Fast-Flow führt die Pipeline mit **`uv`** aus. `uv` liest die `requirements.txt` und stellt die Pakete bereit.
-- Beim **ersten** Run können die Pakete kurz laden; danach landen sie im **gemeinsamen uv-Cache**. Weitere Runs sind oft in unter einer Sekunde startklar.
-- Wenn du **Git-Sync** mit `UV_PRE_HEAT=true` nutzt, werden Abhängigkeiten beim Sync schon vorgeladen.
+- Fast-Flow runs the pipeline with **`uv`**. `uv` reads `requirements.txt` and provides the packages.
+- On the **first** run, packages may take a moment to download; afterward they land in the **shared uv cache**. Further runs are often ready in under a second.
+- If you use **Git sync** with `UV_PRE_HEAT=true`, dependencies are preloaded during sync.
 
-**Format:** Standard-`requirements.txt` (z.B. `paket==1.2.3` oder `paket>=1.0`).
+**Format:** Standard `requirements.txt` (e.g. `package==1.2.3` or `package>=1.0`).
 
 ---
 
-## Schritt 4: Metadaten – `pipeline.json` (optional)
+## Step 4: Metadata – `pipeline.json` (optional)
 
-Mit einer `pipeline.json` (oder `{pipeline_name}.json`, z.B. `hello_world.json`) kannst du:
+With a `pipeline.json` (or `{pipeline_name}.json`, e.g. `hello_world.json`) you can:
 
-- eine **Beschreibung** angeben (wird in der UI angezeigt),
-- **Ressourcen-Limits** (CPU, RAM) setzen,
-- **Timeout** und **Retries** konfigurieren,
-- die **Python-Version** setzen (`python_version`, z.B. `"3.12"`) – **beliebig pro Pipeline**, jede Pipeline kann 3.10, 3.11, 3.12 o. Ä. nutzen; fehlt es, gilt `DEFAULT_PYTHON_VERSION`,
-- **Tags** vergeben.
+- provide a **description** (shown in the UI),
+- set **resource limits** (CPU, RAM),
+- configure **timeout** and **retries**,
+- set the **Python version** (`python_version`, e.g. `"3.12"`) – **any per pipeline**, each pipeline can use 3.10, 3.11, 3.12, etc.; if omitted, `DEFAULT_PYTHON_VERSION` applies,
+- assign **tags**.
 
-### Einfaches Beispiel
+### Simple example
 
 `pipelines/hello_world/pipeline.json`:
 
 ```json
 {
-  "description": "Meine erste Pipeline – sagt Hallo und prüft httpbin.",
+  "description": "My first pipeline – says hello and checks httpbin.",
   "tags": ["tutorial", "test"]
 }
 ```
 
-Nach dem nächsten Sync erscheint die Beschreibung in der Pipeline-Liste. Eine vollständige Referenz aller Felder: [pipeline.json Referenz](/docs/pipelines/referenz).
+After the next sync, the description appears in the pipeline list. Full reference of all fields: [pipeline.json reference](/docs/pipelines/referenz).
 
 ---
 
-## Schritt 5: Secrets und Umgebungsvariablen
+## Step 5: Secrets and environment variables
 
-Passwörter, API-Keys usw. gehören **nicht** in den Code und **nicht** in `pipeline.json`. Du trägst sie in der Fast-Flow-UI als **Secrets** (oder Parameter) ein; sie werden **verschlüsselt** gespeichert und der Pipeline beim Lauf als **Umgebungsvariablen** übergeben.
+Passwords, API keys, etc. do **not** belong in code and **not** in `pipeline.json`. Enter them in the Fast-Flow UI as **Secrets** (or parameters); they are stored **encrypted** and passed to the pipeline at runtime as **environment variables**.
 
-### In der UI
+### In the UI
 
-1. Gehe zu **Pipelines** → wähle `hello_world` (oder die entsprechende Pipeline).
-2. Öffne den Bereich **Secrets** / **Parameter** (je nach UI-Benennung).
-3. Lege z.B. ein Secret **`MEIN_API_KEY`** an und trage einen Wert ein (nur fürs Tutorial: `test-123`).
+1. Go to **Pipelines** → select `hello_world` (or the corresponding pipeline).
+2. Open the **Secrets** / **Parameters** section (depending on UI naming).
+3. Create a secret **`MEIN_API_KEY`** and enter a value (for the tutorial only: `test-123`).
 
-### Im Code
+### In code
 
-In `main.py` liest du Umgebungsvariablen mit `os.getenv`:
+In `main.py`, read environment variables with `os.getenv`:
 
 ```python
 # main.py
@@ -153,77 +153,77 @@ import os
 
 api_key = os.getenv("MEIN_API_KEY")
 if api_key:
-    print("API-Key ist gesetzt (Länge):", len(api_key))
+    print("API key is set (length):", len(api_key))
 else:
-    print("MEIN_API_KEY nicht gesetzt – bitte in der UI eintragen.")
+    print("MEIN_API_KEY not set – please enter it in the UI.")
 ```
 
-Beim Start des Runs setzt Fast-Flow die in der UI konfigurierten Secrets/Parameter als Env-Vars. **Parameter** sind unverschlüsselt (für nicht sensible Werte), **Secrets** werden verschlüsselt gespeichert.
+When the run starts, Fast-Flow sets the secrets/parameters configured in the UI as env vars. **Parameters** are unencrypted (for non-sensitive values), **Secrets** are stored encrypted.
 
 ---
 
-## Schritt 6: Fehler und Logs
+## Step 6: Errors and logs
 
-- **Unbehandelte Exception** → Python beendet mit Exit-Code ≠ 0 → Run wird **FAILED**.
-- **`print`-Ausgaben** erscheinen in den **Logs** des Runs. Nutze Logs für Debugging.
-- Wenn ein **Import** fehlschlägt (z.B. Paket fehlt in `requirements.txt`), steht die Fehlermeldung in den Logs.
+- **Unhandled exception** → Python exits with exit code ≠ 0 → run is **FAILED**.
+- **`print` output** appears in the run **logs**. Use logs for debugging.
+- If an **import** fails (e.g. package missing from `requirements.txt`), the error message appears in the logs.
 
-### Beispiel mit Fehlerbehandlung
+### Example with error handling
 
 ```python
 # main.py
 import sys
 
 def main():
-    print("Starte ...")
-    # ... deine Logik ...
-    print("Fertig.")
+    print("Starting ...")
+    # ... your logic ...
+    print("Done.")
     return 0
 
 if __name__ == "__main__":
     try:
         sys.exit(main())
     except Exception as e:
-        print("Fehler:", e, file=sys.stderr)
+        print("Error:", e, file=sys.stderr)
         sys.exit(1)
 ```
 
-`sys.exit(0)` = Erfolg, `sys.exit(1)` (oder anderer Wert ≠ 0) = Fehler. Fast-Flow wertet den Exit-Code aus.
+`sys.exit(0)` = success, `sys.exit(1)` (or any value ≠ 0) = failure. Fast-Flow evaluates the exit code.
 
 ---
 
-## Lokal testen (ohne UI)
+## Local testing (without UI)
 
-Du kannst die Pipeline lokal **genau so** ausführen wie im Container – mit **`uv`** (oder `pip` + `python`):
+You can run the pipeline locally **exactly** as in the container – with **`uv`** (or `pip` + `python`):
 
 ```bash
 cd pipelines/hello_world
 uv run --with-requirements requirements.txt main.py
 ```
 
-Falls keine `requirements.txt` existiert: `uv run main.py`. Alternative: `pip install -r requirements.txt` und `python main.py`.
+If no `requirements.txt` exists: `uv run main.py`. Alternative: `pip install -r requirements.txt` and `python main.py`.
 
-:::important „If it runs, it runs“
-**Wenn das Skript so lokal durchläuft, läuft es auch im Fast-Flow-Orchestrator.** Gleiche Laufzeit (uv), keine eigenen Pipeline-Images. Tritt trotzdem ein Fehler im Orchestrator auf: [Troubleshooting](/docs/troubleshooting#pipeline-lokal-orchestrator-fehlt).
+:::important "If it runs, it runs"
+**If the script completes successfully locally this way, it will also run in the Fast-Flow orchestrator.** Same runtime (uv), no custom pipeline images. If you still get an error in the orchestrator: [Troubleshooting](/docs/troubleshooting#pipeline-lokal-orchestrator-fehlt).
 :::
 
-So findest du viele Fehler schon vor dem ersten Run in Fast-Flow.
+This helps you catch many errors before the first run in Fast-Flow.
 
 ---
 
-## Kurz-Checkliste: Erste Pipeline
+## Quick checklist: First pipeline
 
-- [ ] Ordner unter `PIPELINES_DIR` (z.B. `pipelines/mein_name/`) mit **`main.py`**
-- [ ] Optional: **`requirements.txt`** für externe Pakete
-- [ ] Optional: **`pipeline.json`** für Beschreibung, Tags, Limits
-- [ ] Secrets/Parameter in der **UI** anlegen und in `main.py` mit **`os.getenv("NAME")`** lesen
-- [ ] Nach Sync/Neustart Pipeline in der UI prüfen und **Run** starten
-- [ ] **Logs** ansehen bei Erfolg und bei Fehlern
+- [ ] Folder under `PIPELINES_DIR` (e.g. `pipelines/mein_name/`) with **`main.py`**
+- [ ] Optional: **`requirements.txt`** for external packages
+- [ ] Optional: **`pipeline.json`** for description, tags, limits
+- [ ] Create secrets/parameters in the **UI** and read them in `main.py` with **`os.getenv("NAME")`**
+- [ ] After sync/restart, verify the pipeline in the UI and start a **Run**
+- [ ] Check **logs** on success and on failure
 
 ---
 
-## Nächste Schritte
+## Next steps
 
-- [**Pipelines – Übersicht**](/docs/pipelines/uebersicht) – Verzeichnisstruktur, Erkennung, alle Dateitypen
-- [**Erweiterte Pipelines**](/docs/pipelines/erweiterte-pipelines) – Retries, Timeout, Scheduling, Webhooks, Struktur
-- [**pipeline.json Referenz**](/docs/pipelines/referenz) – Alle Felder für Metadaten und Limits
+- [**Pipelines – Overview**](/docs/pipelines/uebersicht) – Directory structure, discovery, all file types
+- [**Advanced Pipelines**](/docs/pipelines/erweiterte-pipelines) – Retries, timeout, scheduling, webhooks, structure
+- [**pipeline.json reference**](/docs/pipelines/referenz) – All fields for metadata and limits

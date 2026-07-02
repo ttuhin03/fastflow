@@ -5,138 +5,138 @@ sidebar_position: 3
 import GenerateEncryptionKey from '@site/src/components/GenerateEncryptionKey';
 import GenerateJwtSecret from '@site/src/components/GenerateJwtSecret';
 
-# Setup-Anleitung
+# Setup Guide
 
-Diese Anleitung führt dich Schritt für Schritt durch das Aufsetzen von Fast-Flow – inklusive der wichtigsten Umgebungsvariablen und was sie bewirken.
+This guide walks you step by step through setting up Fast-Flow – including the most important environment variables and what they do.
 
-## Für wen ist diese Anleitung?
+## Who is this guide for?
 
-- Du willst Fast-Flow das erste Mal zum Laufen bringen.
-- Du möchtest verstehen, **warum** bestimmte Einstellungen nötig sind – nicht nur, **dass** sie gesetzt werden müssen.
-- Du planst einen Produktionseinsatz und brauchst eine Checkliste.
+- You want to get Fast-Flow running for the first time.
+- You want to understand **why** certain settings are necessary – not just **that** they must be set.
+- You are planning a production deployment and need a checklist.
 
-Für die vollständige Referenz aller Variablen siehe [Konfiguration](/docs/deployment/CONFIGURATION).
+For the complete reference of all variables, see [Configuration](/docs/deployment/CONFIGURATION).
 
 ---
 
-## Übersicht: Was du brauchst
+## Overview: What you need
 
-| Voraussetzung | Wofür |
+| Prerequisite | Purpose |
 |---------------|--------|
-| **Docker & Docker Compose** | Zum Starten des Orchestrators und der Pipeline-Container. |
-| **Python 3.11+** | Nur für lokale Entwicklung (z.B. `uvicorn`, `pip`, Key-Generierung). |
-| **Git** | Falls du Pipelines aus einem Repository synchronisierst (optional, sonst lokales Verzeichnis). |
+| **Docker & Docker Compose** | To start the orchestrator and pipeline containers. |
+| **Python 3.11+** | For local development only (e.g. `uvicorn`, `pip`, key generation). |
+| **Git** | If you sync pipelines from a repository (optional, otherwise local directory). |
 
 ---
 
-## 1. Projekt vorbereiten
+## 1. Prepare the project
 
-### 1.1 Repository klonen (falls noch nicht geschehen)
+### 1.1 Clone the repository (if not done yet)
 
 ```bash
 git clone https://github.com/ttuhin03/fastflow.git
 cd fastflow
 ```
 
-### 1.2 `.env` aus der Vorlage anlegen
+### 1.2 Create `.env` from the template
 
-Fast-Flow liest Konfiguration aus einer `.env` Datei im Projektroot. Die Datei wird **nicht** ins Git übernommen (steht in `.gitignore`).
+Fast-Flow reads configuration from a `.env` file in the project root. The file is **not** committed to Git (listed in `.gitignore`).
 
 ```bash
 cp .env.example .env
 ```
 
-Öffne `.env` in einem Editor – die meisten Zeilen sind auskommentiert (`#`). Du wirst nur einen Teil davon aktiv setzen müssen.
+Open `.env` in an editor – most lines are commented out (`#`). You will only need to activate and set a portion of them.
 
 ---
 
-## 2. Pflicht-Variablen: Sicherheit & Start
+## 2. Required variables: Security & startup
 
-Ohne diese Werte startet die Anwendung nicht oder blockiert den Start in Produktion.
+Without these values, the application will not start or will block startup in production.
 
-### 2.1 `ENCRYPTION_KEY` (unbedingt setzen)
+### 2.1 `ENCRYPTION_KEY` (must be set)
 
-**Was es ist:** Ein symmetrischer Schlüssel (Fernet) zum Verschlüsseln von **Secrets** in der Datenbank (API-Keys, Passwörter, die du in der UI einträgst).
+**What it is:** A symmetric key (Fernet) for encrypting **secrets** in the database (API keys, passwords you enter in the UI).
 
-**Warum wichtig:** Ohne diesen Key können Secrets nicht sicher gespeichert werden. Die App verweigert den Start.
+**Why it matters:** Without this key, secrets cannot be stored securely. The app refuses to start.
 
-**So erzeugen:**
+**How to generate:**
 
 <GenerateEncryptionKey />
 
-Oder per Kommandozeile:
+Or via command line:
 
 ```bash
 python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-Es erscheint eine Zeichenkette wie `xYz123...=`. Diese **komplett** in `.env` eintragen (den per Button erzeugten Key kannst du mit „Kopieren“ übernehmen):
+A string like `xYz123...=` will appear. Enter it **completely** in `.env` (you can copy the key generated via the button with "Copy"):
 
 ```
 ENCRYPTION_KEY=xYz123...=
 ```
 
-**Tipp:** Den Key sicher aufbewahren. Bei Verlust sind bestehende Secrets in der DB nicht mehr entschlüsselbar.
+**Tip:** Keep the key secure. If lost, existing secrets in the DB cannot be decrypted.
 
 ---
 
-### 2.2 `JWT_SECRET_KEY` (in Produktion Pflicht)
+### 2.2 `JWT_SECRET_KEY` (required in production)
 
-**Was es ist:** Ein geheimer Wert, mit dem die App **JWT-Tokens** (für eingeloggte User) signiert. Er muss lang und zufällig sein.
+**What it is:** A secret value used by the app to sign **JWT tokens** (for logged-in users). It must be long and random.
 
-**Warum wichtig:** Wer den Key kennt, kann gefälschte Login-Tokens erzeugen. In `ENVIRONMENT=production` wird der Standardwert `change-me-in-production` abgelehnt.
+**Why it matters:** Anyone who knows the key can create forged login tokens. In `ENVIRONMENT=production`, the default value `change-me-in-production` is rejected.
 
-**Lokal/Entwicklung:** Der Wert aus `.env.example` reicht zum Testen.
+**Local/development:** The value from `.env.example` is sufficient for testing.
 
-**Produktion:** Mindestens 32 Zeichen, zufällig. So erzeugen:
+**Production:** At least 32 characters, random. Generate as follows:
 
 <GenerateJwtSecret />
 
-Oder per Kommandozeile:
+Or via command line:
 
 ```bash
 openssl rand -base64 32
-# oder
+# or
 python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
-In `.env` eintragen (per-Button-Wert mit „Kopieren“ übernehmen):
+Enter in `.env` (copy the button-generated value with "Copy"):
 
 ```
-JWT_SECRET_KEY=dein-langer-zufaelliger-string
+JWT_SECRET_KEY=your-long-random-string
 ```
 
 ---
 
-### 2.3 OAuth: Mindestens ein Login-Provider
+### 2.3 OAuth: At least one login provider
 
-Fast-Flow hat **kein** klassisches Passwort-Login. Der Zugriff läuft über OAuth-Provider (**GitHub**, **Google**, **Microsoft** oder **Custom OAuth**). Es muss **mindestens ein** Provider vollständig konfiguriert sein (jeweils `CLIENT_ID` und `CLIENT_SECRET`), sonst startet die App nicht.
+Fast-Flow has **no** classic password login. Access runs via OAuth providers (**GitHub**, **Google**, **Microsoft**, or **Custom OAuth**). At least **one** provider must be fully configured (each with `CLIENT_ID` and `CLIENT_SECRET`), otherwise the app will not start.
 
 #### GitHub OAuth
 
-**Was du brauchst:** Eine OAuth-App auf GitHub.
+**What you need:** An OAuth app on GitHub.
 
-1. GitHub → **Settings** (dein Profil) → **Developer settings** → **OAuth Apps** → **New OAuth App**.
-2. **Authorization callback URL** setzen auf:  
-   `http://localhost:8000/api/auth/github/callback` (lokal mit Docker, alles auf :8000)  
-   bzw. `https://deine-domain.de/api/auth/github/callback` in Produktion.
-3. **Client ID** und **Client Secret** kopieren.
+1. GitHub → **Settings** (your profile) → **Developer settings** → **OAuth Apps** → **New OAuth App**.
+2. Set **Authorization callback URL** to:  
+   `http://localhost:8000/api/auth/github/callback` (local with Docker, everything on :8000)  
+   or `https://your-domain.com/api/auth/github/callback` in production.
+3. Copy **Client ID** and **Client Secret**.
 
-In `.env` (Zeilen auskommentieren = `#` entfernen und Werte eintragen):
+In `.env` (uncomment lines = remove `#` and enter values):
 
 ```
-GITHUB_CLIENT_ID=deine-client-id
-GITHUB_CLIENT_SECRET=dein-client-secret
+GITHUB_CLIENT_ID=your-client-id
+GITHUB_CLIENT_SECRET=your-client-secret
 ```
 
-**Wichtig:** Die Callback-URL muss **exakt** zu `BASE_URL` passen (siehe unten). Sonst schlägt der OAuth-Flow fehl.
+**Important:** The callback URL must **exactly** match `BASE_URL` (see below). Otherwise the OAuth flow fails.
 
 #### Google OAuth
 
-1. [Google Cloud Console](https://console.cloud.google.com/) → **APIs & Services** → **Anmeldedaten** → **OAuth 2.0-Client-IDs**.
-2. **Authorisierte Weiterleitungs-URIs** hinzufügen:  
-   `http://localhost:8000/api/auth/google/callback` (lokal) bzw. `https://deine-domain.de/api/auth/google/callback` (Produktion).
-3. **Client-ID** und **Client-Secret** eintragen.
+1. [Google Cloud Console](https://console.cloud.google.com/) → **APIs & Services** → **Credentials** → **OAuth 2.0 Client IDs**.
+2. Add **Authorized redirect URIs**:  
+   `http://localhost:8000/api/auth/google/callback` (local) or `https://your-domain.com/api/auth/google/callback` (production).
+3. Enter **Client ID** and **Client Secret**.
 
 In `.env`:
 
@@ -156,9 +156,9 @@ MICROSOFT_TENANT_ID=common
 ```
 
 Callback:
-`http://localhost:8000/api/auth/microsoft/callback` (lokal) bzw. `https://deine-domain.de/api/auth/microsoft/callback`.
+`http://localhost:8000/api/auth/microsoft/callback` (local) or `https://your-domain.com/api/auth/microsoft/callback`.
 
-#### Custom OAuth (z. B. Keycloak/Auth0)
+#### Custom OAuth (e.g. Keycloak/Auth0)
 
 In `.env`:
 
@@ -171,66 +171,66 @@ CUSTOM_OAUTH_USERINFO_URL=...
 ```
 
 Callback:
-`http://localhost:8000/api/auth/custom/callback` (lokal) bzw. `https://deine-domain.de/api/auth/custom/callback`.
+`http://localhost:8000/api/auth/custom/callback` (local) or `https://your-domain.com/api/auth/custom/callback`.
 
-Ausführliche Schritte: [OAuth (GitHub, Google, Microsoft, Custom)](/docs/oauth/readme).
-
----
-
-### 2.4 `INITIAL_ADMIN_EMAIL` (stark empfohlen)
-
-**Was es ist:** Die E-Mail-Adresse des **ersten Admins**. Der User, der sich mit dieser E-Mail über einen unterstützten OAuth-Provider anmeldet, erhält beim ersten Login automatisch die Admin-Rolle – **ohne** vorherige Einladung.
-
-**Warum wichtig:** Ohne Admin kann niemand andere User einladen oder Einstellungen ändern. Mit `INITIAL_ADMIN_EMAIL` hast du sofort einen Admin.
-
-```
-INITIAL_ADMIN_EMAIL=deine-email@beispiel.de
-```
-
-Die E-Mail muss mit der Adresse übereinstimmen, die dein OAuth-Provider für dein Konto zurückgibt.
+Detailed steps: [OAuth (GitHub, Google, Microsoft, Custom)](/docs/oauth/readme).
 
 ---
 
-### 2.5 `BASE_URL` und `FRONTEND_URL`
+### 2.4 `INITIAL_ADMIN_EMAIL` (strongly recommended)
 
-**BASE_URL:** Die öffentlich erreichbare URL des **Backends** (API). Wird für OAuth-Callbacks und Links in E-Mails genutzt. **Kein** nachgestelltes `/`.
+**What it is:** The email address of the **first admin**. The user who signs in with this email via a supported OAuth provider automatically receives the admin role on first login – **without** a prior invitation.
 
-**FRONTEND_URL:** Die URL des **Frontends**, falls es getrennt läuft (z.B. bei lokaler Entwicklung: Frontend auf :3000, Backend auf :8000). Wenn Frontend und Backend gemeinsam auf einer URL laufen (z.B. alles :8000), kann `FRONTEND_URL` weggelassen oder gleich `BASE_URL` gesetzt werden.
+**Why it matters:** Without an admin, no one can invite other users or change settings. With `INITIAL_ADMIN_EMAIL`, you have an admin immediately.
 
-**Typische Fälle:**
+```
+INITIAL_ADMIN_EMAIL=your-email@example.com
+```
 
-| Szenario | BASE_URL | FRONTEND_URL |
+The email must match the address your OAuth provider returns for your account.
+
+---
+
+### 2.5 `BASE_URL` and `FRONTEND_URL`
+
+**BASE_URL:** The publicly reachable URL of the **backend** (API). Used for OAuth callbacks and links in emails. **No** trailing `/`.
+
+**FRONTEND_URL:** The URL of the **frontend** if it runs separately (e.g. in local development: frontend on :3000, backend on :8000). If frontend and backend run together on one URL (e.g. everything on :8000), `FRONTEND_URL` can be omitted or set equal to `BASE_URL`.
+
+**Typical cases:**
+
+| Scenario | BASE_URL | FRONTEND_URL |
 |----------|----------|--------------|
-| Docker, alles auf Port 8000 | `http://localhost:8000` | weglassen oder `http://localhost:8000` |
-| Lokal: Frontend :3000, Backend :8000 | `http://localhost:8000` | `http://localhost:3000` |
-| Produktion, eine Domain | `https://fastflow.example.com` | weglassen oder identisch |
+| Docker, everything on port 8000 | `http://localhost:8000` | omit or `http://localhost:8000` |
+| Local: Frontend :3000, Backend :8000 | `http://localhost:8000` | `http://localhost:3000` |
+| Production, single domain | `https://fastflow.example.com` | omit or identical |
 
-**Fehlerquelle:** Wenn `BASE_URL` nicht exakt der aufgerufenen URL entspricht (inkl. `http`/`https`, Port), funktioniert der OAuth-Redirect nicht.
+**Common pitfall:** If `BASE_URL` does not exactly match the accessed URL (including `http`/`https`, port), the OAuth redirect will not work.
 
 ---
 
-## 3. Wichtige optionale Variablen
+## 3. Important optional variables
 
 ### 3.1 `ENVIRONMENT`
 
-- `development`: Lockere Sicherheitsprüfungen, Debug-Infos. Für lokales Arbeiten.
-- `production`: Strenge Prüfungen (z.B. `JWT_SECRET_KEY` darf nicht der Default sein). Für den Live-Betrieb.
+- `development`: Relaxed security checks, debug info. For local work.
+- `production`: Strict checks (e.g. `JWT_SECRET_KEY` must not be the default). For live operation.
 
 ```
 ENVIRONMENT=development
 ```
 
-Für Produktion: `ENVIRONMENT=production`.
+For production: `ENVIRONMENT=production`.
 
 ---
 
 ### 3.2 `PIPELINES_DIR`
 
-**Was es ist:** Der Pfad zum Verzeichnis, in dem deine Pipeline-Ordner liegen (jeder mit `main.py`).
+**What it is:** The path to the directory where your pipeline folders live (each with `main.py`).
 
-**Standard:** `./pipelines`
+**Default:** `./pipelines`
 
-**Wann anpassen:** Wenn du ein anderes Verzeichnis oder ein geklontes Git-Repo nutzt. Bei Docker: Der Pfad ist **im Container**; über `docker compose` wird typischerweise ein Host-Ordner gemountet (siehe `docker-compose.yaml`).
+**When to adjust:** If you use a different directory or a cloned Git repo. With Docker: The path is **inside the container**; via `docker compose` a host folder is typically mounted (see `docker-compose.yaml`).
 
 ```
 PIPELINES_DIR=./pipelines
@@ -240,12 +240,12 @@ PIPELINES_DIR=./pipelines
 
 ### 3.3 `DATABASE_URL`
 
-**Standard:** Leer → es wird **SQLite** verwendet (`./data/fastflow.db`).
+**Default:** Empty → **SQLite** is used (`./data/fastflow.db`).
 
-**Produktion / Team:** Oft **PostgreSQL** für bessere Concurrency und Backup-Optionen.
+**Production / team:** Often **PostgreSQL** for better concurrency and backup options.
 
 ```
-# SQLite (Default, nichts setzen oder leer lassen)
+# SQLite (default, leave unset or empty)
 # DATABASE_URL=
 
 # PostgreSQL
@@ -256,33 +256,33 @@ DATABASE_URL=postgresql://user:password@host:5432/fastflow
 
 ### 3.4 `UV_CACHE_DIR`
 
-**Was es ist:** Der globale Cache für **uv** (Python-Paketmanager). Alle Pipeline-Container teilen sich diesen Cache; schon geladene Pakete werden nicht erneut heruntergeladen.
+**What it is:** The global cache for **uv** (Python package manager). All pipeline containers share this cache; already downloaded packages are not downloaded again.
 
-**Standard:** `./data/uv_cache`
+**Default:** `./data/uv_cache`
 
-**Wann anpassen:** Nur, wenn du einen anderen Ort für den Cache haben möchtest (z.B. größere Festplatte). Für den Einstieg reicht der Default.
+**When to adjust:** Only if you want a different location for the cache (e.g. larger disk). The default is sufficient to get started.
 
 ---
 
-### 3.4a `UV_PYTHON_INSTALL_DIR` und `DEFAULT_PYTHON_VERSION`
+### 3.4a `UV_PYTHON_INSTALL_DIR` and `DEFAULT_PYTHON_VERSION`
 
-**UV_PYTHON_INSTALL_DIR:** Verzeichnis für `uv python install` (von uv verwaltete Python-Versionen). Muss persistent sein (Volume). Standard: `{DATA_DIR}/uv_python`.
+**UV_PYTHON_INSTALL_DIR:** Directory for `uv python install` (uv-managed Python versions). Must be persistent (volume). Default: `{DATA_DIR}/uv_python`.
 
-**DEFAULT_PYTHON_VERSION:** Standard-Python-Version, wenn in `pipeline.json` kein `python_version` steht. Standard: `3.11`. Die Python-Version ist beliebig pro Pipeline konfigurierbar (z.B. 3.10, 3.11, 3.12).
+**DEFAULT_PYTHON_VERSION:** Default Python version when `pipeline.json` has no `python_version`. Default: `3.11`. The Python version is freely configurable per pipeline (e.g. 3.10, 3.11, 3.12).
 
-**Wann anpassen:** Meist nicht nötig. `DEFAULT_PYTHON_VERSION` nur, wenn du global z.B. 3.12 nutzen willst.
+**When to adjust:** Usually not necessary. Adjust `DEFAULT_PYTHON_VERSION` only if you want to use e.g. 3.12 globally.
 
 ---
 
 ### 3.5 `UV_PRE_HEAT`
 
-**Was es ist:** `true` oder `false`. Wenn `true`, laufen beim **Git-Sync** und beim **Start**:
-- `uv python install {version}` für alle von Pipelines benötigten Python-Versionen,
-- `uv pip compile --python {version}` für jede `requirements.txt` (Dependencies im Cache).
+**What it is:** `true` or `false`. When `true`, on **Git sync** and on **startup**:
+- `uv python install {version}` for all Python versions required by pipelines,
+- `uv pip compile --python {version}` for each `requirements.txt` (dependencies in cache).
 
-Beim ersten Pipeline-Run sind Python und Pakete dann in der Regel schon da (Low Latency).
+On the first pipeline run, Python and packages are then usually already available (low latency).
 
-**Empfehlung:** `true` lassen.
+**Recommendation:** Leave as `true`.
 
 ```
 UV_PRE_HEAT=true
@@ -290,43 +290,43 @@ UV_PRE_HEAT=true
 
 ---
 
-### 3.6 Git-Sync (wenn Pipelines aus einem Repo kommen)
+### 3.6 Git sync (when pipelines come from a repo)
 
-| Variable | Bedeutung | typischer Wert |
+| Variable | Meaning | typical value |
 |----------|-----------|----------------|
-| `GIT_BRANCH` | Branch, der synchronisiert wird | `main` |
-| `AUTO_SYNC_ENABLED` | Automatischer Sync an/aus | `false` oder `true` |
-| `AUTO_SYNC_INTERVAL` | Intervall in Sekunden | z.B. `300` |
+| `GIT_BRANCH` | Branch to sync | `main` |
+| `AUTO_SYNC_ENABLED` | Automatic sync on/off | `false` or `true` |
+| `AUTO_SYNC_INTERVAL` | Interval in seconds | e.g. `300` |
 
-Zusätzlich: Repo-URL und ggf. GitHub App oder Zugangsdaten (siehe [Konfiguration](/docs/deployment/CONFIGURATION), GitHub Apps).
+Additionally: repo URL and optionally GitHub App or credentials (see [Configuration](/docs/deployment/CONFIGURATION), GitHub Apps).
 
 ---
 
-## 4. Fast-Flow starten
+## 4. Start Fast-Flow
 
-### Mit Docker (empfohlen für Produktion und einfachen Einstieg)
+### With Docker (recommended for production and easy setup)
 
 ```bash
 docker compose up -d
 ```
 
-Logs prüfen:
+Check logs:
 
 ```bash
 docker compose logs -f orchestrator
 ```
 
-Die UI ist unter **http://localhost:8000** (bzw. unter der in `BASE_URL` konfigurierten Adresse).
+The UI is at **http://localhost:8000** (or at the address configured in `BASE_URL`).
 
-#### Hinweis zu `entrypoint.sh`
+#### Note on `entrypoint.sh`
 
-Das Orchestrator-Image nutzt standardmäßig `./entrypoint.sh` als Startkommando (via `Dockerfile` `CMD`). Dadurch laufen vor dem API-Start wichtige Schritte wie DB-Initialisierung/Migration sowie (im Dev-Modus) Seed-Pipeline-Kopie.
+The orchestrator image uses `./entrypoint.sh` as the default start command (via `Dockerfile` `CMD`). This runs important steps before the API starts, such as DB initialization/migration and (in dev mode) seed pipeline copy.
 
-Wenn du in Compose oder Kubernetes `command`/`args` für den Orchestrator überschreibst, rufe `./entrypoint.sh` weiterhin auf oder übernimm die Init-Schritte explizit, damit Start und Worker-Mount-Setup konsistent bleiben.
+If you override `command`/`args` for the orchestrator in Compose or Kubernetes, still call `./entrypoint.sh` or explicitly perform the init steps so startup and worker mount setup remain consistent.
 
-### Lokal (für Entwicklung)
+### Local (for development)
 
-Zwei Terminals:
+Two terminals:
 
 **Terminal 1 – Backend:**
 
@@ -345,33 +345,33 @@ npm install
 npm run dev
 ```
 
-Dann: Frontend meist unter **http://localhost:3000**, Backend unter **http://localhost:8000**. `FRONTEND_URL` und `BASE_URL` wie in der Tabelle oben setzen.
+Then: Frontend usually at **http://localhost:3000**, backend at **http://localhost:8000**. Set `FRONTEND_URL` and `BASE_URL` as in the table above.
 
 ---
 
-## 5. Nach dem Start
+## 5. After startup
 
-1. **Ersten Login:** Mit einem OAuth-Provider anmelden. Die in `INITIAL_ADMIN_EMAIL` hinterlegte E-Mail wird beim ersten Mal zum Admin.
-2. **Pipelines:** Entweder Ordner unter `PIPELINES_DIR` anlegen (z.B. `pipelines/meine_erste/main.py`) oder Git-Sync einrichten. Siehe [Erste Pipeline](/docs/pipelines/erste-pipeline) und [Pipelines – Übersicht](/docs/pipelines/uebersicht).
-3. **Secrets:** In der UI unter Pipelines → Secrets/Parameter eintragen. In der Pipeline über `os.getenv("NAME")` nutzbar.
+1. **First login:** Sign in with an OAuth provider. The email stored in `INITIAL_ADMIN_EMAIL` becomes admin on first login.
+2. **Pipelines:** Either create folders under `PIPELINES_DIR` (e.g. `pipelines/my_first/main.py`) or set up Git sync. See [First Pipeline](/docs/pipelines/erste-pipeline) and [Pipelines – Overview](/docs/pipelines/uebersicht).
+3. **Secrets:** Enter them in the UI under Pipelines → Secrets/Parameters. Use in the pipeline via `os.getenv("NAME")`.
 
 ---
 
-## 6. Checkliste Produktion
+## 6. Production checklist
 
 - [ ] `ENVIRONMENT=production`
-- [ ] `ENCRYPTION_KEY` und `JWT_SECRET_KEY` neu und sicher erzeugt, nicht die Beispiele aus der Doku
-- [ ] OAuth (GitHub/Google/Microsoft/Custom, mind. ein Provider) mit **Produktions**-Callback-URLs
-- [ ] `BASE_URL` und ggf. `FRONTEND_URL` mit **https** und der echten Domain
-- [ ] HTTPS (z.B. Reverse-Proxy wie Nginx) – [Deployment-Guide](/docs/deployment/PRODUCTION)
-- [ ] `DATABASE_URL` für PostgreSQL gesetzt (empfohlen)
-- [ ] Backups für Datenbank und `.env` eingeplant
+- [ ] `ENCRYPTION_KEY` and `JWT_SECRET_KEY` newly and securely generated, not the examples from the docs
+- [ ] OAuth (GitHub/Google/Microsoft/Custom, at least one provider) with **production** callback URLs
+- [ ] `BASE_URL` and optionally `FRONTEND_URL` with **https** and the real domain
+- [ ] HTTPS (e.g. reverse proxy like Nginx) – [Deployment Guide](/docs/deployment/PRODUCTION)
+- [ ] `DATABASE_URL` set for PostgreSQL (recommended)
+- [ ] Backups planned for database and `.env`
 
 ---
 
-## Siehe auch
+## See also
 
-- [Konfiguration](/docs/deployment/CONFIGURATION) – alle Umgebungsvariablen im Überblick
-- [OAuth (GitHub, Google, Microsoft, Custom)](/docs/oauth/readme) – detaillierte OAuth-Einrichtung
-- [Schnellstart](/docs/schnellstart) – kompakte Version ohne Erklärungen
-- [Troubleshooting](/docs/troubleshooting) – wenn etwas nicht startet
+- [Configuration](/docs/deployment/CONFIGURATION) – all environment variables at a glance
+- [OAuth (GitHub, Google, Microsoft, Custom)](/docs/oauth/readme) – detailed OAuth setup
+- [Quick Start](/docs/schnellstart) – compact version without explanations
+- [Troubleshooting](/docs/troubleshooting) – when something does not start

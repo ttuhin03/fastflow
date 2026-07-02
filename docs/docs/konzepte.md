@@ -2,55 +2,55 @@
 sidebar_position: 12
 ---
 
-# Konzepte & Glossar
+# Concepts & Glossary
 
-Kurze Erklärung der zentralen Begriffe in Fast-Flow – für alle, die unter die Haube schauen wollen.
+Brief explanation of the central terms in Fast-Flow – for everyone who wants to look under the hood.
 
-## Runner-Cache-Prinzip
+## Runner cache principle
 
-Fast-Flow nutzt **keine** eigenen Docker-Images pro Pipeline und keine shared Worker-Umgebung. Stattdessen:
+Fast-Flow does **not** use its own Docker images per pipeline or a shared worker environment. Instead:
 
-- **Runner:** Jeder Run startet eine **ephemere** Isolation – entweder ein Docker-Container oder ein **Kubernetes-Job-Pod** („Disposable Worker“), gesteuert über `PIPELINE_EXECUTOR`. Nach dem Lauf wird die Sandbox entfernt bzw. beendet.
-- **Cache:** Der **uv-Cache** (Pakete) und **uv-Python-Installationen** (z.B. 3.11, 3.12) liegen **persistent** (Host-Volumes bei Docker Compose, **PVCs** bei Kubernetes). Sie werden in den Worker **gemountet**, nicht bei jedem Run neu gebaut.
-- **Effekt:** Kein Image-Build pro Pipeline, keine Dependency-Hölle. Dependencies sind nach dem ersten Run in Millisekunden verfügbar (Hardlinks bzw. Cache aus dem Volume).
+- **Runner:** Each run starts **ephemeral** isolation – either a Docker container or a **Kubernetes Job Pod** ("Disposable Worker"), controlled via `PIPELINE_EXECUTOR`. After the run, the sandbox is removed or terminated.
+- **Cache:** The **uv cache** (packages) and **uv Python installations** (e.g. 3.11, 3.12) are **persistent** (host volumes with Docker Compose, **PVCs** with Kubernetes). They are **mounted** into the worker, not rebuilt on every run.
+- **Effect:** No image build per pipeline, no dependency hell. Dependencies are available in milliseconds after the first run (hardlinks or cache from the volume).
 
-## uv (Paketmanager)
+## uv (package manager)
 
-[uv](https://github.com/astral-sh/uv) ist ein extrem schneller Python-Paketmanager (Rust). Fast-Flow nutzt ihn im Pipeline-Container:
+[uv](https://github.com/astral-sh/uv) is an extremely fast Python package manager (Rust). Fast-Flow uses it in the pipeline container:
 
-- **Installation:** `uv run --python {version} --with-requirements requirements.txt main.py` – Pakete werden bei Bedarf installiert und im gemeinsamen Cache abgelegt.
-- **Vorteil:** Deutlich schneller als `pip`, deterministisch, gleiche Umgebung lokal und im Orchestrator möglich.
+- **Installation:** `uv run --python {version} --with-requirements requirements.txt main.py` – packages are installed as needed and stored in the shared cache.
+- **Benefit:** Significantly faster than `pip`, deterministic, same environment possible locally and in the orchestrator.
 
-## JIT (Just-In-Time) Environment
+## JIT (Just-In-Time) environment
 
-**Just-In-Time** bedeutet: Die Laufzeitumgebung (Python-Version + Dependencies) wird **zur Laufzeit** bereitgestellt, nicht beim Image-Build.
+**Just-In-Time** means: The runtime environment (Python version + dependencies) is provided **at runtime**, not during image build.
 
-- Beim **ersten** Run einer Pipeline können Python-Installation und Pakete kurz laden.
-- **Preheating** (`UV_PRE_HEAT=true`): Beim Start und nach Git-Sync werden benötigte Python-Versionen und Dependencies vorinstalliert – der erste Run ist dann oft so schnell wie die folgenden.
+- On the **first** run of a pipeline, Python installation and packages may load briefly.
+- **Preheating** (`UV_PRE_HEAT=true`): On startup and after Git sync, required Python versions and dependencies are pre-installed – the first run is then often as fast as subsequent ones.
 
 ## Disposable Worker
 
-Jede Pipeline-Ausführung läuft in einem **eigenen, frischen** Worker – Docker-Container oder K8s-Job. Nach dem Lauf wird die Umgebung entfernt bzw. der Job beendet. Es gibt keine langlebigen Worker-Prozesse, die sich Zustand oder Dependencies teilen – dadurch maximale **Isolation** und **Sauberkeit**.
+Each pipeline execution runs in its **own, fresh** worker – Docker container or K8s Job. After the run, the environment is removed or the Job is terminated. There are no long-lived worker processes sharing state or dependencies – maximum **isolation** and **cleanliness**.
 
 ## Docker Socket Proxy
 
-Nur im Modus **`PIPELINE_EXECUTOR=docker`**: Der Orchestrator spricht **nicht** direkt mit dem Docker-Socket (`/var/run/docker.sock`), sondern über einen [Docker-Socket-Proxy](https://github.com/Tecnativa/docker-socket-proxy) (`tecnativa/docker-socket-proxy`). Der Proxy erlaubt nur konfigurierte Operationen (z.B. Container erstellen, Logs, Stats) und blockiert den Rest. Bei **`kubernetes`** entfällt dieser Pfad; stattdessen spricht die Anwendung mit der **Kubernetes-API** (Jobs, Pods, Logs).
+Only in **`PIPELINE_EXECUTOR=docker`** mode: The orchestrator does **not** talk directly to the Docker socket (`/var/run/docker.sock`), but via a [Docker Socket Proxy](https://github.com/Tecnativa/docker-socket-proxy) (`tecnativa/docker-socket-proxy`). The proxy only allows configured operations (e.g. create container, logs, stats) and blocks the rest. With **`kubernetes`**, this path is omitted; instead, the application talks to the **Kubernetes API** (Jobs, Pods, logs).
 
-## Git als Source of Truth
+## Git as source of truth
 
-Es gibt **keinen** manuellen Upload von Pipelines und **keinen** Pipeline-spezifischen Image-Build. Die einzige Quelle für Pipeline-Code und Konfiguration ist dein **Git-Repository**. Push → Sync (Webhook oder Auto-Sync) → Code ist im Orchestrator verfügbar. Rollback = `git revert`.
+There is **no** manual upload of pipelines and **no** pipeline-specific image build. The only source for pipeline code and configuration is your **Git repository**. Push → sync (webhook or auto-sync) → code is available in the orchestrator. Rollback = `git revert`.
 
-## Pipeline-Name
+## Pipeline name
 
-Der **Pipeline-Name** ist immer der **Verzeichnisname** unter `PIPELINES_DIR` (z.B. `pipelines/data_sync/` → Name `data_sync`). Er erscheint in der UI und in der API.
+The **pipeline name** is always the **directory name** under `PIPELINES_DIR` (e.g. `pipelines/data_sync/` → name `data_sync`). It appears in the UI and in the API.
 
-## Zero-Config Discovery
+## Zero-config discovery
 
-Pipelines müssen **nicht** in der Datenbank oder UI angelegt werden. Sobald ein Ordner mit `main.py` (oder `main.ipynb` + `"type": "notebook"`) unter `PIPELINES_DIR` existiert (lokal oder nach Git-Sync), wird er automatisch als Pipeline erkannt.
+Pipelines do **not** need to be created in the database or UI. As soon as a folder with `main.py` (or `main.ipynb` + `"type": "notebook"`) exists under `PIPELINES_DIR` (locally or after Git sync), it is automatically recognized as a pipeline.
 
-## Nächste Schritte
+## Next steps
 
-- [**Architektur**](/docs/architektur) – Runner-Cache und Container-Lifecycle im Detail
-- [**Pipelines – Übersicht**](/docs/pipelines/uebersicht) – Struktur und Erkennung
-- [**Docker Socket Proxy**](/docs/deployment/DOCKER_PROXY) – Sicherheitsarchitektur (Docker-Executor)
-- [**Kubernetes Deployment**](/docs/deployment/K8S) – Jobs-Executor
+- [**Architecture**](/docs/architektur) – Runner cache and container lifecycle in detail
+- [**Pipelines – Overview**](/docs/pipelines/uebersicht) – Structure and discovery
+- [**Docker Socket Proxy**](/docs/deployment/DOCKER_PROXY) – Security architecture (Docker executor)
+- [**Kubernetes Deployment**](/docs/deployment/K8S) – Jobs executor

@@ -2,7 +2,7 @@
 sidebar_position: 4
 ---
 
-# Warum Fast-Flow? Das Anti-Overhead-Manifesto
+# Why Fast-Flow? The Anti-Overhead Manifesto
 
 ```text
 .-----------------------------------------------------------.
@@ -19,62 +19,62 @@ sidebar_position: 4
 '-----------------------------------------------------------'
 ```
 
-## 1. Die Philosophie: "Code First, Infrastructure Second"
+## 1. The philosophy: "Code First, Infrastructure Second"
 
-Die meisten modernen Orchestratoren (Airflow, Dagster, Mage) leiden an derselben Krankheit: Sie zwingen dich, deinen Code für das Tool zu schreiben, anstatt dass das Tool deinen Code unterstützt.
+Most modern orchestrators (Airflow, Dagster, Mage) suffer from the same disease: They force you to write your code for the tool, instead of the tool supporting your code.
 
-Wir haben Fast-Flow gebaut, weil wir es leid waren:
+We built Fast-Flow because we were tired of:
 
-- Wochenlang mit DevOps zu streiten, warum `prophet` oder `torch` im Cluster nicht importiert werden können, obwohl es lokal funktioniert.
-- Hunderte Zeilen Boilerplate-Code zu schreiben (Decorators, Operatoren, IO-Manager), nur um eine einfache SQL-Abfrage zu automatisieren.
-- Festzustellen, dass das Tool bestimmte Python-Patterns nicht unterstützt, weil die "Serialisierung des DAGs" fehlschlägt.
+- Spending weeks arguing with DevOps about why `prophet` or `torch` cannot be imported in the cluster even though it works locally.
+- Writing hundreds of lines of boilerplate code (decorators, operators, IO managers) just to automate a simple SQL query.
+- Finding out that the tool does not support certain Python patterns because "DAG serialization" fails.
 
-**Fast-Flow Regel #1:** Wenn es in einem lokalen Script läuft, läuft es auch hier. Ohne Anpassung.
+**Fast-Flow Rule #1:** If it runs in a local script, it runs here too. Without modification.
 
-## 2. Der tiefe Fall: Warum uv-Caching alles verändert
+## 2. The deep dive: Why uv caching changes everything
 
-Der größte Schmerzpunkt in der Orchestrierung ist die Dependency-Hölle.
+The biggest pain point in orchestration is dependency hell.
 
-- **Airflow/Dagster Ansatz:** Entweder nutzt du ein riesiges "Shared Environment" (wo sich Libraries beißen) oder du baust für jede Änderung ein neues Docker-Image (was 5–10 Minuten dauert).
-- **Fast-Flow Ansatz:** Wir nutzen den uv-Cache-JIT (Just-In-Time).
+- **Airflow/Dagster approach:** Either you use a huge "shared environment" (where libraries conflict) or you build a new Docker image for every change (which takes 5–10 minutes).
+- **Fast-Flow approach:** We use uv cache JIT (Just-In-Time).
 
-### Warum das besser ist
+### Why this is better
 
-Wenn du eine schwere Library wie `prophet` hinzufügst:
+When you add a heavy library like `prophet`:
 
-- **Isolation:** Jede Pipeline bekommt ihren eigenen virtuellen Layer im Container. Keine Konflikte.
-- **Speed:** `uv` nutzt Hardlinks. Wenn `pandas` einmal auf dem Server geladen wurde, ist es in jeder weiteren Pipeline in 0.1 Sekunden verfügbar.
-- **DevOps-Freiheit:** Du musst niemanden fragen, ob er dir ein neues Image baut. Schreib es in die `requirements.txt`, den Rest erledigt der Orchestrator beim Start.
+- **Isolation:** Each pipeline gets its own virtual layer in the container. No conflicts.
+- **Speed:** `uv` uses hardlinks. If `pandas` was loaded once on the server, it is available in every subsequent pipeline in 0.1 seconds.
+- **DevOps freedom:** You do not have to ask anyone to build a new image for you. Write it in `requirements.txt`, the orchestrator handles the rest on startup.
 
-## 3. Stimmen aus den Schützengräben
+## 3. Voices from the trenches
 
-*Die folgenden Zitate sind repräsentative Paraphrasen. Sie fassen den allgemeinen Konsens und die häufigsten Schmerzpunkte zusammen, wie sie in der Data-Engineering-Community (z.B. auf Reddit) immer wieder geäußert werden.*
+*The following quotes are representative paraphrases. They summarize the general consensus and the most common pain points as repeatedly expressed in the data engineering community (e.g. on Reddit).*
 
-### Apache Airflow: „Ein Vollzeitjob für sich selbst“
+### Apache Airflow: "A full-time job in itself"
 
-> „Ich habe Monate damit verbracht, Airflow stabil zum Laufen zu bringen. Es ist toll für riesige Teams mit eigener DevOps-Abteilung, aber für kleinere Projekte fühlt es sich einfach nur klobig und überdimensioniert an.“
+> "I spent months getting Airflow to run stably. It's great for huge teams with their own DevOps department, but for smaller projects it just feels clunky and oversized."
 
-> „Das Problem ist die Dependency-Hölle. Sobald du mehr als ein paar Libraries nutzt, beißen sie sich. Am Ende versteckt man alles in Docker-Containern, nur um die Umgebung zu retten.“
+> "The problem is dependency hell. As soon as you use more than a few libraries, they conflict. In the end you hide everything in Docker containers just to save the environment."
 
-### Dagster: „Die Asset-Abstraktion als Goldener Käfig“
+### Dagster: "The asset abstraction as a golden cage"
 
-> „Die Lernkurve ist extrem steil. Man muss seinen Code komplett umbauen, um ihn in 'Assets' oder 'Ops' zu pressen. Einmal drin, kommt man schwer wieder weg.“
+> "The learning curve is extremely steep. You have to completely restructure your code to fit it into 'assets' or 'ops'. Once you're in, it's hard to get out."
 
-### Mage & Modern Stack Fatigue
+### Mage & modern stack fatigue
 
-> „Teams sind müde davon, 20 verschiedene Tools gleichzeitig zu managen. Wir sehen eine Rückkehr zu einfachen Python-first Workflows.“
+> "Teams are tired of managing 20 different tools at the same time. We're seeing a return to simple Python-first workflows."
 
-## 4. Warum Fast-Flow die Antwort ist
+## 4. Why Fast-Flow is the answer
 
-- **Gegen Airflows Klobigkeit:** Wir sind ein einzelner Container. In 60 Sekunden bereit, statt 6 Monaten „Kopf gegen die Wand“.
-- **Gegen Dagsters Lock-in:** Wir haben keine IO-Manager. Dein Code gehört dir.
-- **Gegen die Dependency-Hölle:** uv-Caching, blitzschnelle, isolierte Umgebungen.
+- **Against Airflow's clunkiness:** We are a single container. Ready in 60 seconds, instead of 6 months of "head against the wall."
+- **Against Dagster's lock-in:** We have no IO managers. Your code belongs to you.
+- **Against dependency hell:** uv caching, lightning-fast, isolated environments.
 
-![Cognitive Load im Vergleich](/img/cognitive_load.png)
+![Cognitive Load Comparison](/img/cognitive_load.png)
 
-## 5. Der Realitätscheck: Ein mittel-komplexer Workflow
+## 5. The reality check: A medium-complexity workflow
 
-**Der Fast-Flow Weg (reines Python) – `main.py`:**
+**The Fast-Flow way (pure Python) – `main.py`:**
 
 ```python
 import requests
@@ -82,7 +82,7 @@ import pandas as pd
 from sqlalchemy import create_engine
 import os
 
-# 1. Extraktion
+# 1. Extraction
 data = requests.get("https://api.example.com/metrics").json()
 df = pd.DataFrame(data)
 
@@ -93,24 +93,24 @@ df['processed'] = df['value'] * 1.2
 engine = create_engine(os.getenv("POSTGRES_URL"))
 df.to_sql("metrics", engine, if_exists="append")
 
-print("Pipeline erfolgreich durchgelaufen.")
+print("Pipeline completed successfully.")
 ```
 
-## 6. Der Vergleich
+## 6. The comparison
 
 | Feature | Airflow | Dagster | Mage | **Fast-Flow** |
 | --- | --- | --- | --- | --- |
-| **Code-Anpassung** | Hoch | Hoch | Mittel | **Null (Plain Python)** |
-| **Local Testing** | Schwer | Mittel | Mittel | **Einfach** |
-| **Heavy Libs (Prophet)** | Schmerzhaft | Schmerzhaft | Mittel | **Instant (uv-Cache)** |
-| **Infrastruktur** | 5–7 Container | 3–4 Container | 2–3 Container | **1 Container (+ Proxy)** |
+| **Code adaptation** | High | High | Medium | **None (Plain Python)** |
+| **Local testing** | Hard | Medium | Medium | **Easy** |
+| **Heavy libs (Prophet)** | Painful | Painful | Medium | **Instant (uv cache)** |
+| **Infrastructure** | 5–7 containers | 3–4 containers | 2–3 containers | **1 container (+ proxy)** |
 
-## 7. Das Fazit
+## 7. The conclusion
 
-Wir haben Fast-Flow nicht gebaut, weil wir mehr Features wollten. Wir haben es gebaut, weil wir **weniger Reibung** wollten.
+We did not build Fast-Flow because we wanted more features. We built it because we wanted **less friction**.
 
-Fast-Flow ist für Leute, die ihren Job lieben (das Coden), aber das Drumherum hassen.
+Fast-Flow is for people who love their job (coding) but hate everything around it.
 
 ---
 
-**Bereit?** Nutze das **[Fast-Flow Pipeline Template](https://github.com/ttuhin03/fastflow-pipeline-template)** für deine erste Pipeline.
+**Ready?** Use the **[Fast-Flow Pipeline Template](https://github.com/ttuhin03/fastflow-pipeline-template)** for your first pipeline.

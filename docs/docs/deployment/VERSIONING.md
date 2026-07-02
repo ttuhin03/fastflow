@@ -78,7 +78,7 @@ v{MAJOR}.{MINOR}.{PATCH}
 
 4. **Create a GitHub Release:**
    - Go to: https://github.com/ttuhin03/fastflow/releases/new
-   - Select the tag: `$NEW_VERSION` (z. B. `v1.0.5`)
+   - Select the tag: `$NEW_VERSION` (e.g. `v1.0.5`)
    - Add release notes
    - Publish the release
 
@@ -158,8 +158,8 @@ INFO - Version check scheduled: Daily at 2:00 AM
 The version checker uses these settings from `app/config.py`:
 
 - `VERSION`: Current version (read from `VERSION` file)
-- **GitHub Repository**: Standardmäßig `ttuhin03/fastflow` (in Forks/privaten Mirrors ggf. abweichend konfiguriert)
-  - Bei Bedarf im Version-Checker-Code auf dein Ziel-Repository anpassen
+- **GitHub Repository**: Defaults to `ttuhin03/fastflow` (may differ in forks/private mirrors)
+  - Adjust in the version checker code to your target repository if needed
 
 ## Scheduled Job Details
 

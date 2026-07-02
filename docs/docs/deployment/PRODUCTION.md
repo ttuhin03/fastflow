@@ -4,36 +4,36 @@ sidebar_position: 3
 
 # 🚀 Deployment Guide
 
-Dieser Guide beschreibt Best Practices für das Deployment von Fast-Flow in einer Produktionsumgebung.
+This guide describes best practices for deploying Fast-Flow in a production environment.
 
-## ⚠️ Sicherheits-Checkliste
+## ⚠️ Security Checklist
 
-Vor dem Go-Live sicherstellen:
+Before go-live, ensure:
 
-- [ ] **HTTPS nutzen** (via Reverse Proxy)
-- [ ] **OAuth** (mind. ein Provider: `GITHUB_*`, `GOOGLE_*`, `MICROSOFT_*` oder `CUSTOM_OAUTH_*`), `INITIAL_ADMIN_EMAIL` in `.env` setzen
-- [ ] **JWT Key setzen**: Einen langen, zufälligen `JWT_SECRET_KEY` setzen.
-- [ ] **Encryption Key setzen**: `ENCRYPTION_KEY` sicher generieren und speichern.
-- [ ] **Environment**: Setze `ENVIRONMENT=production` in der `.env`.
-- [ ] **PostgreSQL für Produktion** (siehe Abschnitt Datenbank).
+- [ ] **Use HTTPS** (via reverse proxy)
+- [ ] **OAuth** (at least one provider: `GITHUB_*`, `GOOGLE_*`, `MICROSOFT_*`, or `CUSTOM_OAUTH_*`), set `INITIAL_ADMIN_EMAIL` in `.env`
+- [ ] **Set JWT key**: Set a long, random `JWT_SECRET_KEY`.
+- [ ] **Set encryption key**: Generate and store `ENCRYPTION_KEY` securely.
+- [ ] **Environment**: Set `ENVIRONMENT=production` in `.env`.
+- [ ] **PostgreSQL for production** (see Database section).
 
-## Datenbank: PostgreSQL für Produktion
+## Database: PostgreSQL for Production
 
-**Für den Enterprise-Einsatz wird PostgreSQL dringend empfohlen.** SQLite eignet sich für lokale Entwicklung und sehr kleine Einzelplatz-Setups, ist aber für produktiven Mehrnutzer-Betrieb nicht geeignet:
+**For enterprise use, PostgreSQL is strongly recommended.** SQLite is suitable for local development and very small single-user setups, but is not appropriate for production multi-user operation:
 
-| Aspekt | SQLite | PostgreSQL |
+| Aspect | SQLite | PostgreSQL |
 |--------|--------|------------|
-| **Concurrency** | Ein Writer, "database is locked" bei Last | Echte parallele Schreibzugriffe |
-| **Skalierung** | Begrenzt | Skalierbar |
-| **Enterprise-Tauglichkeit** | Entwicklung/Prototyping | Produktion, Multi-User |
+| **Concurrency** | Single writer, "database is locked" under load | True parallel write access |
+| **Scaling** | Limited | Scalable |
+| **Enterprise readiness** | Development/prototyping | Production, multi-user |
 
-**Setup:** Setze `DATABASE_URL=postgresql://user:password@host:5432/fastflow` in der `.env` (oder als Secret in Kubernetes). Der Orchestrator verwendet dann automatisch PostgreSQL inklusive Connection-Pool.
+**Setup:** Set `DATABASE_URL=postgresql://user:password@host:5432/fastflow` in `.env` (or as a secret in Kubernetes). The orchestrator then automatically uses PostgreSQL including a connection pool.
 
 ## Reverse Proxy Setup (Nginx)
 
-In Produktion sollte der Orchestrator niemals direkt dem Internet ausgesetzt werden. Nutzen Sie Nginx als Reverse Proxy für SSL-Terminierung und zusätzliche Sicherheit.
+In production, the orchestrator should never be exposed directly to the internet. Use Nginx as a reverse proxy for SSL termination and additional security.
 
-### Beispiel Nginx Config
+### Example Nginx Config
 
 ```nginx
 server {
@@ -66,30 +66,30 @@ server {
 }
 ```
 
-> **Wichtig**: Die `Upgrade` und `Connection` Header sind notwendig für Server-Sent Events (SSE), die für Live-Logs genutzt werden.
+> **Important**: The `Upgrade` and `Connection` headers are required for Server-Sent Events (SSE), which are used for live logs.
 
-## Docker Compose für Produktion
+## Docker Compose for Production
 
-Die Standard-`docker-compose.yaml` ist bereits produktionsorientiert:
+The default `docker-compose.yaml` is already production-oriented:
 
-- **Docker-Proxy**: Port 2375 wird nicht auf den Host gemappt (nur intern erreichbar, geringere Angriffsfläche).
-- **Orchestrator**: `ENVIRONMENT=production`, Logging (json-file, max-size/max-file), Restart-Policy.
+- **Docker proxy**: Port 2375 is not mapped to the host (only reachable internally, smaller attack surface).
+- **Orchestrator**: `ENVIRONMENT=production`, logging (json-file, max-size/max-file), restart policy.
 
-Starten mit:
+Start with:
 ```bash
 docker compose up -d
 ```
 
-## Backup Strategie
+## Backup Strategy
 
-Sichern Sie regelmäßig folgende Verzeichnisse:
+Back up the following directories regularly:
 
-1. `data/fastflow.db` (SQLite Datenbank)
-2. `.env` (Konfiguration)
-3. `pipelines/` (Pipeline-Code, falls nicht in einem externen Git-Repo gehostet)
+1. `data/fastflow.db` (SQLite database)
+2. `.env` (configuration)
+3. `pipelines/` (pipeline code, if not hosted in an external Git repo)
 
-## Siehe auch
+## See Also
 
-- [Konfiguration](/docs/deployment/CONFIGURATION) – Environment-Variablen
-- [Docker Socket Proxy](/docs/deployment/DOCKER_PROXY) – Sicherheitslayer
-- [Git-Deployment](/docs/deployment/GIT_DEPLOYMENT) – Push-to-Deploy
+- [Configuration](/docs/deployment/CONFIGURATION) – environment variables
+- [Docker Socket Proxy](/docs/deployment/DOCKER_PROXY) – security layer
+- [Git Deployment](/docs/deployment/GIT_DEPLOYMENT) – push-to-deploy

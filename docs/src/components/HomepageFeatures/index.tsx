@@ -15,25 +15,25 @@ const FeatureList: FeatureItem[] = [
     Svg: require('@site/static/img/undraw_docusaurus_mountain.svg').default,
     description: (
       <>
-        Plain Python – kein DAG-Framework, keine Operatoren. Wenn es lokal läuft, läuft es auch in Fast-Flow.
+        Plain Python – no DAG framework, no operators. If it runs locally, it runs in Fast-Flow.
       </>
     ),
   },
   {
-    title: 'Git-nativ',
+    title: 'Git-native',
     Svg: require('@site/static/img/undraw_docusaurus_tree.svg').default,
     description: (
       <>
-        Push to Deploy. Dein Repo ist die einzige Wahrheit; uv-Cache und Zero-Build machen Änderungen sofort lauffähig.
+        Push to deploy. Your repo is the single source of truth; uv cache and zero-build make changes runnable immediately.
       </>
     ),
   },
   {
-    title: 'Ein Container',
+    title: 'One Container',
     Svg: require('@site/static/img/undraw_docusaurus_react.svg').default,
     description: (
       <>
-        Kein Cluster, keine Worker-Farm. FastAPI + Docker-Socket-Proxy – schnell aufgesetzt und wartungsarm.
+        No cluster, no worker farm. FastAPI + Docker socket proxy – quick to set up and low maintenance.
       </>
     ),
   },

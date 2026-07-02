@@ -1,24 +1,24 @@
-# Frontend-Dokumentation
+# Frontend Documentation
 
-Diese Dokumentation beschreibt die Frontend-Struktur, Komponenten und Seiten des Fast-Flow Orchestrators.
+This documentation describes the frontend structure, components, and pages of the Fast-Flow orchestrator.
 
-## Technologie-Stack
+## Technology Stack
 
-- **React 18**: UI-Framework
-- **TypeScript**: Typsicherheit
-- **Vite**: Build-Tool und Dev-Server
+- **React 18**: UI framework
+- **TypeScript**: Type safety
+- **Vite**: Build tool and dev server
 - **React Router**: Routing
-- **Axios**: HTTP-Client für API-Kommunikation
+- **Axios**: HTTP client for API communication
 - **CSS Modules**: Styling
 
-## Projektstruktur
+## Project Structure
 
 ```
 frontend/
 ├── src/
 │   ├── api/
-│   │   └── client.ts          # Axios-Client mit Auth-Interceptors
-│   ├── components/            # Wiederverwendbare Komponenten
+│   │   └── client.ts          # Axios client with auth interceptors
+│   ├── components/            # Reusable components
 │   │   ├── CalendarHeatmap.tsx
 │   │   ├── Layout.tsx
 │   │   ├── ProgressBar.tsx
@@ -28,8 +28,8 @@ frontend/
 │   │   ├── SystemMetrics.tsx
 │   │   └── Tooltip.tsx
 │   ├── contexts/
-│   │   └── AuthContext.tsx     # Authentication Context
-│   ├── pages/                 # Seiten-Komponenten
+│   │   └── AuthContext.tsx     # Authentication context
+│   ├── pages/                 # Page components
 │   │   ├── AuthCallback.tsx
 │   │   ├── Dashboard.tsx
 │   │   ├── Invite.tsx
@@ -44,56 +44,56 @@ frontend/
 │   │   ├── Sync.tsx
 │   │   └── Users.tsx
 │   ├── styles/
-│   │   ├── design-system.css  # Design-System (Farben, Typografie)
-│   │   └── variables.css      # CSS-Variablen
-│   ├── App.tsx                # Haupt-App-Komponente
-│   └── main.tsx               # Entry-Point
+│   │   ├── design-system.css  # Design system (colors, typography)
+│   │   └── variables.css      # CSS variables
+│   ├── App.tsx                # Main app component
+│   └── main.tsx               # Entry point
 ```
 
-## API-Client
+## API Client
 
 ### `src/api/client.ts`
 
-Der API-Client ist ein konfigurierter Axios-Instanz mit automatischer Authentifizierung.
+The API client is a configured Axios instance with automatic authentication.
 
 **Features:**
-- Automatisches Hinzufügen des Authorization-Headers aus sessionStorage
-- Automatische Weiterleitung zum Login bei 401-Fehlern
-- Basis-URL konfigurierbar über `VITE_API_URL` (Standard: `http://localhost:8000/api`)
+- Automatically adds Authorization header from sessionStorage
+- Automatic redirect to login on 401 errors
+- Base URL configurable via `VITE_API_URL` (default: `http://localhost:8000/api`)
 
-**Verwendung:**
+**Usage:**
 ```typescript
 import apiClient from '@/api/client'
 
-// GET-Request
+// GET request
 const response = await apiClient.get('/pipelines')
 
-// POST-Request
+// POST request
 const response = await apiClient.post('/pipelines/pipeline_a/run', {
   env_vars: { API_KEY: 'secret' }
 })
 ```
 
-## Komponenten
+## Components
 
 ### Layout
 
 #### `Layout.tsx`
 
-Haupt-Layout-Komponente mit Navigation und Sidebar.
+Main layout component with navigation and sidebar.
 
 **Features:**
-- Responsive Sidebar mit Navigation
-- Logout-Funktionalität
-- Aktive Route-Hervorhebung
+- Responsive sidebar with navigation
+- Logout functionality
+- Active route highlighting
 
-**Props:** Keine (verwendet React Router für Navigation)
+**Props:** None (uses React Router for navigation)
 
 ### RunStatusCircles
 
 #### `RunStatusCircles.tsx`
 
-Visualisiert Run-Status mit farbigen Kreisen.
+Visualizes run status with colored circles.
 
 **Props:**
 ```typescript
@@ -104,26 +104,26 @@ interface RunStatusCirclesProps {
 }
 ```
 
-**Status-Farben:**
-- `PENDING`: Grau
-- `RUNNING`: Blau
-- `SUCCESS`: Grün
-- `FAILED`: Rot
+**Status colors:**
+- `PENDING`: Gray
+- `RUNNING`: Blue
+- `SUCCESS`: Green
+- `FAILED`: Red
 - `CANCELLED`: Orange
 
 ### ProgressBar
 
 #### `ProgressBar.tsx`
 
-Fortschrittsbalken-Komponente.
+Progress bar component.
 
 **Props:**
 ```typescript
 interface ProgressBarProps {
   value: number        // 0-100
-  max?: number         // Standard: 100
-  label?: string       // Optionales Label
-  color?: string       // Optional: CSS-Farbe
+  max?: number         // Default: 100
+  label?: string       // Optional label
+  color?: string       // Optional: CSS color
 }
 ```
 
@@ -131,30 +131,30 @@ interface ProgressBarProps {
 
 #### `CalendarHeatmap.tsx`
 
-Kalender-Heatmap zur Visualisierung von Run-Aktivitäten über die Zeit.
+Calendar heatmap for visualizing run activity over time.
 
 **Props:**
 ```typescript
 interface CalendarHeatmapProps {
   data: Array<{
-    date: string        // ISO-Format: YYYY-MM-DD
-    value: number       // Anzahl Runs
+    date: string        // ISO format: YYYY-MM-DD
+    value: number       // Number of runs
   }>
-  startDate?: string   // Optional: Startdatum
-  endDate?: string     // Optional: Enddatum
+  startDate?: string   // Optional: start date
+  endDate?: string     // Optional: end date
 }
 ```
 
 **Features:**
-- Farbcodierung basierend auf Aktivität
-- Tooltip mit Details beim Hover
-- Responsive Design
+- Color coding based on activity
+- Tooltip with details on hover
+- Responsive design
 
 ### SystemMetrics
 
 #### `SystemMetrics.tsx`
 
-Zeigt System-Metriken (CPU, RAM, Container) an.
+Displays system metrics (CPU, RAM, containers).
 
 **Props:**
 ```typescript
@@ -180,15 +180,15 @@ interface SystemMetricsProps {
 ```
 
 **Features:**
-- Echtzeit-Updates (polling)
-- Grafische Darstellung von CPU/RAM
-- Container-Details-Tabelle
+- Real-time updates (polling)
+- Graphical CPU/RAM display
+- Container details table
 
 ### StorageStats
 
 #### `StorageStats.tsx`
 
-Zeigt Speicherplatz-Statistiken an.
+Displays storage statistics.
 
 **Props:**
 ```typescript
@@ -209,14 +209,14 @@ interface StorageStatsProps {
 
 #### `Skeleton.tsx`
 
-Loading-Skeleton-Komponente für bessere UX während des Ladens.
+Loading skeleton component for better UX while loading.
 
 **Props:**
 ```typescript
 interface SkeletonProps {
-  width?: string       // CSS-Breite (z.B. "100%", "200px")
-  height?: string      // CSS-Höhe
-  className?: string   // Zusätzliche CSS-Klassen
+  width?: string       // CSS width (e.g. "100%", "200px")
+  height?: string      // CSS height
+  className?: string   // Additional CSS classes
 }
 ```
 
@@ -224,7 +224,7 @@ interface SkeletonProps {
 
 #### `Tooltip.tsx`
 
-Tooltip-Komponente für zusätzliche Informationen.
+Tooltip component for additional information.
 
 **Props:**
 ```typescript
@@ -235,254 +235,254 @@ interface TooltipProps {
 }
 ```
 
-## Seiten
+## Pages
 
 ### Dashboard
 
 #### `pages/Dashboard.tsx`
 
-Haupt-Dashboard mit Übersicht über alle Pipelines und System-Status.
+Main dashboard with overview of all pipelines and system status.
 
 ![Dashboard](../img/dashboard.png)
 
 **Features:**
-- Pipeline-Übersicht mit Statistiken
-- System-Metriken (CPU, RAM, Container)
-- Speicherplatz-Statistiken
-- Kalender-Heatmap für Run-Aktivitäten
-- Quick-Actions (Pipeline starten, Sync ausführen)
+- Pipeline overview with statistics
+- System metrics (CPU, RAM, containers)
+- Storage statistics
+- Calendar heatmap for run activity
+- Quick actions (start pipeline, run sync)
 
-**API-Endpoints:**
-- `GET /api/pipelines` - Pipeline-Liste
-- `GET /api/pipelines/daily-stats/all` - Tägliche Statistiken
-- `GET /api/settings/system-metrics` - System-Metriken
-- `GET /api/settings/storage` - Speicherplatz-Statistiken
+**API endpoints:**
+- `GET /api/pipelines` - Pipeline list
+- `GET /api/pipelines/daily-stats/all` - Daily statistics
+- `GET /api/settings/system-metrics` - System metrics
+- `GET /api/settings/storage` - Storage statistics
 
 ### Pipelines
 
 #### `pages/Pipelines.tsx`
 
-Übersicht aller Pipelines mit Filtern und Aktionen.
+Overview of all pipelines with filters and actions.
 
 **Features:**
-- Pipeline-Liste mit Statistiken
-- Filter nach Tags
-- Pipeline starten
-- Pipeline-Details öffnen
-- Statistiken anzeigen
+- Pipeline list with statistics
+- Filter by tags
+- Start pipeline
+- Open pipeline details
+- Show statistics
 
-**API-Endpoints:**
-- `GET /api/pipelines` - Pipeline-Liste
-- `POST /api/pipelines/{name}/run` - Pipeline starten
+**API endpoints:**
+- `GET /api/pipelines` - Pipeline list
+- `POST /api/pipelines/{name}/run` - Start pipeline
 
 ### Pipeline Detail
 
 #### `pages/PipelineDetail.tsx`
 
-Detaillierte Ansicht einer einzelnen Pipeline.
+Detailed view of a single pipeline.
 
 **Features:**
-- Pipeline-Informationen und Metadaten
-- Run-Historie
-- Tägliche Statistiken (Grafik)
-- Pipeline starten mit Environment-Variablen
-- Statistiken zurücksetzen
+- Pipeline information and metadata
+- Run history
+- Daily statistics (chart)
+- Start pipeline with environment variables
+- Reset statistics
 
-**API-Endpoints:**
-- `GET /api/pipelines/{name}` - Pipeline-Details
-- `GET /api/pipelines/{name}/runs` - Run-Historie
-- `GET /api/pipelines/{name}/stats` - Statistiken
-- `GET /api/pipelines/{name}/daily-stats` - Tägliche Statistiken
-- `POST /api/pipelines/{name}/run` - Pipeline starten
-- `POST /api/pipelines/{name}/stats/reset` - Statistiken zurücksetzen
+**API endpoints:**
+- `GET /api/pipelines/{name}` - Pipeline details
+- `GET /api/pipelines/{name}/runs` - Run history
+- `GET /api/pipelines/{name}/stats` - Statistics
+- `GET /api/pipelines/{name}/daily-stats` - Daily statistics
+- `POST /api/pipelines/{name}/run` - Start pipeline
+- `POST /api/pipelines/{name}/stats/reset` - Reset statistics
 
 ### Runs
 
 #### `pages/Runs.tsx`
 
-Übersicht aller Runs mit Filtern und Pagination.
+Overview of all runs with filters and pagination.
 
 **Features:**
-- Run-Liste mit Status
-- Filter nach Pipeline, Status, Datum
+- Run list with status
+- Filter by pipeline, status, date
 - Pagination
-- Run-Details öffnen
-- Run abbrechen (für laufende Runs)
+- Open run details
+- Cancel run (for running runs)
 
-**API-Endpoints:**
-- `GET /api/runs` - Run-Liste (mit Filtern)
-- `POST /api/runs/{run_id}/cancel` - Run abbrechen
+**API endpoints:**
+- `GET /api/runs` - Run list (with filters)
+- `POST /api/runs/{run_id}/cancel` - Cancel run
 
 ### Run Detail
 
 #### `pages/RunDetail.tsx`
 
-Detaillierte Ansicht eines einzelnen Runs.
+Detailed view of a single run.
 
 **Features:**
-- Run-Informationen (Status, Exit-Code, Dauer)
-- Live-Logs (Server-Sent Events)
-- Live-Metriken (CPU, RAM)
-- Log-Download
-- Run abbrechen (für laufende Runs)
+- Run information (status, exit code, duration)
+- Live logs (Server-Sent Events)
+- Live metrics (CPU, RAM)
+- Log download
+- Cancel run (for running runs)
 
-**API-Endpoints:**
-- `GET /api/runs/{run_id}` - Run-Details
-- `GET /api/runs/{run_id}/logs` - Logs aus Datei
-- `GET /api/runs/{run_id}/logs/stream` - Live-Logs (SSE)
-- `GET /api/runs/{run_id}/metrics` - Metrics aus Datei
-- `GET /api/runs/{run_id}/metrics/stream` - Live-Metrics (SSE)
-- `POST /api/runs/{run_id}/cancel` - Run abbrechen
+**API endpoints:**
+- `GET /api/runs/{run_id}` - Run details
+- `GET /api/runs/{run_id}/logs` - Logs from file
+- `GET /api/runs/{run_id}/logs/stream` - Live logs (SSE)
+- `GET /api/runs/{run_id}/metrics` - Metrics from file
+- `GET /api/runs/{run_id}/metrics/stream` - Live metrics (SSE)
+- `POST /api/runs/{run_id}/cancel` - Cancel run
 
-**Live-Updates:**
-- Logs werden über Server-Sent Events (SSE) gestreamt
-- Metrics werden alle 2 Sekunden aktualisiert
-- Status wird regelmäßig gepollt
+**Live updates:**
+- Logs streamed via Server-Sent Events (SSE)
+- Metrics updated every 2 seconds
+- Status polled regularly
 
 ### Scheduler
 
 #### `pages/Scheduler.tsx`
 
-Verwaltung von geplanten Jobs.
+Management of scheduled jobs.
 
 **Features:**
-- Job-Liste mit nächstem Ausführungszeitpunkt
-- Job erstellen (CRON oder Interval)
-- Job bearbeiten
-- Job löschen
-- Job aktivieren/deaktivieren
-- Run-Historie pro Job
+- Job list with next execution time
+- Create job (CRON or interval)
+- Edit job
+- Delete job
+- Enable/disable job
+- Run history per job
 
-**API-Endpoints:**
-- `GET /api/scheduler/jobs` - Job-Liste
-- `POST /api/scheduler/jobs` - Job erstellen
-- `PUT /api/scheduler/jobs/{job_id}` - Job aktualisieren
-- `DELETE /api/scheduler/jobs/{job_id}` - Job löschen
-- `GET /api/scheduler/jobs/{job_id}/runs` - Run-Historie
+**API endpoints:**
+- `GET /api/scheduler/jobs` - Job list
+- `POST /api/scheduler/jobs` - Create job
+- `PUT /api/scheduler/jobs/{job_id}` - Update job
+- `DELETE /api/scheduler/jobs/{job_id}` - Delete job
+- `GET /api/scheduler/jobs/{job_id}/runs` - Run history
 
-**Trigger-Typen:**
-- **CRON**: Cron-Expression (z.B. `"0 0 * * *"` für täglich um Mitternacht)
-- **INTERVAL**: Interval in Sekunden (z.B. `"3600"` für stündlich)
+**Trigger types:**
+- **CRON**: Cron expression (e.g. `"0 0 * * *"` for daily at midnight)
+- **INTERVAL**: Interval in seconds (e.g. `"3600"` for hourly)
 
 ### Secrets
 
 #### `pages/Secrets.tsx`
 
-Verwaltung von Secrets und Parametern.
+Management of secrets and parameters.
 
 **Features:**
-- Secret-Liste
-- Secret erstellen/bearbeiten/löschen
-- Unterscheidung zwischen Secrets (verschlüsselt) und Parametern (unverschlüsselt)
-- Secret-Werte anzeigen/verstecken
+- Secret list
+- Create/edit/delete secret
+- Distinction between secrets (encrypted) and parameters (unencrypted)
+- Show/hide secret values
 
-**API-Endpoints:**
-- `GET /api/secrets` - Secret-Liste
-- `POST /api/secrets` - Secret erstellen
-- `PUT /api/secrets/{key}` - Secret aktualisieren
-- `DELETE /api/secrets/{key}` - Secret löschen
+**API endpoints:**
+- `GET /api/secrets` - Secret list
+- `POST /api/secrets` - Create secret
+- `PUT /api/secrets/{key}` - Update secret
+- `DELETE /api/secrets/{key}` - Delete secret
 
-**Hinweise:**
-- Secrets werden verschlüsselt gespeichert
-- Parameter werden unverschlüsselt gespeichert
-- Secret-Werte können in der UI angezeigt/versteckt werden
+**Notes:**
+- Secrets are stored encrypted
+- Parameters are stored unencrypted
+- Secret values can be shown/hidden in the UI
 
 ### Settings
 
 #### `pages/Settings.tsx`
 
-System-Einstellungen und Konfiguration.
+System settings and configuration.
 
-**Einstellungen – Pipelines & Log-Retention:**
+**Settings – Pipelines & log retention:**
 
-![Einstellungen Pipelines](../img/einstellungen-pipelines.png)
+![Settings pipelines](../img/einstellungen-pipelines.png)
 
-**Einstellungen – Benachrichtigungen (E-Mail, Teams):**
+**Settings – Notifications (email, Teams):**
 
-![Einstellungen Benachrichtigungen](../img/einstellungen-benachrichtigungen.png)
+![Settings notifications](../img/einstellungen-benachrichtigungen.png)
 
 **Features:**
-- Einstellungen anzeigen (Log-Retention, Timeouts, etc.)
-- E-Mail-Konfiguration
-- Teams-Webhook-Konfiguration
-- Test-E-Mails/Teams-Nachrichten senden
-- Speicherplatz-Statistiken
-- System-Metriken
-- Manueller Cleanup
+- Display settings (log retention, timeouts, etc.)
+- Email configuration
+- Teams webhook configuration
+- Send test emails/Teams messages
+- Storage statistics
+- System metrics
+- Manual cleanup
 
-**API-Endpoints:**
-- `GET /api/settings` - Einstellungen abrufen
-- `PUT /api/settings` - Einstellungen aktualisieren (nur Warnung)
-- `GET /api/settings/storage` - Speicherplatz-Statistiken
-- `GET /api/settings/system-metrics` - System-Metriken
-- `POST /api/settings/test-email` - Test-E-Mail senden
-- `POST /api/settings/test-teams` - Test-Teams-Nachricht senden
-- `POST /api/settings/cleanup/force` - Manueller Cleanup
+**API endpoints:**
+- `GET /api/settings` - Get settings
+- `PUT /api/settings` - Update settings (warning only)
+- `GET /api/settings/storage` - Storage statistics
+- `GET /api/settings/system-metrics` - System metrics
+- `POST /api/settings/test-email` - Send test email
+- `POST /api/settings/test-teams` - Send test Teams message
+- `POST /api/settings/cleanup/force` - Manual cleanup
 
-**Hinweis:** Einstellungen werden aktuell nur aus Environment-Variablen geladen. Für persistente Änderungen muss die `.env`-Datei bearbeitet werden.
+**Note:** Settings are currently loaded only from environment variables. For persistent changes, edit the `.env` file.
 
 ### Sync
 
 #### `pages/Sync.tsx`
 
-Git-Synchronisation und Repository-Verwaltung.
+Git synchronization and repository management.
 
 **Features:**
-- Git-Status anzeigen
-- Manueller Git-Pull
-- Sync-Logs anzeigen
-- Auto-Sync-Einstellungen
-- GitHub Apps Konfiguration
-- GitHub App Manifest Flow
+- Show Git status
+- Manual Git pull
+- Show sync logs
+- Auto-sync settings
+- GitHub Apps configuration
+- GitHub App manifest flow
 
-**API-Endpoints:**
-- `GET /api/sync/status` - Git-Status
-- `POST /api/sync` - Git-Pull ausführen
-- `GET /api/sync/logs` - Sync-Logs
-- `GET /api/sync/settings` - Sync-Einstellungen
-- `PUT /api/sync/settings` - Sync-Einstellungen aktualisieren
-- `GET /api/sync/github-config` - GitHub Config abrufen
-- `POST /api/sync/github-config` - GitHub Config speichern
-- `POST /api/sync/github-config/test` - GitHub Config testen
-- `DELETE /api/sync/github-config` - GitHub Config löschen
+**API endpoints:**
+- `GET /api/sync/status` - Git status
+- `POST /api/sync` - Run Git pull
+- `GET /api/sync/logs` - Sync logs
+- `GET /api/sync/settings` - Sync settings
+- `PUT /api/sync/settings` - Update sync settings
+- `GET /api/sync/github-config` - Get GitHub config
+- `POST /api/sync/github-config` - Save GitHub config
+- `POST /api/sync/github-config/test` - Test GitHub config
+- `DELETE /api/sync/github-config` - Delete GitHub config
 
 **GitHub Apps:**
-- Unterstützung für GitHub Apps Authentifizierung
-- Manifest Flow für einfache App-Erstellung
-- Installation Flow für Repository-Zugriff
+- Support for GitHub Apps authentication
+- Manifest flow for easy app creation
+- Installation flow for repository access
 
 ### Login
 
 #### `pages/Login.tsx`
 
-Login-Seite. Anmeldung via konfigurierten OAuth-Providern (GitHub, Google, Microsoft, Custom).
+Login page. Sign in via configured OAuth providers (GitHub, Google, Microsoft, Custom).
 
 **Features:**
-- Login-Buttons je nach aktivem Provider (`/api/auth/providers`)
-- Fehlerbehandlung
-- Nach Autorisierung: Redirect zu `/auth/callback#token=...`, dann zu `/`
+- Login buttons per active provider (`/api/auth/providers`)
+- Error handling
+- After authorization: redirect to `/auth/callback#token=...`, then to `/`
 
-**Weitere Seiten:**
-- `pages/AuthCallback.tsx` – verarbeitet `#token=...` nach OAuth, speichert Token in sessionStorage, leitet zu `/` weiter
-- `pages/Invite.tsx` – Einladungs-Landing (`/invite?token=...`), Registrierung über OAuth mit Token im `state`
+**Other pages:**
+- `pages/AuthCallback.tsx` – processes `#token=...` after OAuth, stores token in sessionStorage, redirects to `/`
+- `pages/Invite.tsx` – invitation landing (`/invite?token=...`), registration via OAuth with token in `state`
 
-**API-Endpoints:**
-- `GET /api/auth/providers` – verfügbare OAuth-Provider
-- `GET /api/auth/{provider}/authorize` – Login (Redirect zum Provider)
+**API endpoints:**
+- `GET /api/auth/providers` – available OAuth providers
+- `GET /api/auth/{provider}/authorize` – login (redirect to provider)
 
 ## Authentication Context
 
 ### `contexts/AuthContext.tsx`
 
-Verwaltet den Authentifizierungs-Status der Anwendung.
+Manages the application's authentication state.
 
 **Features:**
-- Token-Verwaltung in sessionStorage (auth_token)
-- Automatische Token-Validierung
-- Logout-Funktionalität
-- Protected Routes
+- Token management in sessionStorage (auth_token)
+- Automatic token validation
+- Logout functionality
+- Protected routes
 
-**Verwendung:**
+**Usage:**
 ```typescript
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -490,56 +490,56 @@ function MyComponent() {
   const { user, isAuthenticated, logout } = useAuth()
   
   if (!isAuthenticated) {
-    return <div>Bitte einloggen</div>
+    return <div>Please log in</div>
   }
   
-  return <div>Willkommen, {user?.username}</div>
+  return <div>Welcome, {user?.username}</div>
 }
 ```
 
 ## Routing
 
-Die Routing-Konfiguration befindet sich in `App.tsx`:
+Routing configuration is in `App.tsx`:
 
 - `/` - Dashboard
 - `/login` - Login (OAuth)
-- `/auth/callback` - OAuth-Callback (verarbeitet `#token=...`)
-- `/invite` - Einladungs-Seite (`?token=...`)
-- `/pipelines` - Pipeline-Übersicht
-- `/pipelines/:name` - Pipeline-Details
-- `/runs` - Run-Übersicht
-- `/runs/:id` - Run-Details
+- `/auth/callback` - OAuth callback (processes `#token=...`)
+- `/invite` - Invitation page (`?token=...`)
+- `/pipelines` - Pipeline overview
+- `/pipelines/:name` - Pipeline details
+- `/runs` - Run overview
+- `/runs/:id` - Run details
 - `/scheduler` - Scheduler
 - `/secrets` - Secrets
 - `/settings` - Settings
-- `/sync` - Git-Sync
-- `/users` - Nutzerverwaltung (nur für Admins, OAuth-Einladungen)
+- `/sync` - Git sync
+- `/users` - User management (admins only, OAuth invitations)
 
-**Protected Routes:**
-Alle Routen außer `/login`, `/auth/callback` und `/invite` sind geschützt und erfordern Authentifizierung.
+**Protected routes:**
+All routes except `/login`, `/auth/callback`, and `/invite` are protected and require authentication.
 
 ## Styling
 
-### Design-System
+### Design System
 
-Das Design-System ist in `styles/design-system.css` definiert und enthält:
-- Farbpalette (Primary, Secondary, Success, Error, Warning)
-- Typografie (Schriftarten, Größen)
-- Spacing (Abstände)
-- Border-Radius
+The design system is defined in `styles/design-system.css` and includes:
+- Color palette (primary, secondary, success, error, warning)
+- Typography (fonts, sizes)
+- Spacing
+- Border radius
 - Shadows
 
-### CSS-Variablen
+### CSS Variables
 
-CSS-Variablen sind in `styles/variables.css` definiert und können für Theming verwendet werden.
+CSS variables are defined in `styles/variables.css` and can be used for theming.
 
 ### CSS Modules
 
-Jede Komponente hat eine zugehörige `.css`-Datei für komponentenspezifische Styles.
+Each component has an associated `.css` file for component-specific styles.
 
-## Entwicklung
+## Development
 
-### Lokale Entwicklung
+### Local development
 
 ```bash
 cd frontend
@@ -547,7 +547,7 @@ npm install
 npm run dev
 ```
 
-Die Anwendung läuft dann auf `http://localhost:3000`.
+The application then runs at `http://localhost:3000`.
 
 ### Build
 
@@ -555,16 +555,16 @@ Die Anwendung läuft dann auf `http://localhost:3000`.
 npm run build
 ```
 
-Der Build wird im `static/`-Verzeichnis erstellt und kann vom Backend serviert werden.
+The build is created in the `static/` directory and can be served by the backend.
 
-### Environment-Variablen
+### Environment variables
 
-- `VITE_API_URL`: API-Basis-URL (Standard: `http://localhost:8000/api`)
+- `VITE_API_URL`: API base URL (default: `http://localhost:8000/api`)
 
 ## Best Practices
 
-1. **API-Calls**: Immer über `apiClient` aus `src/api/client.ts`
-2. **Error-Handling**: Fehler sollten benutzerfreundlich angezeigt werden
-3. **Loading-States**: Verwende `Skeleton`-Komponente während des Ladens
-4. **TypeScript**: Nutze TypeScript für Typsicherheit
-5. **Responsive Design**: Alle Komponenten sollten responsive sein
+1. **API calls**: Always via `apiClient` from `src/api/client.ts`
+2. **Error handling**: Errors should be displayed in a user-friendly way
+3. **Loading states**: Use the `Skeleton` component while loading
+4. **TypeScript**: Use TypeScript for type safety
+5. **Responsive design**: All components should be responsive

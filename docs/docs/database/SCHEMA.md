@@ -1,132 +1,132 @@
-# Datenbank-Schema
+# Database Schema
 
-Fast-Flow verwendet **SQLModel** (basierend auf SQLAlchemy) als ORM. Standardmäßig wird **SQLite** verwendet, aber **PostgreSQL** wird vollständig unterstützt.
+Fast-Flow uses **SQLModel** (based on SQLAlchemy) as its ORM. **SQLite** is used by default, but **PostgreSQL** is fully supported.
 
-## Tables (Modelle)
+## Tables (Models)
 
-### 1. `Pipeline` (Metadaten)
+### 1. `Pipeline` (Metadata)
 
-Speichert statische Informationen über entdeckte Pipelines.
+Stores static information about discovered pipelines.
 
-| Spalte | Typ | Beschreibung |
+| Column | Type | Description |
 |--------|-----|--------------|
-| `pipeline_name` | String (PK) | Einzigartiger Name der Pipeline (entspricht Verzeichnisname). |
-| `has_requirements` | Boolean | Gibt an, ob eine `requirements.txt` gefunden wurde. |
-| `last_cache_warmup` | DateTime | Zeitstempel des letzten erfolgreichen `uv pip compile`. |
-| `total_runs` | Integer | Gesamtanzahl der Runs. |
-| `successful_runs` | Integer | Anzahl erfolgreicher Runs. |
-| `failed_runs` | Integer | Anzahl fehlgeschlagener Runs. |
-| `enabled` | Boolean | Ob die Pipeline aktiviert ist (aus `pipeline.json`). |
-| `metadata` | JSON | Zusätzliche Metadaten aus `pipeline.json` (Limits, Description, Tags). |
-| `webhook_runs` | Integer | Anzahl der durch Webhooks ausgelösten Runs. |
+| `pipeline_name` | String (PK) | Unique pipeline name (matches directory name). |
+| `has_requirements` | Boolean | Indicates whether a `requirements.txt` was found. |
+| `last_cache_warmup` | DateTime | Timestamp of the last successful `uv pip compile`. |
+| `total_runs` | Integer | Total number of runs. |
+| `successful_runs` | Integer | Number of successful runs. |
+| `failed_runs` | Integer | Number of failed runs. |
+| `enabled` | Boolean | Whether the pipeline is enabled (from `pipeline.json`). |
+| `metadata` | JSON | Additional metadata from `pipeline.json` (limits, description, tags). |
+| `webhook_runs` | Integer | Number of runs triggered by webhooks. |
 
-### 2. `PipelineRun` (Historie)
+### 2. `PipelineRun` (History)
 
-Speichert jeden einzelnen Ausführungsversuch einer Pipeline.
+Stores each individual pipeline execution attempt.
 
-| Spalte | Typ | Beschreibung |
+| Column | Type | Description |
 |--------|-----|--------------|
-| `id` | UUID (PK) | Eindeutige ID des Runs. |
-| `pipeline_name` | String (FK) | Referenz zur `Pipeline`. |
+| `id` | UUID (PK) | Unique run ID. |
+| `pipeline_name` | String (FK) | Reference to `Pipeline`. |
 | `status` | Enum | `PENDING`, `RUNNING`, `SUCCESS`, `FAILED`, `CANCELLED`. |
-| `started_at` | DateTime | Startzeitpunkt. |
-| `finished_at` | DateTime | Endzeitpunkt. |
-| `exit_code` | Integer | Exit-Code des Containers (0 = Erfolg). |
-| `log_file` | String | Pfad zur Log-Datei im Dateisystem. |
-| `metrics_file` | String | Pfad zur Metrics-Datei im Dateisystem. |
-| `env_vars` | JSON | Gesetzte Environment-Variablen (Secrets maskiert). |
-| `parameters` | JSON | Übergebene Parameter. |
-| `uv_version` | String | Verwendete Version von `uv`. |
-| `setup_duration` | Float | Dauer des Environment-Setups in Sekunden. |
-| `triggered_by` | String | Auslöser des Runs (z.B. "manual", "scheduler", "webhook"). |
+| `started_at` | DateTime | Start time. |
+| `finished_at` | DateTime | End time. |
+| `exit_code` | Integer | Container exit code (0 = success). |
+| `log_file` | String | Path to log file on the filesystem. |
+| `metrics_file` | String | Path to metrics file on the filesystem. |
+| `env_vars` | JSON | Set environment variables (secrets masked). |
+| `parameters` | JSON | Passed parameters. |
+| `uv_version` | String | Version of `uv` used. |
+| `setup_duration` | Float | Environment setup duration in seconds. |
+| `triggered_by` | String | Run trigger (e.g. "manual", "scheduler", "webhook"). |
 
 ### 3. `ScheduledJob` (Scheduler)
 
-Speichert geplante Ausführungen für den APScheduler via `SQLAlchemyJobStore`.
+Stores scheduled executions for APScheduler via `SQLAlchemyJobStore`.
 
-| Spalte | Typ | Beschreibung |
+| Column | Type | Description |
 |--------|-----|--------------|
-| `id` | UUID (PK) | Eindeutige Job-ID. |
-| `pipeline_name` | String (FK) | Die auszuführende Pipeline. |
-| `trigger_type` | Enum | `CRON` oder `INTERVAL`. |
-| `trigger_value` | String | Der Cron-String (z.B. `0 0 * * *`) oder Interval-Sekunden. |
-| `enabled` | Boolean | Ob der Job aktiv ist. |
-| `created_at` | DateTime | Erstellungsdatum. |
+| `id` | UUID (PK) | Unique job ID. |
+| `pipeline_name` | String (FK) | Pipeline to execute. |
+| `trigger_type` | Enum | `CRON` or `INTERVAL`. |
+| `trigger_value` | String | Cron string (e.g. `0 0 * * *`) or interval in seconds. |
+| `enabled` | Boolean | Whether the job is active. |
+| `created_at` | DateTime | Creation date. |
 
-### 4. `Secret` (Konfiguration)
+### 4. `Secret` (Configuration)
 
-Speichert sensible Daten und Parameter.
+Stores sensitive data and parameters.
 
-| Spalte | Typ | Beschreibung |
+| Column | Type | Description |
 |--------|-----|--------------|
-| `key` | String (PK) | Name des Secrets/Parameters (z.B. `API_KEY`). |
-| `value` | String | Der Wert. **WICHTIG**: Wird verschlüsselt gespeichert (Fernet). |
-| `is_parameter` | Boolean | `true` = Parameter (unverschlüsselt/sichtbar), `false` = Secret (verschlüsselt). |
-| `created_at` | DateTime | Erstellungsdatum. |
-| `updated_at` | DateTime | Änderungsdatum. |
+| `key` | String (PK) | Secret/parameter name (e.g. `API_KEY`). |
+| `value` | String | The value. **IMPORTANT**: Stored encrypted (Fernet). |
+| `is_parameter` | Boolean | `true` = parameter (unencrypted/visible), `false` = secret (encrypted). |
+| `created_at` | DateTime | Creation date. |
+| `updated_at` | DateTime | Last modified date. |
 
-### 5. `User` (Authentifizierung)
+### 5. `User` (Authentication)
 
-Speichert Benutzer. Login via OAuth (GitHub, Google, Microsoft, Custom) plus Einladungs-Flow.
+Stores users. Login via OAuth (GitHub, Google, Microsoft, Custom) plus invitation flow.
 
-| Spalte | Typ | Beschreibung |
+| Column | Type | Description |
 |--------|-----|--------------|
-| `id` | UUID (PK) | Eindeutige User-ID. |
-| `username` | String | Benutzername (eindeutig, indexiert). |
-| `email` | String | (Optional) E-Mail (vom OAuth-Provider oder manuell). |
+| `id` | UUID (PK) | Unique user ID. |
+| `username` | String | Username (unique, indexed). |
+| `email` | String | (Optional) Email (from OAuth provider or manual). |
 | `role` | Enum | `ADMIN`, `WRITE`, `READONLY`. |
-| `blocked` | Boolean | Ob der Benutzer gesperrt ist. |
+| `blocked` | Boolean | Whether the user is blocked. |
 | `github_id` | String | (Optional) GitHub OAuth ID (unique). |
 | `google_id` | String | (Optional) Google OAuth ID (unique). |
-| `avatar_url` | String | (Optional) Profilbild-URL von OAuth-Provider. |
+| `avatar_url` | String | (Optional) Profile image URL from OAuth provider. |
 | `microsoft_id` | String | (Optional) Microsoft OAuth ID (unique). |
 | `custom_oauth_id` | String | (Optional) Custom OAuth ID (unique). |
-| `status` | String | `active` (Zugriff), `pending` (Beitrittsanfrage), `rejected` (abgelehnt). Default: `active`. |
-| `created_at` | DateTime | Erstellungsdatum. |
+| `status` | String | `active` (access), `pending` (join request), `rejected` (declined). Default: `active`. |
+| `created_at` | DateTime | Creation date. |
 
-### 6. `Invitation` (Einladungen)
+### 6. `Invitation` (Invitations)
 
-Token-Einladungen für neue User (Einlösung via OAuth-Provider).
+Token invitations for new users (redeemed via OAuth provider).
 
-| Spalte | Typ | Beschreibung |
+| Column | Type | Description |
 |--------|-----|--------------|
-| `id` | UUID (PK) | Eindeutige ID. |
-| `recipient_email` | String | E-Mail des Empfängers. |
-| `token` | String | Einmal-Token (unique, in URL: `/invite?token=...`). |
-| `is_used` | Boolean | Ob die Einladung bereits eingelöst wurde. |
-| `expires_at` | DateTime | Ablauf der Gültigkeit. |
-| `role` | Enum | Rolle des neuen Users. |
-| `created_at` | DateTime | Erstellungsdatum. |
+| `id` | UUID (PK) | Unique ID. |
+| `recipient_email` | String | Recipient email. |
+| `token` | String | One-time token (unique, in URL: `/invite?token=...`). |
+| `is_used` | Boolean | Whether the invitation has already been redeemed. |
+| `expires_at` | DateTime | Expiration time. |
+| `role` | Enum | Role of the new user. |
+| `created_at` | DateTime | Creation date. |
 
 ### 7. `Session` (Sessions)
 
-Persistente Sessions (JWT-Token in DB).
+Persistent sessions (JWT token in DB).
 
-| Spalte | Typ | Beschreibung |
+| Column | Type | Description |
 |--------|-----|--------------|
-| `id` | UUID (PK) | Eindeutige Session-ID. |
-| `token` | String | JWT-Token (unique). |
-| `user_id` | UUID (FK) | Referenz auf `users.id`. |
-| `expires_at` | DateTime | Ablauf der Session. |
-| `created_at` | DateTime | Erstellungsdatum. |
+| `id` | UUID (PK) | Unique session ID. |
+| `token` | String | JWT token (unique). |
+| `user_id` | UUID (FK) | Reference to `users.id`. |
+| `expires_at` | DateTime | Session expiration. |
+| `created_at` | DateTime | Creation date. |
 
 ---
 
-## Beziehungen
+## Relationships
 
-- Eine **Pipeline** kann viele **PipelineRuns** haben (1:n).
-- Eine **Pipeline** kann viele **ScheduledJobs** haben (1:n).
-- **Secrets** sind global verfügbar und werden bei Bedarf in Runs injiziert.
-- Ein **User** kann viele **Sessions** haben (1:n).
-- **Invitation** steht für sich; nach Einlösung wird ein neuer **User** mit der hinterlegten Rolle angelegt.
+- A **Pipeline** can have many **PipelineRuns** (1:n).
+- A **Pipeline** can have many **ScheduledJobs** (1:n).
+- **Secrets** are globally available and injected into runs as needed.
+- A **User** can have many **Sessions** (1:n).
+- **Invitation** stands alone; after redemption a new **User** is created with the assigned role.
 
-## Hinweise
+## Notes
 
-- Alle Zeitstempel werden als **UTC** gespeichert.
-- SQLite verwendet **WAL-Mode** (Write-Ahead Logging) für bessere Concurrency.
-- JSON-Felder werden in SQLite als TEXT und in PostgreSQL als JSONB gespeichert.
+- All timestamps are stored as **UTC**.
+- SQLite uses **WAL mode** (Write-Ahead Logging) for better concurrency.
+- JSON fields are stored as TEXT in SQLite and as JSONB in PostgreSQL.
 
-## Siehe auch
+## See also
 
-- [Migrationen](/docs/database/MIGRATIONS) – Schema-Änderungen, Alembic
-- [Konfiguration](/docs/deployment/CONFIGURATION) – `DATABASE_URL`
+- [Migrations](/docs/database/MIGRATIONS) – schema changes, Alembic
+- [Configuration](/docs/deployment/CONFIGURATION) – `DATABASE_URL`

@@ -2,70 +2,70 @@
 sidebar_position: 6
 ---
 
-# Abhängigkeiten und Sicherheitsprüfung
+# Dependencies and Security Scanning
 
-Fast-Flow zeigt alle **Libraries und Versionen** pro Pipeline (aus `requirements.txt` und optional `requirements.txt.lock`) und kann **automatisch auf bekannte Schwachstellen (CVE)** prüfen. Bei Fund: **E-Mail- und/oder Teams-Benachrichtigung**.
+Fast-Flow shows all **libraries and versions** per pipeline (from `requirements.txt` and optionally `requirements.txt.lock`) and can **automatically check for known vulnerabilities (CVEs)**. When findings are detected: **email and/or Teams notification**.
 
-## Abhängigkeiten-Seite im Frontend
+## Dependencies page in the frontend
 
-![Abhängigkeiten – Pipelines, Pakete, Sicherheitsprüfung](../img/pipelines-abhaengigkeiten.png)
+![Dependencies – pipelines, packages, security scan](../img/pipelines-abhaengigkeiten.png)
 
-Unter **Abhängigkeiten** in der Navigation siehst du:
+Under **Dependencies** in the navigation you see:
 
-- **Alle Pipelines mit requirements.txt** – pro Pipeline die Liste der Pakete inkl. Version (aus Lock-Datei, falls vorhanden).
-- **Sicherheitsprüfung (pip-audit)** – Button **„Sicherheitsprüfung ausführen“** startet einen Scan mit [pip-audit](https://github.com/pypa/pip-audit) pro Pipeline. Gefundene CVE werden angezeigt; Links führen zu NVD (National Vulnerability Database).
+- **All pipelines with requirements.txt** – per pipeline the list of packages including version (from lock file, if present).
+- **Security scan (pip-audit)** – button **"Run security scan"** starts a scan with [pip-audit](https://github.com/pypa/pip-audit) per pipeline. Found CVEs are displayed; links lead to NVD (National Vulnerability Database).
 
-Filter:
+Filters:
 
-- **Pipeline** – nur eine bestimmte Pipeline anzeigen.
-- **Nur mit Schwachstellen** – nur Pipelines mit gefundenen CVE.
-- **Paket suchen** – Paketname filtern.
+- **Pipeline** – show only a specific pipeline.
+- **With vulnerabilities only** – show only pipelines with found CVEs.
+- **Search package** – filter by package name.
 
 :::tip
-Die Sicherheitsprüfung nutzt **pip-audit** und muss im Backend installiert sein (`pip install pip-audit` bzw. in `requirements.txt`). Fehlt pip-audit, wird ein Hinweis angezeigt; die Paketliste wird trotzdem angezeigt.
+The security scan uses **pip-audit** and must be installed in the backend (`pip install pip-audit` or in `requirements.txt`). If pip-audit is missing, a notice is shown; the package list is still displayed.
 :::
 
-## Automatische Sicherheitsprüfung (täglich)
+## Automatic security scan (daily)
 
-Du kannst eine **tägliche Prüfung** einrichten, die nachts läuft und **nur bei Fund** E-Mail bzw. Teams benachrichtigt.
+You can set up a **daily check** that runs at night and sends email and/or Teams notifications **only when findings are detected**.
 
-### Einstellungen (nur für Admins)
+### Settings (admins only)
 
-Unter **Einstellungen** → Bereich **„Abhängigkeiten – automatische Sicherheitsprüfung“**:
+Under **Settings** → section **"Dependencies – automatic security scan"**:
 
-| Einstellung | Beschreibung |
+| Setting | Description |
 |-------------|--------------|
-| **Automatische Sicherheitsprüfung (täglich in der Nacht)** | Aktiviert/Deaktiviert den geplanten Job. |
-| **Zeitpunkt (Cron)** | Cron-Ausdruck mit 5 Feldern: **Minute Stunde Tag Monat Wochentag**. Standard: `0 3 * * *` = täglich um 3:00 Uhr. |
+| **Automatic security scan (daily at night)** | Enables/disables the scheduled job. |
+| **Time (cron)** | Cron expression with 5 fields: **minute hour day month weekday**. Default: `0 3 * * *` = daily at 3:00 AM. |
 
-Die Werte werden in der Datenbank (SystemSettings) gespeichert und beim App-Start sowie nach Speichern der Einstellungen für den Scheduler übernommen.
+Values are stored in the database (SystemSettings) and applied to the scheduler on app startup and after saving settings.
 
-### Ablauf
+### Process
 
-1. Zur konfigurierten Zeit führt der Scheduler **pip-audit** für jede Pipeline mit `requirements.txt` aus.
-2. Werden **Schwachstellen gefunden**: Es werden **E-Mail** (an die unter Einstellungen konfigurierten Empfänger) und/oder **Microsoft Teams** (an den konfigurierten Webhook) gesendet – dieselben Kanäle wie bei Pipeline-Fehlern und S3-Backup-Fehlern.
-3. Werden **keine** Schwachstellen gefunden: Es erfolgt **keine** Benachrichtigung.
+1. At the configured time, the scheduler runs **pip-audit** for each pipeline with `requirements.txt`.
+2. If **vulnerabilities are found**: **Email** (to recipients configured under Settings) and/or **Microsoft Teams** (to the configured webhook) are sent – the same channels as for pipeline failures and S3 backup failures.
+3. If **no** vulnerabilities are found: **no** notification is sent.
 
 :::important
-**Benachrichtigungen** nutzen die bestehende Konfiguration unter Einstellungen (E-Mail: SMTP, Empfänger; Teams: Webhook-URL). Diese müssen korrekt eingerichtet sein, damit du bei Schwachstellen informiert wirst.
+**Notifications** use the existing configuration under Settings (email: SMTP, recipients; Teams: webhook URL). These must be set up correctly so you are informed about vulnerabilities.
 :::
 
-### Cron-Beispiele
+### Cron examples
 
-| Cron | Bedeutung |
+| Cron | Meaning |
 |------|-----------|
-| `0 3 * * *` | Täglich um 3:00 Uhr (Standard) |
-| `0 2 * * *` | Täglich um 2:00 Uhr |
-| `30 4 * * *` | Täglich um 4:30 Uhr |
-| `0 0 * * 0` | Sonntags um Mitternacht |
+| `0 3 * * *` | Daily at 3:00 AM (default) |
+| `0 2 * * *` | Daily at 2:00 AM |
+| `30 4 * * *` | Daily at 4:30 AM |
+| `0 0 * * 0` | Sundays at midnight |
 
-Format: Minute (0–59), Stunde (0–23), Tag des Monats (1–31), Monat (1–12), Wochentag (0–6, 0 = Sonntag). `*` = jeden.
+Format: minute (0–59), hour (0–23), day of month (1–31), month (1–12), weekday (0–6, 0 = Sunday). `*` = every.
 
-## Technik (Backend)
+## Backend details
 
-- **Parsing:** `requirements.txt` und optional `requirements.txt.lock` (uv-Format) werden gelesen; Paketnamen und aufgelöste Versionen werden angezeigt.
-- **Scan:** [pip-audit](https://github.com/pypa/pip-audit) wird pro Pipeline mit `-r requirements.txt -f json` ausgeführt; das Ergebnis wird für die API und die Benachrichtigung ausgewertet.
-- **Job:** Der geplante Job ist im APScheduler mit fester ID (`dependency_audit_job`) registriert; bei Änderung von Aktivierung oder Cron wird er neu geplant (nach Speichern der System-Einstellungen oder beim App-Start).
-- **Wann läuft der Scan?** Einmal beim API-Start, nach jedem erfolgreichen Git-Pull (Sync) und – wenn aktiviert – zur konfigurierten Cron-Zeit; die letzten Ergebnisse sind unter **Pipelines → Abhängigkeiten** sichtbar.
+- **Parsing:** `requirements.txt` and optionally `requirements.txt.lock` (uv format) are read; package names and resolved versions are displayed.
+- **Scan:** [pip-audit](https://github.com/pypa/pip-audit) is run per pipeline with `-r requirements.txt -f json`; the result is evaluated for the API and notification.
+- **Job:** The scheduled job is registered in APScheduler with fixed ID (`dependency_audit_job`); when activation or cron changes, it is rescheduled (after saving system settings or on app startup).
+- **When does the scan run?** Once at API startup, after each successful Git pull (sync), and – if enabled – at the configured cron time; the latest results are visible under **Pipelines → Dependencies**.
 
-Weitere Details zur Konfiguration von E-Mail und Teams: [Konfiguration (Deployment)](/docs/deployment/CONFIGURATION.md).
+Further details on email and Teams configuration: [Configuration (Deployment)](/docs/deployment/CONFIGURATION.md).
