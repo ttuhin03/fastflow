@@ -40,7 +40,7 @@ jobs:
           echo "full_tag=${TAG}" >> $GITHUB_OUTPUT
 
       - name: Build and push Orchestrator image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile
@@ -52,7 +52,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build and push Worker image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile.worker
