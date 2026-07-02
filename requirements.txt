@@ -4,7 +4,7 @@
 fastapi>=0.115,<1
 prometheus-fastapi-instrumentator>=7,<8
 uvicorn[standard]>=0.32,<1
-sqlmodel>=0.0.14,<0.1
+sqlmodel>=0.0.39,<0.1
 docker>=7,<8
 kubernetes>=31,<32
 apscheduler>=3.10,<4
