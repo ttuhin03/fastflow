@@ -5,8 +5,9 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
-import { showError } from '../utils/toast'
+import { showError, showSuccess } from '../utils/toast'
 import { LuPlay, LuSearch } from 'react-icons/lu'
+import { getFormatLocale } from '../utils/locale'
 import Skeleton from '../components/Skeleton'
 import Runs from './Runs'
 import Scheduler from './Scheduler'
@@ -34,6 +35,15 @@ interface Pipeline {
   }
 }
 
+interface SchedulerJob {
+  id: string
+  pipeline_name: string
+  trigger_type: string
+  trigger_value: string
+  enabled: boolean
+  next_run_time?: string | null
+}
+
 export default function Pipelines() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -59,6 +69,29 @@ export default function Pipelines() {
     placeholderData: (previousData) => previousData,
     refetchInterval: pipelinesInterval,
   })
+
+  // Zeitpläne (Cron + nächste Ausführung) pro Pipeline aus dem Scheduler
+  const { data: schedulerJobs } = useQuery<SchedulerJob[]>({
+    queryKey: ['scheduler-jobs'],
+    queryFn: async () => {
+      const response = await apiClient.get('/scheduler/jobs')
+      return response.data
+    },
+    staleTime: 30_000,
+  })
+
+  const scheduleByPipeline = useMemo(() => {
+    const map = new Map<string, { crons: string[]; nextRun: string | null }>()
+    for (const job of schedulerJobs ?? []) {
+      const entry = map.get(job.pipeline_name) ?? { crons: [], nextRun: null }
+      if (job.trigger_value) entry.crons.push(job.trigger_value)
+      if (job.enabled && job.next_run_time) {
+        if (!entry.nextRun || job.next_run_time < entry.nextRun) entry.nextRun = job.next_run_time
+      }
+      map.set(job.pipeline_name, entry)
+    }
+    return map
+  }, [schedulerJobs])
 
   const [startingPipeline, setStartingPipeline] = useState<string | null>(null)
 
@@ -133,23 +166,32 @@ export default function Pipelines() {
   const clearSelection = () => setSelected(new Set())
   const selectedCount = selected.size
 
-  const handleBulkTrigger = () => {
-    // Reuse the per-pipeline trigger handler for each selected enabled pipeline.
-    if (isReadonly) return
-    const target = filteredPipelines.find((p) => selected.has(p.name) && p.enabled)
-    if (target) handleStartPipeline(target.name)
-    // TODO(redesign): needs backend — true multi-trigger endpoint for all selected
-  }
+  const [bulkTriggering, setBulkTriggering] = useState(false)
 
-  // TODO(redesign): needs backend — per-pipeline enable/disable + bulk enable/disable mutations
-  const handleToggleEnable = (_name: string) => {
-    // No enable/disable endpoint available yet.
-  }
-  const handleBulkEnable = () => {
-    // TODO(redesign): needs backend
-  }
-  const handleBulkDisable = () => {
-    // TODO(redesign): needs backend
+  const handleBulkTrigger = async () => {
+    if (isReadonly || bulkTriggering) return
+    const targets = filteredPipelines.filter((p) => selected.has(p.name) && p.enabled)
+    if (targets.length === 0) return
+    setBulkTriggering(true)
+    let started = 0
+    try {
+      for (const p of targets) {
+        try {
+          await apiClient.post(`/pipelines/${p.name}/run`, { env_vars: {}, parameters: {} })
+          started += 1
+        } catch (error: any) {
+          showError(t('pipelines.startError', { detail: error.response?.data?.detail || error.message }))
+        }
+      }
+    } finally {
+      setBulkTriggering(false)
+      queryClient.invalidateQueries({ queryKey: ['pipelines'] })
+      queryClient.invalidateQueries({ queryKey: ['runs'] })
+    }
+    if (started > 0) {
+      showSuccess(t('pipelines.bulkTriggerSuccess', { count: started }))
+      clearSelection()
+    }
   }
 
   // Die Unterseiten-Navigation übernimmt die Sidebar (Runs/Scheduler/Secrets/Dependencies
@@ -271,17 +313,11 @@ export default function Pipelines() {
           </span>
           <span className="pipelines-bulkbar-divider" aria-hidden />
           {!isReadonly && (
-            <button type="button" className="btn btn-sm btn-outlined" onClick={handleBulkTrigger}>
+            <button type="button" className="btn btn-sm btn-outlined" onClick={handleBulkTrigger} disabled={bulkTriggering}>
               <LuPlay />
               {t('pipelines.trigger', 'Trigger')}
             </button>
           )}
-          <button type="button" className="btn btn-sm btn-outlined" onClick={handleBulkEnable} disabled title={t('common.notAvailableYet', 'Not available yet')}>
-            {t('pipelines.enable', 'Enable')}
-          </button>
-          <button type="button" className="btn btn-sm btn-outlined" onClick={handleBulkDisable} disabled title={t('common.notAvailableYet', 'Not available yet')}>
-            {t('pipelines.disable', 'Disable')}
-          </button>
           <div className="pipelines-toolbar-spacer" />
           <button type="button" className="btn btn-sm btn-ghost" onClick={clearSelection}>
             {t('pipelines.clear', 'Clear')}
@@ -302,9 +338,9 @@ export default function Pipelines() {
             </span>
             <span>{t('runs.thPipeline', 'Pipeline')}</span>
             <span>{t('runs.thStatus', 'Status')}</span>
-            <span>{t('pipelines.thLastRun', 'Last run')}</span>
-            <span>{t('dashboard.successRate', 'Success rate')}</span>
             <span>{t('pipelines.thSchedule', 'Schedule')}</span>
+            <span>{t('dashboard.successRate', 'Success rate')}</span>
+            <span>{t('pipelines.thNextRun', 'Next run')}</span>
             <span className="pipelines-cell-actions">{t('runs.thActions', 'Actions')}</span>
           </div>
           {filteredPipelines.map((pipeline) => {
@@ -312,6 +348,7 @@ export default function Pipelines() {
             const rateClass = successRateClass(rate, pipeline.total_runs)
             const isSelected = selected.has(pipeline.name)
             const tags = pipeline.metadata?.tags ?? []
+            const schedule = scheduleByPipeline.get(pipeline.name)
             return (
               <div
                 key={pipeline.name}
@@ -343,8 +380,9 @@ export default function Pipelines() {
                     {pipeline.enabled ? t('common.active') : t('common.inactive')}
                   </span>
                 </span>
-                {/* TODO(redesign): needs backend — pipeline list API has no last-run timestamp */}
-                <span className="pipelines-cell-lastrun mono">—</span>
+                <span className="pipelines-cell-cron mono" title={schedule?.crons.join(', ')}>
+                  {schedule && schedule.crons.length > 0 ? schedule.crons.join(', ') : '—'}
+                </span>
                 <span className="pipelines-cell-rate">
                   <span className="pipelines-bar">
                     <span
@@ -356,21 +394,10 @@ export default function Pipelines() {
                     {pipeline.total_runs > 0 ? `${rate}%` : '—'}
                   </span>
                 </span>
-                {/* TODO(redesign): needs backend — cron/schedule not in pipeline list API */}
-                <span className="mono pipelines-cell-cron">—</span>
+                <span className="mono pipelines-cell-nextrun">
+                  {schedule?.nextRun ? new Date(schedule.nextRun).toLocaleString(getFormatLocale(), { dateStyle: 'short', timeStyle: 'short' }) : '—'}
+                </span>
                 <span className="pipelines-cell-actions" onClick={(e) => e.stopPropagation()}>
-                  {/* TODO(redesign): needs backend — no enable/disable endpoint; toggle reflects state read-only */}
-                  <label className="toggle toggle--readonly" title={t('dashboard.pipelineActiveTooltip')}>
-                    <input
-                      type="checkbox"
-                      checked={pipeline.enabled}
-                      onChange={() => handleToggleEnable(pipeline.name)}
-                      disabled
-                      aria-label={t('dashboard.pipelineActiveTooltip')}
-                    />
-                    <span className="track" />
-                    <span className="knob" />
-                  </label>
                   {!isReadonly && (
                     <button
                       type="button"

@@ -183,7 +183,7 @@ export default function Scheduler() {
                   <span className="mono scheduler-cell-next">{formatNext(job)}</span>
                   <span className="scheduler-cell-active scheduler-cell-active--row">
                     {!isReadonly ? (
-                      <Tooltip content="Klicken, um Job zu aktivieren/deaktivieren">
+                      <Tooltip content={t('scheduler.toggleTooltip', 'Click to enable or disable this job')}>
                         <label className="toggle">
                           <input
                             type="checkbox"

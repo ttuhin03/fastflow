@@ -34,7 +34,7 @@ import './Layout.css'
 const openCommandPalette = () => window.dispatchEvent(new Event('open-command-palette'))
 
 interface NavSection {
-  label: string
+  labelKey: string
   items: NavItemDef[]
 }
 
@@ -74,13 +74,13 @@ export default function Layout() {
 
   const navSections: NavSection[] = [
     {
-      label: 'Overview',
+      labelKey: 'nav.sectionOverview',
       items: [
         { path: '/', labelKey: 'nav.dashboard', icon: <LuLayoutGrid size={16} /> },
       ],
     },
     {
-      label: 'Orchestration',
+      labelKey: 'nav.sectionOrchestration',
       items: [
         { path: '/pipelines', labelKey: 'nav.pipelines', icon: <LuWorkflow size={16} /> },
         { path: '/runs', labelKey: 'nav.runs', icon: <LuActivity size={16} /> },
@@ -88,14 +88,14 @@ export default function Layout() {
       ],
     },
     {
-      label: 'Security',
+      labelKey: 'nav.sectionSecurity',
       items: [
         { path: '/secrets', labelKey: 'nav.secrets', icon: <LuKeyRound size={16} /> },
         { path: '/dependencies', labelKey: 'nav.dependencies', icon: <LuPackage size={16} /> },
       ],
     },
     {
-      label: 'System',
+      labelKey: 'nav.sectionSystem',
       items: [
         { path: '/sync', labelKey: 'nav.sync', icon: <LuRefreshCw size={16} /> },
         { path: '/audit', labelKey: 'nav.audit', icon: <LuHistory size={16} />, adminOnly: true },
@@ -234,8 +234,8 @@ export default function Layout() {
         {/* Nav */}
         <nav className="sidebar__nav">
           {navSections.map(section => (
-            <div key={section.label}>
-              <div className="nav-group-label">{section.label}</div>
+            <div key={section.labelKey}>
+              <div className="nav-group-label">{t(section.labelKey)}</div>
               {section.items
                 .filter(item => !item.adminOnly || isAdmin)
                 .map(item => (

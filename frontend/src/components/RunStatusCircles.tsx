@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
 import { getFormatLocale } from '../utils/locale'
@@ -23,7 +24,7 @@ interface RunStatusCirclesProps {
   pipelineName: string
   /** 'circles' = legacy round icons; 'strip' = dense colored last-N bar (dashboard cards) */
   variant?: 'circles' | 'strip'
-  /** How many cells to render (strip uses up to 12) */
+  /** How many cells to render (strip uses up to 10 — backend limit) */
   count?: number
 }
 
@@ -32,7 +33,8 @@ function useRecentRunsPerPipeline(pipelineName: string) {
   return useQuery<Run[]>({
     queryKey: ['recent-runs-per-pipeline'],
     queryFn: async () => {
-      const response = await apiClient.get('/runs/recent-per-pipeline?limit_per_pipeline=12')
+      // Backend erlaubt maximal 10 Runs pro Pipeline (le=10)
+      const response = await apiClient.get('/runs/recent-per-pipeline?limit_per_pipeline=10')
       return response.data
     },
     refetchInterval: runsInterval,
@@ -60,6 +62,7 @@ function getStatusClass(status: string) {
 }
 
 export default function RunStatusCircles({ pipelineName, variant = 'circles', count }: RunStatusCirclesProps) {
+  const { t } = useTranslation()
   const { data: runs, isLoading } = useRecentRunsPerPipeline(pipelineName)
 
   const getStatusIcon = (status: string) => {
@@ -82,17 +85,17 @@ export default function RunStatusCircles({ pipelineName, variant = 'circles', co
   }
 
   const getTooltipText = (run: Run | null) => {
-    if (!run) return 'Kein Run'
+    if (!run) return t('runStatusCircles.noRun', 'No run')
     const date = new Date(run.started_at).toLocaleString(getFormatLocale())
     const duration = run.finished_at
       ? `${Math.round((new Date(run.finished_at).getTime() - new Date(run.started_at).getTime()) / 1000)}s`
-      : 'Läuft...'
+      : t('runStatusCircles.running', 'Running…')
     return `${run.status} - ${date} (${duration})`
   }
 
   // Strip variant: dense last-N colored cells (oldest → newest, left → right)
   if (variant === 'strip') {
-    const total = count ?? 12
+    const total = count ?? 10
     const recent = (runs ?? []).slice(0, total).reverse()
     const cells = Array.from({ length: total }, (_, i) => {
       const offset = total - recent.length

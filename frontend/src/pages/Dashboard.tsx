@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
 import { showError, showSuccess, showConfirm } from '../utils/toast'
+import { getFormatLocale } from '../utils/locale'
 import { LuRefreshCw } from 'react-icons/lu'
 import RunStatusCircles from '../components/RunStatusCircles'
 import StorageStats from '../components/StorageStats'
@@ -36,6 +37,14 @@ interface SyncStatus {
   branch: string
   last_sync: string | null
   status: string
+}
+
+interface SchedulerJob {
+  id: string
+  pipeline_name: string
+  trigger_value: string
+  enabled: boolean
+  next_run_time?: string | null
 }
 
 interface DailyStat {
@@ -72,6 +81,15 @@ export default function Dashboard() {
       return response.data
     },
     refetchInterval: syncInterval,
+  })
+
+  const { data: schedulerJobs } = useQuery<SchedulerJob[]>({
+    queryKey: ['scheduler-jobs'],
+    queryFn: async () => {
+      const response = await apiClient.get('/scheduler/jobs')
+      return response.data
+    },
+    staleTime: 30_000,
   })
 
   const { data: allPipelinesDailyStats } = useQuery({
@@ -112,6 +130,18 @@ export default function Dashboard() {
         <p>{t('common.loading')}</p>
       </div>
     )
+  }
+
+  const scheduleByPipeline = new Map<string, { cron: string; nextRun: string | null }>()
+  for (const job of schedulerJobs ?? []) {
+    const entry = scheduleByPipeline.get(job.pipeline_name)
+    const nextRun = job.enabled ? job.next_run_time ?? null : null
+    if (!entry) {
+      scheduleByPipeline.set(job.pipeline_name, { cron: job.trigger_value, nextRun })
+    } else if (nextRun && (!entry.nextRun || nextRun < entry.nextRun)) {
+      entry.cron = job.trigger_value
+      entry.nextRun = nextRun
+    }
   }
 
   const totalRuns = pipelines?.reduce((sum, p) => sum + p.total_runs, 0) || 0
@@ -274,22 +304,12 @@ export default function Dashboard() {
                       <span className={`status-dot ${dotState}`} aria-hidden />
                       <span className="pipeline-name">{pipeline.name}</span>
                     </div>
-                    {/* TODO(redesign): needs backend — no per-pipeline enable/disable endpoint yet */}
-                    <label
-                      className="toggle"
-                      onClick={(e) => e.stopPropagation()}
+                    <span
+                      className={`badge ${pipeline.enabled ? 'badge-success' : 'badge-secondary'}`}
                       title={t('dashboard.pipelineActiveTooltip')}
                     >
-                      <input
-                        type="checkbox"
-                        checked={pipeline.enabled}
-                        readOnly
-                        disabled={isReadonly}
-                        aria-label={t('dashboard.pipelineActiveTooltip')}
-                      />
-                      <span className="track" />
-                      <span className="knob" />
-                    </label>
+                      {pipeline.enabled ? t('common.active') : t('common.inactive')}
+                    </span>
                   </div>
 
                   <div className="pipeline-card__rate">
@@ -302,14 +322,30 @@ export default function Dashboard() {
                     <span className="pipeline-card__pct mono">{successPct}%</span>
                   </div>
 
-                  <RunStatusCircles pipelineName={pipeline.name} variant="strip" count={12} />
+                  <RunStatusCircles pipelineName={pipeline.name} variant="strip" count={10} />
 
                   <div className="pipeline-card__foot">
-                    {/* TODO(redesign): needs backend — cron/next-run not in pipeline list API */}
-                    <span className="mono">{t('dashboard.scheduleUnknown', '—')}</span>
-                    <span className="mono pipeline-card__next">
-                      {t('dashboard.nextRunUnknown', 'next —')}
-                    </span>
+                    {(() => {
+                      const schedule = scheduleByPipeline.get(pipeline.name)
+                      if (!schedule) {
+                        return <span className="mono">{t('dashboard.noSchedule', 'no schedule')}</span>
+                      }
+                      return (
+                        <>
+                          <span className="mono" title={schedule.cron}>{schedule.cron}</span>
+                          {schedule.nextRun && (
+                            <span className="mono pipeline-card__next">
+                              {t('dashboard.nextRunAt', 'next {{time}}', {
+                                time: new Date(schedule.nextRun).toLocaleString(getFormatLocale(), {
+                                  dateStyle: 'short',
+                                  timeStyle: 'short',
+                                }),
+                              })}
+                            </span>
+                          )}
+                        </>
+                      )
+                    })()}
                   </div>
                 </div>
               )

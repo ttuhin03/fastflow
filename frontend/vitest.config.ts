@@ -1,16 +1,20 @@
 /// <reference types="vitest" />
 import path from 'node:path'
+import { createRequire } from 'node:module'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+
+// Je nach npm-Hoisting liegt React lokal (frontend/node_modules) oder im
+// Workspace-Root — per require.resolve pinnen, damit nur eine Instanz läuft.
+const require = createRequire(import.meta.url)
+const resolvePkg = (pkg: string) => path.dirname(require.resolve(`${pkg}/package.json`))
 
 export default defineConfig({
   plugins: [react()],
   resolve: {
-    // Im npm-Workspace liegt React 19 (docs) im Root und React 18 hier —
-    // hart auf die lokale Kopie pinnen, damit nur eine React-Instanz läuft.
     alias: {
-      react: path.resolve(__dirname, 'node_modules/react'),
-      'react-dom': path.resolve(__dirname, 'node_modules/react-dom'),
+      react: resolvePkg('react'),
+      'react-dom': resolvePkg('react-dom'),
       // CJS-Shim würde per nativem require das Root-React laden — Stub nutzt
       // das in React 18 eingebaute useSyncExternalStore (gleiche Instanz).
       'use-sync-external-store/shim': path.resolve(

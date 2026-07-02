@@ -18,7 +18,8 @@
     "no": "No",
     "open": "Open",
     "notAvailableYet": "Not available yet",
-    "search": "Search or jump to…"
+    "search": "Search or jump to…",
+    "close": "Close"
   },
   "cmdk": {
     "title": "Command palette",
@@ -47,7 +48,11 @@
     "docs": "Docs",
     "viewOnGitHub": "View on GitHub",
     "logout": "Log out",
-    "languageSwitcher": "Language"
+    "languageSwitcher": "Language",
+    "sectionOverview": "Overview",
+    "sectionOrchestration": "Orchestration",
+    "sectionSecurity": "Security",
+    "sectionSystem": "System"
   },
   "appTitle": "Fast-Flow",
   "language": {
@@ -71,7 +76,9 @@
     "lastRunsTooltip": "Shows status of recent runs (green=success, red=failed, yellow=running)",
     "pipelineActiveTooltip": "Active: pipeline can run | Inactive: pipeline is disabled",
     "systemStatus": "System status",
-    "successRate": "Success rate"
+    "successRate": "Success rate",
+    "noSchedule": "no schedule",
+    "nextRunAt": "next {{time}}"
   },
   "auth": {
     "providerUnavailable": "This login provider is not configured. Please contact the administrator.",
@@ -94,7 +101,13 @@
     "brandSub": "Schedule, run, and observe your data & ML workloads — with live logs, resource metrics, and Git-synced definitions.",
     "welcomeBack": "Welcome back",
     "signInWorkspace": "Sign in to your FastFlow workspace.",
-    "orSeparator": "or"
+    "orSeparator": "or",
+    "brandStatOneValue": "Container-native",
+    "brandStatOneLabel": "Execution model",
+    "brandStatTwoValue": "Git-synced",
+    "brandStatTwoLabel": "Pipeline definitions",
+    "noAccountYet": "No account yet?",
+    "requestAccessHint": "Sign in with a provider to request access."
   },
   "toast": {
     "ok": "OK",
@@ -108,7 +121,12 @@
     "runsSuccessfulFailed": "{{total}} runs, {{successful}} successful, {{failed}} failed",
     "totalRuns": "Total runs:",
     "successRate": "Success rate:",
-    "runIds": "Run IDs:"
+    "runIds": "Run IDs:",
+    "less": "Less",
+    "more": "More",
+    "mon": "Mon",
+    "wed": "Wed",
+    "fri": "Fri"
   },
   "pipelines": {
     "sectionRuns": "Runs",
@@ -122,7 +140,19 @@
     "filterByTags": "Filter by tags",
     "filterByTagsPlaceholder": "e.g. production, experiment",
     "start": "Start",
-    "starting": "Starting..."
+    "starting": "Starting...",
+    "title": "Pipelines",
+    "searchPlaceholder": "Filter pipelines…",
+    "statusFilter": "Status",
+    "statusAll": "All",
+    "selectedCount": "{{count}} selected",
+    "trigger": "Trigger",
+    "clear": "Clear",
+    "selectAll": "Select all",
+    "thSchedule": "Schedule",
+    "thNextRun": "Next run",
+    "selectRow": "Select {{name}}",
+    "bulkTriggerSuccess": "{{count}} runs started"
   },
   "runs": {
     "notFound": "Run not found",
@@ -171,7 +201,9 @@
     "cardCommit": "Commit:",
     "cardStarted": "Started:",
     "cardDuration": "Duration:",
-    "cardExitCode": "Exit code:"
+    "cardExitCode": "Exit code:",
+    "countTotal": "{{total}} runs",
+    "countLive": "{{n}} live"
   },
   "settings": {
     "title": "Settings",
@@ -463,7 +495,16 @@
     "sshKeyPlaceholder": "-----BEGIN OPENSSH PRIVATE KEY-----...",
     "tokenPlaceholder": "ghp_...",
     "testMessagePrefixOk": "✓ ",
-    "testMessagePrefixFail": "✗ "
+    "testMessagePrefixFail": "✗ ",
+    "subtitle": "Pipelines are discovered from your repository",
+    "syncNow": "Sync now",
+    "branchCommit": "Branch · commit",
+    "pipelinesDetected": "Pipelines detected",
+    "webhook": "Webhook",
+    "webhookRegistered": "Registered",
+    "webhookNotConfigured": "Not configured",
+    "activityTitle": "Sync activity",
+    "pollingEvery": "polling every {{seconds}}s"
   },
   "dependencies": {
     "refresh": "Refresh",
@@ -489,7 +530,11 @@
     "packagesCount": "{{count}} package",
     "packagesCountPlural": "{{count}} packages",
     "vulnNone": "None",
-    "foundVulns": "Vulnerabilities found:"
+    "foundVulns": "Vulnerabilities found:",
+    "installed": "Installed",
+    "latest": "Latest",
+    "status": "Status",
+    "cve": "CVE"
   },
   "pipelineDetail": {
     "editInGithub": "Edit in GitHub",
@@ -594,7 +639,29 @@
     "infoStatusHint": "Status is set in pipeline.json. “Active” means the pipeline can run.",
     "infoPythonVersionHint": "Set in pipeline.json via python_version (e.g. 3.10, 3.11, 3.12). If omitted, the default is used (e.g. 3.11).",
     "infoHardLimitsHint": "Hard limits — the pipeline is stopped if exceeded",
-    "infoSoftLimitsHint": "Soft limits — monitoring only; the pipeline keeps running if exceeded"
+    "infoSoftLimitsHint": "Soft limits — monitoring only; the pipeline keeps running if exceeded",
+    "healthHealthy": "Healthy",
+    "triggerRun": "Trigger run",
+    "tabOverview": "Overview",
+    "tabRuns": "Runs",
+    "tabConfiguration": "Configuration",
+    "tabEnvironment": "Environment",
+    "viewAll": "View all →",
+    "noRuns": "No runs yet.",
+    "schedules": "Schedules",
+    "schedulesSub": "A pipeline can run on multiple schedules — each carries its own environment overrides on top of the base config.",
+    "scheduleEnabledHint": "Enabled (configured in pipeline.json)",
+    "envOverrides": "Env overrides",
+    "envOverridesNote": "on top of base variables",
+    "noSchedules": "No schedules configured. Add a cron expression in pipeline.json.",
+    "resourceLimits": "Resource limits",
+    "resourceLimitsSub": "Soft limits warn; hard limits terminate the container.",
+    "cpuCores": "CPU cores",
+    "memory": "Memory",
+    "environmentVariables": "Environment variables",
+    "environmentSub": "Injected into the container at runtime. Secrets are encrypted at rest.",
+    "environmentCronHint": "Schedule-level environment overrides are listed in the Configuration tab.",
+    "environmentEmpty": "No environment variables exposed by the API yet."
   },
   "users": {
     "title": "Users",
@@ -688,7 +755,8 @@
     "noUsersFound": "No users found",
     "toastUserCreated": "User created successfully",
     "toastPasswordReset": "Password reset successfully",
-    "toastInviteCreatedWithLink": "Invitation link created and copied to clipboard: {{link}}"
+    "toastInviteCreatedWithLink": "Invitation link created and copied to clipboard: {{link}}",
+    "badgePending": "Pending"
   },
   "scheduler": {
     "newScheduleInGithub": "New schedule in GitHub",
@@ -711,7 +779,15 @@
     "editError": "GitHub link for pipeline.json not available (no GitHub repo configured)",
     "enabled": "Enabled",
     "disabled": "Paused",
-    "edit": "Edit"
+    "edit": "Edit",
+    "subtitlePrefix": "Cron-based triggers",
+    "activeCount": "{{count}} active",
+    "pausedCount": "{{count}} paused",
+    "scheduleName": "Schedule",
+    "cron": "Cron",
+    "environment": "Environment",
+    "baseEnv": "base env",
+    "toggleTooltip": "Click to enable or disable this job"
   },
   "storage": {
     "loadError": "Could not load storage statistics",
@@ -777,7 +853,10 @@
   },
   "systemStatus": {
     "loading": "Loading system status…",
-    "error": "Failed to load system status."
+    "error": "Failed to load system status.",
+    "operational": "Operational",
+    "degraded": "Degraded",
+    "down": "Down"
   },
   "runNotifications": {
     "pipelineFailed": "Pipeline failed",
@@ -843,19 +922,27 @@
   "concurrency": {
     "label": "Concurrency",
     "activeRuns": "{{active}} / {{limit}} active runs",
-    "hintHigh": "Limit often reached — consider increasing capacity or checking load."
+    "hintHigh": "Limit often reached — consider increasing capacity or checking load.",
+    "activeSlots": "active slots",
+    "queuedCount": "{{count}} queued",
+    "executor": "{{executor}}",
+    "limitN": "limit {{limit}}"
   },
   "summaryStats": {
     "title": "Run statistics",
     "last24h": "Last 24h: {{failed}} failures of {{total}} runs",
     "successRate7d": "Success rate (7 days): {{rate}}%",
-    "belowThreshold": "Below {{threshold}}%"
+    "belowThreshold": "Below {{threshold}}%",
+    "sevenDayAvg": "7-day avg",
+    "sevenDaysAgo": "7d ago",
+    "last24hRate": "24h: {{rate}}%"
   },
   "runEnv": {
     "envVars": "Environment variables",
     "secretsNote": "Secret values are not shown for security (***).",
     "parameters": "Parameters",
-    "none": "No environment variables or parameters set"
+    "none": "No environment variables or parameters set",
+    "paramKind": "param"
   },
   "charts": {
     "averageRuntime": {
@@ -909,7 +996,12 @@
     "pagination": "Entries {{from}}–{{to}} of {{total}}",
     "page": "Page {{page}} of {{total}}",
     "prev": "Previous",
-    "next": "Next"
+    "next": "Next",
+    "subtitle": "Immutable record of every workspace action",
+    "exportCsv": "Export CSV",
+    "filterActionsPlaceholder": "Filter actions…",
+    "target": "Target",
+    "ip": "IP"
   },
   "runDetail": {
     "copyRunId": "Copy run ID",
@@ -952,7 +1044,17 @@
     "idLabel": "ID:",
     "cancelSuccess": "Run cancelled successfully",
     "retryError": "Error retrying: {{detail}}",
-    "downloadMetrics": "Download metrics"
+    "downloadMetrics": "Download metrics",
+    "streamFilter": "Stream",
+    "streamAll": "All",
+    "searchHits": "{{n}} hits",
+    "lineNumbers": "Line numbers",
+    "wrapLines": "Wrap lines",
+    "follow": "Follow",
+    "noLogs": "No logs found",
+    "streamingSse": "streaming via SSE",
+    "streamClosed": "stream closed",
+    "lineCount": "{{shown}} / {{total}} lines"
   },
   "settingsSections": {
     "account": "My account",
@@ -999,7 +1101,10 @@
     "show": "Show",
     "hide": "Hide",
     "type": "Type",
-    "runConfigBadgeTitle": "Run config (schedules[].id)"
+    "runConfigBadgeTitle": "Run config (schedules[].id)",
+    "scope": "Scope",
+    "scopeApp": "app",
+    "scopeGlobal": "global"
   },
   "invite": {
     "title": "Join request",
@@ -1043,5 +1148,9 @@
     "nextRuns": "Next scheduled runs",
     "loadNextRuns": "Loading next runs...",
     "noNextRuns": "No upcoming runs"
+  },
+  "runStatusCircles": {
+    "noRun": "No run",
+    "running": "Running…"
   }
 }
