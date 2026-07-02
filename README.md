@@ -1,110 +1,110 @@
 # Fast-Flow Orchestrator
 
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE) [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/) [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker)](docker-compose.yaml) [![Kubernetes](https://img.shields.io/badge/Kubernetes-ready-326CE5?logo=kubernetes&logoColor=white)](k8s/README.md) [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat&logo=FastAPI&logoColor=white)](https://fastapi.tiangolo.com/) [![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react&logoColor=61DAFB)](https://reactjs.org/) [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/) [![Lines of Code](https://img.shields.io/badge/lines-45.1k-2ea043)](README.md#-technischer-stack)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE) [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/) [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker)](docker-compose.yaml) [![Kubernetes](https://img.shields.io/badge/Kubernetes-ready-326CE5?logo=kubernetes&logoColor=white)](k8s/README.md) [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat&logo=FastAPI&logoColor=white)](https://fastapi.tiangolo.com/) [![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react&logoColor=61DAFB)](https://reactjs.org/) [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/) [![Lines of Code](https://img.shields.io/badge/lines-45.1k-2ea043)](README.md#-technical-stack)
 
 [![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/ttuhin03/fastflow)](https://github.com/ttuhin03/fastflow/releases)
 
-> **Kubernetes-ready:** Fast-Flow läuft mit **Docker** (Compose oder Socket-Proxy) oder nativ auf **Kubernetes** – Pipeline-Runs als K8s-Jobs, ohne Docker-Socket. Siehe [k8s/README.md](k8s/README.md) und [Kubernetes Deployment](docs/docs/deployment/K8S.md).
+> **Kubernetes-ready:** Fast-Flow runs with **Docker** (Compose or Socket Proxy) or natively on **Kubernetes** – pipeline runs as K8s Jobs, without a Docker socket. See [k8s/README.md](k8s/README.md) and [Kubernetes Deployment](docs/docs/deployment/K8S.md).
 
-**The lightweight, container-native, Python-centric task orchestrator for 2026.** (Docker Compose **oder** Kubernetes Jobs – wählbar über `PIPELINE_EXECUTOR`.)
+**The lightweight, container-native, Python-centric task orchestrator for 2026.** (Docker Compose **or** Kubernetes Jobs – configurable via `PIPELINE_EXECUTOR`.)
 
-Fast-Flow ist die Antwort auf die Komplexität von Airflow und die Schwerfälligkeit traditioneller CI/CD-Tools. Er wurde für Entwickler gebaut, die echte Isolation wollen, ohne auf die Geschwindigkeit lokaler Skripte zu verzichten.
+Fast-Flow is the answer to the complexity of Airflow and the heaviness of traditional CI/CD tools. It was built for developers who want real isolation without sacrificing the speed of local scripts.
 
-<!-- 60-Sekunden-Überblick -->
-**In 60 Sekunden:** Ein Python-Skript pro Pipeline, kein DAG, kein Image-Build. `git push` → Sync → Run. Jede Pipeline läuft isoliert mit **uv** (JIT-Dependencies): unter Docker als ephemerer Container (optional [Socket-Proxy](#-sicherheit-docker-socket-proxy)), unter Kubernetes als **Job-Pod** ohne Docker auf den Nodes. Ein FastAPI-Orchestrator, fertig.
+<!-- 60-second overview -->
+**In 60 seconds:** One Python script per pipeline, no DAG, no image build. `git push` → sync → run. Each pipeline runs in isolation with **uv** (JIT dependencies): under Docker as an ephemeral container (optionally via [Socket Proxy](#-security-docker-socket-proxy)), under Kubernetes as a **Job pod** without Docker on the nodes. One FastAPI orchestrator, ready to go.
 
 > [!NOTE]
->  Lies unser [Anti-Overhead Manifesto](docs/docs/manifesto.md), um zu verstehen, warum Fast-Flow die bessere Alternative zu Airflow, Dagster & Co. ist.
+> Read our [Anti-Overhead Manifesto](docs/docs/manifesto.md) to understand why Fast-Flow is a better alternative to Airflow, Dagster & co.
 
 > [!TIP]
-> Verwenden Sie unser **[fastflow-pipeline-template](https://github.com/ttuhin03/fastflow-pipeline-template)** für einen schnellen Start und eine optimale Struktur Ihrer Pipelines.
+> Use our **[fastflow-pipeline-template](https://github.com/ttuhin03/fastflow-pipeline-template)** for a quick start and optimal pipeline structure.
 
-### App-Überblick
+### App Overview
 
-| [Dashboard](docs/static/img/dashboard.png) | [Pipelines](docs/static/img/pipelines-pipelines.png) | [Abhängigkeiten](docs/static/img/pipelines-abhaengigkeiten.png) | [Einstellungen](docs/static/img/einstellungen-pipelines.png) | [Benachrichtigungen](docs/static/img/einstellungen-benachrichtigungen.png) |
+| [Dashboard](docs/static/img/dashboard.png) | [Pipelines](docs/static/img/pipelines-pipelines.png) | [Dependencies](docs/static/img/pipelines-abhaengigkeiten.png) | [Settings](docs/static/img/einstellungen-pipelines.png) | [Notifications](docs/static/img/einstellungen-benachrichtigungen.png) |
 |:---:|:---:|:---:|:---:|:---:|
-| **Dashboard** – Übersicht, Metriken, Heatmap | **Pipelines** – Liste, Run, Filter | **Abhängigkeiten** – Pakete & CVE-Check | **Einstellungen** – Pipelines, Log-Retention | **Benachrichtigungen** – E-Mail, Teams |
+| **Dashboard** – Overview, metrics, heatmap | **Pipelines** – List, run, filter | **Dependencies** – Packages & CVE check | **Settings** – Pipelines, log retention | **Notifications** – Email, Teams |
 
 <details>
-<summary>📸 Screenshots anzeigen</summary>
+<summary>📸 Show screenshots</summary>
 
 **Dashboard**
 
 ![Dashboard](docs/static/img/dashboard.png)
 
-**Pipelines & Abhängigkeiten**
+**Pipelines & Dependencies**
 
 ![Pipelines](docs/static/img/pipelines-pipelines.png)  
-![Abhängigkeiten](docs/static/img/pipelines-abhaengigkeiten.png)
+![Dependencies](docs/static/img/pipelines-abhaengigkeiten.png)
 
-**Einstellungen**
+**Settings**
 
-![Einstellungen Pipelines](docs/static/img/einstellungen-pipelines.png)  
-![Einstellungen Benachrichtigungen](docs/static/img/einstellungen-benachrichtigungen.png)
+![Settings Pipelines](docs/static/img/einstellungen-pipelines.png)  
+![Settings Notifications](docs/static/img/einstellungen-benachrichtigungen.png)
 
 </details>
 
-## 📖 Inhaltsverzeichnis
-- [App-Überblick (Screenshots)](#app-überblick)
-- [🚀 Schnellstart (Docker · Lokal · Kubernetes)](#-schnellstart)
-- [🏗 Architektur: Das "Runner-Cache"-Prinzip](#-architektur-das-runner-cache-prinzip)
-- [🛠 Worker-Prozess & Lifecycle](#-worker-prozess--lifecycle)
+## 📖 Table of Contents
+- [App Overview (Screenshots)](#app-overview)
+- [🚀 Quick Start (Docker · Local · Kubernetes)](#-quick-start)
+- [🏗 Architecture: The "Runner-Cache" Principle](#-architecture-the-runner-cache-principle)
+- [🛠 Worker Process & Lifecycle](#-worker-process--lifecycle)
 - [🔄 Git-Native Deployment](#-git-native-deployment)
-- [🚀 Warum Fast-Flow? (Vergleich)](#-warum-fast-flow-vergleich)
-- [🎯 Warum Fast-Flow gewinnt (The Python Advantage)](#-warum-fast-flow-gewinnt-the-python-advantage)
-- [🛠 Technischer Stack](#-technischer-stack)
-- [🔒 Sicherheit: Docker Socket Proxy](#-sicherheit-docker-socket-proxy)
-- [📚 Dokumentation](#-dokumentation)
+- [🚀 Why Fast-Flow? (Comparison)](#-why-fast-flow-comparison)
+- [🎯 Why Fast-Flow Wins (The Python Advantage)](#-why-fast-flow-wins-the-python-advantage)
+- [🛠 Technical Stack](#-technical-stack)
+- [🔒 Security: Docker Socket Proxy](#-security-docker-socket-proxy)
+- [📚 Documentation](#-documentation)
 - [📦 Versioning & Releases](#-versioning--releases)
 - [❓ Troubleshooting](#-troubleshooting)
 
-## 🚀 Schnellstart
+## 🚀 Quick Start
 
-Starten Sie Fast-Flow in wenigen Minuten.
+Get Fast-Flow running in minutes.
 
-### Voraussetzungen
+### Prerequisites
 
-- **Docker** & Docker Compose (für Option 1 und lokale Pipeline-Runs im Docker-Modus)
-- **Python 3.11+** (nur für lokale Entwicklung / Key-Generierung)
-- **Kubernetes** + **kubectl** (für Option 3; zum Bauen des Images oft weiterhin Docker auf der Workstation)
+- **Docker** & Docker Compose (for Option 1 and local pipeline runs in Docker mode)
+- **Python 3.11+** (for local development / key generation only)
+- **Kubernetes** + **kubectl** (for Option 3; Docker on the workstation is often still needed to build images)
 
-### Option 1: Docker (Empfohlen für Produktion)
+### Option 1: Docker (Recommended for Production)
 
-Der einfachste Weg, Fast-Flow zu starten.
+The easiest way to start Fast-Flow.
 
 ```bash
-# 1. .env Datei vorbereiten
+# 1. Prepare .env file
 cp .env.example .env
 
-# 2. Encryption Key generieren (WICHTIG!)
-# Generiert einen Key und gibt ihn aus. Füge ihn in .env unter ENCRYPTION_KEY ein.
-# Für den Login: GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, INITIAL_ADMIN_EMAIL in .env (siehe Abschnitt Login).
+# 2. Generate encryption key (IMPORTANT!)
+# Generates a key and prints it. Add it to .env under ENCRYPTION_KEY.
+# For login: GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, INITIAL_ADMIN_EMAIL in .env (see Login section).
 python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 
-# 3. Starten
+# 3. Start
 docker compose up -d
 
-# 4. Logs ansehen
+# 4. View logs
 docker compose logs -f orchestrator
 ```
 
-> Hinweis: Falls dein System noch die Legacy-CLI nutzt, funktionieren die gleichen Befehle auch mit `docker-compose`.
+> Note: If your system still uses the legacy CLI, the same commands work with `docker-compose`.
 
-**UI öffnen:** [http://localhost:8000](http://localhost:8000)
+**Open UI:** [http://localhost:8000](http://localhost:8000)
 
-#### Hinweis zu `entrypoint.sh`
+#### Note on `entrypoint.sh`
 
-Das Orchestrator-Image startet standardmäßig über `./entrypoint.sh` (siehe `Dockerfile` `CMD`). Das Skript:
-- initialisiert DB/Migrationen via `python scripts/init_db_for_migrations.py`
-- kopiert in `ENVIRONMENT=development` optional Seed-Pipelines nach `/app/pipelines`
-- erkennt `PIPELINES_HOST_DIR` automatisch (wichtig für Docker-Worker-Mounts)
-- startet danach `uvicorn app.main:app --host 0.0.0.0 --port 8000`
+The orchestrator image starts by default via `./entrypoint.sh` (see `Dockerfile` `CMD`). The script:
+- initializes DB/migrations via `python scripts/init_db_for_migrations.py`
+- in `ENVIRONMENT=development`, optionally copies seed pipelines to `/app/pipelines`
+- auto-detects `PIPELINES_HOST_DIR` (important for Docker worker mounts)
+- then starts `uvicorn app.main:app --host 0.0.0.0 --port 8000`
 
-Wenn du in Compose/Kubernetes `command` oder `args` überschreibst, sollte diese Init-Logik explizit erhalten bleiben (z. B. durch Aufruf von `./entrypoint.sh`).
+If you override `command` or `args` in Compose/Kubernetes, this init logic should be preserved explicitly (e.g. by calling `./entrypoint.sh`).
 
-### Option 2: Lokal (Für Entwicklung)
+### Option 2: Local (For Development)
 
-Nutzt ein lokales venv, startet aber Container via Docker.
+Uses a local venv but starts containers via Docker.
 
 ```bash
 # 1. Setup
@@ -112,11 +112,11 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-# 2. Konfiguration
+# 2. Configuration
 cp .env.example .env
-# -> ENCRYPTION_KEY in .env setzen (siehe oben)
+# -> Set ENCRYPTION_KEY in .env (see above)
 
-# 3. Starten
+# 3. Start
 # Backend (Terminal 1):
 uvicorn app.main:app --reload
 # Frontend (Terminal 2): cd frontend && npm run dev
@@ -124,10 +124,10 @@ uvicorn app.main:app --reload
 
 ### Option 3: Kubernetes (K8s-ready)
 
-Fast-Flow kann auf einem beliebigen Kubernetes-Cluster laufen. **Pipeline-Runs laufen als Kubernetes-Jobs** (kein Docker-Socket nötig), ideal für produktive oder lokale K8s-Setups.
+Fast-Flow can run on any Kubernetes cluster. **Pipeline runs execute as Kubernetes Jobs** (no Docker socket required), ideal for production or local K8s setups.
 
 ```bash
-# Manifests anwenden (Secrets/ConfigMap anpassen, siehe k8s/README.md)
+# Apply manifests (adjust Secrets/ConfigMap, see k8s/README.md)
 kubectl apply -f k8s/pvc.yaml
 kubectl apply -f k8s/postgres.yaml   # optional
 kubectl apply -f k8s/secrets.yaml
@@ -135,80 +135,80 @@ kubectl apply -f k8s/configmap.yaml
 kubectl apply -f k8s/rbac-kubernetes-executor.yaml
 kubectl apply -f k8s/deployment.yaml
 kubectl apply -f k8s/service.yaml
-# Zugriff: kubectl port-forward svc/fastflow-orchestrator 8000:80 → http://localhost:8000
+# Access: kubectl port-forward svc/fastflow-orchestrator 8000:80 → http://localhost:8000
 ```
 
-**Lokal testen (Minikube in VM):** `./scripts/minikube-vm.sh` – siehe [k8s/README.md](k8s/README.md).
+**Test locally (Minikube in VM):** `./scripts/minikube-vm.sh` – see [k8s/README.md](k8s/README.md).
 
-Vollständige Anleitung (Images, OAuth, Produktion): [k8s/README.md](k8s/README.md) · [Kubernetes Deployment (Doku)](docs/docs/deployment/K8S.md).
+Full guide (images, OAuth, production): [k8s/README.md](k8s/README.md) · [Kubernetes Deployment (docs)](docs/docs/deployment/K8S.md).
 
 ### 🔐 Login (GitHub, Google, Microsoft, Custom OAuth)
 
-Die Anmeldung erfolgt **über GitHub, Google, Microsoft (Entra ID) oder Custom OAuth (z. B. Keycloak/Auth0)**:
+Authentication is via **GitHub, Google, Microsoft (Entra ID), or Custom OAuth (e.g. Keycloak/Auth0)**:
 
-1. **GitHub:** OAuth-App (Settings → Developer settings → OAuth Apps), Callback `{BASE_URL}/api/auth/github/callback`.  
-   **Google:** OAuth-Client (Google Cloud Console), Callback `{BASE_URL}/api/auth/google/callback`.  
-   **Microsoft:** App-Registrierung (Azure/Entra), Callback `{BASE_URL}/api/auth/microsoft/callback`.  
-   **Custom OAuth:** Callback `{BASE_URL}/api/auth/custom/callback` plus Provider-Endpoints (`AUTHORIZE_URL`, `TOKEN_URL`, `USERINFO_URL`).
-2. In **`.env`**: Credentials für mindestens einen Provider setzen (`GITHUB_*`, `GOOGLE_*`, `MICROSOFT_*` oder `CUSTOM_OAUTH_*`) sowie `INITIAL_ADMIN_EMAIL` (E-Mail für ersten Admin).
-3. **Docker** (Alles :8000): `FRONTEND_URL` weglassen oder `=http://localhost:8000`, `BASE_URL=http://localhost:8000`.  
-   **Dev** (Frontend :3000, Backend :8000): `FRONTEND_URL=http://localhost:3000`, `BASE_URL=http://localhost:8000`.
+1. **GitHub:** OAuth app (Settings → Developer settings → OAuth Apps), callback `{BASE_URL}/api/auth/github/callback`.  
+   **Google:** OAuth client (Google Cloud Console), callback `{BASE_URL}/api/auth/google/callback`.  
+   **Microsoft:** App registration (Azure/Entra), callback `{BASE_URL}/api/auth/microsoft/callback`.  
+   **Custom OAuth:** Callback `{BASE_URL}/api/auth/custom/callback` plus provider endpoints (`AUTHORIZE_URL`, `TOKEN_URL`, `USERINFO_URL`).
+2. In **`.env`**: Set credentials for at least one provider (`GITHUB_*`, `GOOGLE_*`, `MICROSOFT_*`, or `CUSTOM_OAUTH_*`) and `INITIAL_ADMIN_EMAIL` (email for the first admin).
+3. **Docker** (everything on :8000): omit `FRONTEND_URL` or set `=http://localhost:8000`, `BASE_URL=http://localhost:8000`.  
+   **Dev** (frontend :3000, backend :8000): `FRONTEND_URL=http://localhost:3000`, `BASE_URL=http://localhost:8000`.
 
 > [!TIP]
-> Ausführliche Schritte, Einladung, Konto verknüpfen, **Beitrittsanfragen**: [OAuth (GitHub, Google, Microsoft, Custom)](docs/docs/oauth/README.md).
+> Detailed steps, invitations, account linking, **join requests**: [OAuth (GitHub, Google, Microsoft, Custom)](docs/docs/oauth/README.md).
 
-**Beitrittsanfragen (Anklopfen):** Unbekannte Nutzer (ohne Einladung) können per OAuth eine Anfrage stellen. Sie erhalten **keine Session**, werden auf `/request-sent` umgeleitet und erscheinen unter **Users → Beitrittsanfragen**. Nach Freigabe durch einen Admin können sie sich normal anmelden. Abgelehnte bzw. noch wartende Nutzer landen bei erneutem OAuth-Login auf `/request-sent` bzw. `/request-rejected` (ebenfalls ohne Session).
+**Join requests (knock-to-join):** Unknown users (without an invitation) can submit a request via OAuth. They receive **no session**, are redirected to `/request-sent`, and appear under **Users → Join Requests**. After approval by an admin, they can log in normally. Rejected or still-pending users land on `/request-sent` or `/request-rejected` on subsequent OAuth login (also without a session).
 
-## 🏗 Architektur: Das "Runner-Cache"-Prinzip
+## 🏗 Architecture: The "Runner-Cache" Principle
 
-Im Gegensatz zu klassischen Orchestratoren, die oft "Dependency Hell" in ihren Worker-Umgebungen erleben, nutzt Fast-Flow eine moderne JIT-Environment-Architektur.
+Unlike classic orchestrators that often suffer from "dependency hell" in their worker environments, Fast-Flow uses a modern JIT environment architecture.
 
-Über **`PIPELINE_EXECUTOR`** wählst du das Backend: **`docker`** (Compose / Docker-API) oder **`kubernetes`** (Batch API → Jobs). Detaillierte Übersicht: [Architektur (Doku)](docs/docs/architektur.md).
+Via **`PIPELINE_EXECUTOR`** you choose the backend: **`docker`** (Compose / Docker API) or **`kubernetes`** (Batch API → Jobs). Detailed overview: [Architecture (docs)](docs/docs/architektur.md).
 
-- **The Singleton Brain**: Ein einzelner FastAPI-Prozess verwaltet den Zustand, den Scheduler und den Git-Sync.
-- **Ephemeral Workers**: Jede Pipeline startet in einer isolierten Sandbox – Docker-Container oder Kubernetes-Job-Pod. Keine Seiteneffekte zwischen Runs.
-- **uv-Acceleration**: Der globale uv-Cache und die uv-Python-Installationen (z.B. 3.11, 3.12) sind persistent (Host-Volumes bzw. PVCs) und werden in den Worker gemountet. Dependencies und die **pro Pipeline wählbare** Python-Version (aus `pipeline.json` oder `DEFAULT_PYTHON_VERSION`) sind so in Millisekunden verfügbar – ohne festes Python im Basis-Image.
-- **Live-Streaming**: Logs und Metriken (CPU/RAM) per SSE: bei Docker über Container-Logs und Docker-Stats (über Socket-Proxy); bei Kubernetes über Pod-Logs und optional die Metrics-API (metrics-server).
+- **The Singleton Brain**: A single FastAPI process manages state, the scheduler, and Git sync.
+- **Ephemeral Workers**: Each pipeline starts in an isolated sandbox – Docker container or Kubernetes Job pod. No side effects between runs.
+- **uv-Acceleration**: The global uv cache and uv Python installations (e.g. 3.11, 3.12) are persistent (host volumes or PVCs) and mounted into the worker. Dependencies and the **per-pipeline selectable** Python version (from `pipeline.json` or `DEFAULT_PYTHON_VERSION`) are available in milliseconds – without a fixed Python in the base image.
+- **Live-Streaming**: Logs and metrics (CPU/RAM) via SSE: under Docker via container logs and Docker stats (through socket proxy); under Kubernetes via pod logs and optionally the Metrics API (metrics-server).
 
-## 🛠 Worker-Prozess & Lifecycle
+## 🛠 Worker Process & Lifecycle
 
-Fast-Flow nutzt ein "Disposable Worker"-Modell. Für jede Ausführung entsteht ein frischer, isolierter **Container** (Docker) bzw. **Pod** (Kubernetes Job). Der Ablauf:
+Fast-Flow uses a "Disposable Worker" model. For each execution, a fresh, isolated **container** (Docker) or **pod** (Kubernetes Job) is created. The flow:
 
-### 1. Trigger & Initialisierung
+### 1. Trigger & Initialization
 
-Sobald ein Run über das React-Frontend (manuell) oder den APScheduler (geplant) ausgelöst wird:
+When a run is triggered via the React frontend (manually) or APScheduler (scheduled):
 
-- Die API validiert die Pipeline-Struktur und lädt die verschlüsselten Secrets.
-- Ein neuer Eintrag in der SQLite-Datenbank wird mit dem Status `PENDING` erstellt.
+- The API validates the pipeline structure and loads encrypted secrets.
+- A new entry is created in the SQLite database with status `PENDING`.
 
-### 2. Die "Zero-Build" Execution
+### 2. The "Zero-Build" Execution
 
-Hier liegt der Kern der Fast-Flow Performance. Statt ein Pipeline-spezifisches Image zu bauen, startet ein generisches Worker-Image (uv, optional vorinstalliertes Python):
+This is the core of Fast-Flow performance. Instead of building a pipeline-specific image, a generic worker image starts (uv, optionally pre-installed Python):
 
-- **Docker**: Pipeline-Verzeichnis read-only vom Host, uv-Cache und uv-Python gemountet.
-- **Kubernetes**: Der Orchestrator kopiert die Pipeline vor dem Job in ein **gemeinsames Volume** (`pipeline_runs/<Run-ID>` auf dem Cache-PVC); Jobs mounten uv-Cache und uv-Python dieselben wie in der [K8s-Doku](docs/docs/deployment/K8S.md).
-- **Just-In-Time (beide)**: `uv run --python {version}` – Version **pro Pipeline** (`python_version` in pipeline.json) oder `DEFAULT_PYTHON_VERSION`. Python aus `uv python install` (Preheating).
-  - **Abhängigkeiten im Cache?** → In Millisekunden per Hardlink verknüpft.
-  - **Neue Abhängigkeiten?** → Einmalig geladen, im gemeinsamen Cache für spätere Runs.
-- **Preheating**: Beim Start und nach Git-Sync: `uv python install` / `uv pip compile` – geringe Latenz beim ersten Run.
+- **Docker**: Pipeline directory read-only from the host, uv cache and uv Python mounted.
+- **Kubernetes**: The orchestrator copies the pipeline into a **shared volume** before the Job (`pipeline_runs/<Run-ID>` on the cache PVC); Jobs mount uv cache and uv Python the same way as in the [K8s docs](docs/docs/deployment/K8S.md).
+- **Just-In-Time (both)**: `uv run --python {version}` – version **per pipeline** (`python_version` in pipeline.json) or `DEFAULT_PYTHON_VERSION`. Python from `uv python install` (preheating).
+  - **Dependencies in cache?** → Linked in milliseconds via hardlink.
+  - **New dependencies?** → Loaded once, stored in the shared cache for future runs.
+- **Preheating**: On startup and after Git sync: `uv python install` / `uv pip compile` – low latency on first run.
 
-### 3. Monitoring & Kommunikation (Headless Architecture)
+### 3. Monitoring & Communication (Headless Architecture)
 
-Während der Worker läuft, vermittelt die FastAPI:
+While the worker runs, FastAPI handles:
 
-- **Logs**: stdout/stderr asynchron → SSE (Docker: Container-Logs; Kubernetes: Pod-Logs).
-- **Metrics**: Docker-Stats über den Proxy **oder** Kubernetes Metrics-API für den Run-Pod (wenn verfügbar).
-- **Security**: Bei **Docker** kein direkter Socket-Zugriff, nur über [Docker-Socket-Proxy](#-sicherheit-docker-socket-proxy). Bei **Kubernetes** spricht der Orchestrator mit der **Kubernetes-API** (RBAC/ServiceAccount), kein Host-Docker-Socket für Runs.
+- **Logs**: stdout/stderr asynchronously → SSE (Docker: container logs; Kubernetes: pod logs).
+- **Metrics**: Docker stats through the proxy **or** Kubernetes Metrics API for the run pod (when available).
+- **Security**: With **Docker**, no direct socket access – only via [Docker Socket Proxy](#-security-docker-socket-proxy). With **Kubernetes**, the orchestrator talks to the **Kubernetes API** (RBAC/ServiceAccount), no host Docker socket for runs.
 
-### 4. Terminierung & Cleanup
+### 4. Termination & Cleanup
 
-Nach Abschluss des Python-Skripts:
+After the Python script completes:
 
-- Der Exit-Code wird erfasst (z.B. 137 für OOM-Fehler).
-- **Docker**: Container wird entfernt (`--rm`). **Kubernetes**: Job endet; TTL/Cluster-Policy räumt Ressourcen auf; Pipeline-Kopie im Volume wird bereinigt.
-- Die Logs werden finalisiert und für die Langzeitarchivierung gespeichert.
+- The exit code is captured (e.g. 137 for OOM errors).
+- **Docker**: Container is removed (`--rm`). **Kubernetes**: Job ends; TTL/cluster policy cleans up resources; pipeline copy in the volume is cleaned up.
+- Logs are finalized and stored for long-term archival.
 
-### 🏗 Architektur-Diagramm (Datenfluss)
+### 🏗 Architecture Diagram (Data Flow)
 
 ```mermaid
 flowchart TB
@@ -229,18 +229,18 @@ flowchart TB
     PE{"PIPELINE_EXECUTOR"}
     B --> PE
 
-    subgraph DockerPfad["Docker (z. B. Compose)"]
+    subgraph DockerPfad["Docker (e.g. Compose)"]
         E["🛡️ Docker Socket Proxy<br/><small>tecnativa</small>"]
         F["🐳 Docker Daemon"]
-        G["📦 Pipeline-Container<br/><small>uv run --python</small>"]
-        H["📚 uv-Cache"]
-        J["🐍 uv-Python"]
-        I["📝 Pipeline-Code<br/><small>ro mount</small>"]
+        G["📦 Pipeline Container<br/><small>uv run --python</small>"]
+        H["📚 uv Cache"]
+        J["🐍 uv Python"]
+        I["📝 Pipeline Code<br/><small>ro mount</small>"]
     end
 
     subgraph K8sPfad["Kubernetes Jobs"]
         K["☸️ Kubernetes API<br/><small>BatchV1 Jobs</small>"]
-        L["📦 Job-Pod<br/><small>uv run --python</small>"]
+        L["📦 Job Pod<br/><small>uv run --python</small>"]
         M["📚 PVC: uv + pipeline_runs"]
     end
 
@@ -250,14 +250,14 @@ flowchart TB
     G -.-> H
     G -.-> J
     G -.-> I
-    B -.->|"HTTP zu Proxy"| E
+    B -.->|"HTTP to Proxy"| E
     B -.->|"Logs & Stats"| G
 
     PE -->|kubernetes| K
     K --> L
     L -.-> M
     B -.->|"RBAC / SA"| K
-    B -.->|"Pod-Logs & Metrics"| L
+    B -.->|"Pod Logs & Metrics"| L
 
     classDef frontend fill:#61dafb,stroke:#20232a,stroke-width:2px,color:#000
     classDef backend fill:#009688,stroke:#004d40,stroke-width:2px,color:#fff
@@ -276,174 +276,174 @@ flowchart TB
     class PE decision
 ```
 
-### Warum dieser Ansatz?
+### Why This Approach?
 
-- **Geschwindigkeit**: Durch den Entfall von `docker build` Schritten startet eine Pipeline so schnell wie ein lokaler Prozess.
-- **Isolation**: Ein Fehler in `pipeline_a` kann niemals die Umgebung von `pipeline_b` beeinflussen.
-- **Skalierbarkeit**: Controller (API) und Worker (Container bzw. Jobs) sind entkoppelt; spätere Erweiterung z. B. mit Message-Queues (Redis) möglich.
+- **Speed**: Without `docker build` steps, a pipeline starts as fast as a local process.
+- **Isolation**: A failure in `pipeline_a` can never affect the environment of `pipeline_b`.
+- **Scalability**: Controller (API) and workers (containers or Jobs) are decoupled; future extensions e.g. with message queues (Redis) are possible.
 
 ## 🔄 Git-Native Deployment
 
 **Push to Deploy, No Build Needed**
 
-Traditionelle Orchestratoren verwandeln Deployment oft in ein logistisches Problem. Fast-Flow verwandelt es in einen `git push`.
+Traditional orchestrators often turn deployment into a logistics problem. Fast-Flow turns it into a `git push`.
 
-### Die alte Welt (Airflow, Dagster, Mage)
+### The Old World (Airflow, Dagster, Mage)
 
-*   **Image-Hell**: Jede Code-Änderung erfordert oft einen neuen Docker-Build (5-10 Minuten warten).
-*   **Sidecar-Chaos**: Man braucht komplexe Git-Sync-Sidecars oder S3-Buckets, um DAGs zu verteilen.
-*   **Version-Gap**: Was im UI steht, entspricht oft nicht dem, was im Git-Repository ist.
+*   **Image Hell**: Every code change often requires a new Docker build (wait 5–10 minutes).
+*   **Sidecar Chaos**: You need complex Git-sync sidecars or S3 buckets to distribute DAGs.
+*   **Version Gap**: What you see in the UI often doesn't match what's in the Git repository.
 
-### Der Fast-Flow Weg: "Source of Truth"
+### The Fast-Flow Way: "Source of Truth"
 
-In Fast-Flow ist dein Git-Repository die einzige Wahrheit. Es gibt keinen "Upload"-Button und keinen manuellen Build-Schritt.
+In Fast-Flow, your Git repository is the single source of truth. There is no "Upload" button and no manual build step.
 
-*   **Zero-Build Deployment**: Wenn du deinen Code änderst, zieht der Orchestrator die Änderungen per Webhook oder manuellem Sync. Dank der uv-JIT Architektur ist die neue Version sofort startbereit.
-*   **Vollständige Rückverfolgbarkeit**: Da jede Pipeline-Konfiguration (`pipeline.json`) und jede Library (`requirements.txt`) im Git liegt, hast du eine lückenlose Historie. Wer hat wann das Memory-Limit erhöht? Wer hat die prophet-Version geändert? Dein Git-Log sagt es dir.
-*   **Atomic Sync**: Unser Sync-Mechanismus stellt sicher, dass Pipelines niemals "halbe" Dateien lesen. Änderungen werden atomar eingespielt – sicher und konsistent.
+*   **Zero-Build Deployment**: When you change your code, the orchestrator pulls changes via webhook or manual sync. Thanks to the uv JIT architecture, the new version is ready to run immediately.
+*   **Full Traceability**: Since every pipeline configuration (`pipeline.json`) and every library (`requirements.txt`) lives in Git, you have a complete history. Who increased the memory limit when? Who changed the prophet version? Your Git log tells you.
+*   **Atomic Sync**: Our sync mechanism ensures pipelines never read "half" files. Changes are applied atomically – safe and consistent.
 
-| Feature | Traditionelle Tools | Fast-Flow |
+| Feature | Traditional Tools | Fast-Flow |
 | :--- | :--- | :--- |
-| **Deployment-Speed** | Minuten (Build & Push) | Sekunden (Git Pull) |
-| **Versionierung** | Oft nur für den Code | Code, Deps & Ressourcen-Limits |
-| **Rollback** | Image-Rollback (komplex) | Git Revert (einfach) |
-| **Wahrheit** | UI vs. Git vs. Image | Git ist Gesetz |
+| **Deployment Speed** | Minutes (build & push) | Seconds (git pull) |
+| **Versioning** | Often code only | Code, deps & resource limits |
+| **Rollback** | Image rollback (complex) | Git revert (simple) |
+| **Source of Truth** | UI vs. Git vs. image | Git is law |
 
-### 🛠 So funktioniert der Flow:
+### 🛠 How the Flow Works:
 
-1.  **Entwickeln**: Du schreibst dein Python-Skript lokal.
-2.  **Pushen**: `git push origin main`.
-3.  **Syncen**: Der Orchestrator merkt die Änderung (via Webhook oder Auto-Sync).
-4.  **Laufen**: Die Pipeline startet sofort mit dem neuen Code. Keine Docker-Builds, kein Warten.
+1.  **Develop**: Write your Python script locally.
+2.  **Push**: `git push origin main`.
+3.  **Sync**: The orchestrator detects the change (via webhook or auto-sync).
+4.  **Run**: The pipeline starts immediately with the new code. No Docker builds, no waiting.
 
-> "Wir haben das Deployment so langweilig wie möglich gemacht, damit du dich auf das Spannende konzentrieren kannst: Deinen Code."
+> "We made deployment as boring as possible so you can focus on the exciting part: your code."
 
-## 🚀 Warum Fast-Flow? (Vergleich)
+## 🚀 Why Fast-Flow? (Comparison)
 
 | Feature | Fast-Flow | Airflow | Dagster |
 |---------|-----------|---------|---------|
-| Setup | 🟢 Compose oder K8s-Manifeste | 🔴 Komplexes Cluster | 🟡 Mittel |
-| Isolation | 🟢 Strikt (Container/Job pro Task) | 🔴 Schwach (Shared Worker) | 🟡 Mittel |
-| Dependency-Speed | 🟢 Instant (uv JIT) | 🔴 Langsam (Image Builds) | 🟡 Mittel |
-| UI-Vibe | 🟢 Modern & Realtime (React) | 🔴 Altbacken / Statisch | 🟡 Modern |
-| Deployment | 🟢 Git Push + Auto-Sync | 🔴 Komplexe CI/CD Pipelines | 🟡 Code-Deployment |
-| **Onboarding-Zeit** | 🟢 **Minuten statt Tage** | 🔴 **Wochen** | 🟡 **Tage** |
-| **Pipeline-Struktur lernen** | 🟢 **Einfach: main.py + requirements.txt** | 🔴 **Komplex: DAGs, Operators, XComs** | 🟡 **Mittel: Assets, Ops, Resources** |
+| Setup | 🟢 Compose or K8s manifests | 🔴 Complex cluster | 🟡 Medium |
+| Isolation | 🟢 Strict (container/job per task) | 🔴 Weak (shared worker) | 🟡 Medium |
+| Dependency Speed | 🟢 Instant (uv JIT) | 🔴 Slow (image builds) | 🟡 Medium |
+| UI Vibe | 🟢 Modern & realtime (React) | 🔴 Dated / static | 🟡 Modern |
+| Deployment | 🟢 Git push + auto-sync | 🔴 Complex CI/CD pipelines | 🟡 Code deployment |
+| **Onboarding Time** | 🟢 **Minutes, not days** | 🔴 **Weeks** | 🟡 **Days** |
+| **Learning Pipeline Structure** | 🟢 **Simple: main.py + requirements.txt** | 🔴 **Complex: DAGs, operators, XComs** | 🟡 **Medium: assets, ops, resources** |
 
-## 🎯 Warum Fast-Flow gewinnt (The Python Advantage)
+## 🎯 Why Fast-Flow Wins (The Python Advantage)
 
 ### 1. 🐍 Simple Python Pipelines – No Context Switching
 
-In anderen Orchestratoren musst du oft YAML-Dateien schreiben oder dich mit komplexen DSLs herumschlagen.
+In other orchestrators you often have to write YAML files or wrestle with complex DSLs.
 
-- **Die Pipelines**: Eine Pipeline ist ein simples Python-Skript. Wenn es lokal läuft, läuft es auch im Orchestrator. Keine speziellen Decorators, keine Operator-Klassen, keine komplexe Konfiguration.
-- **Das Frontend**: Modernes React-Dashboard mit Echtzeit-Monitoring. Das Backend bleibt 100% Python (FastAPI).
+- **The pipelines**: A pipeline is a simple Python script. If it runs locally, it runs in the orchestrator. No special decorators, no operator classes, no complex configuration.
+- **The frontend**: Modern React dashboard with real-time monitoring. The backend stays 100% Python (FastAPI).
 
 ### 2. ⚡️ Instant Onboarding (Developer Experience)
 
-**Keine proprietäre Logik**: Du musst keine speziellen Decorators (wie `@dag`) oder Operatoren (`PythonOperator`) lernen.
+**No proprietary logic**: You don't need to learn special decorators (like `@dag`) or operators (`PythonOperator`).
 
-- **"Write & Run"**: Neue Entwickler können innerhalb von 5 Minuten ihre erste Pipeline pushen. Wer Python versteht, versteht Fast-Flow.
-- **Lokales Debugging**: Da wir uv nutzen, können Entwickler exakt die gleiche Umgebung lokal mit einem Befehl nachbauen, die auch im Container läuft.
+- **"Write & Run"**: New developers can push their first pipeline within 5 minutes. If you understand Python, you understand Fast-Flow.
+- **Local debugging**: Since we use uv, developers can reproduce the exact same environment locally with one command that also runs in the container.
 
-**Onboarding bei Airflow**: Oft eine Sache von Tagen oder Wochen (wegen der DSL, Provider, Cluster-Logik) – bei Fast-Flow ist es eine Sache von Minuten.
+**Onboarding with Airflow**: Often a matter of days or weeks (due to DSL, providers, cluster logic) – with Fast-Flow it's a matter of minutes.
 
-### 3. 🛠 Minimalistischer Footprint
+### 3. 🛠 Minimal Footprint
 
-Während Airflow eine Postgres-DB, einen Redis-Broker, einen Scheduler, einen Webserver und mehrere Worker braucht, bleibt Fast-Flow bewusst schlank: typisch **ein Orchestrator-Deployment** plus ephemere Worker (Docker-Container oder K8s-Jobs).
+While Airflow needs a Postgres DB, a Redis broker, a scheduler, a webserver, and multiple workers, Fast-Flow stays deliberately lean: typically **one orchestrator deployment** plus ephemeral workers (Docker containers or K8s Jobs).
 
-- **Wartungsarm**: Update z. B. `docker compose pull` oder neues Orchestrator-Image im Cluster.
-- **Ressourcenschonend**: Ideal für Edge-Server oder kleinere VM-Instanzen.
+- **Low maintenance**: Update e.g. `docker compose pull` or deploy a new orchestrator image in the cluster.
+- **Resource-efficient**: Ideal for edge servers or smaller VM instances.
 
-### Die Fast-Flow Vorteile:
+### Fast-Flow Advantages:
 
-- **Zero-Build Pipelines**: Du musst keine Docker-Images für deine Pipelines bauen. Ändere die requirements.txt im Git, und Fast-Flow wärmt den Cache automatisch im Hintergrund auf.
-- **Kein "Database is locked"**: Optimiert für SQLite mit WAL-Mode und asynchronem I/O.
-- **Ressourcen-Kontrolle**: Setze CPU- und RAM-Limits pro Pipeline direkt via JSON-Metadaten.
-- **Sicherheits-Fokus**: Verschlüsselte Secrets (Fernet) und nativer GitHub App Support.
+- **Zero-Build Pipelines**: You don't need to build Docker images for your pipelines. Change requirements.txt in Git, and Fast-Flow warms the cache automatically in the background.
+- **No "Database is locked"**: Optimized for SQLite with WAL mode and async I/O.
+- **Resource Control**: Set CPU and RAM limits per pipeline directly via JSON metadata.
+- **Security Focus**: Encrypted secrets (Fernet) and native GitHub App support.
 
-## 🛠 Technischer Stack
+## 🛠 Technical Stack
 
 - **Backend**: FastAPI (Python 3.11+)
 - **Frontend**: React + TypeScript (Vite)
-- **Database**: SQLModel (SQLite/PostgreSQL) – *Produktion: [PostgreSQL empfohlen](docs/docs/deployment/PRODUCTION.md#datenbank-postgresql-für-produktion)*
-- **Execution**: Docker Engine API + uv **oder** Kubernetes Jobs (K8s-ready, siehe [k8s/README.md](k8s/README.md))
-- **Security**: Docker Socket Proxy (tecnativa/docker-socket-proxy) bei Docker-Betrieb; bei K8s keine Socket-Freigabe nötig
-- **Scheduling**: APScheduler (Persistent)
-- **Auth**: OAuth (GitHub, Google, Microsoft, Custom), JWT & Fernet Encryption
+- **Database**: SQLModel (SQLite/PostgreSQL) – *Production: [PostgreSQL recommended](docs/docs/deployment/PRODUCTION.md#datenbank-postgresql-für-produktion)*
+- **Execution**: Docker Engine API + uv **or** Kubernetes Jobs (K8s-ready, see [k8s/README.md](k8s/README.md))
+- **Security**: Docker Socket Proxy (tecnativa/docker-socket-proxy) in Docker mode; no socket exposure needed on K8s
+- **Scheduling**: APScheduler (persistent)
+- **Auth**: OAuth (GitHub, Google, Microsoft, Custom), JWT & Fernet encryption
 
-## Hauptfunktionen
+## Key Features
 
-- **Automatische Pipeline-Erkennung**: Pipelines werden automatisch aus einem Git-Repository erkannt
-- **Isolierte Ausführung**: Jede Pipeline in eigenem Docker-Container oder Kubernetes-Job (`PIPELINE_EXECUTOR`)
-- **Resource-Management**: Konfigurierbare CPU- und Memory-Limits pro Pipeline
-- **Scheduling**: Unterstützung für CRON- und Interval-basierte Jobs
-- **Webhooks**: Pipeline-Trigger via HTTP-Webhooks
-- **Live-Monitoring**: Echtzeit-Logs und Metriken während der Ausführung
-- **Git-Sync**: Automatische Synchronisation mit Git-Repositories
-- **Secrets-Management**: Sichere Verwaltung von Secrets und Parametern
-- **S3 Log-Backup** (optional): Pipeline-Logs werden vor der lokalen Löschung (Cleanup) nach S3/MinIO gesichert; gelöscht wird nur bei erfolgreichem Upload. Bei Fehlern: UI-Hinweis und E-Mail an `EMAIL_RECIPIENTS`. Siehe [Log-Backup (S3/MinIO)](docs/docs/deployment/S3_LOG_BACKUP.md).
+- **Automatic Pipeline Discovery**: Pipelines are automatically discovered from a Git repository
+- **Isolated Execution**: Each pipeline in its own Docker container or Kubernetes Job (`PIPELINE_EXECUTOR`)
+- **Resource Management**: Configurable CPU and memory limits per pipeline
+- **Scheduling**: Support for CRON- and interval-based jobs
+- **Webhooks**: Trigger pipelines via HTTP webhooks
+- **Live Monitoring**: Real-time logs and metrics during execution
+- **Git Sync**: Automatic synchronization with Git repositories
+- **Secrets Management**: Secure management of secrets and parameters
+- **S3 Log Backup** (optional): Pipeline logs are backed up to S3/MinIO before local deletion (cleanup); deletion only happens after successful upload. On failure: UI notice and email to `EMAIL_RECIPIENTS`. See [Log Backup (S3/MinIO)](docs/docs/deployment/S3_LOG_BACKUP.md).
 
-## 🔒 Sicherheit: Docker Socket Proxy
+## 🔒 Security: Docker Socket Proxy
 
-Bei **`PIPELINE_EXECUTOR=docker`** (Standard mit Docker Compose) nutzt Fast-Flow einen **Docker Socket Proxy** (`tecnativa/docker-socket-proxy`) zwischen Orchestrator und Docker-Daemon. So entfällt direkter Root-Zugriff auf den Socket; nur ausgewählte Docker-API-Operationen sind erlaubt. Bei **`PIPELINE_EXECUTOR=kubernetes`** spricht der Orchestrator mit der **Kubernetes-API** (Jobs/Pods); der Proxy entfällt.
+With **`PIPELINE_EXECUTOR=docker`** (default with Docker Compose), Fast-Flow uses a **Docker Socket Proxy** (`tecnativa/docker-socket-proxy`) between the orchestrator and the Docker daemon. This eliminates direct root access to the socket; only selected Docker API operations are allowed. With **`PIPELINE_EXECUTOR=kubernetes`**, the orchestrator talks to the **Kubernetes API** (Jobs/Pods); the proxy is not needed.
 
-### Warum ein Proxy?
+### Why a Proxy?
 
-- **Sicherheit**: Der Docker-Socket (`/var/run/docker.sock`) gibt effektiv Root-Zugriff auf das gesamte Host-System. Ein Proxy filtert und erlaubt nur konfigurierte Operationen.
-- **Kontrollierte Zugriffe**: Nur Container-Erstellung, Logs, Stats und Image-Pulls sind erlaubt. Netzwerk- und Volume-Management sind deaktiviert.
-- **Isolation**: Selbst bei einem kompromittierten Orchestrator ist der Schaden begrenzt.
+- **Security**: The Docker socket (`/var/run/docker.sock`) effectively grants root access to the entire host system. A proxy filters and allows only configured operations.
+- **Controlled Access**: Only container creation, logs, stats, and image pulls are allowed. Network and volume management are disabled.
+- **Isolation**: Even if the orchestrator is compromised, damage is limited.
 
-### Konfiguration
+### Configuration
 
-Der Proxy wird automatisch in `docker-compose.yaml` konfiguriert:
+The proxy is configured automatically in `docker-compose.yaml`:
 
 ```yaml
 docker-proxy:
   image: tecnativa/docker-socket-proxy:latest
   environment:
-    - CONTAINERS=1    # Container-Operationen erlauben
-    - IMAGES=1        # Image-Pulls erlauben
-    - VOLUMES=1       # Volume-Mounts erlauben
-    - POST=1          # HTTP POST (Container-Erstellung) erlauben
-    - DELETE=1        # Container-Entfernung erlauben
-    - STATS=1         # Resource-Monitoring erlauben
-    - NETWORKS=0       # Netzwerk-Management deaktiviert
-    - SYSTEM=0        # System-Operationen deaktiviert
+    - CONTAINERS=1    # Allow container operations
+    - IMAGES=1        # Allow image pulls
+    - VOLUMES=1       # Allow volume mounts
+    - POST=1          # Allow HTTP POST (container creation)
+    - DELETE=1        # Allow container removal
+    - STATS=1         # Allow resource monitoring
+    - NETWORKS=0       # Disable network management
+    - SYSTEM=0        # Disable system operations
 ```
 
-Der Orchestrator kommuniziert mit dem Proxy über `http://docker-proxy:2375` statt direkt mit dem Docker-Socket.
+The orchestrator communicates with the proxy via `http://docker-proxy:2375` instead of directly with the Docker socket.
 
-## Dokumentation
+## Documentation
 
-Die Doku liegt unter `docs/docs/` und wird mit **Docusaurus** bereitgestellt. Lokal starten: `cd docs && npm run start` → [http://localhost:3000/docs](http://localhost:3000/docs).
+Documentation lives under `docs/docs/` and is served with **Docusaurus**. Start locally: `cd docs && npm run start` → [http://localhost:3000/docs](http://localhost:3000/docs).
 
-| Bereich | Links |
+| Area | Links |
 |--------|--------|
-| **Einstieg** | [Schnellstart](docs/docs/schnellstart.md) · [Setup-Anleitung](docs/docs/setup.md) · [Manifesto](docs/docs/manifesto.md) · [Architektur](docs/docs/architektur.md) |
-| **Pipelines** | [Übersicht](docs/docs/pipelines/uebersicht.md) · [Erste Pipeline](docs/docs/pipelines/erste-pipeline.md) · [Erweiterte Pipelines](docs/docs/pipelines/erweiterte-pipelines.md) · [pipeline.json Referenz](docs/docs/pipelines/referenz.md) |
-| **Betrieb** | [Konfiguration](docs/docs/deployment/CONFIGURATION.md) · [Produktion](docs/docs/deployment/PRODUCTION.md) · [Git-Deployment](docs/docs/deployment/GIT_DEPLOYMENT.md) · [Kubernetes](docs/docs/deployment/K8S.md) · [Docker Socket Proxy](docs/docs/deployment/DOCKER_PROXY.md) |
-| **Sicherheit & Ops** | [OAuth (GitHub, Google, Microsoft, Custom)](docs/docs/oauth/README.md) · [S3 Log-Backup](docs/docs/deployment/S3_LOG_BACKUP.md) · [Compliance](docs/docs/compliance-security.md) |
-| **Referenz** | [API](docs/docs/api/API.md) · [Datenbank/Schema](docs/docs/database/SCHEMA.md) · [Versioning](docs/docs/deployment/VERSIONING.md) · [Telemetrie](docs/docs/telemetry/README.md) |
-| **Hilfe** | [Troubleshooting](docs/docs/troubleshooting.md) · [Disclaimer](docs/docs/disclaimer.md) |
+| **Getting Started** | [Quick Start](docs/docs/schnellstart.md) · [Setup Guide](docs/docs/setup.md) · [Manifesto](docs/docs/manifesto.md) · [Architecture](docs/docs/architektur.md) |
+| **Pipelines** | [Overview](docs/docs/pipelines/uebersicht.md) · [First Pipeline](docs/docs/pipelines/erste-pipeline.md) · [Advanced Pipelines](docs/docs/pipelines/erweiterte-pipelines.md) · [pipeline.json Reference](docs/docs/pipelines/referenz.md) |
+| **Operations** | [Configuration](docs/docs/deployment/CONFIGURATION.md) · [Production](docs/docs/deployment/PRODUCTION.md) · [Git Deployment](docs/docs/deployment/GIT_DEPLOYMENT.md) · [Kubernetes](docs/docs/deployment/K8S.md) · [Docker Socket Proxy](docs/docs/deployment/DOCKER_PROXY.md) |
+| **Security & Ops** | [OAuth (GitHub, Google, Microsoft, Custom)](docs/docs/oauth/README.md) · [S3 Log Backup](docs/docs/deployment/S3_LOG_BACKUP.md) · [Compliance](docs/docs/compliance-security.md) |
+| **Reference** | [API](docs/docs/api/API.md) · [Database/Schema](docs/docs/database/SCHEMA.md) · [Versioning](docs/docs/deployment/VERSIONING.md) · [Telemetry](docs/docs/telemetry/README.md) |
+| **Help** | [Troubleshooting](docs/docs/troubleshooting.md) · [Disclaimer](docs/docs/disclaimer.md) |
 
 ## 📦 Versioning & Releases
 
-Fast-Flow verwendet einen automatisierten Versions-Check, der täglich prüft, ob neue Releases verfügbar sind.
+Fast-Flow uses an automated version check that runs daily to see if new releases are available.
 
-### Version-Format
+### Version Format
 
-Die Version wird in der `VERSION`-Datei im Projekt-Root gespeichert (aktuell z. B. `v1.0.4`):
+The version is stored in the `VERSION` file in the project root (currently e.g. `v1.0.4`):
 
 ```
 v1.0.4
 ```
 
-### GitHub Releases erstellen
+### Creating GitHub Releases
 
-Um eine neue Version zu veröffentlichen:
+To publish a new version:
 
-1. **VERSION-Datei aktualisieren:**
+1. **Update VERSION file:**
    ```bash
    export NEW_VERSION=v1.0.5
    echo "$NEW_VERSION" > VERSION
@@ -451,111 +451,111 @@ Um eine neue Version zu veröffentlichen:
    git commit -m "Bump version to $NEW_VERSION"
    ```
 
-2. **Tag erstellen (muss VERSION-Datei exakt entsprechen):**
+2. **Create tag (must match VERSION file exactly):**
    ```bash
    git tag "$NEW_VERSION"
    git push origin "$NEW_VERSION"
    ```
 
-3. **GitHub Release erstellen:**
-   - Gehe zu: https://github.com/ttuhin03/fastflow/releases/new
-   - Wähle Tag: `$NEW_VERSION` (z. B. `v1.0.5`)
-   - Füge Release Notes hinzu
-   - Veröffentliche das Release
+3. **Create GitHub release:**
+   - Go to: https://github.com/ttuhin03/fastflow/releases/new
+   - Select tag: `$NEW_VERSION` (e.g. `v1.0.5`)
+   - Add release notes
+   - Publish the release
 
-> **Wichtig:** Das Tag-Format muss exakt der VERSION-Datei entsprechen (beide mit "v" Präfix)
+> **Important:** The tag format must exactly match the VERSION file (both with "v" prefix)
 
-Die Version-Check läuft automatisch:
-- ✅ Beim API-Start
-- ✅ Täglich um 2:00 Uhr (zusammen mit Log-Cleanup)
-- ✅ On-Demand via API: `GET /api/system/version?force_check=true`
+The version check runs automatically:
+- ✅ On API startup
+- ✅ Daily at 2:00 AM (together with log cleanup)
+- ✅ On demand via API: `GET /api/system/version?force_check=true`
 
-Weitere Details: [Versioning & Releases](docs/docs/deployment/VERSIONING.md)
+More details: [Versioning & Releases](docs/docs/deployment/VERSIONING.md)
 
-## Pipeline-Repository-Struktur
+## Pipeline Repository Structure
 
-Das Pipeline-Repository liegt unter `PIPELINES_DIR` – lokal, per Volume im Orchestrator (Docker Compose) oder auf einem **PVC** (Kubernetes). Pipelines werden automatisch erkannt; im K8s-Jobs-Modus kopiert der Orchestrator den Snapshot pro Run auf das Cache-Volume.
+The pipeline repository lives under `PIPELINES_DIR` – locally, via volume in the orchestrator (Docker Compose), or on a **PVC** (Kubernetes). Pipelines are discovered automatically; in K8s Jobs mode, the orchestrator copies the snapshot per run to the cache volume.
 
 > [!TIP]
-> Verwenden Sie unser **[fastflow-pipeline-template](https://github.com/ttuhin03/fastflow-pipeline-template)** für einen schnellen Start und eine optimale Struktur Ihrer Pipelines.
+> Use our **[fastflow-pipeline-template](https://github.com/ttuhin03/fastflow-pipeline-template)** for a quick start and optimal pipeline structure.
 
-### Verzeichnisstruktur
+### Directory Structure
 
 ```
 pipelines/
 ├── pipeline_a/
-│   ├── main.py              # Haupt-Pipeline-Skript (erforderlich)
-│   ├── requirements.txt     # Python-Dependencies (optional)
-│   └── pipeline.json        # Metadaten (optional)
+│   ├── main.py              # Main pipeline script (required)
+│   ├── requirements.txt     # Python dependencies (optional)
+│   └── pipeline.json        # Metadata (optional)
 ├── pipeline_b/
 │   ├── main.py
 │   ├── requirements.txt
 │   └── data_processor.json  # Alternative: {pipeline_name}.json
 └── pipeline_c/
-    └── main.py              # Minimal: Nur main.py
+    └── main.py              # Minimal: main.py only
 ```
 
-### Pipeline-Dateien
+### Pipeline Files
 
-#### 1. `main.py` (erforderlich)
+#### 1. `main.py` (required)
 
-Das Haupt-Pipeline-Skript. Jede Pipeline muss eine `main.py` Datei im eigenen Verzeichnis haben.
+The main pipeline script. Every pipeline must have a `main.py` file in its own directory.
 
-**Ausführungsweise:**
-- Pipelines werden mit `uv run --with-requirements {requirements.txt} {main.py}` ausgeführt
-- Code kann von oben nach unten ausgeführt werden (keine `main()`-Funktion erforderlich)
-- Optional: `main()`-Funktion mit `if __name__ == "__main__"` Block
+**Execution:**
+- Pipelines are run with `uv run --with-requirements {requirements.txt} {main.py}`
+- Code can run top to bottom (no `main()` function required)
+- Optional: `main()` function with `if __name__ == "__main__"` block
 
-**Beispiel 1: Einfaches Skript (von oben nach unten)**
+**Example 1: Simple script (top to bottom)**
 ```python
 # main.py
 import os
-print("Pipeline gestartet")
+print("Pipeline started")
 data = os.getenv("MY_SECRET")
-print(f"Verarbeite Daten: {data}")
-# ... weiterer Code ...
+print(f"Processing data: {data}")
+# ... more code ...
 ```
 
-**Beispiel 2: Mit main() Funktion (optional)**
+**Example 2: With main() function (optional)**
 ```python
 # main.py
 def main():
-    print("Pipeline gestartet")
-    # ... Logik ...
+    print("Pipeline started")
+    # ... logic ...
 
 if __name__ == "__main__":
     main()
 ```
 
-**Error-Handling:**
-- Bei uncaught Exceptions gibt Python automatisch Exit-Code != 0 zurück
-- Pipeline wird als `FAILED` markiert
+**Error handling:**
+- Uncaught exceptions cause Python to return exit code != 0 automatically
+- Pipeline is marked as `FAILED`
 
 #### 2. `requirements.txt` (optional)
 
-Python-Dependencies für die Pipeline. Werden von `uv` dynamisch installiert.
+Python dependencies for the pipeline. Installed dynamically by `uv`.
 
-**Format:** Standard Python requirements.txt Format
+**Format:** Standard Python requirements.txt format
 ```
 requests==2.31.0
 pandas==2.1.0
 numpy==1.24.3
 ```
 
-**Hinweise:**
-- Dependencies werden beim Pipeline-Start automatisch installiert (via `uv`)
-- Shared Cache ermöglicht schnelle Installation (< 1 Sekunde bei Cached-Dependencies)
-- Pre-Heating: Dependencies können beim Git-Sync vorgeladen werden (UV_PRE_HEAT)
+**Notes:**
+- Dependencies are installed automatically on pipeline start (via `uv`)
+- Shared cache enables fast installation (< 1 second with cached dependencies)
+- Pre-heating: Dependencies can be preloaded on Git sync (UV_PRE_HEAT)
 
-#### 3. `pipeline.json` oder `{pipeline_name}.json` (optional)
+#### 3. `pipeline.json` or `{pipeline_name}.json` (optional)
 
-Metadaten-Datei für Resource-Limits und Konfiguration.
+Metadata file for resource limits and configuration.
 
-**Dateinamen:**
-- `pipeline.json` (Standard, wird bevorzugt)
-- `{pipeline_name}.json` (Alternative, z.B. `data_processor.json`)
+**Filenames:**
+- `pipeline.json` (default, preferred)
+- `{pipeline_name}.json` (alternative, e.g. `data_processor.json`)
 
-**JSON-Format:**
+**JSON format:**
 ```json
 {
   "cpu_hard_limit": 1.0,
@@ -564,7 +564,7 @@ Metadaten-Datei für Resource-Limits und Konfiguration.
   "mem_soft_limit": "800m",
   "timeout": 3600,
   "retry_attempts": 3,
-  "description": "Prozessiert täglich eingehende Daten",
+  "description": "Processes incoming data daily",
   "tags": ["data-processing", "daily"],
   "enabled": true,
   "default_env": {
@@ -574,42 +574,42 @@ Metadaten-Datei für Resource-Limits und Konfiguration.
 }
 ```
 
-**Felder:**
+**Fields:**
 
-**Resource-Limits:**
-- `cpu_hard_limit` (Float, optional): CPU-Limit in Kernen (z.B. 1.0 = 1 Kern, 0.5 = halber Kern)
-- `mem_hard_limit` (String, optional): Memory-Limit (z.B. "512m", "1g", "2g")
-- `cpu_soft_limit` (Float, optional): CPU-Soft-Limit für Monitoring (wird überwacht, keine Limitierung)
-- `mem_soft_limit` (String, optional): Memory-Soft-Limit für Monitoring (wird überwacht, keine Limitierung)
+**Resource limits:**
+- `cpu_hard_limit` (Float, optional): CPU limit in cores (e.g. 1.0 = 1 core, 0.5 = half core)
+- `mem_hard_limit` (String, optional): Memory limit (e.g. "512m", "1g", "2g")
+- `cpu_soft_limit` (Float, optional): CPU soft limit for monitoring (monitored only, not enforced)
+- `mem_soft_limit` (String, optional): Memory soft limit for monitoring (monitored only, not enforced)
 
-**Pipeline-Konfiguration:**
-- `timeout` (Integer, optional): Timeout in Sekunden (pipeline-spezifisch, überschreibt globales CONTAINER_TIMEOUT)
-- `retry_attempts` (Integer, optional): Anzahl Retry-Versuche bei Fehlern (pipeline-spezifisch, überschreibt globales RETRY_ATTEMPTS)
-- `enabled` (Boolean, optional): Pipeline aktiviert/deaktiviert (Standard: true)
+**Pipeline configuration:**
+- `timeout` (Integer, optional): Timeout in seconds (pipeline-specific, overrides global CONTAINER_TIMEOUT)
+- `retry_attempts` (Integer, optional): Number of retry attempts on failure (pipeline-specific, overrides global RETRY_ATTEMPTS)
+- `enabled` (Boolean, optional): Pipeline enabled/disabled (default: true)
 
-**Dokumentation:**
-- `description` (String, optional): Beschreibung der Pipeline (wird in UI angezeigt)
-- `tags` (Array[String], optional): Tags für Kategorisierung/Filterung in der UI
+**Documentation:**
+- `description` (String, optional): Pipeline description (shown in UI)
+- `tags` (Array[String], optional): Tags for categorization/filtering in the UI
 
-**Environment-Variablen:**
-- `default_env` (Object, optional): Pipeline-spezifische Default-Environment-Variablen
-  - Diese werden bei jedem Pipeline-Start gesetzt
-  - Können in der UI durch zusätzliche Env-Vars ergänzt werden (werden zusammengeführt)
-  - Nützlich für Pipeline-spezifische Konfiguration (z.B. LOG_LEVEL, API_ENDPOINT, etc.)
-  - Secrets sollten NICHT hier gespeichert werden (verwende stattdessen Secrets-Management in der UI)
+**Environment variables:**
+- `default_env` (Object, optional): Pipeline-specific default environment variables
+  - Set on every pipeline start
+  - Can be supplemented with additional env vars in the UI (merged)
+  - Useful for pipeline-specific configuration (e.g. LOG_LEVEL, API_ENDPOINT, etc.)
+  - Secrets should NOT be stored here (use secrets management in the UI instead)
 
-**Verhalten:**
-- **Hard Limits**: Werden beim Worker-Start gesetzt (Docker cgroups bzw. Kubernetes `resources.limits`)
-  - Überschreitung führt zu OOM-Kill (Exit-Code 137) bei Memory
-  - CPU wird gedrosselt (Throttling) bei Überschreitung
-- **Soft Limits**: Werden nur überwacht, keine Limitierung
-  - Überschreitung wird im Frontend angezeigt (Warnung)
-  - Nützlich für frühe Erkennung von Resource-Problemen
-- **Fehlende Metadaten**: Standard-Limits werden verwendet (falls konfiguriert)
-- **Timeout & Retry**: Pipeline-spezifische Werte überschreiben globale Konfiguration
-- **Environment-Variablen**: `default_env` wird mit UI-spezifischen Env-Vars zusammengeführt (UI-Werte haben Vorrang)
+**Behavior:**
+- **Hard limits**: Set when the worker starts (Docker cgroups or Kubernetes `resources.limits`)
+  - Exceeding memory leads to OOM kill (exit code 137)
+  - CPU is throttled when exceeded
+- **Soft limits**: Monitored only, not enforced
+  - Exceeding is shown in the frontend (warning)
+  - Useful for early detection of resource issues
+- **Missing metadata**: Default limits are used (if configured)
+- **Timeout & retry**: Pipeline-specific values override global configuration
+- **Environment variables**: `default_env` is merged with UI-specific env vars (UI values take precedence)
 
-**Beispiel:**
+**Example:**
 ```json
 {
   "cpu_hard_limit": 2.0,
@@ -619,16 +619,16 @@ Metadaten-Datei für Resource-Limits und Konfiguration.
 }
 ```
 
-### Pipeline-Erkennung
+### Pipeline Discovery
 
-- **Automatische Discovery**: Pipelines werden automatisch beim Git-Sync erkannt
-- **Pipeline-Name**: Entspricht dem Verzeichnisnamen (z.B. `pipeline_a/` → Pipeline-Name: `pipeline_a`)
-- **Validierung**: Pipeline muss `main.py` Datei enthalten, sonst wird sie ignoriert
-- **Keine manuelle Registrierung**: Pipelines werden automatisch verfügbar
+- **Automatic discovery**: Pipelines are discovered automatically on Git sync
+- **Pipeline name**: Matches the directory name (e.g. `pipeline_a/` → pipeline name: `pipeline_a`)
+- **Validation**: Pipeline must contain a `main.py` file, otherwise it is ignored
+- **No manual registration**: Pipelines become available automatically
 
-### Beispiel-Pipeline-Struktur
+### Example Pipeline Structure
 
-**Vollständiges Beispiel:**
+**Complete example:**
 ```
 pipelines/
 └── data_processor/
@@ -654,7 +654,7 @@ def fetch_data(api_key):
     return response.json()
 
 def transform_data(data):
-    # ... Transformationslogik ...
+    # ... transformation logic ...
     return data
 
 def save_result(result):
@@ -679,7 +679,7 @@ requests==2.31.0
   "mem_soft_limit": "400m",
   "timeout": 1800,
   "retry_attempts": 2,
-  "description": "Prozessiert eingehende Daten und erstellt Reports",
+  "description": "Processes incoming data and creates reports",
   "tags": ["data-processing", "reports"],
   "enabled": true,
   "default_env": {
@@ -691,36 +691,35 @@ requests==2.31.0
 
 ---
 
-*Weitere Doku: [Pipelines – Übersicht](docs/docs/pipelines/uebersicht.md), [Konfiguration](docs/docs/deployment/CONFIGURATION.md)*
+*More docs: [Pipelines – Overview](docs/docs/pipelines/uebersicht.md), [Configuration](docs/docs/deployment/CONFIGURATION.md)*
 
 ## ❓ Troubleshooting
 
-### "Docker läuft nicht" / "Connection refused"
-Stellen Sie sicher, dass Docker Desktop läuft. 
-Prüfen Sie: `docker ps`
+### "Docker is not running" / "Connection refused"
+Make sure Docker Desktop is running.
+Check: `docker ps`
 
-### "Docker-Proxy / 403 Forbidden"
-Der Orchestrator darf nur bestimmte Befehle ausführen. Prüfen Sie die Proxy-Logs:
+### "Docker proxy / 403 Forbidden"
+The orchestrator may only execute certain commands. Check proxy logs:
 `docker compose logs docker-proxy`
-Stellen Sie sicher, dass `POST=1` (für Container-Start) gesetzt ist.
+Make sure `POST=1` (for container start) is set.
 
-### "Port 8000 belegt"
-Ändern Sie den `PORT` in der `.env` Datei.
+### "Port 8000 in use"
+Change `PORT` in the `.env` file.
 
-### "ENCRYPTION_KEY fehlt"
-Die Anwendung startet nicht ohne Key. Generieren Sie einen (siehe Schnellstart) und setzen Sie ihn in der `.env`.
+### "ENCRYPTION_KEY missing"
+The application won't start without a key. Generate one (see Quick Start) and set it in `.env`.
 
 ---
 
-## ⚖️ Disclaimer & Haftungsausschluss
+## ⚖️ Disclaimer
 
-**Wichtiger Hinweis zur Sicherheit und Haftung:**
+**Important notice on security and liability:**
 
-Dieses Projekt befindet sich in einem **Frühen Stadium / Beta-Status**. Im Modus **`PIPELINE_EXECUTOR=docker`** hat der Orchestrator indirekten Zugriff auf den Docker-Daemon (über den empfohlenen Proxy) – bei unsachgemäßer Konfiguration ein relevantes Risiko für das Host-System. Unter **`kubernetes`** sind die Runs vom Host-Docker entkoppelt; dort gelten stattdessen übliche K8s-Themen (RBAC, Netzwerk, Secrets).
+This project is in an **early stage / beta**. In **`PIPELINE_EXECUTOR=docker`** mode, the orchestrator has indirect access to the Docker daemon (via the recommended proxy) – misconfiguration poses a relevant risk to the host system. Under **`kubernetes`**, runs are decoupled from host Docker; typical K8s concerns apply instead (RBAC, networking, secrets).
 
-- **Nutzung auf eigene Gefahr:** Die Software wird „wie besehen“ (as is) zur Verfügung gestellt. Der Autor übernimmt keinerlei Haftung für Schäden an Hardware, Datenverlust, Sicherheitslücken oder Betriebsunterbrechungen, die durch die Nutzung dieser Software entstehen könnten.
-- **Keine Gewährleistung:** Es gibt keine Garantie für die Richtigkeit, Funktionsfähigkeit oder ständige Verfügbarkeit der Software.
-- **Sicherheitsempfehlung:** Niemals ungeschützt im öffentlichen Internet betreiben. Bei Docker-Betrieb den Socket-Proxy verwenden und starke Authentifizierung; bei Kubernetes minimale RBAC-Rechte für den Orchestrator-ServiceAccount.
+- **Use at your own risk:** The software is provided "as is". The author assumes no liability for damage to hardware, data loss, security vulnerabilities, or service interruptions that may result from use of this software.
+- **No warranty:** There is no guarantee of correctness, functionality, or continuous availability of the software.
+- **Security recommendation:** Never run unprotected on the public internet. In Docker mode, use the socket proxy and strong authentication; in Kubernetes, grant minimal RBAC rights to the orchestrator ServiceAccount.
 
-Ausführlich in der Doku: [Disclaimer & Haftungsausschluss](docs/docs/disclaimer.md).
- 
+Full details in the docs: [Disclaimer](docs/docs/disclaimer.md).
