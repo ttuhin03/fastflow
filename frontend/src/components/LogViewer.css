@@ -65,8 +65,9 @@
   border-radius: var(--radius-md);
   animation: ff-fade var(--transition-fast);
 }
+.logviewer__search-icon { flex: none; color: var(--color-text-tertiary); }
 .logviewer__search input {
-  flex: 1; background: transparent; border: none; outline: none;
+  flex: 1; min-width: 0; background: transparent; border: none; outline: none;
   color: var(--color-text-primary); font-family: var(--font-mono); font-size: var(--font-size-sm);
 }
 .logviewer__search .count { font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--color-text-disabled); white-space: nowrap; }

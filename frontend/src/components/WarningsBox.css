@@ -1,8 +1,11 @@
 .warnings-box {
-  padding: var(--spacing-lg);
-  border-radius: var(--radius-md);
-  border: 1px solid rgba(255, 152, 0, 0.5);
-  background-color: rgba(255, 152, 0, 0.06);
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  padding: 13px 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-warning-border);
+  background: linear-gradient(90deg, var(--color-warning-subtle), transparent 70%);
 }
 
 .warnings-box-header {
@@ -13,21 +16,20 @@
 }
 
 .warnings-box-icon {
-  font-size: 1.25rem;
   color: var(--color-warning);
   flex-shrink: 0;
 }
 
 .warnings-box-title {
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
   margin: 0;
   color: var(--color-text-primary);
 }
 
 .warnings-box-list {
   margin: 0;
-  padding-left: 1.5rem;
+  padding-left: var(--spacing-lg);
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
 }

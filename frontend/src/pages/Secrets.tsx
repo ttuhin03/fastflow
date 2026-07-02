@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation } from '@tanstack/react-query'
+import { LuLock, LuEye, LuEyeOff } from 'react-icons/lu'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import { showError, showSuccess } from '../utils/toast'
@@ -27,6 +28,7 @@ export default function Secrets() {
   const { t } = useTranslation()
   const { isReadonly } = useAuth()
   const [showValues, setShowValues] = useState<Record<string, boolean>>({})
+  const [encryptOpen, setEncryptOpen] = useState(false)
   const [encryptPlaintext, setEncryptPlaintext] = useState('')
   const [encryptResult, setEncryptResult] = useState<string | null>(null)
 
@@ -78,26 +80,38 @@ export default function Secrets() {
     return <div>{t('common.loading')}</div>
   }
 
+  const dbSecrets = secrets ?? []
+
   return (
     <div className="secrets">
       <div className="secrets-header">
-        <h2>{t('secrets.title')}</h2>
+        <div>
+          <h1 className="secrets-title">{t('secrets.title')}</h1>
+          <p className="secrets-subtitle">
+            {t('secrets.subtitle', 'Encrypted at rest with AES-256 · values are never displayed')}
+          </p>
+        </div>
+        {!isReadonly && (
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => setEncryptOpen((v) => !v)}
+          >
+            <LuLock aria-hidden />
+            {t('secrets.newSecret', 'New secret')}
+          </button>
+        )}
       </div>
-      <p className="secrets-readonly-hint">
-        {t('secrets.intro')}
-      </p>
 
-      {!isReadonly && (
+      {!isReadonly && encryptOpen && (
         <div className="encrypt-for-pipeline-section card">
           <h3 className="section-title">{t('secrets.encryptSection')}</h3>
-          <p className="encrypt-hint">
-            {t('secrets.encryptHint')}
-          </p>
+          <p className="encrypt-hint">{t('secrets.encryptHint')}</p>
           <div className="form-group">
             <label htmlFor="encrypt-plaintext" className="form-label">{t('secrets.plaintext')}</label>
             <textarea
               id="encrypt-plaintext"
-              className="form-input"
+              className="form-textarea"
               value={encryptPlaintext}
               onChange={(e) => {
                 setEncryptPlaintext(e.target.value)
@@ -125,15 +139,13 @@ export default function Secrets() {
                   readOnly
                   value={encryptResult}
                   rows={2}
-                  className="form-input encrypt-result-value"
+                  className="form-textarea encrypt-result-value"
                 />
                 <button type="button" className="btn btn-secondary" onClick={handleCopyEncrypted}>
                   {t('secrets.copy')}
                 </button>
               </div>
-              <p className="encrypt-result-hint">
-                {t('secrets.encryptResultHint')}
-              </p>
+              <p className="encrypt-result-hint">{t('secrets.encryptResultHint')}</p>
             </div>
           )}
         </div>
@@ -141,96 +153,106 @@ export default function Secrets() {
 
       <section className="secrets-db-section">
         <h3 className="section-title">{t('secrets.inDb')}</h3>
-        {secrets && secrets.length > 0 ? (
-          <table className="secrets-table">
-            <thead>
-              <tr>
-                <th>{t('secrets.key')}</th>
-                <th>{t('secrets.type')}</th>
-                <th>{t('secrets.value')}</th>
-                <th>{t('secrets.createdAt')}</th>
-                <th>{t('secrets.updatedAt')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {secrets.map((secret) => (
-                <tr key={secret.key}>
-                  <td>{secret.key}</td>
-                  <td>
-                    <Tooltip content={secret.is_parameter 
+        {dbSecrets.length > 0 ? (
+          <div className="table secrets-table">
+            <div className="table__head">
+              <span>{t('secrets.key')}</span>
+              <span>{t('secrets.type')}</span>
+              <span>{t('secrets.scope', 'Scope')}</span>
+              <span>{t('secrets.updatedAt')}</span>
+              <span className="secrets-cell-actions">{t('scheduler.actions')}</span>
+            </div>
+            {dbSecrets.map((secret) => {
+              const revealed = showValues[secret.key]
+              return (
+                <div key={secret.key} className="table__row secrets-row">
+                  <span className="secrets-cell-name">
+                    <LuLock className="secrets-lock-icon" aria-hidden />
+                    <span className="secrets-name-inner">
+                      <span className="mono secrets-name-text" title={secret.key}>{secret.key}</span>
+                      <span className="mono secrets-name-value">
+                        {revealed ? secret.value : '••••••••••••'}
+                      </span>
+                    </span>
+                  </span>
+                  <span className="secrets-cell-type">
+                    <Tooltip content={secret.is_parameter
                       ? t('secrets.typeParameterTooltip')
                       : t('secrets.typeSecretTooltip')}>
-                      <span className={`type-badge ${secret.is_parameter ? 'parameter' : 'secret'}`}>
+                      <span className={`badge ${secret.is_parameter ? 'badge-primary' : 'badge-error'}`}>
                         {secret.is_parameter ? t('secrets.typeParameter') : t('secrets.typeSecret')}
                       </span>
                     </Tooltip>
-                  </td>
-                  <td>
-                    <div className="value-cell">
-                      {showValues[secret.key] ? (
-                        <span className="secret-value">{secret.value}</span>
-                      ) : (
-                        <span className="secret-value-hidden">••••••••</span>
-                      )}
-                      <Tooltip content={t('secrets.showHideTooltip')}>
-                        <button
-                          type="button"
-                          onClick={() => toggleShowValue(secret.key)}
-                          className="btn btn-ghost btn-sm"
-                        >
-                          {showValues[secret.key] ? t('secrets.hide') : t('secrets.show')}
-                        </button>
-                      </Tooltip>
-                    </div>
-                  </td>
-                  <td>{new Date(secret.created_at).toLocaleString(getFormatLocale())}</td>
-                  <td>{new Date(secret.updated_at).toLocaleString(getFormatLocale())}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </span>
+                  <span className="secrets-cell-scope">
+                    {/* TODO(redesign): needs backend — no scope field exists yet.
+                        Derive a placeholder scope from the entry type. */}
+                    <span className="badge badge-secondary">
+                      {secret.is_parameter ? t('secrets.scopeApp', 'app') : t('secrets.scopeGlobal', 'global')}
+                    </span>
+                  </span>
+                  <span className="mono secrets-cell-updated">
+                    {new Date(secret.updated_at).toLocaleString(getFormatLocale())}
+                  </span>
+                  <span className="secrets-cell-actions secrets-cell-actions--row">
+                    <Tooltip content={t('secrets.showHideTooltip')}>
+                      <button
+                        type="button"
+                        onClick={() => toggleShowValue(secret.key)}
+                        className="btn btn-icon btn-sm"
+                        aria-label={revealed ? t('secrets.hide') : t('secrets.show')}
+                      >
+                        {revealed ? <LuEyeOff aria-hidden /> : <LuEye aria-hidden />}
+                      </button>
+                    </Tooltip>
+                  </span>
+                </div>
+              )
+            })}
+          </div>
         ) : (
-          <p className="no-secrets">{t('secrets.noEntriesDb')}</p>
+          <div className="card secrets-empty">
+            <p className="no-secrets">{t('secrets.noEntriesDb')}</p>
+          </div>
         )}
       </section>
 
       <section className="secrets-pipelines-section">
         <h3 className="section-title">{t('secrets.inPipelineJson')}</h3>
-        <p className="secrets-pipelines-hint">
-          {t('secrets.envKeysFromPipelines')}
-        </p>
+        <p className="secrets-pipelines-hint">{t('secrets.envKeysFromPipelines')}</p>
         {fromPipelines && fromPipelines.length > 0 ? (
-          <table className="secrets-table">
-            <thead>
-              <tr>
-                <th>{t('secrets.key')}</th>
-                <th>{t('secrets.pipeline')}</th>
-                <th>{t('secrets.source')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {fromPipelines.map((row, idx) => (
-                <tr key={`${row.pipeline}-${row.key}-${row.run_config_id || ''}-${idx}`}>
-                  <td>{row.key}</td>
-                  <td>
-                    {row.pipeline}
-                    {row.run_config_id && (
-                      <span className="run-config-badge" title={t('secrets.runConfigBadgeTitle')}>
-                        {row.run_config_id}
-                      </span>
-                    )}
-                  </td>
-                  <td>
-                    <span className={`type-badge ${row.source === 'encrypted_env' ? 'secret' : 'parameter'}`}>
-                      {row.source === 'encrypted_env' ? 'encrypted_env' : 'default_env'}
+          <div className="table secrets-table secrets-table--pipelines">
+            <div className="table__head">
+              <span>{t('secrets.key')}</span>
+              <span>{t('secrets.pipeline')}</span>
+              <span>{t('secrets.source')}</span>
+            </div>
+            {fromPipelines.map((row, idx) => (
+              <div
+                key={`${row.pipeline}-${row.key}-${row.run_config_id || ''}-${idx}`}
+                className="table__row secrets-pipeline-row"
+              >
+                <span className="mono secrets-name-text" title={row.key}>{row.key}</span>
+                <span className="secrets-cell-pipeline">
+                  <span className="mono">{row.pipeline}</span>
+                  {row.run_config_id && (
+                    <span className="badge badge-secondary" title={t('secrets.runConfigBadgeTitle')}>
+                      {row.run_config_id}
                     </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  )}
+                </span>
+                <span>
+                  <span className={`badge ${row.source === 'encrypted_env' ? 'badge-error' : 'badge-primary'}`}>
+                    {row.source === 'encrypted_env' ? 'encrypted_env' : 'default_env'}
+                  </span>
+                </span>
+              </div>
+            ))}
+          </div>
         ) : (
-          <p className="no-secrets">{t('secrets.noEntriesPipeline')}</p>
+          <div className="card secrets-empty">
+            <p className="no-secrets">{t('secrets.noEntriesPipeline')}</p>
+          </div>
         )}
       </section>
     </div>

@@ -110,11 +110,20 @@
   animation: ff-rise 0.35s var(--ease-out) both;
 }
 .pipeline-card:hover { border-color: var(--color-border-light); transform: translateY(-2px); box-shadow: var(--shadow-md); }
-.pipeline-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.pipeline-card__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pipeline-card__title { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+.pipeline-card__title .status-dot { width: 7px; height: 7px; }
 .pipeline-name { font-family: var(--font-mono); font-size: var(--font-size-sm); font-weight: var(--font-weight-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0; color: var(--color-text-primary); }
 .pipeline-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
 .pipeline-card__meta { font-size: var(--font-size-xs); color: var(--color-text-tertiary); margin-top: 4px; }
-.pipeline-card__foot { display: flex; align-items: center; justify-content: space-between; padding-top: 11px; margin-top: 4px; border-top: 1px solid var(--color-border); font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--color-text-tertiary); }
+
+/* Success-rate bar row */
+.pipeline-card__rate { display: flex; align-items: center; gap: 8px; }
+.pipeline-card__rate .progress { flex: 1; }
+.pipeline-card__pct { font-size: 11.5px; font-weight: var(--font-weight-bold); color: var(--color-text-secondary); }
+
+.pipeline-card__foot { display: flex; align-items: center; justify-content: space-between; padding-top: 11px; margin-top: 0; border-top: 1px solid var(--color-border); font-size: 11px; color: var(--color-text-tertiary); }
+.pipeline-card__next { color: var(--color-text-disabled); }
 
 /* Last-N run strip */
 .run-strip { display: flex; align-items: center; gap: 3px; }
@@ -126,15 +135,6 @@
 .pipeline-recent-runs { display: flex; align-items: center; gap: 6px; padding: 6px 10px; background: var(--color-surface-2); border-radius: var(--radius-sm); }
 .recent-runs-label { font-size: var(--font-size-xs); color: var(--color-text-secondary); font-weight: var(--font-weight-medium); }
 .pipeline-actions { display: flex; gap: 4px; }
-
-/* Toggle (legacy .toggle-switch) */
-.toggle-switch { position: relative; display: inline-block; width: 38px; height: 22px; flex: none; }
-.toggle-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
-.toggle-slider { position: absolute; cursor: pointer; inset: 0; background: var(--color-surface-4); border-radius: var(--radius-full); transition: background var(--transition-base); }
-.toggle-slider:before { position: absolute; content: ''; height: 18px; width: 18px; left: 2px; bottom: 2px; background: #fff; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.4); transition: left var(--transition-base) var(--ease-spring); }
-.toggle-switch input:checked + .toggle-slider { background: var(--color-success); }
-.toggle-switch input:checked + .toggle-slider:before { left: 18px; }
-.toggle-switch input:disabled + .toggle-slider { opacity: 0.5; cursor: not-allowed; }
 
 /* ---- Spinner ------------------------------------------------------------- */
 .spinner {

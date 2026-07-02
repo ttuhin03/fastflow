@@ -26,6 +26,9 @@ class RunPipelineRequest(BaseModel):
     """Request-Model für Pipeline-Start."""
     env_vars: Optional[Dict[str, str]] = None
     parameters: Optional[Dict[str, str]] = None
+    # Optionale Run-Konfiguration aus pipeline.json schedules[] (id). Wenn gesetzt,
+    # werden die schedule-spezifischen Env-/Limit-Overrides angewendet (wie beim Scheduler).
+    run_config_id: Optional[str] = None
 
     @model_validator(mode="after")
     def validate_dict_sizes(self):

@@ -63,10 +63,15 @@ def setup_signal_handlers() -> None:
         logger.info(f"Signal {signal_name} empfangen, starte Graceful Shutdown...")
         shutdown_event.set()
     
-    # Signal-Handler registrieren
-    signal.signal(signal.SIGTERM, signal_handler)
-    signal.signal(signal.SIGINT, signal_handler)
-    logger.info("Signal-Handler registriert (SIGTERM, SIGINT)")
+    # Signal-Handler registrieren. Außerhalb des Main-Threads (z.B. TestClient,
+    # der die App in einem Worker-Thread startet) ist das nicht erlaubt — dann
+    # übernimmt der Host-Prozess das Signal-Handling.
+    try:
+        signal.signal(signal.SIGTERM, signal_handler)
+        signal.signal(signal.SIGINT, signal_handler)
+        logger.info("Signal-Handler registriert (SIGTERM, SIGINT)")
+    except ValueError:
+        logger.debug("Signal-Handler nicht registriert (nicht im Main-Thread)")
 
 
 # FastAPI-App erstellen
@@ -161,6 +166,10 @@ app.add_middleware(
 # Request-Body-Limit (optional, MAX_REQUEST_BODY_MB in config)
 from app.middleware.body_limit import BodyLimitMiddleware
 app.add_middleware(BodyLimitMiddleware)
+
+# Client-IP für Audit-Log in ContextVar ablegen (vor Request-ID, damit innerhalb verfügbar)
+from app.middleware.client_ip import ClientIPMiddleware
+app.add_middleware(ClientIPMiddleware)
 
 # Request-ID: zuletzt hinzufügen = läuft zuerst (outermost)
 from app.middleware.request_id import RequestIDMiddleware

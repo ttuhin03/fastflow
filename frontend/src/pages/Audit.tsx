@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
-import { Navigate } from 'react-router-dom'
 import apiClient from '../api/client'
 import { getFormatLocale } from '../utils/locale'
 import './Audit.css'
@@ -16,6 +15,7 @@ interface AuditEntry {
   resource_type: string
   resource_id: string | null
   details: Record<string, unknown> | null
+  ip_address: string | null
 }
 
 interface AuditResponse {
@@ -27,6 +27,28 @@ interface AuditResponse {
 
 const PAGE_SIZE = 50
 
+/** Derive a 2-letter "kind" pill from the action string (no backend field exists). */
+function actionKind(action: string): { kind: string; cls: string } {
+  const a = (action || '').toLowerCase()
+  if (a.startsWith('run_')) return { kind: 'RUN', cls: 'kind-run' }
+  if (a.startsWith('pipeline_')) return { kind: 'CFG', cls: 'kind-cfg' }
+  if (a.startsWith('user_')) return { kind: 'USR', cls: 'kind-usr' }
+  if (a.startsWith('secret_')) return { kind: 'SEC', cls: 'kind-sec' }
+  if (a.startsWith('schedule_')) return { kind: 'SCH', cls: 'kind-sch' }
+  if (a.startsWith('settings_') || a.startsWith('sync_')) return { kind: 'SYS', cls: 'kind-sys' }
+  if (a.startsWith('auth_') || a.startsWith('login') || a.startsWith('logout')) return { kind: 'AUT', cls: 'kind-aut' }
+  return { kind: 'EVT', cls: 'kind-evt' }
+}
+
+/** Quote a CSV field, escaping embedded quotes and neutralizing formula injection. */
+function csvCell(value: unknown): string {
+  let s = value == null ? '' : String(value)
+  // CSV/formula injection: Excel/Sheets execute cells starting with = + - @ (or tab/CR).
+  // Prefix with a single quote so the value is treated as text.
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`
+  return `"${s.replace(/"/g, '""')}"`
+}
+
 export default function Audit() {
   const { t } = useTranslation()
   const { isAdmin } = useAuth()
@@ -34,6 +56,7 @@ export default function Audit() {
   const [resourceTypeFilter, setResourceTypeFilter] = useState('')
   const [sinceFilter, setSinceFilter] = useState('')
   const [page, setPage] = useState(1)
+  const [expanded, setExpanded] = useState<string | null>(null)
 
   const { data, isLoading, isError, error } = useQuery<AuditResponse>({
     queryKey: ['audit', actionFilter, resourceTypeFilter, sinceFilter, page],
@@ -51,7 +74,16 @@ export default function Audit() {
   })
 
   if (!isAdmin) {
-    return <Navigate to="/" replace />
+    return (
+      <div className="audit-page">
+        <div className="audit-admin-only card">
+          <p className="audit-admin-only-title">{t('audit.adminOnlyTitle', 'Admin access only')}</p>
+          <p className="audit-admin-only-body">
+            {t('audit.adminOnlyBody', 'The audit log is restricted to administrators. Ask an admin if you need access.')}
+          </p>
+        </div>
+      </div>
+    )
   }
 
   if (isError) {
@@ -66,83 +98,129 @@ export default function Audit() {
 
   const totalPages = data ? Math.ceil(data.total / PAGE_SIZE) : 0
 
+  const handleExportCsv = () => {
+    if (!data || data.entries.length === 0) return
+    const header = ['Timestamp', 'User', 'Action', 'ResourceType', 'Target', 'IP', 'Details']
+    const rows = data.entries.map((e) => [
+      new Date(e.created_at).toISOString(),
+      e.username || '',
+      e.action,
+      e.resource_type,
+      e.resource_id || '',
+      e.ip_address || '',
+      e.details && Object.keys(e.details).length > 0 ? JSON.stringify(e.details) : '',
+    ])
+    const csv = [header, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="audit-page">
-      <h2 className="audit-title">{t('audit.title')}</h2>
-      <p className="audit-description">{t('audit.description')}</p>
+      <div className="audit-header">
+        <div>
+          <h2 className="audit-title">{t('audit.title')}</h2>
+          <p className="audit-description">
+            {t('audit.subtitle', 'Immutable record of every workspace action')}
+          </p>
+        </div>
+        <button
+          type="button"
+          className="btn btn-outlined audit-export-btn"
+          onClick={handleExportCsv}
+          disabled={!data || data.entries.length === 0}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
+          </svg>
+          {t('audit.exportCsv', 'Export CSV')}
+        </button>
+      </div>
 
-      <div className="audit-filters card">
-        <div className="audit-filter-row">
-          <label htmlFor="audit-action">{t('audit.action')}</label>
+      {/* Filter bar: inline search + resource/date filters */}
+      <div className="audit-filters">
+        <div className="audit-search">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+            <circle cx="11" cy="11" r="7" />
+            <path d="M21 21l-4-4" />
+          </svg>
           <input
             id="audit-action"
             type="text"
             value={actionFilter}
             onChange={(e) => { setActionFilter(e.target.value); setPage(1) }}
-            placeholder="z.B. run_start, run_cancel"
-            className="audit-input"
+            placeholder={t('audit.filterActionsPlaceholder', 'Filter actions…')}
           />
         </div>
-        <div className="audit-filter-row">
-          <label htmlFor="audit-resource">{t('audit.resourceType')}</label>
-          <input
-            id="audit-resource"
-            type="text"
-            value={resourceTypeFilter}
-            onChange={(e) => { setResourceTypeFilter(e.target.value); setPage(1) }}
-            placeholder="z.B. pipeline, run, user, settings"
-            className="audit-input"
-          />
-        </div>
-        <div className="audit-filter-row">
-          <label htmlFor="audit-since">{t('audit.since')}</label>
-          <input
-            id="audit-since"
-            type="datetime-local"
-            value={sinceFilter}
-            onChange={(e) => { setSinceFilter(e.target.value); setPage(1) }}
-            className="audit-input"
-          />
-        </div>
+        <input
+          id="audit-resource"
+          type="text"
+          className="audit-filter-input"
+          value={resourceTypeFilter}
+          onChange={(e) => { setResourceTypeFilter(e.target.value); setPage(1) }}
+          placeholder={t('audit.resourceType')}
+        />
+        <input
+          id="audit-since"
+          type="datetime-local"
+          className="audit-filter-input"
+          value={sinceFilter}
+          onChange={(e) => { setSinceFilter(e.target.value); setPage(1) }}
+          aria-label={t('audit.since')}
+        />
       </div>
 
       {isLoading ? (
         <div className="audit-loading">{t('common.loading')}</div>
       ) : data && data.entries.length > 0 ? (
         <>
-          <div className="audit-table-container card">
-            <table className="audit-table">
-              <thead>
-                <tr>
-                  <th>{t('audit.time')}</th>
-                  <th>{t('audit.user')}</th>
-                  <th>{t('audit.action')}</th>
-                  <th>{t('audit.resourceType')}</th>
-                  <th>{t('audit.resourceId')}</th>
-                  <th>{t('audit.details')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.entries.map((entry) => (
-                  <tr key={entry.id}>
-                    <td className="audit-time">
-                      {new Date(entry.created_at).toLocaleString(getFormatLocale(), { timeZone: 'UTC' })} UTC
-                    </td>
-                    <td>{entry.username || '-'}</td>
-                    <td><code className="audit-action-badge">{entry.action}</code></td>
-                    <td>{entry.resource_type}</td>
-                    <td className="audit-resource-id">{entry.resource_id || '-'}</td>
-                    <td className="audit-details">
-                      {entry.details && Object.keys(entry.details).length > 0 ? (
-                        <pre>{JSON.stringify(entry.details)}</pre>
-                      ) : (
-                        '-'
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="table audit-table">
+            <div className="table__head audit-table__head">
+              <span>{t('audit.time')}</span>
+              <span>{t('audit.user')}</span>
+              <span>{t('audit.action')}</span>
+              <span>{t('audit.target', 'Target')}</span>
+              <span className="audit-col-ip">{t('audit.ip', 'IP')}</span>
+            </div>
+            {data.entries.map((entry) => {
+              const { kind, cls } = actionKind(entry.action)
+              const hasDetails = entry.details && Object.keys(entry.details).length > 0
+              const isOpen = expanded === entry.id
+              return (
+                <div key={entry.id}>
+                  <div
+                    className={`table__row audit-table__row${hasDetails ? ' clickable' : ''}`}
+                    onClick={hasDetails ? () => setExpanded(isOpen ? null : entry.id) : undefined}
+                    title={hasDetails ? JSON.stringify(entry.details) : undefined}
+                  >
+                    <span className="audit-cell-time mono">
+                      {new Date(entry.created_at).toLocaleString(getFormatLocale(), { timeZone: 'UTC' })}
+                    </span>
+                    <span className="audit-cell-user">{entry.username || '-'}</span>
+                    <span className="audit-cell-action">
+                      <span className={`audit-kind ${cls}`}>{kind}</span>
+                      <span className="mono audit-action-name">{entry.action}</span>
+                    </span>
+                    <span className="mono audit-cell-target" title={entry.resource_id || undefined}>
+                      {entry.resource_id || `${entry.resource_type}`}
+                    </span>
+                    <span className="mono audit-cell-ip" title={entry.ip_address || undefined}>{entry.ip_address || '—'}</span>
+                  </div>
+                  {isOpen && hasDetails && (
+                    <div className="audit-details-row">
+                      <pre>{JSON.stringify(entry.details, null, 2)}</pre>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
           <div className="audit-pagination">
             <span className="audit-pagination-info">

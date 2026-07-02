@@ -85,14 +85,14 @@ export function LineChart({ data, valueKey, maxValue, color, warningColor, softL
                 y1={y}
                 x2={width - padding.right}
                 y2={y}
-                stroke="#444"
+                stroke="#2A2A32"
                 strokeWidth="1"
                 strokeDasharray="2,2"
               />
               <text
                 x={padding.left - 10}
                 y={y + 4}
-                fill="#888"
+                fill="#71717A"
                 fontSize="10"
                 textAnchor="end"
               >
@@ -111,7 +111,7 @@ export function LineChart({ data, valueKey, maxValue, color, warningColor, softL
               y1={padding.top + chartHeight - (hardLimit / maxValue) * chartHeight}
               x2={width - padding.right}
               y2={padding.top + chartHeight - (hardLimit / maxValue) * chartHeight}
-              stroke="#ef4444"
+              stroke="#F1565C"
               strokeWidth="2"
               strokeDasharray="4,4"
               opacity="0.8"
@@ -119,7 +119,7 @@ export function LineChart({ data, valueKey, maxValue, color, warningColor, softL
             <text
               x={width - padding.right + 5}
               y={padding.top + chartHeight - (hardLimit / maxValue) * chartHeight + 4}
-              fill="#ef4444"
+              fill="#F1565C"
               fontSize="10"
               fontWeight="600"
             >
@@ -135,7 +135,7 @@ export function LineChart({ data, valueKey, maxValue, color, warningColor, softL
               y1={padding.top + chartHeight - (softLimit / maxValue) * chartHeight}
               x2={width - padding.right}
               y2={padding.top + chartHeight - (softLimit / maxValue) * chartHeight}
-              stroke="#f59e0b"
+              stroke="#F5A623"
               strokeWidth="2"
               strokeDasharray="3,3"
               opacity="0.8"
@@ -143,7 +143,7 @@ export function LineChart({ data, valueKey, maxValue, color, warningColor, softL
             <text
               x={width - padding.right + 5}
               y={padding.top + chartHeight - (softLimit / maxValue) * chartHeight + 4}
-              fill="#f59e0b"
+              fill="#F5A623"
               fontSize="10"
               fontWeight="600"
             >
@@ -170,7 +170,7 @@ export function LineChart({ data, valueKey, maxValue, color, warningColor, softL
                 cy={point.y}
                 r={isWarning ? 5 : 3}
                 fill={isWarning ? warningColor : color}
-                stroke="#131316"
+                stroke="#111114"
                 strokeWidth="1"
               />
               <title>
@@ -190,7 +190,7 @@ export function LineChart({ data, valueKey, maxValue, color, warningColor, softL
                   key={idx}
                   x={point.x}
                   y={height - padding.bottom + 20}
-                  fill="#888"
+                  fill="#71717A"
                   fontSize="10"
                   textAnchor="middle"
                 >

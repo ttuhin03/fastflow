@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { captureException, posthog } from './posthog'
+import { captureException, initPostHog } from './posthog'
 
 const mockCaptureException = vi.fn()
 const mockInit = vi.fn()
@@ -29,8 +29,8 @@ describe('posthog utils', () => {
     vi.resetModules()
   })
 
-  it('posthog export existiert', () => {
-    expect(posthog).toBeDefined()
+  it('initPostHog export existiert', () => {
+    expect(initPostHog).toBeTypeOf('function')
   })
 
   it('captureException ruft posthog.captureException auf wenn initialisiert', async () => {

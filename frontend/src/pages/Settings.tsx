@@ -1207,7 +1207,7 @@ export default function Settings() {
                 <input
                   id="s3_endpoint_url"
                   type="url"
-                  className="form-input"
+                  className="form-input mono"
                   value={currentSettings.s3_endpoint_url || ''}
                   onChange={(e) => handleInputChange('s3_endpoint_url', e.target.value)}
                   placeholder="https://s3.example.local"
@@ -1219,7 +1219,7 @@ export default function Settings() {
                 <input
                   id="s3_bucket"
                   type="text"
-                  className="form-input"
+                  className="form-input mono"
                   value={currentSettings.s3_bucket || ''}
                   onChange={(e) => handleInputChange('s3_bucket', e.target.value)}
                   placeholder="fastflow-logs"
@@ -1231,7 +1231,7 @@ export default function Settings() {
                 <input
                   id="s3_region"
                   type="text"
-                  className="form-input"
+                  className="form-input mono"
                   value={currentSettings.s3_region || 'us-east-1'}
                   onChange={(e) => handleInputChange('s3_region', e.target.value)}
                   placeholder="us-east-1"
@@ -1243,7 +1243,7 @@ export default function Settings() {
                 <input
                   id="s3_prefix"
                   type="text"
-                  className="form-input"
+                  className="form-input mono"
                   value={currentSettings.s3_prefix || 'pipeline-logs'}
                   onChange={(e) => handleInputChange('s3_prefix', e.target.value)}
                   placeholder="pipeline-logs"
@@ -1495,7 +1495,7 @@ export default function Settings() {
                 <input
                   id="smtp_host"
                   type="text"
-                  className="form-input"
+                  className="form-input mono"
                   value={currentSettings.smtp_host || ''}
                   onChange={(e) => handleInputChange('smtp_host', e.target.value)}
                   placeholder="smtp.example.com"
@@ -1512,7 +1512,7 @@ export default function Settings() {
                   type="number"
                   min="1"
                   max="65535"
-                  className="form-input"
+                  className="form-input mono"
                   value={currentSettings.smtp_port}
                   onChange={(e) => handleInputChange('smtp_port', e.target.value)}
                   placeholder="587"
@@ -1558,7 +1558,7 @@ export default function Settings() {
                 <input
                   id="smtp_from"
                   type="email"
-                  className="form-input"
+                  className="form-input mono"
                   value={currentSettings.smtp_from || ''}
                   onChange={(e) => handleInputChange('smtp_from', e.target.value)}
                   placeholder="noreply@example.com"
@@ -1587,7 +1587,7 @@ export default function Settings() {
                   <button
                     onClick={() => testEmailMutation.mutate()}
                     disabled={!currentSettings.email_enabled || testEmailMutation.isPending || fieldLocked}
-                    className="btn btn-primary"
+                    className="btn btn-secondary"
                   >
                   <LuMail />
                   {testEmailMutation.isPending ? t('settings.sendingLabel') : t('settings.testEmailSend')}
@@ -1626,7 +1626,7 @@ export default function Settings() {
                 <input
                   id="teams_webhook_url"
                   type="url"
-                  className="form-input"
+                  className="form-input mono"
                   value={currentSettings.teams_webhook_url || ''}
                   onChange={(e) => handleInputChange('teams_webhook_url', e.target.value)}
                   placeholder="https://outlook.office.com/webhook/..."
@@ -1639,7 +1639,7 @@ export default function Settings() {
                   <button
                     onClick={() => testTeamsMutation.mutate()}
                     disabled={!currentSettings.teams_enabled || testTeamsMutation.isPending || fieldLocked}
-                    className="btn btn-primary"
+                    className="btn btn-secondary"
                   >
                     <LuUsers />
                     {testTeamsMutation.isPending ? t('settings.sendingLabel') : t('settings.testTeamsSend')}

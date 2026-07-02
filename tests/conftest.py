@@ -18,6 +18,7 @@ os.environ["TESTING"] = "1"
 
 import pytest
 from pathlib import Path
+from sqlalchemy.pool import StaticPool
 from sqlmodel import SQLModel, create_engine, Session
 from fastapi.testclient import TestClient
 
@@ -33,10 +34,14 @@ def test_db():
     Yields:
         Engine: SQLModel Engine für Test-Datenbank
     """
-    # In-Memory SQLite-Datenbank für Tests
+    # In-Memory SQLite-Datenbank für Tests.
+    # StaticPool ist Pflicht: Ohne ihn öffnet der Pool weitere Connections,
+    # und jede neue Connection auf ":memory:" sieht eine LEERE Datenbank
+    # ("no such table"), sobald z.B. der TestClient-Thread beteiligt ist.
     test_engine = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
         echo=False
     )
     

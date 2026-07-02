@@ -37,7 +37,7 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError && this.state.error) {
       if (this.props.fallback) return this.props.fallback
       return (
-        <div style={{ padding: '1.5rem', textAlign: 'center', color: '#aaa' }}>
+        <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
           <p>{t('errors.generic')}</p>
           <button
             type="button"

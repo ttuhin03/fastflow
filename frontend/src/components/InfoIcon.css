@@ -2,16 +2,16 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-text-secondary, #666);
+  color: var(--color-text-secondary);
   cursor: help;
   margin-left: 0.25rem;
   vertical-align: middle;
   font-size: 1rem;
-  transition: color var(--transition-base, 0.2s ease);
+  transition: color var(--transition-base);
 }
 
 .info-icon:hover {
-  color: var(--color-primary, #007bff);
+  color: var(--color-primary-light);
 }
 
 .info-icon svg {

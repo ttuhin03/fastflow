@@ -5,6 +5,10 @@
   gap: var(--spacing-lg);
   min-height: 0;
   flex: 1;
+  /* Content column centered ~900px for form readability (mockup) */
+  max-width: 940px;
+  width: 100%;
+  margin: 0 auto;
 }
 
 /* Segmented control style: floating pill tray */
@@ -17,12 +21,11 @@
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 4px;
+  gap: 3px;
+  padding: 3px;
   background-color: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-full);
-  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius-md);
   width: fit-content;
   max-width: 100%;
   overflow-x: auto;
@@ -30,16 +33,29 @@
   -webkit-overflow-scrolling: touch;
 }
 
+/* Active indicator: subtle raised surface (not a full accent fill).
+   The active pill carries an accent-text + a 2px inset-left accent bar. */
 .settings-nav-indicator {
   position: absolute;
-  top: 4px;
-  height: calc(100% - 8px);
-  border-radius: var(--radius-full);
-  background-color: var(--color-primary);
-  box-shadow: var(--shadow-sm);
+  top: 3px;
+  height: calc(100% - 6px);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface-3);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.30);
   pointer-events: none;
   z-index: 0;
-  transition: left 0.25s ease-out, width 0.25s ease-out;
+  transition: left 0.25s var(--ease-out), width 0.25s var(--ease-out);
+}
+
+.settings-nav-indicator::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 5px;
+  bottom: 5px;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+  background: var(--color-primary);
 }
 
 .settings-nav-tray::-webkit-scrollbar {
@@ -52,45 +68,43 @@
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-sm);
-  padding: 10px 18px;
+  height: 32px;
+  padding: 0 14px;
   border: none;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--color-text-secondary);
+  color: var(--color-text-tertiary);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   cursor: pointer;
-  transition: background-color var(--transition-base), color var(--transition-base), transform var(--transition-fast);
+  transition: color var(--transition-fast), background-color var(--transition-fast);
   white-space: nowrap;
   flex-shrink: 0;
 }
 
 .settings-nav-pill:hover {
-  background-color: var(--color-surface-variant);
   color: var(--color-text-primary);
 }
 
 .settings-nav-pill.active {
   background: transparent;
-  color: white;
+  color: var(--color-primary-light);
 }
 
 .settings-nav-pill.active:hover {
   background: transparent;
-}
-
-.settings-nav-pill:active {
-  transform: scale(0.98);
+  color: var(--color-primary-light);
 }
 
 .settings-nav-pill svg {
   flex-shrink: 0;
-  font-size: 1.125rem;
-  opacity: 0.9;
+  font-size: 1rem;
+  opacity: 0.85;
 }
 
 .settings-nav-pill.active svg {
   opacity: 1;
+  color: var(--color-primary);
 }
 
 .settings-content {
@@ -132,7 +146,7 @@
 .settings-edit-lock-btn:hover {
   background: var(--color-surface-variant);
   color: var(--color-text-primary);
-  border-color: color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+  border-color: var(--color-border-light);
 }
 
 .settings-edit-lock-btn:focus-visible {
@@ -146,8 +160,8 @@
 
 .settings-edit-lock-btn.is-unlocked {
   color: var(--color-primary);
-  border-color: color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
-  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+  border-color: var(--color-accent-border);
+  background: var(--color-accent-subtle);
 }
 
 .settings-content.settings-embedded {
@@ -410,13 +424,7 @@ textarea.form-input {
   border: 3px solid var(--color-surface-variant);
   border-top-color: var(--color-primary);
   border-radius: var(--radius-full);
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: ff-spin 0.8s linear infinite;
 }
 
 /* Modal Styles */
@@ -427,30 +435,22 @@ textarea.form-input {
   right: 0;
   bottom: 0;
   background-color: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
   padding: var(--spacing-lg);
 }
 
 .modal-content {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--color-surface) 102%, white) 0%,
-    var(--color-surface) 100%
-  );
-  border: 1px solid color-mix(in srgb, var(--color-border) 55%, transparent);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   max-width: 600px;
   width: 100%;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 24px 48px rgba(0, 0, 0, 0.4),
-    0 0 0 1px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-xl);
   display: flex;
   flex-direction: column;
 }
@@ -587,7 +587,7 @@ textarea.form-input {
 }
 
 .executor-kubernetes {
-  color: #326ce5;
+  color: var(--color-primary);
 }
 
 /* Account linking & misc layout (replaces inline styles) */
@@ -674,7 +674,7 @@ textarea.form-input {
 
 .form-input--cron {
   max-width: 12rem;
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-mono);
 }
 
 .settings-section--dev {

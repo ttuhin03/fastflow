@@ -74,37 +74,21 @@ export default function CalendarHeatmap({ dailyStats, days = 365, showTitle = tr
     return daysArray
   }, [days, statsMap])
 
-  // Berechne Farbe für einen Tag
-  const getDayColor = (day: DayData): string => {
-    if (day.total_runs === 0) {
-      return '#666' // Gray für keine Runs
-    }
-    
-    // Grün wenn Erfolgsrate >= 80% oder keine Fehler
-    if (day.success_rate >= 80 || day.failed_runs === 0) {
-      // Intensität basierend auf Anzahl Runs
-      const intensity = Math.min(day.total_runs / 10, 1) // Max 10 Runs = volle Intensität
-      const lightness = 50 + (intensity * 30) // 50-80% lightness
-      return `hsl(120, 60%, ${lightness}%)` // Grün
-    }
-    
-    // Rot wenn Erfolgsrate < 80% oder mehr Fehler als Erfolge
-    if (day.success_rate < 80 || day.failed_runs > day.successful_runs) {
-      // Intensität basierend auf Fehlerrate
-      const failureRatio = day.failed_runs / day.total_runs
-      const intensity = Math.min(failureRatio * 2, 1) // Max bei 50% Fehlerrate
-      const lightness = 50 + (intensity * 30)
-      return `hsl(0, 70%, ${lightness}%)` // Rot
-    }
-    
-    return '#666'
+  // Green-ramp heat level (0..4) for a day. Failures pull toward the "failed" tint.
+  const getDayHeat = (day: DayData): number => {
+    if (day.total_runs === 0) return 0
+    // Days with significant failures render as a distinct "failed" cell.
+    if (day.success_rate < 80 && day.failed_runs > day.successful_runs) return -1
+    const runs = day.total_runs
+    if (runs >= 10) return 4
+    if (runs >= 5) return 3
+    if (runs >= 2) return 2
+    return 1
   }
 
-  // Berechne CSS-Klasse für Intensität
-  const getDayIntensity = (day: DayData): string => {
-    if (day.total_runs === 0) return 'intensity-0'
-    const runs = Math.min(day.total_runs, 10)
-    return `intensity-${Math.floor(runs / 2)}`
+  const getDayHeatClass = (day: DayData): string => {
+    const heat = getDayHeat(day)
+    return heat < 0 ? 'heat-fail' : `heat-${heat}`
   }
 
   const updateTooltipPosition = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
@@ -191,29 +175,30 @@ export default function CalendarHeatmap({ dailyStats, days = 365, showTitle = tr
       <div className="calendar-heatmap-header">
         {showTitle && <h3>{t('dashboard.runHistory')}</h3>}
         <div className="calendar-legend">
-          <span className="legend-label">Weniger</span>
+          <span className="legend-label">{t('calendar.less', 'Less')}</span>
           <div className="legend-colors">
-            <div className="legend-color" style={{ backgroundColor: '#666' }}></div>
-            <div className="legend-color" style={{ backgroundColor: 'hsl(120, 60%, 80%)' }}></div>
-            <div className="legend-color" style={{ backgroundColor: 'hsl(120, 60%, 60%)' }}></div>
-            <div className="legend-color" style={{ backgroundColor: 'hsl(120, 60%, 40%)' }}></div>
+            <div className="legend-color heat-0"></div>
+            <div className="legend-color heat-1"></div>
+            <div className="legend-color heat-2"></div>
+            <div className="legend-color heat-3"></div>
+            <div className="legend-color heat-4"></div>
           </div>
-          <span className="legend-label">Mehr</span>
+          <span className="legend-label">{t('calendar.more', 'More')}</span>
         </div>
       </div>
       
       <div className="calendar-grid">
         <div className="calendar-week-labels">
-          <span>Mo</span>
-          <span>Mi</span>
-          <span>Fr</span>
+          <span>{t('calendar.mon', 'Mon')}</span>
+          <span>{t('calendar.wed', 'Wed')}</span>
+          <span>{t('calendar.fri', 'Fri')}</span>
         </div>
         
         <div className="calendar-weeks-container">
           <div className="calendar-month-labels">
             {monthLabels.map(({ weekIndex, month }) => {
-              // Berechne Position basierend auf Wochen-Index (11px Breite + 0.25rem gap)
-              const weekWidth = 11 + 4 // 11px cell + 4px gap (0.25rem)
+              // Position based on week index (11px cell + 3px gap)
+              const weekWidth = 11 + 3
               const leftOffset = weekIndex * weekWidth
               
               return (
@@ -239,14 +224,12 @@ export default function CalendarHeatmap({ dailyStats, days = 365, showTitle = tr
                     return <div key={dayIndex} className="calendar-day empty"></div>
                   }
                   
-                  const color = getDayColor(day)
                   const isHovered = hoveredDay === day.dateStr
-                  
+
                   return (
                     <div
                       key={day.dateStr}
-                      className={`calendar-day ${getDayIntensity(day)} ${isHovered ? 'hovered' : ''}`}
-                      style={{ backgroundColor: color }}
+                      className={`calendar-day ${getDayHeatClass(day)} ${isHovered ? 'hovered' : ''}`}
                       onMouseEnter={(e) => handleDayHover(e, day.dateStr)}
                       onMouseMove={updateTooltipPosition}
                       onMouseLeave={handleDayLeave}

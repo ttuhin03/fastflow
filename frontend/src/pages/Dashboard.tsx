@@ -1,11 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
 import { showError, showSuccess, showConfirm } from '../utils/toast'
 import { LuRefreshCw } from 'react-icons/lu'
-import InfoIcon from '../components/InfoIcon'
 import RunStatusCircles from '../components/RunStatusCircles'
 import StorageStats from '../components/StorageStats'
 import CalendarHeatmap from '../components/CalendarHeatmap'
@@ -13,6 +13,7 @@ import WarningsBox from '../components/WarningsBox'
 import SystemStatus from '../components/SystemStatus'
 import ConcurrencyStatus from '../components/ConcurrencyStatus'
 import SummaryStatsCard from '../components/SummaryStatsCard'
+import Sparkline from '../components/Sparkline'
 import './Dashboard.css'
 
 interface Pipeline {
@@ -45,36 +46,9 @@ interface DailyStat {
   success_rate: number
 }
 
-/** Inline SVG sparkline from an array of numbers */
-function Sparkline({ values, color = 'var(--color-primary)' }: { values: number[]; color?: string }) {
-  if (!values || values.length < 2) return null
-  const w = 92
-  const h = 34
-  const min = Math.min(...values)
-  const max = Math.max(...values)
-  const range = max - min || 1
-  const pts = values.map((v, i) => {
-    const x = (i / (values.length - 1)) * w
-    const y = h - ((v - min) / range) * (h - 4) - 2
-    return `${x.toFixed(1)},${y.toFixed(1)}`
-  })
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="stat-spark" aria-hidden>
-      <polyline
-        points={pts.join(' ')}
-        fill="none"
-        stroke={color}
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        opacity="0.9"
-      />
-    </svg>
-  )
-}
-
 export default function Dashboard() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { isReadonly } = useAuth()
   const pipelinesInterval = useRefetchInterval(30_000, 120_000)
@@ -189,7 +163,7 @@ export default function Dashboard() {
           </div>
           <div className="stat-card__bottom">
             <p className="stat-value">{pipelines?.length || 0}</p>
-            <Sparkline values={(pipelines || []).map((_, i) => i + 1)} color="var(--chart-1)" />
+            {sparkRuns.length > 1 && <Sparkline data={sparkRuns} color="var(--chart-1)" />}
           </div>
         </div>
 
@@ -198,13 +172,13 @@ export default function Dashboard() {
             <p className="stat-label">{t('dashboard.totalRuns')}</p>
             {runsTrend && runsDelta != null && (
               <span className={`stat-trend ${runsTrend}`}>
-                {runsTrend === 'up' ? '↑' : '↓'} +{runsDelta}%
+                {runsTrend === 'up' ? '↑' : '↓'} {runsTrend === 'up' ? '+' : '-'}{runsDelta}%
               </span>
             )}
           </div>
           <div className="stat-card__bottom">
             <p className="stat-value">{totalRuns.toLocaleString()}</p>
-            <Sparkline values={sparkRuns} color="var(--chart-3)" />
+            {sparkRuns.length > 1 && <Sparkline data={sparkRuns} color="var(--chart-3)" />}
           </div>
         </div>
 
@@ -217,7 +191,7 @@ export default function Dashboard() {
           </div>
           <div className="stat-card__bottom">
             <p className="stat-value success">{totalSuccessful.toLocaleString()}</p>
-            <Sparkline values={sparkSuccess} color="var(--color-success)" />
+            {sparkSuccess.length > 1 && <Sparkline data={sparkSuccess} color="var(--color-success)" />}
           </div>
         </div>
 
@@ -230,7 +204,7 @@ export default function Dashboard() {
           </div>
           <div className="stat-card__bottom">
             <p className="stat-value">{successRate}{typeof successRate === 'string' && successRate !== '—' ? '%' : ''}</p>
-            <Sparkline values={sparkRate} color="var(--chart-2)" />
+            {sparkRate.length > 1 && <Sparkline data={sparkRate} color="var(--chart-2)" />}
           </div>
         </div>
       </div>
@@ -273,35 +247,79 @@ export default function Dashboard() {
         <h3 className="section-title">{t('nav.pipelines')}</h3>
         {pipelines && pipelines.length > 0 ? (
           <div className="pipeline-grid">
-            {pipelines.map((pipeline, index) => (
-              <div
-                key={pipeline.name}
-                className="pipeline-card"
-                style={{ animationDelay: `${index * 0.04}s` }}
-              >
-                <div className="pipeline-card__head">
-                  <h4 className="pipeline-name">{pipeline.name}</h4>
-                  <span className={`badge ${pipeline.enabled ? 'badge-success' : 'badge-secondary'}`}>
-                    {pipeline.enabled ? t('common.active') : t('common.inactive')}
-                  </span>
-                </div>
-                <div className="pipeline-recent-runs">
-                  <span className="recent-runs-label">
-                    {t('dashboard.lastRuns')}
-                    <InfoIcon content={t('dashboard.lastRunsTooltip')} />
-                  </span>
-                  <RunStatusCircles pipelineName={pipeline.name} />
-                </div>
-                <div className="pipeline-card__foot">
-                  <span>{pipeline.total_runs} runs</span>
-                  {pipeline.total_runs > 0 && (
-                    <span style={{ color: 'var(--color-success-text)' }}>
-                      {Math.round((pipeline.successful_runs / pipeline.total_runs) * 100)}% ok
+            {pipelines.map((pipeline, index) => {
+              const successPct =
+                pipeline.total_runs > 0
+                  ? Math.round((pipeline.successful_runs / pipeline.total_runs) * 100)
+                  : 0
+              const barClass = successPct >= 90 ? 'success' : successPct >= 70 ? 'warning' : 'error'
+              const dotState = !pipeline.enabled
+                ? 'disabled'
+                : successPct >= 90 || pipeline.total_runs === 0
+                  ? 'success'
+                  : successPct >= 70
+                    ? 'degraded'
+                    : 'error'
+              return (
+                <div
+                  key={pipeline.name}
+                  className="pipeline-card"
+                  style={{ animationDelay: `${index * 0.04}s` }}
+                  onClick={() => navigate(`/pipelines/${encodeURIComponent(pipeline.name)}`)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      navigate(`/pipelines/${encodeURIComponent(pipeline.name)}`)
+                    }
+                  }}
+                >
+                  <div className="pipeline-card__head">
+                    <div className="pipeline-card__title">
+                      <span className={`status-dot ${dotState}`} aria-hidden />
+                      <span className="pipeline-name">{pipeline.name}</span>
+                    </div>
+                    {/* TODO(redesign): needs backend — no per-pipeline enable/disable endpoint yet */}
+                    <label
+                      className="toggle"
+                      onClick={(e) => e.stopPropagation()}
+                      title={t('dashboard.pipelineActiveTooltip')}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={pipeline.enabled}
+                        readOnly
+                        disabled={isReadonly}
+                        aria-label={t('dashboard.pipelineActiveTooltip')}
+                      />
+                      <span className="track" />
+                      <span className="knob" />
+                    </label>
+                  </div>
+
+                  <div className="pipeline-card__rate">
+                    <div className="progress">
+                      <div
+                        className={`progress__fill ${barClass}`}
+                        style={{ width: `${successPct}%` }}
+                      />
+                    </div>
+                    <span className="pipeline-card__pct mono">{successPct}%</span>
+                  </div>
+
+                  <RunStatusCircles pipelineName={pipeline.name} variant="strip" count={12} />
+
+                  <div className="pipeline-card__foot">
+                    {/* TODO(redesign): needs backend — cron/next-run not in pipeline list API */}
+                    <span className="mono">{t('dashboard.scheduleUnknown', '—')}</span>
+                    <span className="mono pipeline-card__next">
+                      {t('dashboard.nextRunUnknown', 'next —')}
                     </span>
-                  )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         ) : (
           <div className="empty-state">
