@@ -38,7 +38,7 @@ Only in **`PIPELINE_EXECUTOR=docker`** mode: The orchestrator does **not** talk 
 
 ## Git as source of truth
 
-There is **no** manual upload of pipelines and **no** pipeline-specific image build. The only source for pipeline code and configuration is your **Git repository**. Push → sync (webhook or auto-sync) → code is available in the orchestrator. Rollback = `git revert`.
+There is **no** manual upload of pipelines and **no** pipeline-specific image build. The only source for pipeline code and configuration is your **Git repository**. Push → sync (auto-sync or manual sync) → code is available in the orchestrator. Rollback = `git revert`.
 
 ## Pipeline name
 

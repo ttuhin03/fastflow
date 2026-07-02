@@ -70,16 +70,16 @@ Optional metadata file for resource limits, timeout, retries, description, tags,
 | Field | Type | Description |
 |------|-----|--------------|
 | `timeout` | Integer, optional | Timeout in seconds (overrides global `CONTAINER_TIMEOUT`). `0` = no timeout (e.g. for long-running daemons). Per schedule, a separate value can be set in `schedules[].timeout`. |
-| `retry_attempts` | Integer, optional | Number of retries on failure (overrides global `RETRY_ATTEMPTS`). **Note:** For notebook pipelines, **pipeline-level retries** are not executed; only [cell retries](/docs/pipelines/notebook-pipelines#zellen-retries-das-cells-array) in `cells` or cell metadata apply. |
-| `retry_strategy` | Object, optional | Wait strategy between retries. See [Retry strategies](#retry-strategien). Applies only to script pipelines. |
+| `retry_attempts` | Integer, optional | Number of retries on failure (overrides global `RETRY_ATTEMPTS`). **Note:** For notebook pipelines, **pipeline-level retries** are not executed; only [cell retries](/docs/pipelines/notebook-pipelines#cell-retries-the-cells-array) in `cells` or cell metadata apply. |
+| `retry_strategy` | Object, optional | Wait strategy between retries. See [Retry strategies](#retry-strategies). Applies only to script pipelines. |
 | `enabled` | Boolean, optional | Pipeline enabled/disabled (default: `true`). |
 | `python_version` | String, optional | Python version for `uv run --python` – **any per pipeline** (e.g. `"3.10"`, `"3.11"`, `"3.12"`). Each pipeline can use a different version. If omitted: `DEFAULT_PYTHON_VERSION` (default 3.11). |
 
-**Example in the pipeline template:** The **`timeout_example`** pipeline in the [fastflow-pipeline-template](https://github.com/ttuhin03/fastflow-pipeline-template) demonstrates timeout per pipeline: `pipeline.json` has `"timeout": 10`, the script runs 25 seconds – the run is terminated with status **INTERRUPTED** after 10 seconds.
+**Example in the pipeline template:** The **`timeout_example`** pipeline in the [fastflow-pipeline-template](https://github.com/ttuhin03/fastflow-pipeline-template) demonstrates timeout per pipeline: `pipeline.json` has `"timeout": 10`, the script runs 25 seconds – the run is terminated after 10 seconds and marked as **FAILED** (error type: timeout).
 
 ### Notebook pipelines: cell retries (`cells`)
 
-Relevant only when **`type`** = **`"notebook"`**. See in detail [Notebook Pipelines – Cell retries](/docs/pipelines/notebook-pipelines#zellen-retries-das-cells-array).
+Relevant only when **`type`** = **`"notebook"`**. See in detail [Notebook Pipelines – Cell retries](/docs/pipelines/notebook-pipelines#cell-retries-the-cells-array).
 
 | Field | Type | Description |
 |------|-----|--------------|
@@ -96,9 +96,9 @@ You can define the schedule **directly in pipeline.json**. On orchestrator start
 | `schedule_start` | String, optional | ISO date/time – start of the period during which the schedule runs (inclusive). |
 | `schedule_end` | String, optional | ISO date/time – end of the period (inclusive). |
 
-If both `schedule_cron` and `schedule_interval_seconds` are set, cron takes precedence. Without `schedule_start`/`schedule_end`, the schedule runs indefinitely.
-
 | `run_once_at` | String, optional | ISO date/time – run the pipeline once at this time. On Git sync/startup, a corresponding scheduler job (type DATE) is created. Must be in the future. |
+
+If both `schedule_cron` and `schedule_interval_seconds` are set, cron takes precedence. Without `schedule_start`/`schedule_end`, the schedule runs indefinitely.
 
 ### Multiple run configurations (`schedules`)
 
@@ -122,7 +122,7 @@ If you need **multiple scheduled runs per pipeline** with different cron/interva
 | `mem_soft_limit` | String, optional | RAM soft limit for monitoring for this schedule. |
 | `timeout` | Integer, optional | Timeout in seconds for this schedule (`0` = unlimited). Overrides pipeline `timeout`. |
 | `retry_attempts` | Integer, optional | Number of retry attempts for this schedule. Overrides pipeline `retry_attempts`. |
-| `retry_strategy` | Object, optional | Retry strategy for this schedule (see [Retry strategies](#retry-strategien)). Overrides pipeline `retry_strategy`. |
+| `retry_strategy` | Object, optional | Retry strategy for this schedule (see [Retry strategies](#retry-strategies)). Overrides pipeline `retry_strategy`. |
 | `webhook_key` | String, optional | Separate webhook key for this schedule. If set: `POST /api/webhooks/{pipeline_name}/{webhook_key}` starts a run with **this** run configuration (run_config_id = `id`). Each `webhook_key` may appear only **once** per pipeline (pipeline level and all schedules combined). |
 
 **Example:**
@@ -156,7 +156,6 @@ If you need **multiple scheduled runs per pipeline** with different cron/interva
 | `restart_on_crash` | Boolean, optional | If `true`: pipeline is automatically restarted after FAILED (after `restart_cooldown` seconds). |
 | `restart_cooldown` | Integer, optional | Seconds between stop and restart (default: 60). Prevents restart loops. |
 | `restart_interval` | String, optional | Regular restart. Cron expression (e.g. `"0 3 * * *"` = daily at 03:00) or interval in seconds. Terminates running run, waits cooldown, starts again. |
-
 | `max_instances` | Integer, optional | Maximum number of concurrent runs of this pipeline. If set, a new start is rejected once the number of PENDING/RUNNING runs reaches the limit. Without limit, only global `MAX_CONCURRENT_RUNS` applies. |
 
 ### Pipeline chaining (downstream triggers)
@@ -276,7 +275,7 @@ Fastflow sets `FASTFLOW_ROUTE_FILE` as an env var with the path to a writable fi
 
 | Field | Type | Description |
 |------|-----|--------------|
-| `default_env` | Object, optional | Default env vars on every run. Merged with UI env vars (UI takes precedence). **Do not put secrets here** – use [Secrets management](/docs/deployment/CONFIGURATION) in the UI. |
+| `default_env` | Object, optional | Default env vars on every run. Merged with UI env vars (UI takes precedence). **Do not put secrets here** – use `encrypted_env` (see next row). |
 | `encrypted_env` | Object, optional | **Encrypted** env vars (key → ciphertext). Values are encrypted with the server `ENCRYPTION_KEY`; plaintext never in the file. In the UI under "Secrets" → "Encrypt for pipeline.json", enter plaintext, generate ciphertext, and **manually** enter it here. At runtime the server decrypts and provides values to the pipeline environment. |
 
 **Example `encrypted_env`:** Encrypt plaintext in the UI, then enter in pipeline.json:
