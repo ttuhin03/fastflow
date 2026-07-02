@@ -395,32 +395,11 @@ Returns all scheduled jobs.
 
 Returns a job by ID.
 
-### `POST /api/scheduler/jobs`
-
-Creates a new scheduled job.
-
-**Request body:**
-```json
-{
-  "pipeline_name": "pipeline_a",
-  "trigger_type": "CRON",
-  "trigger_value": "0 0 * * *",
-  "enabled": true
-}
-```
-
-**Trigger-Typen:**
-- `CRON`: Cron expression (e.g. `"0 0 * * *"` for daily at midnight)
-- `INTERVAL`: Interval in seconds (e.g. `"3600"` for hourly)
-
-**Errors:**
-- `404`: Pipeline not found
-- `400`: Invalid trigger expression
-- `503`: Scheduler not available
+> **Note:** Jobs are defined declaratively in `pipeline.json` (`schedules` array) and synced automatically on Git sync / startup. There is no API endpoint to create or delete jobs — edit `pipeline.json` instead. The API can only update existing jobs (e.g. enable/disable).
 
 ### `PUT /api/scheduler/jobs/{job_id}`
 
-Updates an existing job.
+Updates an existing job. All fields are optional; only provided fields are changed.
 
 **Request body:**
 ```json
@@ -428,15 +407,30 @@ Updates an existing job.
   "pipeline_name": "pipeline_b",
   "trigger_type": "INTERVAL",
   "trigger_value": "1800",
-  "enabled": false
+  "enabled": false,
+  "start_date": "2026-01-01",
+  "end_date": "2026-12-31",
+  "run_config_id": "prod"
 }
 ```
 
-### `DELETE /api/scheduler/jobs/{job_id}`
+**Trigger types:**
+- `CRON`: Cron expression (e.g. `"0 0 * * *"` for daily at midnight)
+- `INTERVAL`: Interval in seconds (e.g. `"3600"` for hourly)
 
-Deletes a job.
+**Errors:**
+- `404`: Job or pipeline not found
+- `400`: Invalid trigger expression
+- `503`: Scheduler not available
 
-**Response:** `204 No Content`
+### `GET /api/scheduler/jobs/{job_id}/next-runs`
+
+Returns the next planned run times for a job.
+
+**Query parameters:**
+- `count` (optional, default: 5, max: 20): Number of upcoming run times
+
+**Response:** `{ "next_runs": ["2026-03-01T09:00:00+00:00", "..."] }`
 
 ### `GET /api/scheduler/jobs/{job_id}/runs`
 
@@ -451,22 +445,42 @@ Returns run history for a job.
 
 ### `GET /api/secrets`
 
-Returns all secrets.
+Returns secrets stored in the database (values decrypted), optionally paginated.
+
+**Query parameters:**
+- `limit` (optional, max: 500): Maximum number of secrets per page (without it: all)
+- `offset` (optional, default: 0): Offset for pagination
+
+**Response:**
+```json
+{
+  "secrets": [
+    {
+      "key": "API_KEY",
+      "value": "secret-value",
+      "is_parameter": false,
+      "created_at": "2024-01-15T10:00:00",
+      "updated_at": "2024-01-15T10:00:00"
+    }
+  ],
+  "total": 1
+}
+```
+
+**Note:** Secrets are stored encrypted but returned decrypted. Parameters (`is_parameter: true`) are not encrypted.
+
+> **Note:** Secrets are managed declaratively via `pipeline.json` (`encrypted_env` / `default_env`); there are no API endpoints to create, update, or delete secrets. Use `POST /api/secrets/encrypt-for-pipeline` to encrypt values for `pipeline.json`.
+
+### `GET /api/secrets/from-pipelines`
+
+Returns all env keys defined in the pipelines' `pipeline.json` files (`encrypted_env`, `default_env`) — keys only, no values.
 
 **Response:**
 ```json
 [
-  {
-    "key": "API_KEY",
-    "value": "secret-value",
-    "is_parameter": false,
-    "created_at": "2024-01-15T10:00:00",
-    "updated_at": "2024-01-15T10:00:00"
-  }
+  { "key": "API_KEY", "pipeline": "data_processor", "source": "encrypted_env", "run_config_id": null }
 ]
 ```
-
-**Note:** Secrets are stored encrypted but returned decrypted. Parameters (`is_parameter: true`) are not encrypted.
 
 ### `POST /api/secrets/encrypt-for-pipeline`
 
@@ -474,45 +488,7 @@ Encrypts plaintext with the server `ENCRYPTION_KEY` for manual entry in `pipelin
 
 **Request body:** `{ "value": "plaintext" }`
 
-### `POST /api/secrets`
-
-Creates a new secret.
-
-**Request body:**
-```json
-{
-  "key": "API_KEY",
-  "value": "secret-value",
-  "is_parameter": false
-}
-```
-
-**Errors:**
-- `409`: Secret already exists (use PUT to update)
-
-### `PUT /api/secrets/{key}`
-
-Updates an existing secret.
-
-**Request body:**
-```json
-{
-  "value": "new-secret-value",
-  "is_parameter": false
-}
-```
-
-### `DELETE /api/secrets/{key}`
-
-Deletes a secret.
-
-**Response:**
-```json
-{
-  "message": "Secret 'API_KEY' deleted successfully.",
-  "key": "API_KEY"
-}
-```
+**Response:** `{ "encrypted": "gAAAAA..." }`
 
 ---
 
@@ -597,76 +573,57 @@ Returns sync logs.
 **Query parameters:**
 - `limit` (optional, default: 100): Maximum number of log entries
 
-### GitHub Apps Configuration
+### Repository Configuration
 
-#### `GET /api/sync/github-config`
+#### `GET /api/sync/repo-config`
 
-Returns current GitHub Apps configuration.
+Returns the sync repository configuration (without token/deploy key). Environment variables `GIT_REPO_URL` / `GIT_SYNC_TOKEN` take precedence over DB values.
 
-**Response:**
-```json
-{
-  "app_id": "123456",
-  "installation_id": "789012",
-  "configured": true,
-  "has_private_key": true
-}
-```
+#### `POST /api/sync/repo-config`
 
-**Note:** Private key is NOT returned for security reasons.
-
-#### `POST /api/sync/github-config`
-
-Saves GitHub Apps configuration.
+Saves the repository configuration (write access required).
 
 **Request body:**
 ```json
 {
-  "app_id": "123456",
-  "installation_id": "789012",
-  "private_key": "-----BEGIN RSA PRIVATE KEY-----\n..."
+  "repo_url": "https://github.com/org/repo.git",
+  "token": "ghp_... (optional, for private repos via HTTPS)",
+  "deploy_key": "-----BEGIN OPENSSH PRIVATE KEY----- ... (required for SSH URLs)"
 }
 ```
 
-#### `POST /api/sync/github-config/test`
+#### `DELETE /api/sync/repo-config`
 
-Tests GitHub Apps configuration.
+Deletes the repository configuration from the DB (environment values remain untouched). Write access required.
+
+#### `POST /api/sync/repo-config/generate-deploy-key`
+
+Generates an SSH deploy key server-side for an SSH repository URL and stores the configuration. Returns the public key for entry in the Git host (e.g. GitHub → Deploy Keys). Write access required.
+
+**Request body:**
+```json
+{
+  "repo_url": "git@github.com:org/repo.git",
+  "branch": "main",
+  "pipelines_subdir": "pipelines"
+}
+```
+
+#### `POST /api/sync/repo-config/test`
+
+Tests the repository configuration via `git ls-remote`. Write access required.
 
 **Response:**
 ```json
 {
   "success": true,
-  "message": "Token generated successfully"
+  "message": "Connection successful"
 }
 ```
 
-#### `DELETE /api/sync/github-config`
+#### `POST /api/sync/clear-pipelines`
 
-Deletes GitHub Apps configuration.
-
-### GitHub App Manifest Flow
-
-**Requires admin rights** (authorize and exchange).
-
-#### `GET /api/sync/github-manifest/authorize`
-
-Generates HTML form for GitHub App Manifest flow. Requires admin login.
-
-#### `GET /api/sync/github-manifest/callback`
-
-Callback endpoint for GitHub App Manifest flow (called by GitHub).
-
-#### `POST /api/sync/github-manifest/exchange`
-
-Exchanges manifest code for GitHub App credentials. Requires admin login.
-
-**Request body:**
-```json
-{
-  "code": "temporary-code",
-  "state": "state-token"
-}
-```
+Completely empties the pipelines directory (incl. `.git`), so a new repository can be cloned via sync. **Requires admin rights.**
 
 ---
 
@@ -877,6 +834,41 @@ curl -X POST http://localhost:8000/api/webhooks/pipeline_a/my-secret-key \
   -H "Content-Type: application/json" \
   -d '{"env_vars":{"API_KEY":"secret-value","LOG_LEVEL":"DEBUG"},"parameters":{"input_file":"data.csv"}}'
 ```
+
+---
+
+## Notifications (script API)
+
+### `POST /api/notifications/send`
+
+Sends an email and/or Teams notification — intended for scripts/CI. Authentication is via an API key in the `X-Notification-Key` header (keys are created and managed in **Settings → Notifications**). The feature must be enabled in the settings.
+
+**Request body:**
+```json
+{
+  "subject": "Nightly import finished",
+  "body": "1234 records processed.",
+  "recipients": ["team@example.com"],
+  "channels": ["email", "teams"]
+}
+```
+
+- `recipients` (optional): Email recipients; default: `EMAIL_RECIPIENTS`
+- `channels` (optional): `["email", "teams"]`; default: both, if configured
+
+**Example:**
+```bash
+curl -X POST http://localhost:8000/api/notifications/send \
+  -H "Content-Type: application/json" \
+  -H "X-Notification-Key: <api-key>" \
+  -d '{"subject":"Job done","body":"All good."}'
+```
+
+**Errors:**
+- `503`: Notification API disabled (enable in settings)
+- `401`: Invalid or missing API key
+- `400`: Neither email nor Teams configured/selected, or `subject`/`body` missing
+- `429`: Rate limit exceeded (configurable, default: 30 requests/minute per IP)
 
 ---
 

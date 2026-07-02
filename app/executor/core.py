@@ -737,7 +737,9 @@ async def _run_container_task(
                 pipeline,
                 run_id,
                 session,
-                env_vars
+                env_vars,
+                cpu_soft_limit=effective_cpu_soft_limit,
+                mem_soft_limit=effective_mem_soft_limit,
             )
         )
         
@@ -760,6 +762,9 @@ async def _run_container_task(
         
         # Container-Wait mit Timeout
         if timeout:
+            # container.wait(timeout=...) wirft bei Ablauf requests.exceptions.ReadTimeout
+            # (bzw. ConnectionError mit ReadTimeoutError) — nicht asyncio.TimeoutError.
+            import requests.exceptions
             try:
                 exit_code = await asyncio.wait_for(
                     asyncio.get_running_loop().run_in_executor(
@@ -768,10 +773,15 @@ async def _run_container_task(
                     ),
                     timeout=timeout + 10  # Buffer für Timeout
                 )
-            except asyncio.TimeoutError:
+            except (asyncio.TimeoutError, requests.exceptions.Timeout, requests.exceptions.ConnectionError) as timeout_exc:
                 # Timeout erreicht, Container killen
-                logger.warning(f"Container-Timeout erreicht für Run {run_id}, killen Container")
-                container.kill()
+                logger.warning(
+                    f"Container-Timeout erreicht für Run {run_id} ({timeout_exc.__class__.__name__}), kille Container"
+                )
+                try:
+                    container.kill()
+                except Exception as kill_err:
+                    logger.warning(f"Container-Kill nach Timeout fehlgeschlagen für Run {run_id}: {kill_err}")
                 exit_code = {"StatusCode": -1}  # Timeout-Exit-Code
         else:
             # Kein Timeout, warte auf natürliches Ende
@@ -1582,7 +1592,9 @@ async def _monitor_metrics(
     pipeline: DiscoveredPipeline,
     run_id: UUID,
     session: Session,
-    env_vars: Dict[str, str]
+    env_vars: Dict[str, str],
+    cpu_soft_limit: Optional[float] = None,
+    mem_soft_limit: Optional[str] = None,
 ) -> None:
     """
     Überwacht Container-Metrics (CPU & RAM) und speichert sie.
@@ -1599,7 +1611,9 @@ async def _monitor_metrics(
         run_id: Run-ID (UUID)
         session: SQLModel Session (für DB-Zugriffe bei Notifications)
         env_vars: Environment-Variablen-Dictionary (für Notification-Flag)
-    
+        cpu_soft_limit: Effektives CPU-Soft-Limit (Kerne; Schedule-Override oder Pipeline-Metadaten)
+        mem_soft_limit: Effektives RAM-Soft-Limit (z.B. "512m"; Schedule-Override oder Pipeline-Metadaten)
+
     Notes:
         - CPU-Berechnung verwendet Delta-Vergleich mit precpu_stats
         - RAM-Werte werden direkt aus memory_stats extrahiert
@@ -1641,8 +1655,8 @@ async def _monitor_metrics(
                     exceeded_value = None
                     exceeded_limit = None
                     
-                    if effective_cpu_soft_limit and cpu_percent:
-                        cpu_soft_limit_percent = effective_cpu_soft_limit * 100
+                    if cpu_soft_limit and cpu_percent:
+                        cpu_soft_limit_percent = cpu_soft_limit * 100
                         if cpu_percent > cpu_soft_limit_percent:
                             soft_limit_exceeded = True
                             if not exceeded_resource:  # Nur erste Überschreitung melden
@@ -1650,8 +1664,8 @@ async def _monitor_metrics(
                                 exceeded_value = cpu_percent
                                 exceeded_limit = cpu_soft_limit_percent
                     
-                    if effective_mem_soft_limit:
-                        mem_soft_limit_bytes = _convert_memory_to_bytes(effective_mem_soft_limit)
+                    if mem_soft_limit:
+                        mem_soft_limit_bytes = _convert_memory_to_bytes(mem_soft_limit)
                         mem_soft_limit_mb = mem_soft_limit_bytes / (1024 * 1024)
                         if ram_usage_mb > mem_soft_limit_mb:
                             soft_limit_exceeded = True
@@ -2237,15 +2251,23 @@ async def _re_attach_container(
             _stream_logs(container, log_file_path, log_queue, run_id)
         )
         
+        cpu_soft_limit = getattr(pipeline.metadata, "cpu_soft_limit", None)
+        mem_soft_limit = getattr(pipeline.metadata, "mem_soft_limit", None)
         if metrics_file_path:
             metrics_task = asyncio.create_task(
-                _monitor_metrics(container, metrics_file_path, metrics_queue, pipeline, run_id, session, env_vars)
+                _monitor_metrics(
+                    container, metrics_file_path, metrics_queue, pipeline, run_id, session, env_vars,
+                    cpu_soft_limit=cpu_soft_limit, mem_soft_limit=mem_soft_limit,
+                )
             )
         else:
             # Metrics-Datei-Pfad erstellen
             metrics_file_path = Path(config.LOGS_DIR / f"{run_id}_metrics.jsonl")
             metrics_task = asyncio.create_task(
-                _monitor_metrics(container, metrics_file_path, metrics_queue, pipeline, run_id, session, env_vars)
+                _monitor_metrics(
+                    container, metrics_file_path, metrics_queue, pipeline, run_id, session, env_vars,
+                    cpu_soft_limit=cpu_soft_limit, mem_soft_limit=mem_soft_limit,
+                )
             )
             run.metrics_file = str(metrics_file_path)
             session.add(run)
