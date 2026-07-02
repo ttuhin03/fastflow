@@ -1,7 +1,7 @@
 # Fast-Flow Orchestrator – Production-ready pins (compatible release)
 # Install: pip install -r requirements.txt
 
-fastapi>=0.115,<1
+fastapi>=0.139.0,<1
 prometheus-fastapi-instrumentator>=7,<8
 uvicorn[standard]>=0.32,<1
 sqlmodel>=0.0.14,<0.1
