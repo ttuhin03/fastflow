@@ -27,6 +27,6 @@ pytest>=8,<9
 pytest-asyncio>=0.24,<0.25
 pytest-cov>=6,<7
 slowapi>=0.1,<1
-posthog>=3,<4
+posthog>=7.21.2,<8
 pip-audit>=2,<3
 tenacity>=9,<10
