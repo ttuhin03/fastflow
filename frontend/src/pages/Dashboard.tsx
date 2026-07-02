@@ -209,31 +209,25 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Row 2: Heatmap (1.6fr) + System Status (1fr) */}
-      {allPipelinesDailyStats?.daily_stats && allPipelinesDailyStats.daily_stats.length > 0 && (
-        <div className="dashboard-row-2">
-          <div className="panel">
-            <div className="panel__head">
-              <h3 className="section-title">{t('dashboard.runHistory')}</h3>
-            </div>
-            <CalendarHeatmap dailyStats={allPipelinesDailyStats.daily_stats} days={365} showTitle={false} />
+      {/* Row 2: Heatmap (1.6fr) + System Status (1fr) — Heatmap auch ohne Daten (leere Zellen) */}
+      <div className="dashboard-row-2">
+        <div className="panel">
+          <div className="panel__head">
+            <h3 className="section-title">{t('dashboard.runHistory')}</h3>
           </div>
-          <div className="panel">
-            <div className="panel__head">
-              <h3 className="section-title">{t('dashboard.systemStatus')}</h3>
-            </div>
-            <SystemStatus />
-          </div>
+          <CalendarHeatmap
+            dailyStats={allPipelinesDailyStats?.daily_stats ?? []}
+            days={365}
+            showTitle={false}
+          />
         </div>
-      )}
-
-      {/* If no daily stats yet, show system status alone */}
-      {(!allPipelinesDailyStats?.daily_stats || allPipelinesDailyStats.daily_stats.length === 0) && (
-        <div className="dashboard-system-section">
-          <h3 className="section-title">{t('dashboard.systemStatus')}</h3>
+        <div className="panel">
+          <div className="panel__head">
+            <h3 className="section-title">{t('dashboard.systemStatus')}</h3>
+          </div>
           <SystemStatus />
         </div>
-      )}
+      </div>
 
       {/* Row 3: Summary + Concurrency + Storage */}
       <div className="dashboard-row-3">

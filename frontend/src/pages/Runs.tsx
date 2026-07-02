@@ -318,7 +318,7 @@ export default function Runs() {
                 <span className="run-pipeline mono">{run.pipeline_name}</span>
                 <span className="run-status-cell">
                   <Tooltip content={statusTooltipText(run.status)}>
-                    <span className={`badge dot ${statusBadgeClass(run.status)}`}>
+                    <span className={`badge ${statusBadgeClass(run.status)}`}>
                       <span className={`status-dot ${statusDotKind(run.status)}`} />
                       {run.status}
                     </span>

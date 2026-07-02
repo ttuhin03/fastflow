@@ -963,6 +963,8 @@
     "nutzer": "Nutzer"
   },
   "secrets": {
+    "newSecret": "Wert verschlüsseln",
+    "subtitle": "Verschlüsselt gespeichert (Fernet) · Werte werden nie im Klartext angezeigt",
     "intro": "Secrets kommen aus der Datenbank oder aus pipeline.json (encrypted_env / default_env). Unten siehst du beides: DB-Einträge und Keys, die in Pipelines verwendet werden.",
     "envKeysFromPipelines": "Env-Keys aus encrypted_env und default_env aller Pipelines (Werte werden hier nicht angezeigt).",
     "title": "Secrets & Parameter",

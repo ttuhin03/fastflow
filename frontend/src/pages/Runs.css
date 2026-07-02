@@ -169,6 +169,7 @@
 
 .run-exit {
   font-size: var(--font-size-xs);
+  white-space: nowrap;
 }
 
 .run-duration {

@@ -1,4 +1,4 @@
-import { useRef, useState, useLayoutEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -6,7 +6,7 @@ import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import { showError } from '../utils/toast'
-import { LuPlay, LuClock, LuLock, LuPuzzle, LuGitBranch, LuSearch } from 'react-icons/lu'
+import { LuPlay, LuSearch } from 'react-icons/lu'
 import Skeleton from '../components/Skeleton'
 import Runs from './Runs'
 import Scheduler from './Scheduler'
@@ -39,38 +39,12 @@ export default function Pipelines() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { isReadonly } = useAuth()
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams] = useSearchParams()
   const section = (searchParams.get('section') as PipelinesSection) || 'pipelines'
-  const setSection = (s: PipelinesSection) => {
-    const np = new URLSearchParams(searchParams)
-    np.set('section', s)
-    setSearchParams(np, { replace: true })
-  }
   const [tagsFilter, setTagsFilter] = useState('')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [selected, setSelected] = useState<Set<string>>(new Set())
-
-  const sectionItems: { id: PipelinesSection; labelKey: string; icon: React.ReactNode }[] = [
-    { id: 'pipelines', labelKey: 'nav.pipelines', icon: <LuGitBranch /> },
-    { id: 'runs', labelKey: 'pipelines.sectionRuns', icon: <LuPlay /> },
-    { id: 'scheduler', labelKey: 'pipelines.sectionScheduler', icon: <LuClock /> },
-    { id: 'secrets', labelKey: 'pipelines.sectionSecrets', icon: <LuLock /> },
-    { id: 'dependencies', labelKey: 'pipelines.sectionDependencies', icon: <LuPuzzle /> },
-  ]
-
-  const trayRef = useRef<HTMLDivElement>(null)
-  const [indicator, setIndicator] = useState({ left: 0, width: 0 })
-
-  useLayoutEffect(() => {
-    const tray = trayRef.current
-    if (!tray) return
-    const pill = tray.querySelector<HTMLElement>(`[data-section="${section}"]`)
-    if (!pill) return
-    const tr = tray.getBoundingClientRect()
-    const pr = pill.getBoundingClientRect()
-    setIndicator({ left: pr.left - tr.left, width: pr.width })
-  }, [section])
 
   const pipelinesInterval = useRefetchInterval(5000)
   const tagsParam = tagsFilter.trim() || undefined
@@ -178,39 +152,11 @@ export default function Pipelines() {
     // TODO(redesign): needs backend
   }
 
-  const renderNav = () => (
-    <nav className="pipelines-nav" role="tablist" aria-label={t('pipelines.sectionLabel')}>
-      <div ref={trayRef} className="pipelines-nav-tray">
-        <div
-          className="pipelines-nav-indicator"
-          style={{
-            left: indicator.left,
-            width: indicator.width,
-          }}
-          aria-hidden
-        />
-        {sectionItems.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            role="tab"
-            data-section={item.id}
-            aria-selected={section === item.id}
-            className={`pipelines-nav-pill ${section === item.id ? 'active' : ''}`}
-            onClick={() => setSection(item.id)}
-          >
-            {item.icon}
-            <span>{t(item.labelKey)}</span>
-          </button>
-        ))}
-      </div>
-    </nav>
-  )
-
+  // Die Unterseiten-Navigation übernimmt die Sidebar (Runs/Scheduler/Secrets/Dependencies
+  // sind dort eigene Einträge, die auf ?section=… verlinken).
   if (section === 'runs') {
     return (
       <div className="pipelines-page">
-        {renderNav()}
         <div className="pipelines-content pipelines-embedded">
           <Runs />
         </div>
@@ -220,7 +166,6 @@ export default function Pipelines() {
   if (section === 'scheduler') {
     return (
       <div className="pipelines-page">
-        {renderNav()}
         <div className="pipelines-content pipelines-embedded">
           <Scheduler />
         </div>
@@ -230,7 +175,6 @@ export default function Pipelines() {
   if (section === 'secrets') {
     return (
       <div className="pipelines-page">
-        {renderNav()}
         <div className="pipelines-content pipelines-embedded">
           <Secrets />
         </div>
@@ -240,7 +184,6 @@ export default function Pipelines() {
   if (section === 'dependencies') {
     return (
       <div className="pipelines-page">
-        {renderNav()}
         <div className="pipelines-content pipelines-embedded">
           <Dependencies />
         </div>
@@ -251,7 +194,6 @@ export default function Pipelines() {
   if (isLoading && !pipelines) {
     return (
       <div className="pipelines-page">
-        {renderNav()}
         <div className="pipelines-content">
           <div className="pipelines">
             <div className="table pipelines-table">
@@ -276,7 +218,6 @@ export default function Pipelines() {
 
   return (
     <div className="pipelines-page">
-      {renderNav()}
       <div className="pipelines-content">
     <div className="pipelines">
       {/* Toolbar: search + status filter + tags filter + count */}

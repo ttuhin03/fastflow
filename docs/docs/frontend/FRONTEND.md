@@ -60,8 +60,8 @@ The API client is a configured Axios instance with automatic authentication.
 
 **Features:**
 - Automatically adds Authorization header from sessionStorage
-- Automatic redirect to login on 401 errors
-- Base URL configurable via `VITE_API_URL` (default: `http://localhost:8000/api`)
+- Automatic redirect to login on 401 errors (with automatic token refresh)
+- Base URL is derived at runtime from `window.location.origin` (`src/config.ts`); in dev, Vite proxies `/api` to `http://localhost:8000`
 
 **Usage:**
 ```typescript
@@ -571,7 +571,9 @@ The build is created in the `frontend/dist/` directory; the Docker build copies 
 
 ### Environment variables
 
-- `VITE_API_URL`: API base URL (default: `http://localhost:8000/api`)
+- The API base URL is **not** set at build time — it is derived at runtime from `window.location.origin`. In dev, the Vite proxy forwards `/api` to `http://localhost:8000` (see `vite.config.ts`).
+- `VITE_LOGIN_PATH` (optional): Path of the login page (default: `/login`).
+- `VITE_DOCS_URL` (optional): URL of the documentation link in the sidebar.
 
 ## Best Practices
 

@@ -67,6 +67,8 @@
 .dashboard-row-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .panel { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 18px 20px; }
 .panel__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+/* Eingebettete Heatmap: Panel liefert bereits die Karte (kein Card-in-Card) */
+.panel .calendar-heatmap { background: transparent; border: none; padding: 0; }
 
 /* Legacy section wrappers */
 .dashboard-calendar-section,

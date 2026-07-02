@@ -583,7 +583,7 @@ export default function RunDetail() {
             >
               {idCopied ? <LuCheck size={13} /> : <LuCopy size={13} />}
             </button>
-            <span className={`badge dot ${statusBadgeClass(run.status)} run-detail-status`}>
+            <span className={`badge ${statusBadgeClass(run.status)} run-detail-status`}>
               <span className={`status-dot ${statusDotKind(run.status)}`} />
               {run.status}
             </span>

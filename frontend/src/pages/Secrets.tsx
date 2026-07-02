@@ -88,7 +88,7 @@ export default function Secrets() {
         <div>
           <h1 className="secrets-title">{t('secrets.title')}</h1>
           <p className="secrets-subtitle">
-            {t('secrets.subtitle', 'Encrypted at rest with AES-256 · values are never displayed')}
+            {t('secrets.subtitle', 'Encrypted at rest (Fernet) · values are never displayed')}
           </p>
         </div>
         {!isReadonly && (
@@ -98,7 +98,7 @@ export default function Secrets() {
             onClick={() => setEncryptOpen((v) => !v)}
           >
             <LuLock aria-hidden />
-            {t('secrets.newSecret', 'New secret')}
+            {t('secrets.newSecret', 'Encrypt value')}
           </button>
         )}
       </div>
