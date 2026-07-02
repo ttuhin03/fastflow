@@ -298,7 +298,7 @@ Traditional orchestrators often turn deployment into a logistics problem. Fast-F
 
 In Fast-Flow, your Git repository is the single source of truth. There is no "Upload" button and no manual build step.
 
-*   **Zero-Build Deployment**: When you change your code, the orchestrator pulls changes via webhook or manual sync. Thanks to the uv JIT architecture, the new version is ready to run immediately.
+*   **Zero-Build Deployment**: When you change your code, the orchestrator pulls changes via auto-sync or manual sync. Thanks to the uv JIT architecture, the new version is ready to run immediately.
 *   **Full Traceability**: Since every pipeline configuration (`pipeline.json`) and every library (`requirements.txt`) lives in Git, you have a complete history. Who increased the memory limit when? Who changed the prophet version? Your Git log tells you.
 *   **Atomic Sync**: Our sync mechanism ensures pipelines never read "half" files. Changes are applied atomically – safe and consistent.
 
@@ -313,7 +313,7 @@ In Fast-Flow, your Git repository is the single source of truth. There is no "Up
 
 1.  **Develop**: Write your Python script locally.
 2.  **Push**: `git push origin main`.
-3.  **Sync**: The orchestrator detects the change (via webhook or auto-sync).
+3.  **Sync**: The orchestrator detects the change (via auto-sync or manual sync).
 4.  **Run**: The pipeline starts immediately with the new code. No Docker builds, no waiting.
 
 > "We made deployment as boring as possible so you can focus on the exciting part: your code."
@@ -404,6 +404,7 @@ docker-proxy:
   environment:
     - CONTAINERS=1    # Allow container operations
     - IMAGES=1        # Allow image pulls
+    - BUILD=1         # Allow build operations
     - VOLUMES=1       # Allow volume mounts
     - EXEC=1          # Allow exec (used to read the uv version from the container)
     - POST=1          # Allow HTTP POST (container creation)

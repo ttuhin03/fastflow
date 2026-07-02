@@ -15,7 +15,7 @@ Fast-Flow can be run in a local or production Kubernetes cluster. The API is K8s
   |--------|----------------|-------|
   | **kubeadm** | Production | Standard worker with containerd (no Docker needed for runs) |
   | **Docker Desktop** | Local development | Enable Settings → "Enable Kubernetes" |
-  | **Kind** (Kubernetes in Docker) | Lightweight | Project root: `kind-config.yaml` – only needed if you **additionally** use the Docker executor in the cluster (unusual) |
+  | **Kind** (Kubernetes in Docker) | Lightweight | Works out of the box with the default manifests (Jobs executor) |
   | **Minikube** | Feature-rich | Any workable driver |
 
 - **Docker** (local): only for **building and loading** the orchestrator image (`docker build`, `kind load`, Minikube Docker env). **Pipeline runs** use **Kubernetes Jobs** with the default manifests (`PIPELINE_EXECUTOR=kubernetes`) – **no** Docker daemon on Kubernetes nodes is required.
@@ -24,10 +24,10 @@ Fast-Flow can be run in a local or production Kubernetes cluster. The API is K8s
 
 The included `k8s/` deployments start pipeline runs as **Jobs** via the Kubernetes API. A **host Docker socket** in Kind is only relevant if you deliberately run the orchestrator with `PIPELINE_EXECUTOR=docker` and want to start worker containers on the host's Docker (not the recommended approach for pure K8s environments).
 
-If you still need the socket in Kind nodes, `kind-config.yaml` in the project root can set **extraMounts** for `/var/run/docker.sock`. Create the cluster:
+If you still need the socket in Kind nodes, create your own Kind config with **extraMounts** for `/var/run/docker.sock` (not included in the repository) and create the cluster with it:
 
 ```bash
-kind create cluster --config kind-config.yaml
+kind create cluster --config <your-kind-config>.yaml
 ```
 
 ## Manual Deployment
@@ -99,8 +99,8 @@ Then restart the pod: `kubectl rollout restart deployment/fastflow-orchestrator`
 |-----|-------------|
 | `/` | React frontend (dashboard) |
 | `/doku` | Docusaurus documentation |
-| `/docs` | FastAPI Swagger (API docs) |
-| `/redoc` | FastAPI ReDoc |
+| `/docs` | FastAPI Swagger (API docs; disabled when `ENVIRONMENT=production`) |
+| `/redoc` | FastAPI ReDoc (disabled when `ENVIRONMENT=production`) |
 
 ### 7. Pipelines: PVC, executor, and DEV vs. PROD
 

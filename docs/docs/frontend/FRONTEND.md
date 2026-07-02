@@ -8,8 +8,10 @@ This documentation describes the frontend structure, components, and pages of th
 - **TypeScript**: Type safety
 - **Vite**: Build tool and dev server
 - **React Router**: Routing
+- **TanStack React Query**: Server state, caching, polling
 - **Axios**: HTTP client for API communication
-- **CSS Modules**: Styling
+- **react-i18next**: Internationalization (translations in `src/locales/`)
+- **CSS**: Design system with CSS variables (`src/styles/`)
 
 ## Project Structure
 
@@ -99,7 +101,7 @@ Visualizes run status with colored circles.
 ```typescript
 interface RunStatusCirclesProps {
   runs: Array<{
-    status: 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED' | 'CANCELLED'
+    status: 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED' | 'INTERRUPTED' | 'WARNING'
   }>
 }
 ```
@@ -109,7 +111,7 @@ interface RunStatusCirclesProps {
 - `RUNNING`: Blue
 - `SUCCESS`: Green
 - `FAILED`: Red
-- `CANCELLED`: Orange
+- `INTERRUPTED` / `WARNING`: Orange
 
 ### ProgressBar
 
@@ -289,10 +291,14 @@ Detailed view of a single pipeline.
 - Reset statistics
 
 **API endpoints:**
-- `GET /api/pipelines/{name}` - Pipeline details
+- `GET /api/pipelines` - Pipeline list (detail data is filtered client-side by name)
 - `GET /api/pipelines/{name}/runs` - Run history
 - `GET /api/pipelines/{name}/stats` - Statistics
 - `GET /api/pipelines/{name}/daily-stats` - Daily statistics
+- `GET /api/pipelines/{name}/source` - Source files (main.py, pipeline.json, requirements.txt)
+- `GET /api/pipelines/{name}/downstream-triggers` - Downstream triggers (pipeline chaining)
+- `POST /api/pipelines/{name}/downstream-triggers` - Create downstream trigger
+- `DELETE /api/pipelines/{name}/downstream-triggers/{trigger_id}` - Delete downstream trigger
 - `POST /api/pipelines/{name}/run` - Start pipeline
 - `POST /api/pipelines/{name}/stats/reset` - Reset statistics
 
@@ -347,17 +353,16 @@ Management of scheduled jobs.
 
 **Features:**
 - Job list with next execution time
-- Create job (CRON or interval)
-- Edit job
-- Delete job
 - Enable/disable job
+- Upcoming run times per job
 - Run history per job
+
+Jobs are defined declaratively in `pipeline.json` (`schedules` array) and synced automatically on Git sync / startup — they cannot be created or deleted in the UI.
 
 **API endpoints:**
 - `GET /api/scheduler/jobs` - Job list
-- `POST /api/scheduler/jobs` - Create job
-- `PUT /api/scheduler/jobs/{job_id}` - Update job
-- `DELETE /api/scheduler/jobs/{job_id}` - Delete job
+- `PUT /api/scheduler/jobs/{job_id}` - Update job (e.g. enable/disable)
+- `GET /api/scheduler/jobs/{job_id}/next-runs` - Upcoming run times
 - `GET /api/scheduler/jobs/{job_id}/runs` - Run history
 
 **Trigger types:**
@@ -368,19 +373,20 @@ Management of scheduled jobs.
 
 #### `pages/Secrets.tsx`
 
-Management of secrets and parameters.
+Overview of secrets and parameters.
 
 **Features:**
-- Secret list
-- Create/edit/delete secret
+- Secret list (from the database and from the pipelines' `pipeline.json` files)
+- Encrypt values for `pipeline.json` (`encrypted_env`)
 - Distinction between secrets (encrypted) and parameters (unencrypted)
 - Show/hide secret values
 
+Secrets are managed declaratively via `pipeline.json` (`encrypted_env` / `default_env`); the UI is read-only apart from the encryption helper.
+
 **API endpoints:**
-- `GET /api/secrets` - Secret list
-- `POST /api/secrets` - Create secret
-- `PUT /api/secrets/{key}` - Update secret
-- `DELETE /api/secrets/{key}` - Delete secret
+- `GET /api/secrets` - Secret list (database)
+- `GET /api/secrets/from-pipelines` - Env keys defined in `pipeline.json` files (keys only)
+- `POST /api/secrets/encrypt-for-pipeline` - Encrypt a value for `pipeline.json`
 
 **Notes:**
 - Secrets are stored encrypted
@@ -412,14 +418,18 @@ System settings and configuration.
 
 **API endpoints:**
 - `GET /api/settings` - Get settings
-- `PUT /api/settings` - Update settings (warning only)
+- `PUT /api/settings` - Update settings (persisted in `orchestrator_settings`)
+- `GET /api/settings/system` / `PUT /api/settings/system` - System settings
 - `GET /api/settings/storage` - Storage statistics
 - `GET /api/settings/system-metrics` - System metrics
+- `GET /api/settings/backup-failures` - S3 backup failures
+- `POST /api/settings/s3/test` - Test S3 configuration
 - `POST /api/settings/test-email` - Send test email
 - `POST /api/settings/test-teams` - Send test Teams message
+- `POST /api/settings/notification-api/keys` / `DELETE .../keys/{key_id}` - Notification API keys
 - `POST /api/settings/cleanup/force` - Manual cleanup
 
-**Note:** Settings are currently loaded only from environment variables. For persistent changes, edit the `.env` file.
+**Note:** Changed settings are stored persistently in the database (`orchestrator_settings`) and loaded at startup; environment variables serve as defaults.
 
 ### Sync
 
@@ -432,8 +442,9 @@ Git synchronization and repository management.
 - Manual Git pull
 - Show sync logs
 - Auto-sync settings
-- GitHub Apps configuration
-- GitHub App manifest flow
+- Repository configuration (HTTPS + token or SSH + deploy key)
+- Server-side deploy key generation
+- Test connection, clear pipelines directory
 
 **API endpoints:**
 - `GET /api/sync/status` - Git status
@@ -441,15 +452,17 @@ Git synchronization and repository management.
 - `GET /api/sync/logs` - Sync logs
 - `GET /api/sync/settings` - Sync settings
 - `PUT /api/sync/settings` - Update sync settings
-- `GET /api/sync/github-config` - Get GitHub config
-- `POST /api/sync/github-config` - Save GitHub config
-- `POST /api/sync/github-config/test` - Test GitHub config
-- `DELETE /api/sync/github-config` - Delete GitHub config
+- `GET /api/sync/repo-config` - Get repository configuration
+- `POST /api/sync/repo-config` - Save repository configuration
+- `POST /api/sync/repo-config/generate-deploy-key` - Generate SSH deploy key
+- `POST /api/sync/repo-config/test` - Test repository configuration (`git ls-remote`)
+- `DELETE /api/sync/repo-config` - Delete repository configuration
+- `POST /api/sync/clear-pipelines` - Empty pipelines directory (admin)
 
-**GitHub Apps:**
-- Support for GitHub Apps authentication
-- Manifest flow for easy app creation
-- Installation flow for repository access
+**Repository authentication:**
+- Public repos: repository URL only
+- Private repos via HTTPS: Personal Access Token (PAT)
+- Private repos via SSH: deploy key (paste or generate server-side)
 
 ### Login
 
@@ -505,18 +518,17 @@ Routing configuration is in `App.tsx`:
 - `/login` - Login (OAuth)
 - `/auth/callback` - OAuth callback (processes `#token=...`)
 - `/invite` - Invitation page (`?token=...`)
-- `/pipelines` - Pipeline overview
+- `/request-sent`, `/request-rejected`, `/account-blocked` - Join request / account status pages
+- `/pipelines` - Pipeline overview (with sections: runs, scheduler, secrets, dependencies via `?section=...`)
 - `/pipelines/:name` - Pipeline details
-- `/runs` - Run overview
-- `/runs/:id` - Run details
-- `/scheduler` - Scheduler
-- `/secrets` - Secrets
-- `/settings` - Settings
-- `/sync` - Git sync
-- `/users` - User management (admins only, OAuth invitations)
+- `/runs/:runId` - Run details
+- `/settings` - Settings (with sections: git-sync, users etc. via `?section=...`)
+- `/audit` - Audit log
+
+**Redirects:** `/runs`, `/scheduler`, `/secrets`, and `/dependencies` redirect to the corresponding section of `/pipelines`; `/sync` and `/users` redirect to the corresponding section of `/settings`.
 
 **Protected routes:**
-All routes except `/login`, `/auth/callback`, and `/invite` are protected and require authentication.
+All routes except `/login`, `/auth/callback`, `/invite`, and the request/status pages are protected and require authentication.
 
 ## Styling
 
@@ -555,7 +567,7 @@ The application then runs at `http://localhost:3000`.
 npm run build
 ```
 
-The build is created in the `static/` directory and can be served by the backend.
+The build is created in the `frontend/dist/` directory; the Docker build copies it to `static/`, from where the backend serves it.
 
 ### Environment variables
 

@@ -11,6 +11,9 @@ Fast-Flow is configured primarily via environment variables in a `.env` file. Th
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `ENVIRONMENT` | `development` | Sets the mode (`development` or `production`). In `production`, insecure default values (e.g. `JWT_SECRET_KEY`) are blocked. |
+| `LOG_LEVEL` | `INFO` | Log level for the orchestrator (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`). |
+| `LOG_JSON` | `false` | Structured JSON logging (for central log aggregation, e.g. ELK/Datadog). |
+| `CORS_ORIGINS` | Localhost origins | Comma-separated list of allowed CORS origins. **Set explicitly in production** (no `*`). |
 
 ## Database
 
@@ -34,6 +37,8 @@ Fast-Flow is configured primarily via environment variables in a `.env` file. Th
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `PIPELINE_EXECUTOR` | `docker` | Execution backend for pipeline runs: `docker` (containers via Docker socket proxy) or `kubernetes` (Kubernetes Jobs, see [Kubernetes](K8S.md)). |
+| `DOCKER_PROXY_URL` | `http://docker-proxy:2375` | URL of the Docker socket proxy (only relevant for `PIPELINE_EXECUTOR=docker`). |
 | `WORKER_BASE_IMAGE` | `ghcr.io/astral-sh/uv:python3.11-bookworm-slim` | Base image for pipeline containers (must include `uv`). For a minimal setup with uv only: `ghcr.io/astral-sh/uv:bookworm-slim` or a custom image from `Dockerfile.worker` (then preheating must provide Python). |
 | `MAX_CONCURRENT_RUNS` | `10` | Maximum number of pipelines running concurrently. |
 | `CONTAINER_TIMEOUT` | *Empty* (no timeout) | Global timeout for pipeline runs in seconds. |
@@ -49,6 +54,8 @@ Repository URL and authentication (PAT or deploy key) can be set **either** via 
 | `GIT_SYNC_TOKEN` | *Empty* | Optional: Personal Access Token (PAT) for private repos with an **HTTPS** URL. |
 | `GIT_SYNC_DEPLOY_KEY` | *Empty* | Optional: Content of the private SSH deploy key for an **SSH** URL. Sensitive—set as a secret. |
 | `GIT_BRANCH` | `main` | The Git branch to synchronize. |
+| `PIPELINES_SUBDIR` | *Empty* | Optional subfolder in the repo containing the pipeline directories (e.g. `pipelines`). Empty: search in the repo root. |
+| `GIT_SSH_KNOWN_HOSTS` | *Empty* | Content of a `known_hosts` file for SSH Git operations (enables `StrictHostKeyChecking=yes`). Generate e.g. with `ssh-keyscan github.com`. |
 | `AUTO_SYNC_ENABLED` | `false` | Whether pipelines should be synchronized automatically. |
 | `AUTO_SYNC_INTERVAL` | *Empty* | Interval in seconds for automatic sync. |
 | `UV_PRE_HEAT` | `true` | Whether dependencies should be preinstalled ("preheated") automatically during sync. |

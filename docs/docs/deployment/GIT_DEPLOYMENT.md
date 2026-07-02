@@ -16,7 +16,7 @@ In Fast-Flow, your **Git repository is the single source of truth**. There is no
 
 ## The Fast-Flow Way: "Source of Truth"
 
-- **Zero-build deployment:** Code changes are pulled via webhook or manual sync. Thanks to uv JIT, the new version is immediately runnable.
+- **Zero-build deployment:** Code changes are pulled via auto-sync or manual sync (UI/API). Thanks to uv JIT, the new version is immediately runnable.
 - **Full traceability:** `pipeline.json` and `requirements.txt` live in Git—who changed limits, dependencies, or the **per-pipeline selectable** Python version and when is recorded in the Git log.
 - **Atomic sync:** Pipelines never read "half" files; changes are applied atomically.
 
@@ -31,7 +31,7 @@ In Fast-Flow, your **Git repository is the single source of truth**. There is no
 
 1. **Develop:** Write and test Python scripts locally.
 2. **Push:** `git push origin main`
-3. **Sync:** Orchestrator fetches changes via webhook or auto-sync.
+3. **Sync:** Orchestrator fetches changes via auto-sync (`AUTO_SYNC_ENABLED`) or manual sync in the UI.
 4. **Run:** Pipeline starts with the new code—without Docker builds.
 
 > "We made deployment as boring as possible so you can focus on what's exciting: your code."
@@ -44,7 +44,7 @@ Relevant variables (see [Configuration](/docs/deployment/CONFIGURATION)):
 - `GIT_BRANCH` – branch for sync (e.g. `main`)
 - `AUTO_SYNC_ENABLED` / `AUTO_SYNC_INTERVAL` – automatic sync
 - `UV_PRE_HEAT` – preinstall dependencies during sync
-- GitHub App / Git URL for private repos
+- `GIT_REPO_URL` plus `GIT_SYNC_TOKEN` (PAT, HTTPS) or `GIT_SYNC_DEPLOY_KEY` (SSH) for private repos — alternatively via the Sync UI
 
 ## See Also
 
