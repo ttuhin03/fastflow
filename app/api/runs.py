@@ -71,24 +71,46 @@ async def get_recent_runs_per_pipeline(
     Gibt die letzten N Runs pro Pipeline zurück (Batch-Endpoint).
 
     Vermeidet N+1-Polling, indem alle Pipelines in einer Anfrage abgedeckt werden.
+    Die Begrenzung auf N Runs pro Pipeline passiert per Window-Function in der DB
+    (statt die gesamte Tabelle zu laden und in Python zu gruppieren).
     """
-    from sqlalchemy import text as sa_text
-
-    all_runs = session.exec(
-        select(PipelineRun)
-        .order_by(PipelineRun.pipeline_name, PipelineRun.started_at.desc())
-    ).all()
+    row_number = (
+        func.row_number()
+        .over(
+            partition_by=PipelineRun.pipeline_name,
+            order_by=PipelineRun.started_at.desc(),
+        )
+        .label("rn")
+    )
+    subq = select(
+        PipelineRun.id,
+        PipelineRun.pipeline_name,
+        PipelineRun.status,
+        PipelineRun.started_at,
+        PipelineRun.finished_at,
+        row_number,
+    ).subquery()
+    stmt = (
+        select(
+            subq.c.id,
+            subq.c.pipeline_name,
+            subq.c.status,
+            subq.c.started_at,
+            subq.c.finished_at,
+        )
+        .where(subq.c.rn <= limit_per_pipeline)
+        .order_by(subq.c.pipeline_name, subq.c.started_at.desc())
+    )
+    rows = session.exec(stmt).all()
 
     grouped: Dict[str, list] = {}
-    for run in all_runs:
-        bucket = grouped.setdefault(run.pipeline_name, [])
-        if len(bucket) >= limit_per_pipeline:
-            continue
-        bucket.append({
-            "id": str(run.id),
-            "status": run.status.value,
-            "started_at": run.started_at.isoformat(),
-            "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+    for row in rows:
+        status = row.status.value if hasattr(row.status, "value") else row.status
+        grouped.setdefault(row.pipeline_name, []).append({
+            "id": str(row.id),
+            "status": status,
+            "started_at": row.started_at.isoformat(),
+            "finished_at": row.finished_at.isoformat() if row.finished_at else None,
         })
 
     return {"pipelines": grouped}
