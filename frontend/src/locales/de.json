@@ -265,6 +265,7 @@
     },
     "linked": "Verknüpft",
     "connectNow": "Jetzt verbinden",
+    "linkStartFailed": "Account-Verknüpfung konnte nicht gestartet werden. Bitte erneut versuchen.",
     "unlink": "Entfernen",
     "unlinkConfirm": "Möchtest du die Verknüpfung mit {{provider}} wirklich entfernen?",
     "unlinkSuccess": "{{provider}} wurde entfernt.",

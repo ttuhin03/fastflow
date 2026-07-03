@@ -4,6 +4,7 @@ Auth package: session auth, OAuth (GitHub/Google/Microsoft/Custom), OAuth proces
 
 from app.auth.auth import (
     create_access_token,
+    create_link_token,
     create_log_download_token,
     create_session,
     delete_all_user_sessions,
@@ -12,6 +13,7 @@ from app.auth.auth import (
     get_session_by_token,
     require_admin,
     require_write,
+    verify_link_token,
     verify_log_download_token,
     verify_token,
 )
@@ -46,6 +48,7 @@ from app.auth.oauth_processing import process_oauth_login
 
 __all__ = [
     "create_access_token",
+    "create_link_token",
     "create_log_download_token",
     "create_session",
     "delete_all_user_sessions",
@@ -53,6 +56,7 @@ __all__ = [
     "get_current_user",
     "get_session_by_token",
     "require_admin",
+    "verify_link_token",
     "verify_log_download_token",
     "verify_token",
     "require_write",

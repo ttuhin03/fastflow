@@ -16,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import uuid4, UUID
 
-from fastapi import Depends, HTTPException, status, Query
+from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from sqlmodel import Session, select
@@ -83,6 +83,43 @@ def verify_log_download_token(token: str, run_id: UUID) -> bool:
         return payload.get("type") == "log_download" and payload.get("sub") == str(run_id)
     except JWTError:
         return False
+
+
+def create_link_token(user_id: UUID) -> str:
+    """
+    Erstellt ein kurzlebiges JWT (60 Sekunden) zum Starten des OAuth-Account-Link-Flows.
+
+    Wird verwendet, damit das Frontend beim Account-Linking (volle Browser-Navigation ohne
+    Authorization-Header) nicht das volle Session-JWT als Query-Parameter mitschicken muss.
+    Ein geleaktes, 60 Sekunden gültiges Link-Token ist deutlich weniger sensibel als ein
+    volles Session-JWT, das in Server-/Proxy-Logs, Browser-History und Referrer landen würde.
+    """
+    expire = datetime.now(timezone.utc) + timedelta(seconds=60)
+    to_encode = {"sub": str(user_id), "exp": expire, "type": "account_link"}
+    return jwt.encode(to_encode, config.JWT_SECRET_KEY, algorithm=config.JWT_ALGORITHM)
+
+
+def verify_link_token(token: str) -> Optional[UUID]:
+    """
+    Prüft ein Account-Link-Token und gibt die User-ID zurück, wenn es gültig ist.
+
+    Gibt None zurück, wenn das Token ungültig/abgelaufen ist oder nicht vom Typ
+    "account_link" ist (Schutz vor Token-Type-Confusion: ein Access- oder Log-Download-Token
+    darf niemals einen Link-Flow autorisieren).
+    """
+    try:
+        payload = jwt.decode(token, config.JWT_SECRET_KEY, algorithms=[config.JWT_ALGORITHM])
+    except JWTError:
+        return None
+    if payload.get("type") != "account_link":
+        return None
+    sub = payload.get("sub")
+    if not sub:
+        return None
+    try:
+        return UUID(str(sub))
+    except (ValueError, TypeError):
+        return None
 
 
 def verify_token(token: str) -> Optional[str]:
@@ -235,53 +272,39 @@ def cleanup_expired_sessions(session: Session) -> None:
 
 async def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-    token: Optional[str] = Query(None, description="JWT-Token als Query-Parameter (für EventSource/SSE)"),
     db_session: Session = Depends(get_session)
 ) -> User:
     """
     Dependency für FastAPI-Endpoints zur Authentifizierung.
-    
+
     Verifiziert JWT-Token und gibt den aktuellen Benutzer zurück.
     Muss als Dependency in Protected Routes verwendet werden.
-    
-    Unterstützt zwei Methoden für Token-Übergabe:
-    1. Authorization Header (Standard für REST-APIs)
-    2. Query-Parameter "token" (für EventSource/SSE, da EventSource keine Custom Headers unterstützt)
-    
+
+    Das Token wird ausschließlich über den Authorization-Header übergeben. Der früher
+    unterstützte Query-Parameter "token" wurde entfernt, da volle Session-JWTs in URLs
+    in Server-/Proxy-Logs, Browser-History und Referrer landen. Flows ohne
+    Authorization-Header (z.B. Account-Linking per Browser-Navigation) verwenden dedizierte,
+    kurzlebige Tokens (siehe create_link_token/verify_link_token).
+
     Args:
         credentials: HTTPBearer Credentials (JWT-Token aus Header)
-        token: JWT-Token als Query-Parameter (optional, für EventSource)
         db_session: Datenbank-Session
-        
+
     Returns:
         User: Aktueller Benutzer
-        
+
     Raises:
         HTTPException: Wenn Token fehlt, ungültig oder abgelaufen
     """
-    # Token aus Header oder Query-Parameter holen
-    auth_token = None
-    
-    if credentials is not None:
-        # Standard: Token aus Authorization Header
-        auth_token = credentials.credentials
-    elif token is not None:
-        # Fallback: Token aus Query-Parameter (veraltet, unsicher: wird in URLs geloggt)
-        logger.warning(
-            "Token-Übergabe per Query-Parameter ist veraltet und unsicher (z.B. Logs, Referrer). "
-            "Bitte Authorization-Header verwenden (z.B. fetch mit SSE)."
-        )
-        auth_token = token
-    
-    if auth_token is None:
+    if credentials is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentifizierung erforderlich",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    token = auth_token
-    
+
+    token = credentials.credentials
+
     # Verifiziere Token
     username = verify_token(token)
     if username is None:

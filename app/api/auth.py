@@ -20,10 +20,13 @@ from sqlmodel import Session, select
 
 from app.auth import (
     create_access_token,
+    create_link_token,
     create_session,
     delete_session,
     get_current_user,
     get_session_by_token,
+    verify_link_token,
+    verify_token,
     delete_oauth_state,
     get_oauth_state,
     generate_oauth_state,
@@ -409,11 +412,67 @@ async def microsoft_callback(
     return _redirect_with_token(token)
 
 
+@router.post("/link-token", response_model=dict, status_code=status.HTTP_200_OK)
+async def get_link_token(
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """
+    Liefert ein kurzlebiges Link-Token (60 Sekunden) zum Starten des OAuth-Account-Link-Flows.
+
+    Das Frontend holt dieses Token per authentifiziertem POST (Authorization-Header) und
+    navigiert danach zu /api/auth/link/<provider>?link_token=..., statt das volle Session-JWT
+    in die URL zu schreiben (das sonst in Logs, Browser-History und Referrer landen würde).
+    """
+    return {"token": create_link_token(current_user.id)}
+
+
+def get_link_flow_user(
+    link_token: Optional[str] = Query(default=None),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    session: Session = Depends(get_session),
+) -> User:
+    """
+    Dependency für die Link-Flow-Start-Endpoints (Browser-Navigation ohne Authorization-Header).
+
+    Autorisiert über ein kurzlebiges link_token (Query-Parameter) ODER – für API-Clients –
+    über einen gültigen Authorization-Bearer. Ein volles Session-JWT als Query-Parameter wird
+    NICHT mehr akzeptiert.
+    """
+    user_id: Optional[Any] = None
+
+    if link_token:
+        user_id = verify_link_token(link_token)
+
+    if user_id is None and credentials is not None:
+        token = credentials.credentials
+        username = verify_token(token)
+        if username and get_session_by_token(session, token):
+            user = session.exec(select(User).where(User.username == username)).first()
+            if user is not None:
+                return user
+
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentifizierung erforderlich",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user = session.exec(select(User).where(User.id == user_id)).first()
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Benutzer nicht gefunden",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
+
+
 @router.get("/link/google")
 @limiter.limit("20/minute")
 async def link_google(
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_link_flow_user),
 ) -> RedirectResponse:
     """
     Startet den Google-OAuth-Flow zum Verknüpfen des Google-Kontos mit dem eingeloggten User.
@@ -434,7 +493,7 @@ async def link_google(
 @limiter.limit("20/minute")
 async def link_github(
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_link_flow_user),
 ) -> RedirectResponse:
     """
     Startet den GitHub-OAuth-Flow zum Verknüpfen des GitHub-Kontos mit dem eingeloggten User.
@@ -455,7 +514,7 @@ async def link_github(
 @limiter.limit("20/minute")
 async def link_microsoft(
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_link_flow_user),
 ) -> RedirectResponse:
     """
     Startet den Microsoft-OAuth-Flow zum Verknüpfen des Microsoft-Kontos mit dem eingeloggten User.
@@ -538,7 +597,7 @@ async def custom_callback(
 @limiter.limit("20/minute")
 async def link_custom(
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_link_flow_user),
 ) -> RedirectResponse:
     """
     Startet den Custom-OAuth-Flow zum Verknüpfen des Custom-Kontos mit dem eingeloggten User.

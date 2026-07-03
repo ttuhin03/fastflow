@@ -17,16 +17,19 @@ import Sync from './Sync'
 import Users from './Users'
 import './Settings.css'
 
+type AccountLinkPath = '/link/github' | '/link/google' | '/link/microsoft' | '/link/custom'
+
 /**
  * Account-Linking triggert eine volle Browser-Navigation; der Browser sendet keinen Authorization-Header.
- * Das Backend akzeptiert JWT per Query-Parameter (wie bei SSE), siehe get_current_user.
+ * Statt das volle Session-JWT als Query-Parameter zu übergeben (landet in Logs, Browser-History, Referrer),
+ * holt das Frontend per authentifiziertem POST ein kurzlebiges Link-Token und navigiert damit zum Link-Endpoint.
  */
-function accountOAuthLinkUrl(path: '/link/github' | '/link/google' | '/link/microsoft' | '/link/custom'): string {
+async function startAccountLink(path: AccountLinkPath): Promise<void> {
   const base = `${getApiOrigin()}/api/auth${path}`
-  if (typeof window === 'undefined') return base
-  const token = sessionStorage.getItem('auth_token')
-  if (!token) return base
-  return `${base}?token=${encodeURIComponent(token)}`
+  const { data } = await apiClient.post<{ token: string }>('/auth/link-token')
+  const linkToken = data?.token
+  if (!linkToken) throw new Error('missing link token')
+  window.location.href = `${base}?link_token=${encodeURIComponent(linkToken)}`
 }
 
 export type SettingsSection = 'account' | 'system' | 'pipeline' | 'notifications' | 'git-sync' | 'nutzer'
@@ -97,6 +100,7 @@ export default function Settings() {
   const [generatedKey, setGeneratedKey] = useState<{ key: string; id: number; label?: string | null } | null>(null)
   const [newKeyLabel, setNewKeyLabel] = useState('')
   const [unlinkingProvider, setUnlinkingProvider] = useState<'github' | 'google' | 'microsoft' | 'custom' | null>(null)
+  const [linkingProvider, setLinkingProvider] = useState<AccountLinkPath | null>(null)
   /** Geschützte Tabs: Eingaben erst nach Klick auf Schloss (verhindert versehentliche Änderungen). */
   const [sensitiveSettingsLocked, setSensitiveSettingsLocked] = useState(true)
 
@@ -578,6 +582,17 @@ export default function Settings() {
     unlinkProviderMutation.mutate(provider)
   }
 
+  const onStartAccountLink = async (path: AccountLinkPath) => {
+    if (linkingProvider) return
+    setLinkingProvider(path)
+    try {
+      await startAccountLink(path)
+    } catch {
+      setLinkingProvider(null)
+      showError(t('settings.linkStartFailed'))
+    }
+  }
+
   const isSensitiveSection = SENSITIVE_SETTINGS_SECTIONS.includes(section)
   const fieldLocked = isSensitiveSection && sensitiveSettingsLocked
   const fieldDisabled = isReadonly || fieldLocked
@@ -681,10 +696,15 @@ export default function Settings() {
             ) : authProvidersLoading ? (
               <span className="settings-provider-status">{t('common.loading')}</span>
             ) : authProviders.github ? (
-              <a href={accountOAuthLinkUrl('/link/github')} className="btn btn-outlined btn-sm">
+              <button
+                type="button"
+                className="btn btn-outlined btn-sm"
+                onClick={() => onStartAccountLink('/link/github')}
+                disabled={linkingProvider === '/link/github'}
+              >
                 <LuLink />
-                {t('settings.connectNow')}
-              </a>
+                {linkingProvider === '/link/github' ? t('common.loading') : t('settings.connectNow')}
+              </button>
             ) : (
               <span className="settings-provider-status" title={t('auth.githubNotConfigured')}>
                 {t('auth.githubNotConfigured')}
@@ -712,10 +732,15 @@ export default function Settings() {
             ) : authProvidersLoading ? (
               <span className="settings-provider-status">{t('common.loading')}</span>
             ) : authProviders.google ? (
-              <a href={accountOAuthLinkUrl('/link/google')} className="btn btn-outlined btn-sm">
+              <button
+                type="button"
+                className="btn btn-outlined btn-sm"
+                onClick={() => onStartAccountLink('/link/google')}
+                disabled={linkingProvider === '/link/google'}
+              >
                 <LuLink />
-                {t('settings.connectNow')}
-              </a>
+                {linkingProvider === '/link/google' ? t('common.loading') : t('settings.connectNow')}
+              </button>
             ) : (
               <span className="settings-provider-status" title={t('auth.googleNotConfigured')}>
                 {t('auth.googleNotConfigured')}
@@ -743,10 +768,15 @@ export default function Settings() {
             ) : authProvidersLoading ? (
               <span className="settings-provider-status">{t('common.loading')}</span>
             ) : authProviders.microsoft ? (
-              <a href={accountOAuthLinkUrl('/link/microsoft')} className="btn btn-outlined btn-sm">
+              <button
+                type="button"
+                className="btn btn-outlined btn-sm"
+                onClick={() => onStartAccountLink('/link/microsoft')}
+                disabled={linkingProvider === '/link/microsoft'}
+              >
                 <LuLink />
-                {t('settings.connectNow')}
-              </a>
+                {linkingProvider === '/link/microsoft' ? t('common.loading') : t('settings.connectNow')}
+              </button>
             ) : (
               <span className="settings-provider-status" title={t('auth.microsoftNotConfigured')}>
                 {t('auth.microsoftNotConfigured')}
@@ -774,10 +804,15 @@ export default function Settings() {
             ) : authProvidersLoading ? (
               <span className="settings-provider-status">{t('common.loading')}</span>
             ) : authProviders.custom ? (
-              <a href={accountOAuthLinkUrl('/link/custom')} className="btn btn-outlined btn-sm">
+              <button
+                type="button"
+                className="btn btn-outlined btn-sm"
+                onClick={() => onStartAccountLink('/link/custom')}
+                disabled={linkingProvider === '/link/custom'}
+              >
                 <LuLink />
-                {t('settings.connectNow')}
-              </a>
+                {linkingProvider === '/link/custom' ? t('common.loading') : t('settings.connectNow')}
+              </button>
             ) : (
               <span className="settings-provider-status" title={t('auth.customNotConfigured')}>
                 {t('auth.customNotConfigured')}
