@@ -265,6 +265,7 @@
     },
     "linked": "Linked",
     "connectNow": "Connect now",
+    "linkStartFailed": "Could not start account linking. Please try again.",
     "unlink": "Remove",
     "unlinkConfirm": "Do you really want to remove the link to {{provider}}?",
     "unlinkSuccess": "{{provider}} was removed.",
