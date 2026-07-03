@@ -93,14 +93,24 @@ jobs:
           exit 1
 
       - name: ZAP Baseline Scan
-        uses: zaproxy/action-baseline@v0.12.0
-        with:
-          target: "http://localhost:8000"
-          rules_file_name: '.zap/rules.tsv'
-          cmd_options: '-a'
-          fail_action: true
-          # Keine automatischen GitHub-Issues anlegen (bräuchte issues:write)
-          allow_issue_writing: false
+        # ZAP läuft in eigenem Container und wird deshalb ins selbe Docker-Netz
+        # gehängt; das Ziel wird per Container-Namen adressiert (nicht localhost,
+        # das im ZAP-Container auf ZAP selbst zeigen würde).
+        run: |
+          mkdir -p "$RUNNER_TEMP/zap-wrk"
+          cp .zap/rules.tsv "$RUNNER_TEMP/zap-wrk/rules.tsv"
+          chmod -R 777 "$RUNNER_TEMP/zap-wrk"
+          set +e
+          # -I: WARN-Findings sind informativ und brechen den Build NICHT
+          # (konsistent zu .zap/rules.tsv: Header=WARN, nur SQLi/XSS=FAIL).
+          # -a: zusätzliche (alpha) Passive-Scan-Regeln.
+          docker run --rm --network "$DAST_NETWORK" \
+            -v "$RUNNER_TEMP/zap-wrk:/zap/wrk/:rw" \
+            -t ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py -t "http://fastflow-dast:8000" \
+              -c rules.tsv -a -I -r report_html.html -J report_json.json
+          echo "zap_exit=$?" >> "$GITHUB_ENV"
+          set -e
 
       - name: ZAP Report als Artifact hochladen
         if: always()
@@ -108,8 +118,8 @@ jobs:
         with:
           name: zap-report
           path: |
-            report_html.html
-            report_json.json
+            ${{ runner.temp }}/zap-wrk/report_html.html
+            ${{ runner.temp }}/zap-wrk/report_json.json
           if-no-files-found: ignore
 
       # --- sqlmap: nur bei manuellem Trigger mit run_sqlmap=true oder beim wöchentlichen Scan ---
@@ -146,6 +156,17 @@ jobs:
           name: sqlmap-results
           path: sqlmap-results/
           if-no-files-found: ignore
+
+      - name: ZAP Findings auswerten (Build ggf. brechen)
+        if: always()
+        run: |
+          # zap-baseline.py: 0 = keine WARN/FAIL, sonst Findings oder interner Fehler
+          if [ "${zap_exit:-3}" = "0" ]; then
+            echo "ZAP Baseline: keine nicht-ignorierten Findings."
+          else
+            echo "::error::ZAP Baseline meldet Findings oder Fehler (exit ${zap_exit:-unset}). Details im zap-report-Artifact."
+            exit 1
+          fi
 
       - name: Container und Netzwerk aufräumen
         if: always()

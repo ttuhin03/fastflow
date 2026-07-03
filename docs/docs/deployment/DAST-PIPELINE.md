@@ -33,10 +33,15 @@ App und scannt sie.
 
 ## Ablauf
 
-- **ZAP Baseline Scan**: läuft bei jedem Push auf `main` und bei jedem PR.
-  `fail_action: true` lässt den Job bei nicht-ignorierten Findings fehlschlagen.
+- **ZAP Baseline Scan**: läuft bei jedem Push auf `main` und bei jedem PR. ZAP
+  läuft in einem eigenen Container im selben Docker-Netz und adressiert das Ziel
+  per Container-Namen (`http://fastflow-dast:8000`) — `localhost` würde im
+  ZAP-Container auf ZAP selbst zeigen. Mit `-I` sind `WARN`-Findings informativ
+  und brechen den Build **nicht**; nur `FAIL`-Level (via `.zap/rules.tsv`) lässt
+  den Job fehlschlagen.
 - **sqlmap-Scan**: läuft nur bei manuellem Trigger (Checkbox `run_sqlmap`) oder
-  beim wöchentlichen Scheduled Run (Montag 03:00 UTC).
+  beim wöchentlichen Scheduled Run (Montag 03:00 UTC). sqlmap läuft direkt auf
+  dem Runner-Host, kann das Ziel also über `localhost:8000` erreichen.
 
 Alles läuft in **einem** Job, damit der Stack nur einmal gebaut/gestartet wird.
 
@@ -51,9 +56,10 @@ Alles läuft in **einem** Job, damit der Stack nur einmal gebaut/gestartet wird.
   API-Routen liegen hinter Auth. Für einen sinnvollen Scan einen echten
   parametrisierten Endpoint eintragen — idealerweise über eine gespeicherte
   Request mit Session-Cookie/Token (`-r request.txt`).
-- **GitHub-Issues**: Die ZAP-Action legt bewusst **keine** Issues an
-  (`allow_issue_writing: false`), damit der Workflow mit `contents: read`
-  auskommt. Findings landen im `zap-report`-Artifact.
+- **Permissions**: Der Workflow läuft mit `contents: read`. ZAP wird direkt per
+  `docker run` gestartet (nicht über die `zaproxy/action-baseline`-Action), legt
+  also keine automatischen GitHub-Issues an. Findings landen im
+  `zap-report`-Artifact.
 
 ## Sicherheits-/Rechtliche Hinweise
 
