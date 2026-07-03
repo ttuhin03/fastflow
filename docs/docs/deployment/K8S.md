@@ -107,6 +107,7 @@ Then restart the pod: `kubectl rollout restart deployment/fastflow-orchestrator`
 Pipelines live in **`fastflow-pvc`** (subdirectory `pipelines`) – together with `data` and `logs` (20 GiB setup in the example manifests).
 
 - **`PIPELINE_EXECUTOR=kubernetes`** (default in `k8s/deployment`): Before each run, the orchestrator copies the pipeline to a **shared cache volume** (`fastflow-cache-pvc`, mount e.g. `/shared`, subdirectory `pipeline_runs/<Run-ID>`). Jobs mount this volume and the uv cache – **no** manual `PIPELINES_HOST_DIR` for worker bind mounts needed.
+- **UV cache / Python installs**: Orchestrator env **`UV_CACHE_DIR=/shared/uv_cache`** and **`UV_PYTHON_INSTALL_DIR=/shared/uv_python`** use the same PVC subdirectories as job pods (`/cache/uv`, `/cache/uv_python`), so pre-heating is shared with pipeline runs.
 - **`PIPELINES_HOST_DIR`**: Mainly needed for **`PIPELINE_EXECUTOR=docker`** when the orchestrator starts Docker workers with host paths. Not required in the typical K8s Jobs configuration.
 
 - **`ENVIRONMENT`** controls population:
