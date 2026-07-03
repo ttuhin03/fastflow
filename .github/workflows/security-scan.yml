@@ -146,11 +146,13 @@ jobs:
           fetch-depth: 0   # gesamte History scannen, nicht nur den letzten Commit
 
       - name: gitleaks Scan
+        # gitleaks v8.19+: das alte `detect` wurde durch `git <pfad>` ersetzt.
         # --redact: Secrets werden im Report maskiert (keine Klartext-Leaks in Logs/Artifact).
         # --exit-code 1: BLOCKIEREND bei Fund. Allowlisting via .gitleaks.toml / .gitleaksignore.
         run: |
-          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.21.2 \
-            detect --source=/repo --redact \
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.28.0 \
+            git /repo --redact \
+            --gitleaks-ignore-path /repo/.gitleaksignore \
             --report-format sarif --report-path /repo/gitleaks.sarif \
             --exit-code 1
 
