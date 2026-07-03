@@ -1,0 +1,171 @@
+name: Security Scan (IaC / Image / Secrets)
+
+# Ergänzt die bestehende Absicherung (CodeQL = Code-SAST, Dependabot =
+# Dependency-CVEs) um genau die Bereiche, die diese NICHT abdecken:
+#   1. IaC-/K8s-/Dockerfile-Misconfiguration  -> Trivy config
+#   2. OS-/Base-Image-Schwachstellen           -> Trivy image
+#   3. Versehentlich committete Secrets        -> gitleaks
+#
+# Findings werden als SARIF in den GitHub Security-Tab (Code scanning) geladen
+# UND zusätzlich als Artifact abgelegt (Fallback, falls das Repo kein Code
+# Scanning / GHAS aktiviert hat).
+#
+# Gating-Philosophie (bewusst gewählt, siehe Kommentare an den Steps):
+#   - Secrets  -> BLOCKIEREND (eindeutig, gehören nie ins Repo).
+#   - IaC/Image -> zunächst NICHT blockierend (Sichtbarkeit zuerst, kein rotes
+#     Board am ersten Tag). Zum Verschärfen jeweils exit-code auf '1' setzen.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Montags 04:00 UTC (1h nach der DAST-Pipeline, damit sich Runner nicht überlappen)
+    - cron: '0 4 * * 1'
+
+permissions:
+  contents: read
+  security-events: write   # nötig für den Upload der SARIF-Reports ins Code-Scanning
+
+# Laufende Scans für denselben Branch/PR abbrechen, wenn ein neuer Push kommt.
+concurrency:
+  group: security-scan-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1) IaC / Dockerfile / Kubernetes Misconfiguration
+  #    Fängt genau das ab, was CodeQL nicht sieht: über-permissive RBAC,
+  #    privilegierte Pods, fehlende SecurityContexts, Root-Container,
+  #    Docker-Socket-Exposure etc.
+  # ---------------------------------------------------------------------------
+  iac-scan:
+    name: IaC & Dockerfile Misconfig (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Trivy Config Scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: config
+          scan-ref: .
+          format: sarif
+          output: trivy-iac.sarif
+          severity: CRITICAL,HIGH,MEDIUM
+          # Nicht blockierend (Sichtbarkeit zuerst). Zum Erzwingen: '1' setzen und
+          # ggf. severity auf CRITICAL,HIGH reduzieren, um Rauschen zu vermeiden.
+          exit-code: '0'
+          # Fremd-/Duplikat-Manifeste ausklammern: node_modules und die lokalen
+          # Claude-Worktrees enthalten Kopien der k8s-Manifeste (sonst Doppel-Findings).
+          skip-dirs: '.claude,node_modules,frontend/node_modules'
+
+      - name: SARIF ins Code-Scanning laden
+        if: always()
+        continue-on-error: true   # kein GHAS/Code-Scanning -> nicht hart failen
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-iac.sarif
+          category: trivy-iac
+
+      - name: SARIF als Artifact hochladen
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-iac-sarif
+          path: trivy-iac.sarif
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # 2) Container-Image Vulnerabilities
+  #    Baut Orchestrator- und Worker-Image und scannt OS-Pakete + Bibliotheken.
+  #    Deckt Base-Image-CVEs ab, die Dependabot (nur deklarierte Deps) nicht sieht.
+  # ---------------------------------------------------------------------------
+  image-scan:
+    name: Image Vulnerabilities (Trivy)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: orchestrator
+            dockerfile: Dockerfile
+          - name: worker
+            dockerfile: Dockerfile.worker
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: ${{ matrix.name }}-Image bauen
+        run: docker build -f "${{ matrix.dockerfile }}" -t "fastflow-${{ matrix.name }}:scan" .
+
+      - name: Trivy Image Scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: image
+          image-ref: "fastflow-${{ matrix.name }}:scan"
+          format: sarif
+          output: "trivy-image-${{ matrix.name }}.sarif"
+          vuln-type: 'os,library'
+          severity: CRITICAL,HIGH
+          # Nur behebbare CVEs melden -> weniger Rauschen durch nicht-fixbare Base-CVEs.
+          ignore-unfixed: true
+          # Nicht blockierend (Sichtbarkeit zuerst). Zum Erzwingen auf '1' setzen.
+          exit-code: '0'
+
+      - name: SARIF ins Code-Scanning laden
+        if: always()
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: "trivy-image-${{ matrix.name }}.sarif"
+          category: "trivy-image-${{ matrix.name }}"
+
+      - name: SARIF als Artifact hochladen
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "trivy-image-${{ matrix.name }}-sarif"
+          path: "trivy-image-${{ matrix.name }}.sarif"
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # 3) Secret Scanning
+  #    Scannt die gesamte Git-History nach committeten Secrets. Läuft über das
+  #    offizielle gitleaks-Image (keine Lizenz-/Org-Gates wie bei der Action).
+  # ---------------------------------------------------------------------------
+  secret-scan:
+    name: Secret Scanning (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (volle History)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # gesamte History scannen, nicht nur den letzten Commit
+
+      - name: gitleaks Scan
+        # --redact: Secrets werden im Report maskiert (keine Klartext-Leaks in Logs/Artifact).
+        # --exit-code 1: BLOCKIEREND bei Fund. Allowlisting via .gitleaks.toml / .gitleaksignore.
+        run: |
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.21.2 \
+            detect --source=/repo --redact \
+            --report-format sarif --report-path /repo/gitleaks.sarif \
+            --exit-code 1
+
+      - name: SARIF ins Code-Scanning laden
+        if: always()
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: gitleaks.sarif
+          category: gitleaks
+
+      - name: SARIF als Artifact hochladen
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-sarif
+          path: gitleaks.sarif
+          if-no-files-found: ignore
