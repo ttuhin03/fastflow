@@ -62,6 +62,41 @@ _auth_codes: Dict[str, Dict] = {}
 _AUTH_CODE_TTL = 60
 _MAX_AUTH_CODES = 200
 
+# OAuth-state wird zusätzlich zum Server-State an den Browser gebunden (Login-CSRF-Schutz).
+# httponly + SameSite=Lax; das Cookie wird beim Authorize gesetzt und im Callback geprüft.
+_OAUTH_STATE_COOKIE = "oauth_state"
+_OAUTH_STATE_COOKIE_MAX_AGE = 600  # 10 Minuten
+_OAUTH_STATE_COOKIE_PATH = "/api/auth"
+
+
+def _set_oauth_state_cookie(response: RedirectResponse, state: str) -> RedirectResponse:
+    """Bindet den OAuth-state an den Browser (httponly, SameSite=Lax), damit der Callback
+    verifizieren kann, dass der zurückkommende state zu genau dieser Session gehört."""
+    response.set_cookie(
+        key=_OAUTH_STATE_COOKIE,
+        value=state,
+        max_age=_OAUTH_STATE_COOKIE_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+        secure=(config.ENVIRONMENT == "production"),
+        path=_OAUTH_STATE_COOKIE_PATH,
+    )
+    return response
+
+
+def _clear_oauth_state_cookie(response: RedirectResponse) -> RedirectResponse:
+    """Löscht das oauth_state-Cookie nach abgeschlossenem Callback."""
+    response.delete_cookie(key=_OAUTH_STATE_COOKIE, path=_OAUTH_STATE_COOKIE_PATH)
+    return response
+
+
+def _verify_oauth_state_cookie(request: Request, state: Optional[str]) -> None:
+    """Prüft, dass der im Callback zurückgegebene state exakt dem browser-gebundenen
+    Cookie entspricht (CSRF-Schutz). Bei fehlendem/abweichendem state: 400."""
+    cookie_state = request.cookies.get(_OAUTH_STATE_COOKIE)
+    if not state or not cookie_state or not secrets.compare_digest(state, cookie_state):
+        raise HTTPException(status_code=400, detail="Ungültiger oder fehlender OAuth-state (CSRF-Schutz)")
+
 
 def _cleanup_auth_codes() -> None:
     """Entfernt abgelaufene Auth-Codes aus dem In-Memory-Store."""
@@ -232,7 +267,8 @@ async def github_authorize(
     url = get_github_authorize_url(s)
     if not url.startswith(GITHUB_AUTHORIZE_URL):
         raise HTTPException(status_code=400, detail="Invalid redirect target")
-    return RedirectResponse(url=url, status_code=302)
+    resp = RedirectResponse(url=url, status_code=302)
+    return _set_oauth_state_cookie(resp, s)
 
 
 @router.get("/github/callback")
@@ -248,6 +284,15 @@ async def github_callback(
     """
     if not code:
         raise HTTPException(status_code=400, detail="GitHub OAuth: code fehlt")
+    # CSRF-Schutz: zurückgegebener state muss zum browser-gebundenen oauth_state-Cookie passen.
+    _verify_oauth_state_cookie(request, state)
+    response = await _github_callback_impl(code=code, state=state, session=session)
+    return _clear_oauth_state_cookie(response)
+
+
+async def _github_callback_impl(
+    *, code: str, state: Optional[str], session: Session
+) -> RedirectResponse:
     try:
         github_user = await get_github_user_data(code)
     except HTTPException as exc:
@@ -301,7 +346,8 @@ async def google_authorize(
     url = get_google_authorize_url(s)
     if not url.startswith(GOOGLE_AUTHORIZE_URL):
         raise HTTPException(status_code=400, detail="Invalid redirect target")
-    return RedirectResponse(url=url, status_code=302)
+    resp = RedirectResponse(url=url, status_code=302)
+    return _set_oauth_state_cookie(resp, s)
 
 
 @router.get("/google/callback")
@@ -317,6 +363,15 @@ async def google_callback(
     """
     if not code:
         raise HTTPException(status_code=400, detail="Google OAuth: code fehlt")
+    # CSRF-Schutz: zurückgegebener state muss zum browser-gebundenen oauth_state-Cookie passen.
+    _verify_oauth_state_cookie(request, state)
+    response = await _google_callback_impl(code=code, state=state, session=session)
+    return _clear_oauth_state_cookie(response)
+
+
+async def _google_callback_impl(
+    *, code: str, state: Optional[str], session: Session
+) -> RedirectResponse:
     try:
         google_user = await get_google_user_data(code)
     except HTTPException as exc:
@@ -368,7 +423,8 @@ async def microsoft_authorize(
     url = get_microsoft_authorize_url(s)
     if not url.startswith(MICROSOFT_AUTHORIZE_URL_BASE):
         raise HTTPException(status_code=400, detail="Invalid redirect target")
-    return RedirectResponse(url=url, status_code=302)
+    resp = RedirectResponse(url=url, status_code=302)
+    return _set_oauth_state_cookie(resp, s)
 
 
 @router.get("/microsoft/callback")
@@ -384,6 +440,15 @@ async def microsoft_callback(
     """
     if not code:
         raise HTTPException(status_code=400, detail="Microsoft OAuth: code fehlt")
+    # CSRF-Schutz: zurückgegebener state muss zum browser-gebundenen oauth_state-Cookie passen.
+    _verify_oauth_state_cookie(request, state)
+    response = await _microsoft_callback_impl(code=code, state=state, session=session)
+    return _clear_oauth_state_cookie(response)
+
+
+async def _microsoft_callback_impl(
+    *, code: str, state: Optional[str], session: Session
+) -> RedirectResponse:
     try:
         microsoft_user = await get_microsoft_user_data(code)
     except HTTPException:
@@ -486,7 +551,8 @@ async def link_google(
     if not url.startswith(GOOGLE_AUTHORIZE_URL):
         raise HTTPException(status_code=400, detail="Invalid redirect target")
     logger.info("OAuth: Link-Flow gestartet provider=google user=%s", current_user.username)
-    return RedirectResponse(url=url, status_code=302)
+    resp = RedirectResponse(url=url, status_code=302)
+    return _set_oauth_state_cookie(resp, s)
 
 
 @router.get("/link/github")
@@ -507,7 +573,8 @@ async def link_github(
     if not url.startswith(GITHUB_AUTHORIZE_URL):
         raise HTTPException(status_code=400, detail="Invalid redirect target")
     logger.info("OAuth: Link-Flow gestartet provider=github user=%s", current_user.username)
-    return RedirectResponse(url=url, status_code=302)
+    resp = RedirectResponse(url=url, status_code=302)
+    return _set_oauth_state_cookie(resp, s)
 
 
 @router.get("/link/microsoft")
@@ -527,7 +594,8 @@ async def link_microsoft(
     if not url.startswith(MICROSOFT_AUTHORIZE_URL_BASE):
         raise HTTPException(status_code=400, detail="Invalid redirect target")
     logger.info("OAuth: Link-Flow gestartet provider=microsoft user=%s", current_user.username)
-    return RedirectResponse(url=url, status_code=302)
+    resp = RedirectResponse(url=url, status_code=302)
+    return _set_oauth_state_cookie(resp, s)
 
 
 @router.get("/custom/authorize")
@@ -549,7 +617,8 @@ async def custom_authorize(
     allowed_base = (config.CUSTOM_OAUTH_AUTHORIZE_URL or "").split("?")[0]
     if not allowed_base or not url.startswith(allowed_base):
         raise HTTPException(status_code=400, detail="Invalid redirect target")
-    return RedirectResponse(url=url, status_code=302)
+    resp = RedirectResponse(url=url, status_code=302)
+    return _set_oauth_state_cookie(resp, s)
 
 
 @router.get("/custom/callback")
@@ -565,6 +634,15 @@ async def custom_callback(
     """
     if not code:
         raise HTTPException(status_code=400, detail="Custom OAuth: code fehlt")
+    # CSRF-Schutz: zurückgegebener state muss zum browser-gebundenen oauth_state-Cookie passen.
+    _verify_oauth_state_cookie(request, state)
+    response = await _custom_callback_impl(code=code, state=state, session=session)
+    return _clear_oauth_state_cookie(response)
+
+
+async def _custom_callback_impl(
+    *, code: str, state: Optional[str], session: Session
+) -> RedirectResponse:
     try:
         custom_user = await get_custom_oauth_user_data(code)
     except HTTPException:
@@ -609,7 +687,8 @@ async def link_custom(
     if not allowed_base or not url.startswith(allowed_base):
         raise HTTPException(status_code=400, detail="Invalid redirect target")
     logger.info("OAuth: Link-Flow gestartet provider=custom user=%s", current_user.username)
-    return RedirectResponse(url=url, status_code=302)
+    resp = RedirectResponse(url=url, status_code=302)
+    return _set_oauth_state_cookie(resp, s)
 
 
 @router.get("/me", response_model=dict, status_code=status.HTTP_200_OK)
