@@ -1,0 +1,22 @@
+# gitleaks-Allowlist (Fingerprint-Format: <commit>:<datei>:<rule>:<zeile>)
+#
+# Diese Treffer liegen dauerhaft in der Git-History und lassen sich nicht mehr
+# entfernen (ohne History-Rewrite). Sie sind hier bewusst allowlistet:
+#
+#  - k8s/secrets.yaml: ENCRYPTION_KEY + GITHUB_CLIENT_SECRET wurden versehentlich
+#    committet und anschließend geleert. Die Werte wurden ROTIERT (2026-07-03),
+#    gelten also als tot/ungültig. Aktueller Stand der Datei ist leer.
+#  - docs/api/API.md: abgeschnittenes JWT-Beispiel in der Doku (False Positive).
+#
+# WICHTIG: Neue Secret-Funde werden weiterhin geflaggt – hier NUR die bekannten
+# historischen Fingerprints eintragen.
+
+# ENCRYPTION_KEY (rotiert) – k8s/secrets.yaml
+d333f2a00a7b48909d03b7dc8cd952c266177e2d:k8s/secrets.yaml:generic-api-key:17
+
+# GITHUB_CLIENT_SECRET (rotiert) – k8s/secrets.yaml
+d333f2a00a7b48909d03b7dc8cd952c266177e2d:k8s/secrets.yaml:generic-api-key:23
+865259dfe1b23bd204012116a81da50ccf4c6ab6:k8s/secrets.yaml:generic-api-key:24
+
+# JWT-Beispiel in der API-Doku (False Positive)
+6f3e8b610040e401578c9b35bfd43c6daf4bf7a8:docs/api/API.md:generic-api-key:824
