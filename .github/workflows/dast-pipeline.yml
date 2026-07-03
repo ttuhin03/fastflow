@@ -17,6 +17,10 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
+      full_scan:
+        description: "Aktiven ZAP Full-Scan (zap-full-scan.py) statt Baseline ausführen?"
+        type: boolean
+        default: false
       run_sqlmap:
         description: "sqlmap zusätzlich zu ZAP ausführen?"
         type: boolean
@@ -99,10 +103,74 @@ jobs:
           docker logs fastflow-dast
           exit 1
 
-      - name: ZAP Baseline Scan
+      - name: Scan-Modus bestimmen (Baseline vs. Full)
+        # Baseline (schnell, rein passiv) bei jedem Push/PR. Aktiver Full-Scan nur
+        # beim wöchentlichen Schedule oder wenn manuell full_scan=true gewählt wurde.
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ] || \
+             { [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.full_scan }}" = "true" ]; }; then
+            echo "ZAP_SCRIPT=zap-full-scan.py" >> "$GITHUB_ENV"
+            echo "ZAP_SCAN_MODE=full" >> "$GITHUB_ENV"
+            echo "Modus: FULL (aktiver Scan via zap-full-scan.py)"
+          else
+            echo "ZAP_SCRIPT=zap-baseline.py" >> "$GITHUB_ENV"
+            echo "ZAP_SCAN_MODE=baseline" >> "$GITHUB_ENV"
+            echo "Modus: BASELINE (passiver Scan via zap-baseline.py)"
+          fi
+
+      - name: JWT-Admin-Token für authentifizierten Scan erzeugen
+        # Ein bloß selbst-signiertes JWT reicht NICHT: get_current_user verlangt
+        # zusätzlich eine in der DB persistierte Session (get_session_by_token) und
+        # einen existierenden User. Deshalb wird der Token im laufenden Container
+        # über die App-eigene Logik erzeugt (nutzt automatisch den JWT_SECRET_KEY
+        # aus dessen Env) und ein passender Admin-User + Session angelegt.
+        run: |
+          docker exec -i fastflow-dast python - <<'PY'
+          from datetime import timedelta
+          from sqlmodel import Session, select
+          from app.core.database import engine
+          from app.models import User, UserRole, UserStatus
+          from app.auth.auth import create_access_token, create_session
+
+          USERNAME = "dast-admin"
+          with Session(engine) as db:
+              user = db.exec(select(User).where(User.username == USERNAME)).first()
+              if user is None:
+                  user = User(
+                      username=USERNAME,
+                      email="dast-admin@example.invalid",
+                      role=UserRole.ADMIN,
+                      status=UserStatus.ACTIVE,
+                      blocked=False,
+                  )
+                  db.add(user)
+                  db.commit()
+                  db.refresh(user)
+              # Laufzeit großzügig wählen, damit der Token einen langen Full-Scan überlebt.
+              token = create_access_token(USERNAME, expires_delta=timedelta(hours=3))
+              create_session(db, user, token)
+              with open("/tmp/dast_token", "w") as f:
+                  f.write(token)
+          PY
+          TOKEN=$(docker exec fastflow-dast cat /tmp/dast_token)
+          if [ -z "$TOKEN" ]; then
+            echo "::error::JWT-Token-Erzeugung fehlgeschlagen. Container-Logs:"
+            docker logs fastflow-dast
+            exit 1
+          fi
+          # Token in Runner-Logs maskieren und für Folge-Steps bereitstellen.
+          echo "::add-mask::$TOKEN"
+          echo "ZAP_AUTH_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+          echo "JWT-Admin-Token erzeugt und Session persistiert."
+
+      - name: ZAP Scan (Baseline oder Full)
         # ZAP läuft in eigenem Container und wird deshalb ins selbe Docker-Netz
         # gehängt; das Ziel wird per Container-Namen adressiert (nicht localhost,
         # das im ZAP-Container auf ZAP selbst zeigen würde).
+        #
+        # Authentifizierung: Über die ZAP-"replacer"-Add-on-Config (per -z an den
+        # ZAP-Daemon durchgereicht) wird bei JEDEM Request ein
+        # "Authorization: Bearer <TOKEN>"-Header gesetzt bzw. ersetzt.
         run: |
           mkdir -p "$RUNNER_TEMP/zap-wrk"
           cp .zap/rules.tsv "$RUNNER_TEMP/zap-wrk/rules.tsv"
@@ -111,11 +179,18 @@ jobs:
           # -I: WARN-Findings sind informativ und brechen den Build NICHT
           # (konsistent zu .zap/rules.tsv: Header=WARN, nur SQLi/XSS=FAIL).
           # -a: zusätzliche (alpha) Passive-Scan-Regeln.
+          # -z: ZAP-Daemon-Config -> replacer-Regel injiziert den Auth-Header.
           docker run --rm --network "$DAST_NETWORK" \
             -v "$RUNNER_TEMP/zap-wrk:/zap/wrk/:rw" \
             -t ghcr.io/zaproxy/zaproxy:stable \
-            zap-baseline.py -t "http://fastflow-dast:8000" \
-              -c rules.tsv -a -I -r report_html.html -J report_json.json
+            "$ZAP_SCRIPT" -t "http://fastflow-dast:8000" \
+              -c rules.tsv -a -I -r report_html.html -J report_json.json \
+              -z "-config replacer.full_list(0).description=auth \
+                  -config replacer.full_list(0).enabled=true \
+                  -config replacer.full_list(0).matchtype=REQ_HEADER \
+                  -config replacer.full_list(0).matchstr=Authorization \
+                  -config replacer.full_list(0).regex=false \
+                  -config 'replacer.full_list(0).replacement=Bearer ${ZAP_AUTH_TOKEN}'"
           echo "zap_exit=$?" >> "$GITHUB_ENV"
           set -e
 
@@ -167,11 +242,12 @@ jobs:
       - name: ZAP Findings auswerten (Build ggf. brechen)
         if: always()
         run: |
-          # zap-baseline.py: 0 = keine WARN/FAIL, sonst Findings oder interner Fehler
+          # zap-baseline.py / zap-full-scan.py: 0 = keine WARN/FAIL, sonst Findings
+          # oder interner Fehler.
           if [ "${zap_exit:-3}" = "0" ]; then
-            echo "ZAP Baseline: keine nicht-ignorierten Findings."
+            echo "ZAP (${ZAP_SCAN_MODE:-baseline}): keine nicht-ignorierten Findings."
           else
-            echo "::error::ZAP Baseline meldet Findings oder Fehler (exit ${zap_exit:-unset}). Details im zap-report-Artifact."
+            echo "::error::ZAP (${ZAP_SCAN_MODE:-baseline}) meldet Findings oder Fehler (exit ${zap_exit:-unset}). Details im zap-report-Artifact."
             exit 1
           fi
 
