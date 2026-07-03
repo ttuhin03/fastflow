@@ -41,6 +41,9 @@ services:
       dockerfile: Dockerfile
     container_name: fastflow-orchestrator
     image: fastflow-orchestrator:latest
+    read_only: true
+    tmpfs:
+      - /tmp
     
     # Docker-Socket-Mount entfernt - Kommunikation erfolgt über docker-proxy
     # ⚠️ SECURITY: Docker-Socket wird nur noch vom docker-proxy-Service gemountet
@@ -69,6 +72,9 @@ services:
       - DATA_DIR=/app/data
       - UV_CACHE_DIR=/app/data/uv_cache
       - UV_PYTHON_INSTALL_DIR=/app/data/uv_python
+      - WORKER_BASE_IMAGE=fastflow-worker:latest
+      - PYTHONDONTWRITEBYTECODE=1
+      - TMPDIR=/tmp
       # OAuth-Redirect: Frontend wird vom gleichen Server (Orchestrator) auf :8000 ausgeliefert
       - FRONTEND_URL=http://localhost:${PORT:-8000}
       - BASE_URL=http://localhost:${PORT:-8000}
@@ -133,8 +139,8 @@ networks:
     driver: bridge
 
 # Hinweise:
-# - Worker-Image (WORKER_BASE_IMAGE) muss nicht gebaut werden, wird von Registry gepullt
-# - Standard: ghcr.io/astral-sh/uv:python3.11-bookworm-slim
+# - Worker-Image vor Start bauen: docker build -f Dockerfile.worker -t fastflow-worker:latest .
+# - WORKER_BASE_IMAGE=fastflow-worker:latest (Non-Root, read-only root, /runner für Notebooks)
 # - Docker-Socket-Mount ist erforderlich für Container-Management
 # - Alle Volumes sind konfigurierbar über Environment-Variablen
 # - .env-Datei sollte im Projekt-Root erstellt werden (siehe .env.example)

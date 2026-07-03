@@ -49,6 +49,14 @@ from app.services.downstream_triggers import get_downstream_pipelines_to_trigger
 from app.resilience.retry_strategy import wait_for_retry
 from app.core.database import get_session
 from app.git_sync.sync import get_current_git_info
+from app.executor.worker_runtime import (
+    WORKER_APP_MOUNT,
+    WORKER_ROUTE_FILE,
+    WORKER_UV_CACHE_DIR,
+    WORKER_UV_PYTHON_DIR,
+    worker_base_env,
+    worker_container_user,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -620,22 +628,15 @@ async def _run_container_task(
         route_host_path.touch()  # Muss vor dem Docker-Mount existieren
 
         # Basis-Env für uv (Cache + Python-Install); env_vars/Secrets können überschreiben
-        # UV_LINK_MODE=copy verhindert Probleme mit Hardlinks in Docker-Volumes
-        base_env = {
-            "UV_CACHE_DIR": "/root/.cache/uv",
-            "UV_PYTHON_INSTALL_DIR": "/cache/uv_python",
-            "UV_LINK_MODE": "copy",
-            "FASTFLOW_ROUTE_FILE": "/tmp/.fastflow_route",
-        }
-        container_env = {**base_env, **env_vars}
+        container_env = worker_base_env(env_vars)
         
         # Bei Notebook-Pipelines: Runner-Verzeichnis (app/runners) nach /runner mounten
         # /app rw, damit Pipelines Ausgabedateien (z. B. generierte XML/CSV) schreiben können
         volumes_dict: Dict[str, Dict[str, str]] = {
-            pipeline_host_path: {"bind": "/app", "mode": "rw"},
-            uv_cache_host_path: {"bind": "/root/.cache/uv", "mode": "rw"},
-            uv_python_host_path: {"bind": "/cache/uv_python", "mode": "rw"},
-            str(route_host_path): {"bind": "/tmp/.fastflow_route", "mode": "rw"},
+            pipeline_host_path: {"bind": WORKER_APP_MOUNT, "mode": "rw"},
+            uv_cache_host_path: {"bind": WORKER_UV_CACHE_DIR, "mode": "rw"},
+            uv_python_host_path: {"bind": WORKER_UV_PYTHON_DIR, "mode": "rw"},
+            str(route_host_path): {"bind": WORKER_ROUTE_FILE, "mode": "rw"},
         }
         if pipeline.get_entry_type() == "notebook":
             runners_host_path = _get_host_path_for_volume(
@@ -657,6 +658,9 @@ async def _run_container_task(
                 "fastflow-run-id": str(run_id),
                 "fastflow-pipeline": pipeline.name
             },
+            "user": worker_container_user(),
+            "read_only": True,
+            "tmpfs": {"/tmp": "size=64m"},
             "auto_remove": False,  # Wird manuell entfernt
             "detach": True,
             "log_config": {

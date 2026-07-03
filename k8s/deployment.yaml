@@ -26,9 +26,24 @@ spec:
         runAsUser: 1001
         runAsGroup: 1001
         fsGroup: 1001          # Kubernetes setzt Gruppe aller PVC-Mounts auf 1001
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
         - name: wait-for-postgres
           image: postgres:16-alpine
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 70
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            seccompProfile:
+              type: RuntimeDefault
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           command:
             - sh
             - -c
@@ -49,6 +64,14 @@ spec:
           # bei echtem Deployment "ghcr.io/ttuhin03/fastflow-orchestrator:v0.7.1",
           image: fastflow-orchestrator:latest
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            seccompProfile:
+              type: RuntimeDefault
+            capabilities:
+              drop:
+                - ALL
           resources:
             requests:
               cpu: 250m
@@ -86,9 +109,13 @@ spec:
             - name: DATA_DIR
               value: /app/data
             - name: UV_CACHE_DIR
-              value: /app/data/uv_cache
+              value: /shared/uv_cache
             - name: UV_PYTHON_INSTALL_DIR
-              value: /app/data/uv_python
+              value: /shared/uv_python
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+            - name: TMPDIR
+              value: /tmp
           volumeMounts:
             - name: fastflow-storage
               mountPath: /app/data
@@ -101,6 +128,8 @@ spec:
               subPath: pipelines
             - name: cache-pvc
               mountPath: /shared
+            - name: tmp
+              mountPath: /tmp
           livenessProbe:
             httpGet:
               path: /health
@@ -124,3 +153,5 @@ spec:
         - name: cache-pvc
           persistentVolumeClaim:
             claimName: fastflow-cache-pvc
+        - name: tmp
+          emptyDir: {}

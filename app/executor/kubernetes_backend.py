@@ -38,6 +38,12 @@ from app.executor.core import (
     PREFIX_CELL_START,
     _parse_and_persist_cell_line,
 )
+from app.executor.worker_runtime import (
+    build_k8s_container_security_context,
+    build_k8s_pod_security_context,
+    k8s_worker_volume_mount_specs,
+    worker_base_env,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -267,13 +273,8 @@ async def run_container_task(
             pipeline_slug = "run"
         job_name = f"ff-{pipeline_slug}-{run_id_short}"[:63]
 
-        base_env = {
-            "UV_CACHE_DIR": "/root/.cache/uv",
-            "UV_PYTHON_INSTALL_DIR": "/cache/uv_python",
-            "UV_LINK_MODE": "copy",
-            "PYTHONUNBUFFERED": "1",
-        }
-        container_env = [client.V1EnvVar(name=k, value=v) for k, v in {**base_env, **env_vars}.items()]
+        base_env = worker_base_env(env_vars)
+        container_env = [client.V1EnvVar(name=k, value=v) for k, v in base_env.items()]
 
         resources: Dict[str, Any] = {}
         if effective_mem:
@@ -287,11 +288,18 @@ async def run_container_task(
             name="cache",
             persistent_volume_claim=client.V1PersistentVolumeClaimVolumeSource(claim_name=pvc_name),
         )
-        # /app rw, damit Pipelines Ausgabedateien schreiben können
+        tmp_volume = client.V1Volume(
+            name="tmp",
+            empty_dir=client.V1EmptyDirVolumeSource(),
+        )
         mounts = [
-            client.V1VolumeMount(name="cache", mount_path="/app", sub_path=sub_path_run, read_only=False),
-            client.V1VolumeMount(name="cache", mount_path="/root/.cache/uv", sub_path="uv_cache", read_only=False),
-            client.V1VolumeMount(name="cache", mount_path="/cache/uv_python", sub_path="uv_python", read_only=False),
+            client.V1VolumeMount(
+                name=spec["name"],
+                mount_path=spec["mount_path"],
+                sub_path=spec["sub_path"],
+                read_only=spec["read_only"],
+            )
+            for spec in k8s_worker_volume_mount_specs(sub_path_run)
         ]
         container = client.V1Container(
             name="pipeline",
@@ -301,17 +309,13 @@ async def run_container_task(
             env=container_env,
             volume_mounts=mounts,
             resources=client.V1ResourceRequirements(**resources) if resources else None,
+            security_context=build_k8s_container_security_context(client),
         )
         pod_spec = client.V1PodSpec(
             restart_policy="Never",
             containers=[container],
-            volumes=[volume],
-            security_context=client.V1PodSecurityContext(
-                run_as_non_root=True,
-                run_as_user=1001,
-                run_as_group=1001,
-                fs_group=1001,
-            ),
+            volumes=[volume, tmp_volume],
+            security_context=build_k8s_pod_security_context(client),
         )
         template = client.V1PodTemplateSpec(
             metadata=client.V1ObjectMeta(

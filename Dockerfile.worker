@@ -22,4 +22,4 @@ RUN groupadd -g 1001 worker && useradd -u 1001 -g worker -d /runner -s /sbin/nol
 USER worker
 
 # UV_CACHE_DIR und UV_PYTHON_INSTALL_DIR werden zur Laufzeit als Env gesetzt
-# (steuern den Cache-Pfad; nicht abhängig von /root).
+# (Pfade: /cache/uv und /cache/uv_python – nicht /root).

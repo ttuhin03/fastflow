@@ -142,13 +142,13 @@ class Config:
     
     WORKER_BASE_IMAGE: str = os.getenv(
         "WORKER_BASE_IMAGE",
-        "ghcr.io/astral-sh/uv:python3.11-bookworm-slim"
+        "fastflow-worker:latest"
     )
     """
     Docker-Image für Pipeline-Container.
     
-    Muss UV (Astral UV) enthalten und Python 3.11+ unterstützen.
-    Standard: ghcr.io/astral-sh/uv:python3.11-bookworm-slim
+    Muss UV enthalten und als Non-Root-User (UID 1001) mit readOnlyRootFS lauffähig sein.
+    Standard: fastflow-worker:latest (bauen: docker build -f Dockerfile.worker -t fastflow-worker:latest .)
     """
     
     UV_CACHE_DIR: Path = Path(os.getenv("UV_CACHE_DIR", "./data/uv_cache")).resolve()

@@ -39,7 +39,7 @@ Fast-Flow is configured primarily via environment variables in a `.env` file. Th
 |----------|---------|-------------|
 | `PIPELINE_EXECUTOR` | `docker` | Execution backend for pipeline runs: `docker` (containers via Docker socket proxy) or `kubernetes` (Kubernetes Jobs, see [Kubernetes](K8S.md)). |
 | `DOCKER_PROXY_URL` | `http://docker-proxy:2375` | URL of the Docker socket proxy (only relevant for `PIPELINE_EXECUTOR=docker`). |
-| `WORKER_BASE_IMAGE` | `ghcr.io/astral-sh/uv:python3.11-bookworm-slim` | Base image for pipeline containers (must include `uv`). For a minimal setup with uv only: `ghcr.io/astral-sh/uv:bookworm-slim` or a custom image from `Dockerfile.worker` (then preheating must provide Python). |
+| `WORKER_BASE_IMAGE` | `fastflow-worker:latest` | Base image for pipeline containers (build with `Dockerfile.worker`; must run as UID 1001 with read-only root). In production use your registry image, e.g. `ghcr.io/<owner>/fastflow-worker:v1.0.0`. |
 | `MAX_CONCURRENT_RUNS` | `10` | Maximum number of pipelines running concurrently. |
 | `CONTAINER_TIMEOUT` | *Empty* (no timeout) | Global timeout for pipeline runs in seconds. |
 | `RETRY_ATTEMPTS` | `0` | Default number of retry attempts on failure. |
