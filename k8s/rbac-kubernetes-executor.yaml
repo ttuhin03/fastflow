@@ -1,5 +1,5 @@
 # RBAC für Pipeline-Executor im Kubernetes-Modus
-# Erlaubt dem Orchestrator: Jobs erstellen/löschen/listen, Pod-Logs lesen, PVC nutzen
+# Minimal: Jobs verwalten, Pods/Logs lesen, optionale Pod-Metriken (metrics-server)
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -17,12 +17,9 @@ metadata:
 rules:
   - apiGroups: ["batch"]
     resources: ["jobs"]
-    verbs: ["create", "get", "list", "watch", "delete"]
+    verbs: ["create", "get", "list", "delete"]
   - apiGroups: [""]
     resources: ["pods", "pods/log"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: [""]
-    resources: ["persistentvolumeclaims"]
     verbs: ["get", "list"]
   - apiGroups: ["metrics.k8s.io"]
     resources: ["pods"]
