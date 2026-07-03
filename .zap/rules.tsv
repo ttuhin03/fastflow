@@ -8,5 +8,24 @@
 # Beispiel: informativen Alert zu Server-Version-Leak ignorieren
 10036	IGNORE	Server Leaks Version Information
 
+# Sub Resource Integrity: einzige externe Ressource ist das Google-Fonts-CSS,
+# dessen Response UA-abhängig ist -> SRI-Hashes technisch nicht möglich.
+90003	IGNORE	Sub Resource Integrity Attribute Missing
+
+# Sec-Fetch-* sind REQUEST-Header, die der Browser sendet; ZAP sendet sie im
+# Baseline-Scan nicht mit. Serverseitig nicht behebbar -> False Positive.
+90005	IGNORE	Sec-Fetch-* Header is Missing
+
+# Rein informativ: erkennt nur, dass es eine SPA ist.
+10109	IGNORE	Modern Web Application
+
+# Statische Assets (JS/CSS/Fonts/favicon) sind bewusst cachebar.
+10049	IGNORE	Storable and Cacheable Content
+
+# False Positives in minifizierten JS-Bundles (zufällige Base64-ähnliche
+# Strings bzw. Wortmuster wie "USER" in Vendor-Code).
+10094	IGNORE	Base64 Disclosure
+10027	IGNORE	Information Disclosure - Suspicious Comments
+
 # Alles andere bleibt bei den ZAP-Standardeinstellungen (i.d.R. WARN),
 # kritische Dinge wie SQLi/XSS lässt man normalerweise auf FAIL stehen.

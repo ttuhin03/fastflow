@@ -49,26 +49,32 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         
         # Content-Security-Policy
-        # Erlaubt:
-        # - self: Eigene Domain
-        # - 'unsafe-inline' für inline scripts/styles (notwendig für React in Dev)
-        # - 'unsafe-eval' für eval (notwendig für React Dev Mode)
+        # Bewusste Ausnahmen (werden von ZAP als WARN gemeldet, akzeptiertes Risiko):
+        # - style-src 'unsafe-inline': React/Recharts setzen Inline-Styles
+        # - img-src https:: Branding-Logo und Custom-OAuth-Icon sind Admin-konfigurierbare
+        #   URLs auf beliebigen HTTPS-Hosts; data: für Zell-Output-Bilder (base64)
         # OAuth-Provider für Login (connect-src für Fetch, falls nötig)
         oauth_connect = "https://github.com https://api.github.com https://accounts.google.com https://oauth2.googleapis.com https://login.microsoftonline.com https://graph.microsoft.com"
         if config.ENVIRONMENT == "production":
             # Produktion: Restriktive CSP
+            # script-src ohne 'unsafe-inline'/'unsafe-eval': Der Vite-Build nutzt
+            # weder eval noch Inline-Scripts (index.html hat keine).
             # style-src: fonts.googleapis.com für Google Fonts CSS; font-src: fonts.gstatic.com für Font-Dateien (.woff2)
             csp = (
                 "default-src 'self'; "
-                "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+                "script-src 'self'; "
                 "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
                 "img-src 'self' data: https:; "
                 "font-src 'self' data: https://fonts.gstatic.com; "
                 f"connect-src 'self' {oauth_connect}; "
-                "frame-ancestors 'none';"
+                "frame-ancestors 'none'; "
+                "form-action 'self'; "
+                "base-uri 'self'; "
+                "object-src 'none';"
             )
         else:
             # Development: Weniger restriktiv für Dev-Tools
+            # (Vite Dev-Server/HMR braucht eval, Inline-Scripts und WebSockets)
             csp = (
                 "default-src 'self'; "
                 "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
@@ -76,9 +82,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
                 "img-src 'self' data: https:; "
                 "font-src 'self' data: https://fonts.gstatic.com; "
                 f"connect-src 'self' ws: wss: {oauth_connect}; "
-                "frame-ancestors 'none';"
+                "frame-ancestors 'none'; "
+                "form-action 'self'; "
+                "base-uri 'self'; "
+                "object-src 'none';"
             )
-        
+
         response.headers["Content-Security-Policy"] = csp
         
         # X-Frame-Options: Verhindert Einbettung in Frames (Clickjacking-Schutz)
@@ -92,6 +101,21 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         
         # X-XSS-Protection: Zusätzlicher XSS-Schutz (veraltet, aber für Kompatibilität)
         response.headers["X-XSS-Protection"] = "1; mode=block"
+
+        # Permissions-Policy: Deaktiviert mächtige Browser-Features, die die App nicht nutzt
+        response.headers["Permissions-Policy"] = (
+            "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+        )
+
+        # Cross-Origin-Isolation-Header (Spectre-/XS-Leak-Schutz)
+        # COOP: eigener Browsing-Context, kein window.opener-Zugriff von fremden Origins
+        response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+        # CORP: eigene Ressourcen (Assets, API) nicht von fremden Origins einbettbar
+        response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+        # COEP: 'credentialless' statt 'require-corp', damit Google Fonts und
+        # Admin-konfigurierte Branding-Bilder (fremde Hosts ohne CORP-Header)
+        # weiter laden; Browser ohne Support ignorieren den Wert einfach
+        response.headers["Cross-Origin-Embedder-Policy"] = "credentialless"
         
         # Strict-Transport-Security: Erzwingt HTTPS (nur wenn HTTPS aktiviert ist)
         # Prüfe ob Request über HTTPS kam

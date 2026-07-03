@@ -64,11 +64,18 @@ jobs:
             tecnativa/docker-socket-proxy:latest
 
       - name: Orchestrator-Container starten
+        # ENVIRONMENT=production, damit ZAP die produktive CSP/Header-Konfiguration
+        # scannt. Production erzwingt beim Boot einen JWT-Secret >= 32 Zeichen und
+        # einen gültigen Fernet-ENCRYPTION_KEY -> beide werden als Wegwerf-Werte
+        # pro Lauf frisch generiert (keine echten Secrets).
         run: |
+          ENCRYPTION_KEY=$(openssl rand -base64 32 | tr '+/' '-_')
+          JWT_SECRET_KEY=$(openssl rand -hex 32)
           docker run -d --name fastflow-dast --network "$DAST_NETWORK" \
             -p ${APP_PORT}:8000 \
-            -e ENVIRONMENT=development \
-            -e JWT_SECRET_KEY=dast-scan-dummy-not-for-prod \
+            -e ENVIRONMENT=production \
+            -e JWT_SECRET_KEY="$JWT_SECRET_KEY" \
+            -e ENCRYPTION_KEY="$ENCRYPTION_KEY" \
             -e SKIP_OAUTH_VERIFICATION=true \
             -e GITHUB_CLIENT_ID=dast-dummy \
             -e GITHUB_CLIENT_SECRET=dast-dummy \
