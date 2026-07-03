@@ -5,66 +5,96 @@ sidebar_position: 12
 # DAST-Pipeline: ZAP + sqlmap
 
 Der Workflow [`.github/workflows/dast-pipeline.yml`](https://github.com/ttuhin03/fastflow/blob/main/.github/workflows/dast-pipeline.yml)
-baut das echte Orchestrator-Image, startet es als Container und prüft die
-laufende App automatisiert auf Schwachstellen (Dynamic Application Security
+baut den Fast-Flow Orchestrator, startet ihn samt benötigtem Backend und prüft
+die laufende App automatisiert auf Schwachstellen (Dynamic Application Security
 Testing).
+
+## Warum der Orchestrator nicht per nacktem `docker run` scanbar ist
+
+Anders als eine triviale Web-App bootet der Orchestrator nur, wenn ein
+vollständiger Stack bereitsteht. Der Workflow stellt genau das her:
+
+1. **Orchestrator-Image** bauen (`./Dockerfile`).
+2. **Worker-Image** bauen (`./Dockerfile.worker`, `fastflow-worker:latest`) —
+   der Orchestrator prüft/pullt es beim Start, sonst bricht die Executor-Init ab.
+3. **docker-proxy** starten (`tecnativa/docker-socket-proxy`). Die
+   Pipeline-Executor-Initialisierung verlangt ein erreichbares Container-Backend
+   (`DOCKER_PROXY_URL`, Default `http://docker-proxy:2375`).
+4. **Beschreibbares Daten-Verzeichnis** nach `/app/data` mounten. Das Image legt
+   `/app/data` nicht selbst an (normalerweise ein Volume), und SQLite erstellt
+   keine Elternverzeichnisse → sonst `unable to open database file`.
+5. **OAuth-Dummy + `SKIP_OAUTH_VERIFICATION=true`** setzen. Der Start erzwingt
+   mindestens einen konfigurierten OAuth-Provider und verifiziert dessen
+   Credentials sonst live gegen den Provider. Die Dummy-Werte im Workflow sind
+   durch das Skip-Flag wirkungslos — **keine echten Secrets nötig**.
+
+Danach wartet der Workflow per `GET /health`-Gate (Liveness, Port `8000`) auf die
+App und scannt sie.
 
 ## Ablauf
 
-1. **Build**: Das Image wird aus dem regulären [`Dockerfile`](https://github.com/ttuhin03/fastflow/blob/main/Dockerfile)
-   gebaut (`fastflow-dast:latest`).
-2. **Run + Healthcheck**: Der Container startet auf Port `8000` und wird über
-   den `GET /health`-Endpoint abgewartet (Liveness-Check ohne externe
-   Abhängigkeiten – SQLite wird beim Start automatisch angelegt).
-3. **zap-scan**: Führt einen ZAP Baseline Scan gegen die laufende App aus.
-   Läuft bei jedem Push auf `main` und bei jedem PR.
-4. **sqlmap-scan**: Läuft nur bei manuellem Trigger (Checkbox `run_sqlmap`) oder
-   beim wöchentlichen Scheduled Run (Montag 03:00 UTC) — sqlmap-Scans dauern
-   länger und sind für jeden PR meist zu viel.
+- **ZAP Baseline Scan**: läuft bei jedem Push auf `main` und bei jedem PR.
+  `fail_action: true` lässt den Job bei nicht-ignorierten Findings fehlschlagen.
+- **sqlmap-Scan**: läuft nur bei manuellem Trigger (Checkbox `run_sqlmap`) oder
+  beim wöchentlichen Scheduled Run (Montag 03:00 UTC).
 
-Build, Start und Scan laufen bewusst **pro Job auf demselben Runner**. Ein
-`services:`-Container mit lokal gebautem Image funktioniert in GitHub Actions
-nicht, weil Jobs auf getrennten Runnern laufen und dort nur Images aus einer
-Registry verfügbar sind.
+Alles läuft in **einem** Job, damit der Stack nur einmal gebaut/gestartet wird.
 
 ## Konfiguration
 
-- **Port / Healthcheck**: Der Workflow ist auf Fast-Flow abgestimmt (Port `8000`,
-  `GET /health`). Wird der Port im Image geändert, muss er hier ebenfalls
-  angepasst werden.
-- **`.zap/rules.tsv`**: Legt fest, welche ZAP-Findings nur als Warnung gelten
-  (`WARN`), ignoriert (`IGNORE`) oder den Build brechen (`FAIL`) sollen. Die
-  Alert-IDs stehen im HTML-Report nach einem ersten Lauf bzw. in der
-  ZAP-Dokumentation. Kritisches (SQLi/XSS) bleibt auf den ZAP-Defaults.
+- **`.zap/rules.tsv`**: Legt fest, welche ZAP-Findings nur Warnung (`WARN`),
+  ignoriert (`IGNORE`) oder Build-brechend (`FAIL`) sind. Alert-IDs stehen im
+  HTML-Report nach einem ersten Lauf. Kritisches (SQLi/XSS) bleibt auf den
+  ZAP-Defaults.
 - **sqlmap-Zielparameter**: `http://localhost:8000/api/health?q=test` ist nur ein
-  Platzhalter. Fast-Flow hat keinen offenen `/search?q=`-Endpoint, und die meisten
+  Platzhalter. Fast-Flow hat keinen offenen `?q=`-Endpoint, und die echten
   API-Routen liegen hinter Auth. Für einen sinnvollen Scan einen echten
-  parametrisierten Endpoint eintragen – idealerweise über eine gespeicherte
+  parametrisierten Endpoint eintragen — idealerweise über eine gespeicherte
   Request mit Session-Cookie/Token (`-r request.txt`).
-- **GitHub-Issues**: Die ZAP-Action legt bewusst **keine** automatischen Issues
-  an (`allow_issue_writing: false`), damit der Workflow mit `contents: read`
+- **GitHub-Issues**: Die ZAP-Action legt bewusst **keine** Issues an
+  (`allow_issue_writing: false`), damit der Workflow mit `contents: read`
   auskommt. Findings landen im `zap-report`-Artifact.
 
 ## Sicherheits-/Rechtliche Hinweise
 
-- Nur gegen Systeme scannen, die man selbst kontrolliert – hier läuft der
-  Container im selben CI-Runner, ist also unproblematisch.
-- Bei echten Staging-Umgebungen sicherstellen, dass die Ziel-URL nicht
-  versehentlich auf Produktion zeigt.
-- sqlmap kann ab `--risk=2` destructive Payloads senden. Für CI reicht i.d.R.
-  `--risk=1 --level=2` (so im Workflow gesetzt).
+- Nur gegen selbst kontrollierte Systeme scannen — hier läuft alles im selben
+  CI-Runner, ist also unproblematisch.
+- Die gesetzten OAuth-/JWT-Werte sind reine Dummies für den Scan-Boot, **nicht**
+  für Produktion.
+- sqlmap kann ab `--risk=2` destructive Payloads senden. Für CI reicht
+  `--risk=1 --level=2` (so gesetzt).
 
-## Lokal testen, bevor es in CI läuft
+## Lokal testen
 
 ```bash
+# Images bauen
 docker build -t fastflow-dast:latest .
-docker run -d --name fastflow-dast -p 8000:8000 -e ENVIRONMENT=development fastflow-dast:latest
+docker build -f Dockerfile.worker -t fastflow-worker:latest .
+
+# Backend + App starten
+docker network create dast-net
+docker run -d --name docker-proxy --network dast-net \
+  -v /var/run/docker.sock:/var/run/docker.sock:ro \
+  -e CONTAINERS=1 -e IMAGES=1 -e VOLUMES=1 -e EXEC=1 -e NETWORKS=1 \
+  -e POST=1 -e DELETE=1 -e STATS=1 -e INFO=1 -e VERSION=1 -e BUILD=1 \
+  tecnativa/docker-socket-proxy:latest
+
+mkdir -p /tmp/dast-data && chmod 777 /tmp/dast-data
+docker run -d --name fastflow-dast --network dast-net -p 8000:8000 \
+  -e ENVIRONMENT=development -e JWT_SECRET_KEY=dummy \
+  -e SKIP_OAUTH_VERIFICATION=true \
+  -e GITHUB_CLIENT_ID=dummy -e GITHUB_CLIENT_SECRET=dummy \
+  -e DOCKER_PROXY_URL=http://docker-proxy:2375 \
+  -e WORKER_BASE_IMAGE=fastflow-worker:latest \
+  -v /tmp/dast-data:/app/data \
+  fastflow-dast:latest
+
 curl http://localhost:8000/health
 
-docker run -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
-  -t http://host.docker.internal:8000
+# ZAP-Scan
+docker run -t --network host ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
+  -t http://localhost:8000
 
-docker rm -f fastflow-dast
+# Aufräumen
+docker rm -f fastflow-dast docker-proxy && docker network rm dast-net
 ```
-
-So sieht man Findings sofort, ohne jedes Mal eine Pipeline anzustoßen.

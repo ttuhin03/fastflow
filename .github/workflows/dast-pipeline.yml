@@ -1,13 +1,15 @@
 name: DAST Security Pipeline
 
-# Dynamic Application Security Testing gegen den Fast-Flow Orchestrator:
-# Das echte Image (root ./Dockerfile) wird gebaut, der Container gestartet und
-# per ZAP Baseline (und optional sqlmap) auf Schwachstellen geprüft.
+# Dynamic Application Security Testing gegen den Fast-Flow Orchestrator.
 #
-# Hinweis: Anders als im generischen Template wird die App pro Job auf demselben
-# Runner gebaut UND gescannt. Ein `services:`-Container mit `image: <lokal>:latest`
-# würde nicht funktionieren, weil GitHub-Actions-Jobs auf separaten Runnern laufen
-# und lokal gebaute Images dort nicht verfügbar sind.
+# Der Orchestrator ist KEINE triviale Standalone-App: Er bootet nur mit einem
+# erreichbaren Container-Backend (docker-proxy) und einem vorhandenen
+# Worker-Image, verlangt eine beschreibbare Datenbank sowie mindestens einen
+# OAuth-Provider. Dieser Workflow stellt genau diesen Stack bereit, wartet per
+# /health-Gate auf die App und scannt sie dann mit ZAP (und optional sqlmap).
+#
+# Die OAuth-Werte hier sind bewusste Dummy-Platzhalter und durch
+# SKIP_OAUTH_VERIFICATION=true wirkungslos (keine echten Secrets nötig).
 
 on:
   push:
@@ -26,41 +28,74 @@ on:
 permissions:
   contents: read
 
+env:
+  APP_PORT: 8000
+  APP_IMAGE: fastflow-dast:latest
+  WORKER_IMAGE: fastflow-worker:latest
+  DAST_NETWORK: dast-net
+
 jobs:
-  zap-scan:
+  dast:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build Orchestrator Image
-        run: docker build -t fastflow-dast:latest .
+      - name: Orchestrator-Image bauen
+        run: docker build -t "$APP_IMAGE" .
 
-      - name: Run App Container
+      - name: Worker-Image bauen
+        # Wird vom Orchestrator beim Start benötigt (sonst Pull-Fehler)
+        run: docker build -f Dockerfile.worker -t "$WORKER_IMAGE" .
+
+      - name: Netzwerk und beschreibbares Daten-Verzeichnis vorbereiten
         run: |
-          docker run -d --name fastflow-dast \
-            -p 8000:8000 \
+          docker network create "$DAST_NETWORK"
+          mkdir -p "$RUNNER_TEMP/dast-data"
+          # SQLite läuft als UID 1001 im Container -> Verzeichnis beschreibbar machen
+          chmod 777 "$RUNNER_TEMP/dast-data"
+
+      - name: docker-proxy starten (Container-Backend für Executor-Init)
+        run: |
+          docker run -d --name docker-proxy --network "$DAST_NETWORK" \
+            -v /var/run/docker.sock:/var/run/docker.sock:ro \
+            -e CONTAINERS=1 -e IMAGES=1 -e VOLUMES=1 -e EXEC=1 -e NETWORKS=1 \
+            -e POST=1 -e DELETE=1 -e STATS=1 -e INFO=1 -e VERSION=1 -e BUILD=1 \
+            tecnativa/docker-socket-proxy:latest
+
+      - name: Orchestrator-Container starten
+        run: |
+          docker run -d --name fastflow-dast --network "$DAST_NETWORK" \
+            -p ${APP_PORT}:8000 \
             -e ENVIRONMENT=development \
-            fastflow-dast:latest
+            -e JWT_SECRET_KEY=dast-scan-dummy-not-for-prod \
+            -e SKIP_OAUTH_VERIFICATION=true \
+            -e GITHUB_CLIENT_ID=dast-dummy \
+            -e GITHUB_CLIENT_SECRET=dast-dummy \
+            -e DOCKER_PROXY_URL=http://docker-proxy:2375 \
+            -e WORKER_BASE_IMAGE="$WORKER_IMAGE" \
+            -v "$RUNNER_TEMP/dast-data:/app/data" \
+            "$APP_IMAGE"
 
       - name: Warten bis App erreichbar ist
         run: |
           for i in $(seq 1 60); do
-            if curl -sf http://localhost:8000/health > /dev/null; then
+            if curl -sf "http://localhost:${APP_PORT}/health" > /dev/null; then
               echo "App ist erreichbar"
+              curl -s "http://localhost:${APP_PORT}/health"; echo
               exit 0
             fi
             echo "Warte auf App... ($i/60)"
             sleep 2
           done
-          echo "App nicht erreichbar, breche ab"
+          echo "App nicht erreichbar, breche ab. Logs:"
           docker logs fastflow-dast
           exit 1
 
       - name: ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.12.0
         with:
-          target: 'http://localhost:8000'
+          target: "http://localhost:8000"
           rules_file_name: '.zap/rules.tsv'
           cmd_options: '-a'
           fail_action: true
@@ -77,59 +112,26 @@ jobs:
             report_json.json
           if-no-files-found: ignore
 
-      - name: Container aufräumen
-        if: always()
-        run: docker rm -f fastflow-dast || true
-
-  sqlmap-scan:
-    # Nur bei manuellem Trigger mit run_sqlmap=true oder beim wöchentlichen Scan
-    if: >
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_sqlmap == 'true')
-      || github.event_name == 'schedule'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Build Orchestrator Image
-        run: docker build -t fastflow-dast:latest .
-
-      - name: Run App Container
-        run: |
-          docker run -d --name fastflow-dast \
-            -p 8000:8000 \
-            -e ENVIRONMENT=development \
-            fastflow-dast:latest
-
-      - name: Warten bis App erreichbar ist
-        run: |
-          for i in $(seq 1 60); do
-            curl -sf http://localhost:8000/health && exit 0
-            sleep 2
-          done
-          docker logs fastflow-dast
-          exit 1
-
+      # --- sqlmap: nur bei manuellem Trigger mit run_sqlmap=true oder beim wöchentlichen Scan ---
       - name: sqlmap installieren
+        if: always() && ((github.event_name == 'workflow_dispatch' && github.event.inputs.run_sqlmap == 'true') || github.event_name == 'schedule')
         run: git clone --depth 1 https://github.com/sqlmapproject/sqlmap.git sqlmap-dir
 
       - name: sqlmap Scan ausführen
+        if: always() && ((github.event_name == 'workflow_dispatch' && github.event.inputs.run_sqlmap == 'true') || github.event_name == 'schedule')
         run: |
           # ACHTUNG: Fast-Flow hat keinen offenen /search?q=-Endpoint. Die meisten
           # API-Routen liegen hinter Auth (/api/...). Vor produktivem Einsatz hier
           # einen echten parametrisierten Endpoint eintragen – idealerweise über
           # eine gespeicherte Request mit Session-Cookie/Token: -r request.txt
           python3 sqlmap-dir/sqlmap.py \
-            -u "http://localhost:8000/api/health?q=test" \
-            --batch \
-            --level=2 \
-            --risk=1 \
+            -u "http://localhost:${APP_PORT}/api/health?q=test" \
+            --batch --level=2 --risk=1 \
             --output-dir=sqlmap-results \
           || true
-          # "|| true" verhindert Pipeline-Abbruch bei Findings;
-          # stattdessen werten wir das Ergebnis im nächsten Schritt aus.
 
-      - name: Ergebnisse prüfen und Job ggf. fehlschlagen lassen
+      - name: sqlmap Ergebnisse prüfen
+        if: always() && ((github.event_name == 'workflow_dispatch' && github.event.inputs.run_sqlmap == 'true') || github.event_name == 'schedule')
         run: |
           if grep -rl "is vulnerable" sqlmap-results/ 2>/dev/null; then
             echo "::error::sqlmap hat eine mögliche SQL-Injection gefunden!"
@@ -138,13 +140,15 @@ jobs:
           echo "Keine SQL-Injection gefunden."
 
       - name: sqlmap Ergebnisse als Artifact hochladen
-        if: always()
+        if: always() && ((github.event_name == 'workflow_dispatch' && github.event.inputs.run_sqlmap == 'true') || github.event_name == 'schedule')
         uses: actions/upload-artifact@v4
         with:
           name: sqlmap-results
           path: sqlmap-results/
           if-no-files-found: ignore
 
-      - name: Container aufräumen
+      - name: Container und Netzwerk aufräumen
         if: always()
-        run: docker rm -f fastflow-dast || true
+        run: |
+          docker rm -f fastflow-dast docker-proxy || true
+          docker network rm "$DAST_NETWORK" || true
