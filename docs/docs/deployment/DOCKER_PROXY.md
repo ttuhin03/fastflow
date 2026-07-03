@@ -90,12 +90,12 @@ services:
 The orchestrator connects to the proxy via the `DOCKER_PROXY_URL` environment variable:
 
 ```python
-# app/config.py
+# app/core/config.py
 DOCKER_PROXY_URL: str = os.getenv("DOCKER_PROXY_URL", "http://docker-proxy:2375")
 ```
 
 ```python
-# app/executor.py
+# app/executor/core.py
 _docker_client = docker.DockerClient(base_url=config.DOCKER_PROXY_URL)
 ```
 

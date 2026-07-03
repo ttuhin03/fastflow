@@ -466,17 +466,19 @@ async def start_pipeline(
         HTTPException: Wenn Pipeline nicht existiert, deaktiviert ist oder Concurrency-Limit erreicht ist
     """
     try:
-        # Pipeline-Start (manuell getriggert)
+        # Pipeline-Start (manuell getriggert), optional mit gewählter Run-Konfiguration
+        run_config_id = (request.run_config_id or "").strip() or None
         run = await run_pipeline(
             name=name,
             env_vars=request.env_vars,
             parameters=request.parameters,
             session=session,
-            triggered_by="manual"
+            triggered_by="manual",
+            run_config_id=run_config_id,
         )
         log_audit(
             session, "run_start", "pipeline", name,
-            details={"run_id": str(run.id)},
+            details={"run_id": str(run.id), "run_config_id": run_config_id},
             user=current_user,
         )
         return {

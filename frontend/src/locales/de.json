@@ -16,7 +16,16 @@
     "more": "weitere",
     "yes": "Ja",
     "no": "Nein",
-    "search": "Suchen oder springen…"
+    "open": "Öffnen",
+    "notAvailableYet": "Noch nicht verfügbar",
+    "search": "Suchen oder springen…",
+    "close": "Schließen"
+  },
+  "cmdk": {
+    "title": "Befehlspalette",
+    "placeholder": "Pipelines, Runs, Aktionen suchen…",
+    "jumpTo": "Springe zu",
+    "noResults": "Keine Treffer"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -37,9 +46,13 @@
     "online": "Online",
     "offline": "Offline",
     "docs": "Doku",
-    "viewOnGitHub": "View on GitHub",
+    "viewOnGitHub": "Auf GitHub ansehen",
     "logout": "Abmelden",
-    "languageSwitcher": "Sprache"
+    "languageSwitcher": "Sprache",
+    "sectionOverview": "Übersicht",
+    "sectionOrchestration": "Orchestrierung",
+    "sectionSecurity": "Sicherheit",
+    "sectionSystem": "System"
   },
   "appTitle": "Fast-Flow",
   "language": {
@@ -63,25 +76,38 @@
     "lastRunsTooltip": "Zeigt die Status der letzten Runs (grün=erfolgreich, rot=fehlgeschlagen, gelb=läuft)",
     "pipelineActiveTooltip": "Aktiv: Pipeline kann ausgeführt werden | Inaktiv: Pipeline ist deaktiviert",
     "systemStatus": "System-Status",
-    "successRate": "Erfolgsrate"
+    "successRate": "Erfolgsrate",
+    "noSchedule": "kein Zeitplan",
+    "nextRunAt": "nächster {{time}}"
   },
   "auth": {
     "providerUnavailable": "Dieser Anmeldeanbieter ist nicht konfiguriert. Bitte Administrator kontaktieren.",
     "oauthSectionInactive": "Nicht konfiguriert",
     "subtitle": "Pipeline Orchestrator",
     "loginEyebrow": "Anmelden",
-    "signInGitHub": "Sign in with GitHub",
-    "signInGoogle": "Sign in with Google",
-    "signInMicrosoft": "Sign in with Microsoft",
-    "signInCustom": "Sign in with Custom",
+    "signInGitHub": "Mit GitHub anmelden",
+    "signInGoogle": "Mit Google anmelden",
+    "signInMicrosoft": "Mit Microsoft anmelden",
+    "signInCustom": "Mit Custom anmelden",
     "signInNamedProvider": "Mit {{name}} anmelden",
     "customProviderFallback": "Custom",
     "githubNotConfigured": "GitHub nicht konfiguriert",
     "googleNotConfigured": "Google nicht konfiguriert",
     "microsoftNotConfigured": "Microsoft nicht konfiguriert",
     "customNotConfigured": "Custom OAuth nicht konfiguriert",
-    "viewOnGitHub": "View on GitHub",
-    "callbackError": "Anmeldung fehlgeschlagen. Bitte erneut versuchen."
+    "viewOnGitHub": "Auf GitHub ansehen",
+    "callbackError": "Anmeldung fehlgeschlagen. Bitte erneut versuchen.",
+    "brandHeadline": "Python-Pipelines orchestrieren, container-nativ.",
+    "brandSub": "Plane, starte und beobachte deine Daten- & ML-Workloads — mit Live-Logs, Ressourcen-Metriken und Git-synchronisierten Definitionen.",
+    "welcomeBack": "Willkommen zurück",
+    "signInWorkspace": "Melde dich in deinem FastFlow-Workspace an.",
+    "orSeparator": "oder",
+    "brandStatOneValue": "Container-nativ",
+    "brandStatOneLabel": "Ausführungsmodell",
+    "brandStatTwoValue": "Git-synchronisiert",
+    "brandStatTwoLabel": "Pipeline-Definitionen",
+    "noAccountYet": "Noch kein Konto?",
+    "requestAccessHint": "Melde dich mit einem Provider an, um Zugang anzufragen."
   },
   "toast": {
     "ok": "OK",
@@ -95,7 +121,12 @@
     "runsSuccessfulFailed": "{{total}} Runs, {{successful}} erfolgreich, {{failed}} fehlgeschlagen",
     "totalRuns": "Gesamt Runs:",
     "successRate": "Erfolgsrate:",
-    "runIds": "Run-IDs:"
+    "runIds": "Run-IDs:",
+    "less": "Wenig",
+    "more": "Viel",
+    "mon": "Mo",
+    "wed": "Mi",
+    "fri": "Fr"
   },
   "pipelines": {
     "sectionRuns": "Runs",
@@ -109,7 +140,19 @@
     "filterByTags": "Filter nach Tags",
     "filterByTagsPlaceholder": "z.B. production, experiment",
     "start": "Starten",
-    "starting": "Startet..."
+    "starting": "Startet...",
+    "title": "Pipelines",
+    "searchPlaceholder": "Pipelines filtern…",
+    "statusFilter": "Status",
+    "statusAll": "Alle",
+    "selectedCount": "{{count}} ausgewählt",
+    "trigger": "Starten",
+    "clear": "Auswahl aufheben",
+    "selectAll": "Alle auswählen",
+    "thSchedule": "Zeitplan",
+    "thNextRun": "Nächster Lauf",
+    "selectRow": "{{name}} auswählen",
+    "bulkTriggerSuccess": "{{count}} Runs gestartet"
   },
   "runs": {
     "notFound": "Run nicht gefunden",
@@ -158,7 +201,9 @@
     "cardCommit": "Commit:",
     "cardStarted": "Gestartet:",
     "cardDuration": "Dauer:",
-    "cardExitCode": "Exit Code:"
+    "cardExitCode": "Exit Code:",
+    "countTotal": "{{total}} Runs",
+    "countLive": "{{n}} live"
   },
   "settings": {
     "title": "Einstellungen",
@@ -239,7 +284,7 @@
     "editLockTooltipUnlocked": "Entsperrt: Einstellungen können geändert werden. Erneut klicken zum Sperren.",
     "editLockUnlockAria": "Einstellungen zum Bearbeiten entsperren",
     "editLockLockAria": "Einstellungen sperren",
-    "telemetryTitle": "Global Privacy & Telemetry",
+    "telemetryTitle": "Datenschutz & Telemetrie (global)",
     "telemetryInfo": "Phase 1: Fehlerberichte. Phase 2: Nutzungsstatistiken (Product Analytics). Session Recording (Replay) wird ausdrücklich nicht verwendet.",
     "telemetryToggle": "Nutzungsstatistiken (Product Analytics, anonym). Kein Session Recording.",
     "errorReportingToggle": "Fehlerberichte (PostHog Error-Tracking)",
@@ -450,9 +495,21 @@
     "sshKeyPlaceholder": "-----BEGIN OPENSSH PRIVATE KEY-----...",
     "tokenPlaceholder": "ghp_...",
     "testMessagePrefixOk": "✓ ",
-    "testMessagePrefixFail": "✗ "
+    "testMessagePrefixFail": "✗ ",
+    "subtitle": "Pipelines werden aus deinem Repository erkannt",
+    "syncNow": "Jetzt synchronisieren",
+    "branchCommit": "Branch · Commit",
+    "pipelinesDetected": "Erkannte Pipelines",
+    "webhook": "Webhook",
+    "webhookRegistered": "Registriert",
+    "webhookNotConfigured": "Nicht konfiguriert",
+    "activityTitle": "Sync-Aktivität",
+    "pollingEvery": "Abfrage alle {{seconds}}s"
   },
   "dependencies": {
+    "refresh": "Aktualisieren",
+    "runSecurityScanConfirm": "Ein Sicherheits-Scan kann eine Weile dauern. Fortfahren?",
+    "runSecurityScanHint": "Führt einen Live-pip-audit-Scan aus — ratenbegrenzt und ggf. langsam",
     "intro": "Libraries und Versionen aller Pipelines mit requirements.txt.",
     "update": "Aktualisieren",
     "noEntries": "Keine Einträge passen zu den Filtern.",
@@ -473,9 +530,25 @@
     "packagesCount": "{{count}} Paket",
     "packagesCountPlural": "{{count}} Pakete",
     "vulnNone": "Keine",
-    "foundVulns": "Gefundene Schwachstellen:"
+    "foundVulns": "Gefundene Schwachstellen:",
+    "installed": "Installiert",
+    "latest": "Aktuell",
+    "status": "Status",
+    "cve": "CVE"
   },
   "pipelineDetail": {
+    "editInGithub": "In GitHub bearbeiten",
+    "editInGithubHint": "pipeline.json in GitHub bearbeiten",
+    "editInPipelineJsonLabel": "In pipeline.json bearbeiten",
+    "runStarted": "Run gestartet",
+    "runStarting": "Startet…",
+    "triggerRunHint": "Run mit der Basis-Konfiguration starten",
+    "triggerRunDisabledHint": "Pipeline ist deaktiviert",
+    "runConcurrencyLimit": "Concurrency-Limit erreicht — bitte später erneut versuchen.",
+    "runSchedule": "Starten",
+    "runScheduleHint": "Jetzt mit den Env-Overrides dieser Schedule starten",
+    "everyNSeconds": "alle {{n}}s",
+    "noEnvOverrides": "Keine Overrides — nutzt die Basis-Umgebung.",
     "moreSettings": "Weitere Einstellungen",
     "lastCacheWarmupTooltip": "Zeitpunkt des letzten Pre-Heating. Pipelines mit Cache starten schneller.",
     "downstreamTooltip": "Wenn diese Pipeline fertig ist, können andere Pipelines automatisch gestartet werden. Konfigurierbar in pipeline.json oder per UI.",
@@ -566,7 +639,29 @@
     "infoStatusHint": "Status wird in pipeline.json konfiguriert. „Aktiv“ bedeutet, dass die Pipeline ausgeführt werden kann.",
     "infoPythonVersionHint": "Wird in pipeline.json über python_version gesetzt – beliebig pro Pipeline (z.B. 3.10, 3.11, 3.12). Fehlt es, gilt die Standardversion (z.B. 3.11).",
     "infoHardLimitsHint": "Harte Limits – Pipeline wird beendet, wenn diese überschritten werden",
-    "infoSoftLimitsHint": "Weiche Limits – nur für Monitoring, Pipeline läuft weiter bei Überschreitung"
+    "infoSoftLimitsHint": "Weiche Limits – nur für Monitoring, Pipeline läuft weiter bei Überschreitung",
+    "healthHealthy": "Stabil",
+    "triggerRun": "Run starten",
+    "tabOverview": "Übersicht",
+    "tabRuns": "Runs",
+    "tabConfiguration": "Konfiguration",
+    "tabEnvironment": "Umgebung",
+    "viewAll": "Alle anzeigen →",
+    "noRuns": "Noch keine Runs.",
+    "schedules": "Zeitpläne",
+    "schedulesSub": "Eine Pipeline kann auf mehreren Zeitplänen laufen — jeder bringt eigene Umgebungs-Overrides zusätzlich zur Basiskonfiguration mit.",
+    "scheduleEnabledHint": "Aktiv (konfiguriert in pipeline.json)",
+    "envOverrides": "Env-Overrides",
+    "envOverridesNote": "zusätzlich zu den Basis-Variablen",
+    "noSchedules": "Keine Zeitpläne konfiguriert. Füge einen Cron-Ausdruck in pipeline.json hinzu.",
+    "resourceLimits": "Ressourcen-Limits",
+    "resourceLimitsSub": "Soft-Limits warnen, Hard-Limits beenden den Container.",
+    "cpuCores": "CPU-Kerne",
+    "memory": "Arbeitsspeicher",
+    "environmentVariables": "Umgebungsvariablen",
+    "environmentSub": "Werden zur Laufzeit in den Container injiziert. Secrets sind verschlüsselt gespeichert.",
+    "environmentCronHint": "Zeitplan-spezifische Umgebungs-Overrides findest du im Tab Konfiguration.",
+    "environmentEmpty": "Die API stellt noch keine Umgebungsvariablen bereit."
   },
   "users": {
     "title": "Nutzer",
@@ -660,9 +755,15 @@
     "noUsersFound": "Keine Benutzer gefunden",
     "toastUserCreated": "Benutzer erfolgreich erstellt",
     "toastPasswordReset": "Passwort erfolgreich zurückgesetzt",
-    "toastInviteCreatedWithLink": "Einladungslink erstellt und in Zwischenablage kopiert: {{link}}"
+    "toastInviteCreatedWithLink": "Einladungslink erstellt und in Zwischenablage kopiert: {{link}}",
+    "badgePending": "Ausstehend"
   },
   "scheduler": {
+    "newScheduleInGithub": "Neue Schedule in GitHub",
+    "newScheduleHint": "Schedules werden in pipeline.json definiert — öffnet GitHub zum Hinzufügen",
+    "editInGithub": "In GitHub bearbeiten",
+    "editInGithubHint": "pipeline.json in GitHub bearbeiten (Schedules dort hinzufügen/entfernen)",
+    "editDisabledHint": "GitHub-Repository nicht konfiguriert — pipeline.json im Repo bearbeiten",
     "title": "Scheduler",
     "loading": "Laden...",
     "pipeline": "Pipeline",
@@ -678,7 +779,15 @@
     "editError": "GitHub-Link für pipeline.json nicht verfügbar (kein GitHub-Repository konfiguriert)",
     "enabled": "Aktiv",
     "disabled": "Pausiert",
-    "edit": "Bearbeiten"
+    "edit": "Bearbeiten",
+    "subtitlePrefix": "Cron-basierte Trigger",
+    "activeCount": "{{count}} aktiv",
+    "pausedCount": "{{count}} pausiert",
+    "scheduleName": "Zeitplan",
+    "cron": "Cron",
+    "environment": "Umgebung",
+    "baseEnv": "Basis-Env",
+    "toggleTooltip": "Klicken, um den Job zu aktivieren oder zu deaktivieren"
   },
   "storage": {
     "loadError": "Speicherplatz-Statistiken konnten nicht geladen werden",
@@ -744,7 +853,10 @@
   },
   "systemStatus": {
     "loading": "System-Status wird geladen…",
-    "error": "System-Status konnte nicht geladen werden."
+    "error": "System-Status konnte nicht geladen werden.",
+    "operational": "Betriebsbereit",
+    "degraded": "Beeinträchtigt",
+    "down": "Ausgefallen"
   },
   "runNotifications": {
     "pipelineFailed": "Pipeline fehlgeschlagen",
@@ -808,21 +920,29 @@
     "status": "Status"
   },
   "concurrency": {
-    "label": "Concurrency",
+    "label": "Parallelität",
     "activeRuns": "{{active}} / {{limit}} aktive Runs",
-    "hintHigh": "Limit oft erreicht – ggf. erhöhen oder Last prüfen."
+    "hintHigh": "Limit oft erreicht – ggf. erhöhen oder Last prüfen.",
+    "activeSlots": "aktive Slots",
+    "queuedCount": "{{count}} in Warteschlange",
+    "executor": "{{executor}}",
+    "limitN": "Limit {{limit}}"
   },
   "summaryStats": {
     "title": "Lauf-Statistik",
     "last24h": "Letzte 24h: {{failed}} Fehler von {{total}} Runs",
     "successRate7d": "Erfolgsrate (7 Tage): {{rate}}%",
-    "belowThreshold": "Unter {{threshold}}%"
+    "belowThreshold": "Unter {{threshold}}%",
+    "sevenDayAvg": "7-Tage-Schnitt",
+    "sevenDaysAgo": "vor 7 Tagen",
+    "last24hRate": "24h: {{rate}}%"
   },
   "runEnv": {
     "envVars": "Environment-Variablen",
     "secretsNote": "Werte für Secrets werden aus Sicherheitsgründen nicht angezeigt (***).",
     "parameters": "Parameter",
-    "none": "Keine Environment-Variablen oder Parameter gesetzt"
+    "none": "Keine Environment-Variablen oder Parameter gesetzt",
+    "paramKind": "Param"
   },
   "charts": {
     "averageRuntime": {
@@ -859,6 +979,9 @@
     }
   },
   "audit": {
+    "adminOnlyTitle": "Nur für Administratoren",
+    "adminOnlyBody": "Das Audit-Log ist auf Administratoren beschränkt. Wende dich an einen Admin, falls du Zugriff brauchst.",
+    "ipNotCaptured": "IP-Adresse wird noch nicht erfasst",
     "title": "Audit-Log",
     "description": "Protokoll aller relevanten Aktionen (nur für Admins sichtbar).",
     "action": "Aktion",
@@ -873,9 +996,17 @@
     "pagination": "Einträge {{from}}–{{to}} von {{total}}",
     "page": "Seite {{page}} von {{total}}",
     "prev": "Zurück",
-    "next": "Weiter"
+    "next": "Weiter",
+    "subtitle": "Unveränderliches Protokoll aller Workspace-Aktionen",
+    "exportCsv": "CSV exportieren",
+    "filterActionsPlaceholder": "Aktionen filtern…",
+    "target": "Ziel",
+    "ip": "IP"
   },
   "runDetail": {
+    "copyRunId": "Run-ID kopieren",
+    "idCopied": "Run-ID kopiert",
+    "idCopyError": "Run-ID konnte nicht kopiert werden",
     "title": "Run Details",
     "retry": "Wiederholen",
     "info": "Info",
@@ -913,7 +1044,17 @@
     "idLabel": "ID:",
     "cancelSuccess": "Run wurde erfolgreich abgebrochen",
     "retryError": "Fehler beim Neustart: {{detail}}",
-    "downloadMetrics": "Metrics herunterladen"
+    "downloadMetrics": "Metrics herunterladen",
+    "streamFilter": "Stream",
+    "streamAll": "Alle",
+    "searchHits": "{{n}} Treffer",
+    "lineNumbers": "Zeilennummern",
+    "wrapLines": "Zeilenumbruch",
+    "follow": "Folgen",
+    "noLogs": "Keine Logs gefunden",
+    "streamingSse": "Streaming via SSE",
+    "streamClosed": "Stream beendet",
+    "lineCount": "{{shown}} / {{total}} Zeilen"
   },
   "settingsSections": {
     "account": "Mein Konto",
@@ -924,6 +1065,8 @@
     "nutzer": "Nutzer"
   },
   "secrets": {
+    "newSecret": "Wert verschlüsseln",
+    "subtitle": "Verschlüsselt gespeichert (Fernet) · Werte werden nie im Klartext angezeigt",
     "intro": "Secrets kommen aus der Datenbank oder aus pipeline.json (encrypted_env / default_env). Unten siehst du beides: DB-Einträge und Keys, die in Pipelines verwendet werden.",
     "envKeysFromPipelines": "Env-Keys aus encrypted_env und default_env aller Pipelines (Werte werden hier nicht angezeigt).",
     "title": "Secrets & Parameter",
@@ -958,7 +1101,10 @@
     "show": "Anzeigen",
     "hide": "Verbergen",
     "type": "Type",
-    "runConfigBadgeTitle": "Run-Konfiguration (schedules[].id)"
+    "runConfigBadgeTitle": "Run-Konfiguration (schedules[].id)",
+    "scope": "Scope",
+    "scopeApp": "App",
+    "scopeGlobal": "Global"
   },
   "invite": {
     "title": "Beitrittsanfrage",
@@ -1002,5 +1148,9 @@
     "nextRuns": "Nächste geplante Läufe",
     "loadNextRuns": "Lade nächste Läufe...",
     "noNextRuns": "Keine geplanten Läufe"
+  },
+  "runStatusCircles": {
+    "noRun": "Kein Run",
+    "running": "Läuft…"
   }
 }

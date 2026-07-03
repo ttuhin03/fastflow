@@ -3,19 +3,22 @@
   display: inline-block;
 }
 
+/* Positionierte (fixed) Variante des .tooltip-Primitives aus design-system.css —
+   Farben/Typo hier synchron zum Primitive halten. */
 .tooltip {
   position: fixed;
-  background-color: var(--color-surface);
+  background-color: var(--color-surface-4);
   color: var(--color-text-primary);
-  padding: var(--spacing-xs) var(--spacing-sm);
+  padding: 7px 10px;
   border-radius: var(--radius-sm);
   font-size: var(--font-size-xs);
+  line-height: 1.45;
   white-space: normal;
   max-width: 300px;
   word-wrap: break-word;
-  z-index: var(--z-tooltip, 9999);
-  box-shadow: var(--shadow-lg);
-  border: 1px solid var(--color-border);
+  z-index: var(--z-tooltip);
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--color-border-light);
   pointer-events: none;
   animation: tooltip-fade-in var(--transition-base);
 }
@@ -32,28 +35,28 @@
   bottom: -12px;
   left: 50%;
   transform: translateX(-50%);
-  border-top-color: var(--color-surface);
+  border-top-color: var(--color-surface-4);
 }
 
 .tooltip-bottom::before {
   top: -12px;
   left: 50%;
   transform: translateX(-50%);
-  border-bottom-color: var(--color-surface);
+  border-bottom-color: var(--color-surface-4);
 }
 
 .tooltip-left::before {
   right: -12px;
   top: 50%;
   transform: translateY(-50%);
-  border-left-color: var(--color-surface);
+  border-left-color: var(--color-surface-4);
 }
 
 .tooltip-right::before {
   left: -12px;
   top: 50%;
   transform: translateY(-50%);
-  border-right-color: var(--color-surface);
+  border-right-color: var(--color-surface-4);
 }
 
 @keyframes tooltip-fade-in {

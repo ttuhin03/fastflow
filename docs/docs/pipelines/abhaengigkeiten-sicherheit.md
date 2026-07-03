@@ -68,4 +68,4 @@ Format: minute (0–59), hour (0–23), day of month (1–31), month (1–12), w
 - **Job:** The scheduled job is registered in APScheduler with fixed ID (`dependency_audit_job`); when activation or cron changes, it is rescheduled (after saving system settings or on app startup).
 - **When does the scan run?** Once at API startup, after each successful Git pull (sync), and – if enabled – at the configured cron time; the latest results are visible under **Pipelines → Dependencies**.
 
-Further details on email and Teams configuration: [Configuration (Deployment)](/docs/deployment/CONFIGURATION.md).
+Further details on email and Teams configuration: [Configuration (Deployment)](/docs/deployment/CONFIGURATION).

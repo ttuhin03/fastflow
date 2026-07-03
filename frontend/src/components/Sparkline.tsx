@@ -9,24 +9,25 @@ interface SparklineProps {
   showPoints?: boolean
 }
 
-export default function Sparkline({ 
-  data, 
-  width = 100, 
-  height = 30, 
-  color = '#22c55e',
-  showPoints = false 
+export default function Sparkline({
+  data,
+  width = 92,
+  height = 34,
+  color = 'var(--color-success)',
+  showPoints = false
 }: SparklineProps) {
   const path = useMemo(() => {
     if (data.length === 0) return ''
-    
+
     const max = Math.max(...data)
     const min = Math.min(...data)
     const range = max - min || 1 // Vermeide Division durch 0
-    
+    const pad = 2 // keep the stroke off the edges
+
     const points = data.map((value, index) => {
       const x = (index / (data.length - 1 || 1)) * width
       const normalizedValue = (value - min) / range
-      const y = height - (normalizedValue * height)
+      const y = height - pad - (normalizedValue * (height - pad * 2))
       return { x, y, value }
     })
     
@@ -74,21 +75,22 @@ export default function Sparkline({
         d={path}
         fill="none"
         stroke={color}
-        strokeWidth="1.5"
+        strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      
+
       {/* Punkte */}
       {showPoints && data.length > 0 && (() => {
         const max = Math.max(...data)
         const min = Math.min(...data)
         const range = max - min || 1
-        
+        const pad = 2
+
         return data.map((value, index) => {
           const x = (index / (data.length - 1 || 1)) * width
           const normalizedValue = (value - min) / range
-          const y = height - (normalizedValue * height)
+          const y = height - pad - (normalizedValue * (height - pad * 2))
           
           return (
             <circle

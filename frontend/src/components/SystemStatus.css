@@ -1,57 +1,52 @@
+/* System status — vertical rows: glow dot + name + mono detail + status pill */
 .system-status {
-  padding: var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
 
 .system-status.loading,
 .system-status.error {
-  display: flex;
+  flex-direction: row;
   align-items: center;
   gap: var(--spacing-sm);
   color: var(--color-text-secondary);
+  padding: var(--spacing-md) 0;
 }
 
-.system-status.has-errors .system-status-item.error {
-  background-color: var(--color-error-subtle);
-  border-color: var(--color-error-border);
-}
-
-.system-status-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-sm);
-}
-
-.system-status-item {
+.system-status__row {
   display: flex;
   align-items: center;
-  gap: var(--spacing-xs);
-  padding: var(--spacing-xs) var(--spacing-sm);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
+  gap: 12px;
+  padding: 10px 8px;
+  border-radius: var(--radius-md);
+  transition: background var(--transition-fast);
+}
+
+.system-status__row:hover {
+  background: var(--color-surface-2);
+}
+
+/* Slightly larger, double-glow dot than the 8px primitive */
+.system-status__row .status-dot {
+  width: 9px;
+  height: 9px;
+}
+
+.system-status__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.system-status__name {
   font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
 }
 
-.system-status-item.ok {
-  border-color: var(--color-success-border);
-  background-color: var(--color-success-subtle);
-}
-
-.system-status-item .system-status-icon {
-  display: flex;
-  font-size: 1.1rem;
-}
-
-.system-status-item.ok .system-status-icon {
-  color: var(--color-success);
-}
-
-.system-status-item.error .system-status-icon {
-  color: var(--color-error);
-}
-
-.system-status-detail {
-  color: var(--color-text-secondary);
-  max-width: 180px;
+.system-status__detail {
+  font-size: 11.5px;
+  color: var(--color-text-tertiary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

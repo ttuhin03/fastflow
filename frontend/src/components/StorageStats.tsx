@@ -77,8 +77,69 @@ export default function StorageStats() {
     return 'high'
   }
 
+  // Circular progress ring (52x52 SVG, rotated -90deg). r=21 → circumference ≈ 131.95.
+  const RING_R = 21
+  const RING_C = 2 * Math.PI * RING_R
+  const ringColor = (pct: number) =>
+    pct >= 90 ? 'var(--color-error)' : pct >= 70 ? 'var(--color-warning)' : 'var(--color-success)'
+
+  const diskPct =
+    stats.total_disk_space_gb > 0
+      ? (stats.used_disk_space_gb / stats.total_disk_space_gb) * 100
+      : 0
+
+  const rings: { key: string; label: string; pct: number; used: string }[] = [
+    {
+      key: 'disk',
+      label: t('storage.totalStorage'),
+      pct: diskPct,
+      used: t('storage.diskUsedFree', {
+        used: stats.used_disk_space_gb.toFixed(1),
+        free: stats.free_disk_space_gb.toFixed(1),
+      }),
+    },
+  ]
+  if (stats.database_size_bytes !== undefined && stats.database_size_bytes > 0) {
+    rings.push({
+      key: 'db',
+      label: t('storage.database'),
+      pct: stats.database_percentage ?? 0,
+      used: t('storage.sizeMb', { size: stats.database_size_mb?.toFixed(1) || '0.0' }),
+    })
+  }
+
   return (
     <div className="storage-stats">
+      <div className="storage-rings">
+        {rings.map((r) => {
+          const pct = Math.min(Math.max(r.pct, 0), 100)
+          const dash = `${(pct / 100) * RING_C} ${RING_C}`
+          return (
+            <div key={r.key} className="storage-ring">
+              <svg width="52" height="52" viewBox="0 0 52 52" className="storage-ring__svg">
+                <circle cx="26" cy="26" r={RING_R} fill="none" stroke="var(--color-surface-3)" strokeWidth="6" />
+                <circle
+                  cx="26"
+                  cy="26"
+                  r={RING_R}
+                  fill="none"
+                  stroke={ringColor(pct)}
+                  strokeWidth="6"
+                  strokeLinecap="round"
+                  strokeDasharray={dash}
+                  strokeDashoffset="0"
+                />
+              </svg>
+              <div className="storage-ring__info">
+                <div className="storage-ring__label">{r.label}</div>
+                <div className="storage-ring__pct mono">{pct.toFixed(0)}%</div>
+                <div className="storage-ring__used mono">{r.used}</div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
       <div className="storage-stats-grid">
         <div className="storage-stat-card card">
           <div className="stat-icon">

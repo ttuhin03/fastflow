@@ -136,8 +136,7 @@
 .users-table-container {
   overflow-x: auto;
   border-radius: var(--radius-lg);
-  border: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--color-border);
   overflow: hidden;
 }
 
@@ -179,7 +178,16 @@
 }
 
 .users-table tbody tr:hover {
-  background-color: var(--color-surface-variant);
+  background-color: var(--color-surface-2);
+}
+
+.users-email-cell {
+  display: inline-block;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
 }
 
 .users-table tbody tr:last-child td:first-child {
@@ -199,31 +207,49 @@
   gap: var(--spacing-xs);
 }
 
-.badge {
-  display: inline-block;
-  padding: var(--spacing-xs) var(--spacing-sm);
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-medium);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+.users-name-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
 }
 
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+/* Role badges (mockup): ADMIN=accent · WRITE=blue · READONLY=neutral · PENDING=amber */
 .badge-readonly {
-  background-color: var(--color-surface-variant);
+  background-color: var(--color-surface-3);
+  border: 1px solid var(--color-border-light);
   color: var(--color-text-secondary);
 }
 
 .badge-write {
-  background-color: var(--color-warning-subtle);
-  border: 1px solid var(--color-warning-border);
-  color: var(--color-warning-text);
+  background-color: var(--color-running-subtle);
+  border: 1px solid var(--color-running-border);
+  color: var(--color-running-text);
 }
 
 .badge-admin {
   background-color: var(--color-accent-subtle);
   border: 1px solid var(--color-accent-border);
   color: var(--color-primary-light);
+}
+
+.badge-pending,
+.badge-warning {
+  background-color: var(--color-warning-subtle);
+  border: 1px solid var(--color-warning-border);
+  color: var(--color-warning-text);
 }
 
 .badge-success {
@@ -245,9 +271,9 @@
 }
 
 .badge-account {
-  font-size: 0.7rem;
+  font-size: var(--font-size-xs);
   padding: 2px 6px;
-  background-color: rgba(255, 255, 255, 0.08);
+  background-color: var(--color-surface-variant);
   color: var(--color-text-secondary);
   border: 1px solid var(--color-border);
 }

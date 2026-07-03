@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
@@ -30,6 +30,30 @@ function formatLastCommit(lc: SyncStatus['last_commit']): string {
     const date = typeof lc.date === 'string' ? lc.date : ''
     return [hash, msg].filter(Boolean).join(' – ') + (date ? ` (${date})` : '')
   }
+  return ''
+}
+
+/** Relative "Xm ago" string for the status grid. Returns '' when no timestamp. */
+function relativeTime(iso?: string): string {
+  if (!iso) return ''
+  const then = new Date(iso).getTime()
+  if (Number.isNaN(then)) return ''
+  const diff = Math.max(0, Date.now() - then)
+  const s = Math.floor(diff / 1000)
+  if (s < 60) return `${s}s ago`
+  const m = Math.floor(s / 60)
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  const d = Math.floor(h / 24)
+  return `${d}d ago`
+}
+
+/** Short commit hash (7 chars) from the various shapes the backend may return. */
+function shortCommitHash(lc: SyncStatus['last_commit']): string {
+  if (lc == null) return ''
+  if (typeof lc === 'string') return lc.slice(0, 7)
+  if (typeof lc === 'object' && 'hash' in lc && typeof lc.hash === 'string') return lc.hash.slice(0, 7)
   return ''
 }
 
@@ -78,6 +102,9 @@ export default function Sync({ editLocked = false }: SyncProps) {
   })
   const [generatedPublicKey, setGeneratedPublicKey] = useState<string | null>(null)
   const [showManualDeployKey, setShowManualDeployKey] = useState(false)
+  const activityBodyRef = useRef<HTMLDivElement>(null)
+  // Tracks whether the user is pinned to the bottom of the activity log (follow mode).
+  const activityFollowRef = useRef(true)
 
   const syncInterval = useRefetchInterval(10000)
   const { data: syncStatus, isLoading } = useQuery<SyncStatus>({
@@ -103,14 +130,15 @@ export default function Sync({ editLocked = false }: SyncProps) {
     }
   }, [settings])
 
-  const syncLogsInterval = useRefetchInterval(activeTab === 'logs' ? 5000 : false)
+  const syncLogsVisible = activeTab === 'logs' || activeTab === 'status'
+  const syncLogsInterval = useRefetchInterval(syncLogsVisible ? 5000 : false)
   const { data: syncLogs } = useQuery({
     queryKey: ['sync-logs'],
     queryFn: async () => {
       const response = await apiClient.get('/sync/logs?limit=50')
       return response.data
     },
-    enabled: activeTab === 'logs',
+    enabled: syncLogsVisible,
     refetchInterval: syncLogsInterval,
   })
 
@@ -121,6 +149,16 @@ export default function Sync({ editLocked = false }: SyncProps) {
       return response.data
     },
   })
+
+  // Auto-scroll the "Sync activity" terminal to the bottom when new entries arrive,
+  // but only if the user is already at (or near) the bottom — log-viewer "follow" behavior.
+  useEffect(() => {
+    const body = activityBodyRef.current
+    if (!body) return
+    if (activityFollowRef.current) {
+      body.scrollTop = body.scrollHeight
+    }
+  }, [syncLogs])
 
   useEffect(() => {
     if (repoConfig && activeTab === 'repository') {
@@ -346,6 +384,13 @@ export default function Sync({ editLocked = false }: SyncProps) {
     }
   }
 
+  const handleActivityScroll = () => {
+    const body = activityBodyRef.current
+    if (!body) return
+    // "Near bottom" threshold keeps follow active through small layout jitters.
+    activityFollowRef.current = body.scrollHeight - body.scrollTop - body.clientHeight < 40
+  }
+
   const handleClearPipelines = async () => {
     const confirmed = await showConfirm(t('sync.clearConfirm'))
     if (confirmed) {
@@ -364,9 +409,40 @@ export default function Sync({ editLocked = false }: SyncProps) {
     return <div>{t('common.loading')}</div>
   }
 
+  const lastSyncRel = relativeTime(syncStatus?.last_sync)
+  const commitShort = shortCommitHash(syncStatus?.last_commit)
+  const branchCommit = syncStatus?.branch
+    ? commitShort
+      ? `${syncStatus.branch}@${commitShort}`
+      : syncStatus.branch
+    : '—'
+  const pipelinesDetected = syncStatus?.pipelines_cached?.length ?? 0
+  const repoConfigured = syncStatus?.repo_configured ?? repoConfig?.configured ?? false
+
   return (
     <div className="sync">
-      <h2>{t('dashboard.gitSync')}</h2>
+      <div className="sync-header">
+        <div>
+          <h2 className="sync-header__title">{t('dashboard.gitSync')}</h2>
+          <p className="sync-header__subtitle">
+            {t('sync.subtitle', 'Pipelines are discovered from your repository')}
+          </p>
+        </div>
+        {!isReadonly && (
+          <button
+            type="button"
+            onClick={handleSync}
+            disabled={syncMutation.isPending || fieldDisabled}
+            className="btn btn-primary sync-now-btn"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className={syncMutation.isPending ? 'sync-now-btn__spin' : undefined}>
+              <path d="M21 12a9 9 0 1 1-2.6-6.3" />
+              <path d="M21 4v5h-5" />
+            </svg>
+            {syncMutation.isPending ? t('dashboard.syncRunning') : t('sync.syncNow', 'Sync now')}
+          </button>
+        )}
+      </div>
 
       <div className="tab-strip sync-page-tabs">
         <button
@@ -401,100 +477,139 @@ export default function Sync({ editLocked = false }: SyncProps) {
 
       {activeTab === 'status' && (
         <>
-      <div className="sync-status-card">
-        <h3>{t('sync.status')}</h3>
-        <div className="status-info">
-          <div className="status-row">
-            <span className="status-label">
-              {t('sync.branchLabel')}
-              <InfoIcon content={t('sync.branchInfo')} />
-            </span>
-            <span className="status-value">{syncStatus?.branch || '-'}</span>
+          {/* 4-card status grid */}
+          <div className="sync-stat-grid">
+            <div className="sync-stat-card">
+              <div className="sync-stat-card__label">{t('sync.lastSync').replace(':', '')}</div>
+              <div className="sync-stat-card__value">
+                {lastSyncRel ? (
+                  <>
+                    <span className="status-dot success" />
+                    <span>{lastSyncRel}</span>
+                  </>
+                ) : (
+                  <span className="sync-stat-card__muted">—</span>
+                )}
+              </div>
+            </div>
+            <div className="sync-stat-card">
+              <div className="sync-stat-card__label">{t('sync.branchCommit', 'Branch · commit')}</div>
+              <div className="sync-stat-card__value sync-stat-card__value--accent mono">
+                {branchCommit}
+              </div>
+            </div>
+            <div className="sync-stat-card">
+              <div className="sync-stat-card__label">{t('sync.pipelinesDetected', 'Pipelines detected')}</div>
+              <div className="sync-stat-card__value mono sync-stat-card__value--num">
+                {pipelinesDetected}
+              </div>
+            </div>
+            <div className="sync-stat-card">
+              <div className="sync-stat-card__label">{t('sync.webhook', 'Webhook')}</div>
+              {/* TODO(redesign): needs backend — webhook registration status is not exposed yet,
+                  fall back to repo-configured state as a best-effort signal. */}
+              <div className="sync-stat-card__value">
+                <span className={`status-dot ${repoConfigured ? 'success' : 'disabled'}`} />
+                <span className={repoConfigured ? 'sync-stat-card__webhook-ok' : 'sync-stat-card__muted'}>
+                  {repoConfigured
+                    ? t('sync.webhookRegistered', 'Registered')
+                    : t('sync.webhookNotConfigured', 'Not configured')}
+                </span>
+              </div>
+            </div>
           </div>
-          {syncStatus?.remote_url && (
-            <div className="status-row">
-              <span className="status-label">
-                {t('sync.remoteUrl')}
-                <InfoIcon content={t('sync.remoteUrlInfo')} />
-              </span>
-              <span className="status-value">{syncStatus.remote_url}</span>
-            </div>
-          )}
-          {formatLastCommit(syncStatus?.last_commit) && (
-            <div className="status-row">
-              <span className="status-label">
-                {t('sync.lastCommit')}
-                <InfoIcon content={t('sync.lastCommitInfo')} />
-              </span>
-              <span className="status-value">{formatLastCommit(syncStatus?.last_commit)}</span>
-            </div>
-          )}
-          {syncStatus?.last_sync && (
-            <div className="status-row">
-              <span className="status-label">{t('sync.lastSync')}:</span>
-              <span className="status-value">
-                {new Date(syncStatus.last_sync).toLocaleString(formatLocale)}
-              </span>
-            </div>
-          )}
-          {syncStatus?.status && (
-            <div className="status-row">
-              <span className="status-label">{t('sync.status')}:</span>
-              <span className={`status-badge ${syncStatus.status.toLowerCase()}`}>
-                {syncStatus.status}
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
 
-      <div className="sync-actions-card">
-        <h3>{t('sync.runSync')}</h3>
-        <div className="sync-form">
-          {syncMutation.isPending && (
-            <p className="settings-note">
-              {t('dashboard.syncRunning')} - das kann je nach Repo/Dependencies einige Minuten dauern.
-            </p>
-          )}
-          <div className="form-group">
-            <label htmlFor="sync-branch">{t('sync.branchOptional')}</label>
-            <input
-              id="sync-branch"
-              type="text"
-              value={syncBranch}
-              onChange={(e) => setSyncBranch(e.target.value)}
-              placeholder={syncStatus?.branch || t('sync.branchPlaceholderDefault')}
-              disabled={fieldDisabled}
-            />
+          {/* Run-sync form (branch override) — restyled */}
+          <div className="sync-status-card">
+            <h3>{t('sync.runSync')}</h3>
+            <div className="sync-form">
+              {syncMutation.isPending && (
+                <p className="settings-note">{t('dashboard.syncRunning')}</p>
+              )}
+              <div className="form-group">
+                <label htmlFor="sync-branch">{t('sync.branchOptional')}</label>
+                <input
+                  id="sync-branch"
+                  type="text"
+                  value={syncBranch}
+                  onChange={(e) => setSyncBranch(e.target.value)}
+                  placeholder={syncStatus?.branch || t('sync.branchPlaceholderDefault')}
+                  disabled={fieldDisabled}
+                />
+              </div>
+              {syncStatus?.remote_url && (
+                <p className="settings-note">
+                  {t('sync.remoteUrl')} <span className="mono">{syncStatus.remote_url}</span>
+                </p>
+              )}
+              {formatLastCommit(syncStatus?.last_commit) && (
+                <p className="settings-note">
+                  {t('sync.lastCommit')} <span className="mono">{formatLastCommit(syncStatus?.last_commit)}</span>
+                </p>
+              )}
+              {!isReadonly && (
+                <button
+                  type="button"
+                  onClick={handleSync}
+                  disabled={syncMutation.isPending || fieldDisabled}
+                  className="btn btn-primary sync-form-submit"
+                >
+                  {syncMutation.isPending ? t('dashboard.syncRunning') : t('sync.runSync')}
+                </button>
+              )}
+            </div>
           </div>
-          {!isReadonly && (
-            <button
-              type="button"
-              onClick={handleSync}
-              disabled={syncMutation.isPending || fieldDisabled}
-              className="btn btn-primary sync-form-submit"
-            >
-              {syncMutation.isPending ? t('dashboard.syncRunning') : t('sync.runSync')}
-            </button>
-          )}
-        </div>
-      </div>
 
-      {syncStatus?.pipelines_cached && syncStatus.pipelines_cached.length > 0 && (
-        <div className="cache-status-card">
-          <h3>
-            {t('sync.cachedPipelines')}
-            <InfoIcon content={t('sync.cachedPipelinesTooltip')} />
-          </h3>
-          <div className="cached-pipelines">
-            {syncStatus.pipelines_cached.map((pipeline) => (
-              <span key={pipeline} className="cached-badge">
-                {pipeline}
+          {/* Terminal-style sync activity */}
+          <div className="sync-activity">
+            <div className="sync-activity__head">
+              <h3 className="sync-activity__title">{t('sync.activityTitle', 'Sync activity')}</h3>
+              <span className="sync-activity__poll">
+                <span className="sync-activity__poll-dot" />
+                {t('sync.pollingEvery', { seconds: 5, defaultValue: 'polling every {{seconds}}s' })}
               </span>
-            ))}
+            </div>
+            <div className="sync-activity__body" ref={activityBodyRef} onScroll={handleActivityScroll}>
+              {syncLogs && syncLogs.length > 0 ? (
+                syncLogs.map((log: any, index: number) => {
+                  const level = (log.status || log.event || 'info').toLowerCase()
+                  return (
+                    <div key={index} className="sync-activity__line">
+                      <span className="sync-activity__time">
+                        {log.timestamp
+                          ? new Date(log.timestamp).toLocaleTimeString(formatLocale)
+                          : '--:--:--'}
+                      </span>
+                      <span className={`sync-activity__level sync-activity__level--${level}`}>
+                        {(log.status || log.event || 'info').toUpperCase()}
+                      </span>
+                      <span className="sync-activity__text">
+                        {log.message || log.error || t('sync.logStatusUnknown')}
+                      </span>
+                    </div>
+                  )
+                })
+              ) : (
+                <div className="sync-activity__empty">{t('sync.noSyncLogs')}</div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+
+          {syncStatus?.pipelines_cached && syncStatus.pipelines_cached.length > 0 && (
+            <div className="cache-status-card">
+              <h3>
+                {t('sync.cachedPipelines')}
+                <InfoIcon content={t('sync.cachedPipelinesTooltip')} />
+              </h3>
+              <div className="cached-pipelines">
+                {syncStatus.pipelines_cached.map((pipeline) => (
+                  <span key={pipeline} className="cached-badge">
+                    {pipeline}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
 

@@ -139,6 +139,13 @@
 .status-dot.degraded { background: var(--color-warning); box-shadow: 0 0 8px var(--color-warning); animation: ff-pulse 1.5s ease-in-out infinite; }
 .status-dot.queued,  .status-dot.disabled { background: var(--color-neutral); }
 
+/* Pulsing "ping" halo around a status dot (e.g. live / operational) */
+.status-ping { position: relative; display: inline-flex; }
+.status-ping::after {
+  content: ''; position: absolute; inset: 0; border-radius: 50%;
+  background: var(--color-success); animation: ff-ping 2s var(--ease-out) infinite;
+}
+
 /* ---- CARDS --------------------------------------------------------------- */
 .card {
   background: var(--color-surface);

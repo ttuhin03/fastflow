@@ -6,8 +6,7 @@ import { initPostHog } from './utils/posthog'
 import ErrorBoundary from './components/ErrorBoundary'
 import './index.css'
 
-async function bootstrap(): Promise<void> {
-  await initPostHog()
+function bootstrap(): void {
   const el = document.getElementById('root')
   if (!el) return
   ReactDOM.createRoot(el).render(
@@ -17,6 +16,9 @@ async function bootstrap(): Promise<void> {
       </ErrorBoundary>
     </React.StrictMode>,
   )
+  // Telemetrie außerhalb des kritischen Render-Pfads initialisieren (fire-and-forget):
+  // weder der Status-Fetch noch posthog-js blockieren so den ersten Paint.
+  void initPostHog()
 }
 
 bootstrap()

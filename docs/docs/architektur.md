@@ -37,7 +37,7 @@ As soon as a run is triggered via the React frontend (manually) or APScheduler (
 
 Instead of building a pipeline-specific image, a generic **worker base image** is started (uv, optionally pre-installed Python):
 
-- **Docker (`PIPELINE_EXECUTOR=docker`)**: Pipeline directory **read-only** from the host, uv cache and uv Python installations are mounted.
+- **Docker (`PIPELINE_EXECUTOR=docker`)**: Pipeline directory is mounted from the host (**read-write**, so pipelines can write output files), uv cache and uv Python installations are mounted.
 - **Kubernetes (`PIPELINE_EXECUTOR=kubernetes`)**: The orchestrator copies the pipeline into a **shared volume** (`pipeline_runs/<Run-ID>`) before the Job; uv cache and uv Python live on the **cache PVC** and are mounted into the Job Pod (details: [Kubernetes Deployment](/docs/deployment/K8S)).
 - **Just-In-Time Environment (both modes)**: `uv run --python {version}` – the version is **freely configurable per pipeline** (`python_version` in pipeline.json, e.g. 3.10, 3.11, 3.12) or `DEFAULT_PYTHON_VERSION`. Python comes from `uv python install` (preheating), not from the pipeline image.
   - **Dependencies in cache?** → Linked in milliseconds via hardlink.
@@ -71,7 +71,7 @@ flowchart TB
     subgraph App["Application Layer"]
         B["FastAPI Orchestrator\nPython 3.11+"]
         C["Database (SQLite/PostgreSQL)"]
-        D["Auth & Secrets\nGitHub App / Fernet"]
+        D["Auth & Secrets\nOAuth / Fernet"]
     end
 
     A -->|"REST / SSE\nLive Updates"| B
@@ -88,7 +88,7 @@ flowchart TB
         G["Pipeline-Container\nuv run --python {version}"]
         H["uv-Cache"]
         J["uv-Python"]
-        I["Pipeline-Code\nread-only mount"]
+        I["Pipeline-Code\nrw mount"]
     end
 
     subgraph K8sPfad["Kubernetes Jobs"]
@@ -140,9 +140,9 @@ All REST endpoints live under the prefix **`/api`**. Routers are centrally maint
 
 - **`app/executor`**: Execution (Docker or Kubernetes), log and metrics streaming, zombie reconciliation, graceful shutdown.
 - **`app/executor/kubernetes_backend`**: Kubernetes Jobs (Batch API), Pod logs, Metrics API, run cleanup on the shared volume.
-- **`app/git_sync`**: Git sync of the pipeline repo, GitHub App token, sync log, pre-heat.
+- **`app/git_sync`**: Git sync of the pipeline repo (HTTPS + PAT or SSH + deploy key), sync log, pre-heat.
 - **`app/startup`**: Startup/shutdown logic, OAuth and security validation.
-- **`app/logging_config`**: Log level and optional JSON log format.
+- **`app/core/logging_config`**: Log level and optional JSON log format.
 
 ## Next steps
 

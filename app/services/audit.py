@@ -11,6 +11,7 @@ from typing import Any, Dict, Optional
 from sqlmodel import Session
 
 from app.models import AuditLogEntry, User
+from app.middleware.client_ip import get_client_ip
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,7 @@ def log_audit(
             resource_type=resource_type,
             resource_id=resource_id,
             details=details,
+            ip_address=get_client_ip(),
         )
         session.add(entry)
         session.commit()

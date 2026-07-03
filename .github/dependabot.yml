@@ -14,8 +14,6 @@ updates:
       python-dependencies:
         patterns:
           - "*"
-        exclude-patterns:
-          - "*"  # remove this line if you don't want grouping; see note below
 
   # npm dependencies (React/TypeScript frontend)
   - package-ecosystem: "npm"
@@ -28,8 +26,9 @@ updates:
       - "dependencies"
       - "javascript"
     groups:
-      dev-dependencies:
-        dependency-type: "development"
+      npm-dependencies:
+        patterns:
+          - "*"
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
@@ -39,3 +38,7 @@ updates:
     labels:
       - "dependencies"
       - "github-actions"
+    groups:
+      github-actions:
+        patterns:
+          - "*"

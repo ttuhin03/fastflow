@@ -45,7 +45,7 @@ When S3 backup is **active and configured**, at least one log or metrics file ex
 - **Email:** An **email is sent to all `EMAIL_RECIPIENTS`** (if `EMAIL_ENABLED`, SMTP, and `EMAIL_RECIPIENTS` are configured).
 - **Microsoft Teams:** The same message is sent to the configured **Teams webhook** (if `TEAMS_ENABLED` and `TEAMS_WEBHOOK_URL` are set).
 
-For emails on backup failures to reach everyone: `EMAIL_ENABLED`, `SMTP_HOST`, `SMTP_FROM`, `EMAIL_RECIPIENTS` (and optionally `SMTP_USER`/`SMTP_PASSWORD`). For Teams: `TEAMS_ENABLED`, `TEAMS_WEBHOOK_URL` (see [Configuration – Notifications](CONFIGURATION.md#benachrichtigungen-optional)).
+For emails on backup failures to reach everyone: `EMAIL_ENABLED`, `SMTP_HOST`, `SMTP_FROM`, `EMAIL_RECIPIENTS` (and optionally `SMTP_USER`/`SMTP_PASSWORD`). For Teams: `TEAMS_ENABLED`, `TEAMS_WEBHOOK_URL` (see [Configuration – Notifications](CONFIGURATION.md#notifications-optional)).
 
 ## Configuration
 

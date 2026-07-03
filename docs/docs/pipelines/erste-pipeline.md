@@ -135,13 +135,26 @@ After the next sync, the description appears in the pipeline list. Full referenc
 
 ## Step 5: Secrets and environment variables
 
-Passwords, API keys, etc. do **not** belong in code and **not** in `pipeline.json`. Enter them in the Fast-Flow UI as **Secrets** (or parameters); they are stored **encrypted** and passed to the pipeline at runtime as **environment variables**.
+Passwords, API keys, etc. do **not** belong in code and **not in plain text** in `pipeline.json`. Fast-Flow passes them to the pipeline at runtime as **environment variables**. Two ways:
 
-### In the UI
+### Encrypted in `pipeline.json` (`encrypted_env`)
 
-1. Go to **Pipelines** → select `hello_world` (or the corresponding pipeline).
-2. Open the **Secrets** / **Parameters** section (depending on UI naming).
-3. Create a secret **`MEIN_API_KEY`** and enter a value (for the tutorial only: `test-123`).
+1. Go to **Pipelines → Secrets** in the UI and use the **encryption helper** ("Encrypt value for pipeline.json"): enter a value (for the tutorial only: `test-123`) and copy the encrypted string.
+2. Add it to your `pipeline.json`:
+
+```json
+{
+  "encrypted_env": {
+    "MEIN_API_KEY": "gAAAAA...encrypted..."
+  }
+}
+```
+
+The value is stored encrypted (Fernet, server `ENCRYPTION_KEY`) and decrypted only at run start. Non-sensitive defaults go into **`default_env`** as plain values.
+
+### At run start (UI)
+
+When starting a run in the UI, you can also pass additional **environment variables** directly — useful for one-off values.
 
 ### In code
 
@@ -155,10 +168,8 @@ api_key = os.getenv("MEIN_API_KEY")
 if api_key:
     print("API key is set (length):", len(api_key))
 else:
-    print("MEIN_API_KEY not set – please enter it in the UI.")
+    print("MEIN_API_KEY not set – check encrypted_env in pipeline.json.")
 ```
-
-When the run starts, Fast-Flow sets the secrets/parameters configured in the UI as env vars. **Parameters** are unencrypted (for non-sensitive values), **Secrets** are stored encrypted.
 
 ---
 
@@ -216,7 +227,7 @@ This helps you catch many errors before the first run in Fast-Flow.
 - [ ] Folder under `PIPELINES_DIR` (e.g. `pipelines/mein_name/`) with **`main.py`**
 - [ ] Optional: **`requirements.txt`** for external packages
 - [ ] Optional: **`pipeline.json`** for description, tags, limits
-- [ ] Create secrets/parameters in the **UI** and read them in `main.py` with **`os.getenv("NAME")`**
+- [ ] Define secrets via **`encrypted_env`** in `pipeline.json` (encrypt in the UI under Pipelines → Secrets) and read them in `main.py` with **`os.getenv("NAME")`**
 - [ ] After sync/restart, verify the pipeline in the UI and start a **Run**
 - [ ] Check **logs** on success and on failure
 

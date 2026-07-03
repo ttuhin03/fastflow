@@ -298,7 +298,7 @@ UV_PRE_HEAT=true
 | `AUTO_SYNC_ENABLED` | Automatic sync on/off | `false` or `true` |
 | `AUTO_SYNC_INTERVAL` | Interval in seconds | e.g. `300` |
 
-Additionally: repo URL and optionally GitHub App or credentials (see [Configuration](/docs/deployment/CONFIGURATION), GitHub Apps).
+Additionally: repo URL (`GIT_REPO_URL`) and, for private repos, `GIT_SYNC_TOKEN` (PAT, HTTPS) or `GIT_SYNC_DEPLOY_KEY` (SSH) — alternatively via the Sync UI (see [Configuration](/docs/deployment/CONFIGURATION), Git Sync).
 
 ---
 
@@ -353,7 +353,7 @@ Then: Frontend usually at **http://localhost:3000**, backend at **http://localho
 
 1. **First login:** Sign in with an OAuth provider. The email stored in `INITIAL_ADMIN_EMAIL` becomes admin on first login.
 2. **Pipelines:** Either create folders under `PIPELINES_DIR` (e.g. `pipelines/my_first/main.py`) or set up Git sync. See [First Pipeline](/docs/pipelines/erste-pipeline) and [Pipelines – Overview](/docs/pipelines/uebersicht).
-3. **Secrets:** Enter them in the UI under Pipelines → Secrets/Parameters. Use in the pipeline via `os.getenv("NAME")`.
+3. **Secrets:** Define them in `pipeline.json` (`encrypted_env` for sensitive values, `default_env` for plain defaults). The UI under Pipelines → Secrets shows all keys and provides an **encryption helper** for `encrypted_env` values. Use in the pipeline via `os.getenv("NAME")`.
 
 ---
 

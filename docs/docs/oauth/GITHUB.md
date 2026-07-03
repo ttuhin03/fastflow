@@ -39,7 +39,7 @@ BASE_URL=http://localhost:8000
 
 ## 3. Start Backend + Frontend
 
-- **Docker:** `./start-docker.sh` or `./start-dev.sh`
+- **Docker:** `./start-docker.sh` (or `docker compose up -d`)
 - **Local:** `uvicorn app.main:app --reload --port 8000` and `cd frontend && npm run dev`
 
 ---

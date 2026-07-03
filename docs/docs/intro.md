@@ -26,7 +26,7 @@ Use the **[fastflow-pipeline-template](https://github.com/ttuhin03/fastflow-pipe
 
 - **Code First:** Your Python script runs as-is – no DAG decorators, operators, or IO managers.
 - **uv + Docker:** Each pipeline runs in an isolated container; dependencies arrive via the uv cache in milliseconds. The Python version is freely configurable per pipeline (e.g. 3.10, 3.11, 3.12).
-- **Git as source:** Push to deploy – no image build, no manual upload. The orchestrator pulls changes via webhook or sync.
+- **Git as source:** Push to deploy – no image build, no manual upload. The orchestrator pulls changes via auto-sync or manual sync.
 - **Docker or Kubernetes:** One FastAPI container plus Docker socket proxy (Docker mode) or deployment on Kubernetes with pipeline runs as K8s Jobs. See [Kubernetes Deployment](/docs/deployment/K8S).
 
 ## Next steps

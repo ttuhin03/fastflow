@@ -587,6 +587,7 @@ class AuditLogEntry(SQLModel, table=True):
     resource_type: str = Field(index=True, description="Betroffene Ressource: pipeline, run, user, settings, secret, invite")
     resource_id: Optional[str] = Field(default=None, index=True, description="ID der betroffenen Ressource (z.B. Run-ID, Pipeline-Name)")
     details: Optional[Dict[str, Any]] = Field(default=None, sa_column=Column(JSON), description="Zusätzliche Daten (z.B. new_run_id)")
+    ip_address: Optional[str] = Field(default=None, description="Client-IP zum Zeitpunkt der Aktion (None bei System-/Hintergrund-Aktionen)")
 
 
 class Session(SQLModel, table=True):

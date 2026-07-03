@@ -79,7 +79,7 @@ The pipeline value overrides the global setting. With e.g. `3`, there are up to 
 
 **Typical use case:** Unstable external APIs or brief network outages. For logical errors (bad data, bugs), retries often help little – improve error handling in code instead.
 
-**Retry strategy (`retry_strategy`):** In addition to `retry_attempts`, you can define in `pipeline.json` **how long** to wait before each retry: e.g. **Exponential Backoff** (for flaky APIs), **Fixed Delay** (fixed seconds), or **Custom Schedule** (list of wait times). See [pipeline.json reference – Retry strategies](/docs/pipelines/referenz#retry-strategien).
+**Retry strategy (`retry_strategy`):** In addition to `retry_attempts`, you can define in `pipeline.json` **how long** to wait before each retry: e.g. **Exponential Backoff** (for flaky APIs), **Fixed Delay** (fixed seconds), or **Custom Schedule** (list of wait times). See [pipeline.json reference – Retry strategies](/docs/pipelines/referenz#retry-strategies).
 
 ### 2.2 Timeout
 
@@ -103,15 +103,15 @@ If a pipeline runs too long, you can abort it after a certain **runtime** (secon
 
 ## 3. Secrets, parameters, and `default_env`
 
-### 3.1 Secrets vs. parameters
+### 3.1 Secrets vs. plain defaults
 
-| | **Secrets** | **Parameters** |
+| | **`encrypted_env`** | **`default_env`** |
 |---|-------------|----------------|
-| **Storage** | Encrypted in the database | Unencrypted |
+| **Storage** | Encrypted in `pipeline.json` (Fernet, server `ENCRYPTION_KEY`) | Plain text in `pipeline.json` |
 | **Use** | API keys, passwords, tokens | Endpoints, filenames, flags |
 | **In the pipeline** | Both as environment variables (`os.getenv("NAME")`) |
 
-Both are managed in the **UI** per pipeline (or globally, depending on Fast-Flow version). In code you do not distinguish – everything arrives as an env var.
+Both live in `pipeline.json` (and therefore in Git). Encrypt sensitive values with the **encryption helper** in the UI (Pipelines → Secrets). In code you do not distinguish – everything arrives as an env var. Additional env vars can also be passed when starting a run in the UI.
 
 ### 3.2 `default_env` in `pipeline.json`
 
@@ -130,7 +130,7 @@ For **non-sensitive** defaults (e.g. `LOG_LEVEL`, `API_BASE`, `DRY_RUN=false`) y
 
 - These values are set on **every** run.
 - Env vars set additionally in the UI (e.g. for a single run) **override** these defaults.
-- **Do not put secrets** in `default_env` – use the UI instead. `pipeline.json` typically lives in Git and would otherwise be a security risk.
+- **Do not put secrets** in `default_env` – use **`encrypted_env`** instead (encrypt in the UI under Pipelines → Secrets). `pipeline.json` typically lives in Git and plain-text secrets would be a security risk.
 
 ---
 
@@ -140,15 +140,15 @@ Instead of starting only manually or via webhook, you can run pipelines **on a s
 
 ### In pipeline.json (schedule from code)
 
-You can define the schedule **directly in pipeline.json**: `schedule_cron` (e.g. `"0 9 * * *"`) or `schedule_interval_seconds` (e.g. `3600`). Optionally, `schedule_start` and `schedule_end` (ISO date/time) limit the period during which the schedule is active. On orchestrator startup and after Git sync, scheduler jobs are created automatically from this. See [pipeline.json reference – Schedule](/docs/pipelines/referenz#schedule-cron--intervall-in-pipelinejson).
+You can define the schedule **directly in pipeline.json**: `schedule_cron` (e.g. `"0 9 * * *"`) or `schedule_interval_seconds` (e.g. `3600`). Optionally, `schedule_start` and `schedule_end` (ISO date/time) limit the period during which the schedule is active. On orchestrator startup and after Git sync, scheduler jobs are created automatically from this. See [pipeline.json reference – Schedule](/docs/pipelines/referenz#schedule-cron--interval-in-pipelinejson).
 
 ### Multiple run configurations (`schedules`)
 
-Per pipeline you can define **multiple** scheduled runs with different cron/interval, env vars, time ranges, and resources. The optional **`schedules`** array in pipeline.json serves this purpose. Each entry has a unique **`id`** (e.g. `"prod"`, `"staging"`) and can have its own values for `schedule_cron`/`schedule_interval_seconds`, `schedule_start`/`schedule_end`, `default_env`, optional `encrypted_env`, as well as **per-schedule overrides** for `cpu_hard_limit`, `mem_hard_limit`, `cpu_soft_limit`, `mem_soft_limit`, `timeout`, `retry_attempts`, and `retry_strategy`. Env vars are merged: first pipeline `default_env`, then entry `default_env`; then pipeline `encrypted_env`, then entry `encrypted_env`. This lets you run the same pipeline e.g. daily for production with higher limits and more retries, and hourly for staging with lower resources. Details and example: [pipeline.json reference – schedules](/docs/pipelines/referenz#mehrere-run-konfigurationen-schedules).
+Per pipeline you can define **multiple** scheduled runs with different cron/interval, env vars, time ranges, and resources. The optional **`schedules`** array in pipeline.json serves this purpose. Each entry has a unique **`id`** (e.g. `"prod"`, `"staging"`) and can have its own values for `schedule_cron`/`schedule_interval_seconds`, `schedule_start`/`schedule_end`, `default_env`, optional `encrypted_env`, as well as **per-schedule overrides** for `cpu_hard_limit`, `mem_hard_limit`, `cpu_soft_limit`, `mem_soft_limit`, `timeout`, `retry_attempts`, and `retry_strategy`. Env vars are merged: first pipeline `default_env`, then entry `default_env`; then pipeline `encrypted_env`, then entry `encrypted_env`. This lets you run the same pipeline e.g. daily for production with higher limits and more retries, and hourly for staging with lower resources. Details and example: [pipeline.json reference – schedules](/docs/pipelines/referenz#multiple-run-configurations-schedules).
 
 ### In the UI
 
-Under the respective pipeline (or in the scheduler section) you can set up **cron expressions** or **intervals** (e.g. every 6 hours). The exact fields depend on the Fast-Flow version; typical:
+The scheduler section shows all jobs created from `pipeline.json`, with next run times and run history. Jobs can be **enabled/disabled** there; creating and deleting jobs happens declaratively via `pipeline.json`. Typical values:
 
 - **Cron:** e.g. `0 2 * * *` = daily at 2:00 AM
 - **Interval:** e.g. every 3600 seconds
@@ -208,7 +208,7 @@ curl -X POST "https://deine-instanz.de/api/webhooks/data_sync/dein-geheimer-schl
 
 **Responses:** 200 with run info; **401** for wrong `webhook_key`; **404** if the pipeline does not exist, is disabled, or webhooks are off for it.
 
-The **complete webhook URL** (with your key) is shown in the pipeline detail view in the UI and can be copied there. Details: [pipeline.json reference – Webhooks](/docs/pipelines/referenz#webhooks-pipeline-per-http-auslösen) and [API](/docs/api/api).
+The **complete webhook URL** (with your key) is shown in the pipeline detail view in the UI and can be copied there. Details: [pipeline.json reference – Webhooks](/docs/pipelines/referenz#webhooks-trigger-pipeline-via-http) and [API](/docs/api/api).
 
 ### Typical usage
 
@@ -333,9 +333,9 @@ When a pipeline runs **multiple times** (retry, duplicate webhook, scheduled run
 |------|-------------|
 | **Retries on failure** | `retry_attempts` in `pipeline.json` or `RETRY_ATTEMPTS` globally |
 | **Maximum runtime** | `timeout` in `pipeline.json` or `CONTAINER_TIMEOUT` |
-| **Secret values** | Secrets in the UI, `os.getenv("NAME")` in code |
+| **Secret values** | `encrypted_env` in `pipeline.json` (encrypt in the UI), `os.getenv("NAME")` in code |
 | **Non-critical defaults** | `default_env` in `pipeline.json` |
-| **Schedule** | Scheduling in the UI (cron/interval) |
+| **Schedule** | `schedule_cron` / `schedule_interval_seconds` (or `schedules[]`) in `pipeline.json` |
 | **External trigger** | Webhook URL, `POST` request |
 | **Limit CPU/RAM** | `cpu_hard_limit`, `mem_hard_limit` in `pipeline.json` |
 | **Structure and maintainability** | `main()`, modules, `logging` |
@@ -349,7 +349,7 @@ When a pipeline runs **multiple times** (retry, duplicate webhook, scheduled run
 ## 10. Best practices
 
 - **Clean code:** Keep `main.py` modular. Use helper functions and additional modules in the same folder.
-- **Environment variables:** Configuration and secrets via `os.getenv("NAME")`. Manage secret values in the **Fast-Flow UI** as secrets, not in `pipeline.json` or code.
+- **Environment variables:** Configuration and secrets via `os.getenv("NAME")`. Store secret values **encrypted** as `encrypted_env` in `pipeline.json` (encryption helper in the UI), never in plain text in `pipeline.json` or code.
 - **Logs:** Simply use `print()`. Fast-Flow captures **stdout** and **stderr** and streams them to the UI. For more structured output: `logging` (see section 7).
 
 ---

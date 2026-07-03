@@ -5,7 +5,7 @@ sidebar_position: 30
 # Disclaimer & Liability
 
 :::caution Important notice on security and liability
-This project is in an **early stage / beta status**. The orchestrator requires access to the **Docker socket** to execute pipelines. With **improper configuration**, there is a **security risk** to the host system.
+This project is in an **early stage / beta status**. In **`PIPELINE_EXECUTOR=docker`** mode, the orchestrator has indirect access to the Docker daemon (via the recommended socket proxy) – with **improper configuration**, there is a **security risk** to the host system. In **`kubernetes`** mode, runs are decoupled from host Docker; typical K8s concerns apply instead (RBAC, networking, secrets).
 :::
 
 ## Use at your own risk
@@ -30,6 +30,7 @@ There is **no guarantee** for:
 ## Security recommendation
 
 - **Never** run this orchestrator **unprotected on the public internet**.
-- **Always** use the recommended **Docker socket proxy** and **strong authentication** (OAuth, secure JWT and encryption keys).
+- In Docker mode: **always** use the recommended **Docker socket proxy**; in Kubernetes: grant the orchestrator ServiceAccount **minimal RBAC rights**.
+- **Always** use **strong authentication** (OAuth, secure JWT and encryption keys).
 
 Details: [Docker Socket Proxy](/docs/deployment/DOCKER_PROXY), [Setup Guide](/docs/setup) (production checklist), [Deployment](/docs/deployment/PRODUCTION).

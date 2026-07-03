@@ -185,7 +185,7 @@ When a run is triggered via the React frontend (manually) or APScheduler (schedu
 
 This is the core of Fast-Flow performance. Instead of building a pipeline-specific image, a generic worker image starts (uv, optionally pre-installed Python):
 
-- **Docker**: Pipeline directory read-only from the host, uv cache and uv Python mounted.
+- **Docker**: Pipeline directory mounted from the host (read-write, so pipelines can write output files), uv cache and uv Python mounted.
 - **Kubernetes**: The orchestrator copies the pipeline into a **shared volume** before the Job (`pipeline_runs/<Run-ID>` on the cache PVC); Jobs mount uv cache and uv Python the same way as in the [K8s docs](docs/docs/deployment/K8S.md).
 - **Just-In-Time (both)**: `uv run --python {version}` – version **per pipeline** (`python_version` in pipeline.json) or `DEFAULT_PYTHON_VERSION`. Python from `uv python install` (preheating).
   - **Dependencies in cache?** → Linked in milliseconds via hardlink.
@@ -235,7 +235,7 @@ flowchart TB
         G["📦 Pipeline Container<br/><small>uv run --python</small>"]
         H["📚 uv Cache"]
         J["🐍 uv Python"]
-        I["📝 Pipeline Code<br/><small>ro mount</small>"]
+        I["📝 Pipeline Code<br/><small>rw mount</small>"]
     end
 
     subgraph K8sPfad["Kubernetes Jobs"]
@@ -298,7 +298,7 @@ Traditional orchestrators often turn deployment into a logistics problem. Fast-F
 
 In Fast-Flow, your Git repository is the single source of truth. There is no "Upload" button and no manual build step.
 
-*   **Zero-Build Deployment**: When you change your code, the orchestrator pulls changes via webhook or manual sync. Thanks to the uv JIT architecture, the new version is ready to run immediately.
+*   **Zero-Build Deployment**: When you change your code, the orchestrator pulls changes via auto-sync or manual sync. Thanks to the uv JIT architecture, the new version is ready to run immediately.
 *   **Full Traceability**: Since every pipeline configuration (`pipeline.json`) and every library (`requirements.txt`) lives in Git, you have a complete history. Who increased the memory limit when? Who changed the prophet version? Your Git log tells you.
 *   **Atomic Sync**: Our sync mechanism ensures pipelines never read "half" files. Changes are applied atomically – safe and consistent.
 
@@ -313,7 +313,7 @@ In Fast-Flow, your Git repository is the single source of truth. There is no "Up
 
 1.  **Develop**: Write your Python script locally.
 2.  **Push**: `git push origin main`.
-3.  **Sync**: The orchestrator detects the change (via webhook or auto-sync).
+3.  **Sync**: The orchestrator detects the change (via auto-sync or manual sync).
 4.  **Run**: The pipeline starts immediately with the new code. No Docker builds, no waiting.
 
 > "We made deployment as boring as possible so you can focus on the exciting part: your code."
@@ -404,11 +404,13 @@ docker-proxy:
   environment:
     - CONTAINERS=1    # Allow container operations
     - IMAGES=1        # Allow image pulls
+    - BUILD=1         # Allow build operations
     - VOLUMES=1       # Allow volume mounts
+    - EXEC=1          # Allow exec (used to read the uv version from the container)
     - POST=1          # Allow HTTP POST (container creation)
     - DELETE=1        # Allow container removal
     - STATS=1         # Allow resource monitoring
-    - NETWORKS=0       # Disable network management
+    - NETWORKS=0      # Disable network management
     - SYSTEM=0        # Disable system operations
 ```
 

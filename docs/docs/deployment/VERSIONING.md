@@ -28,7 +28,7 @@ VERSION
 ```
 
 This single source of truth is used by both:
-- **Backend**: Read via `app/config.py` (strips "v" prefix automatically)
+- **Backend**: Read via `app/core/config.py` (strips "v" prefix automatically)
 - **Frontend**: Injected via `vite.config.ts` (strips "v" prefix automatically)
 
 ## GitHub Tag Naming Convention
@@ -155,7 +155,7 @@ INFO - Version check scheduled: Daily at 2:00 AM
 
 ## Configuration
 
-The version checker uses these settings from `app/config.py`:
+The version checker uses these settings from `app/core/config.py`:
 
 - `VERSION`: Current version (read from `VERSION` file)
 - **GitHub Repository**: Defaults to `ttuhin03/fastflow` (may differ in forks/private mirrors)

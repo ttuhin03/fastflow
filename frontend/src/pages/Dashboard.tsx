@@ -1,11 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
 import { showError, showSuccess, showConfirm } from '../utils/toast'
+import { getFormatLocale } from '../utils/locale'
 import { LuRefreshCw } from 'react-icons/lu'
-import InfoIcon from '../components/InfoIcon'
 import RunStatusCircles from '../components/RunStatusCircles'
 import StorageStats from '../components/StorageStats'
 import CalendarHeatmap from '../components/CalendarHeatmap'
@@ -13,6 +14,7 @@ import WarningsBox from '../components/WarningsBox'
 import SystemStatus from '../components/SystemStatus'
 import ConcurrencyStatus from '../components/ConcurrencyStatus'
 import SummaryStatsCard from '../components/SummaryStatsCard'
+import Sparkline from '../components/Sparkline'
 import './Dashboard.css'
 
 interface Pipeline {
@@ -37,6 +39,14 @@ interface SyncStatus {
   status: string
 }
 
+interface SchedulerJob {
+  id: string
+  pipeline_name: string
+  trigger_value: string
+  enabled: boolean
+  next_run_time?: string | null
+}
+
 interface DailyStat {
   date: string
   total_runs: number
@@ -45,36 +55,9 @@ interface DailyStat {
   success_rate: number
 }
 
-/** Inline SVG sparkline from an array of numbers */
-function Sparkline({ values, color = 'var(--color-primary)' }: { values: number[]; color?: string }) {
-  if (!values || values.length < 2) return null
-  const w = 92
-  const h = 34
-  const min = Math.min(...values)
-  const max = Math.max(...values)
-  const range = max - min || 1
-  const pts = values.map((v, i) => {
-    const x = (i / (values.length - 1)) * w
-    const y = h - ((v - min) / range) * (h - 4) - 2
-    return `${x.toFixed(1)},${y.toFixed(1)}`
-  })
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="stat-spark" aria-hidden>
-      <polyline
-        points={pts.join(' ')}
-        fill="none"
-        stroke={color}
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        opacity="0.9"
-      />
-    </svg>
-  )
-}
-
 export default function Dashboard() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { isReadonly } = useAuth()
   const pipelinesInterval = useRefetchInterval(30_000, 120_000)
@@ -98,6 +81,15 @@ export default function Dashboard() {
       return response.data
     },
     refetchInterval: syncInterval,
+  })
+
+  const { data: schedulerJobs } = useQuery<SchedulerJob[]>({
+    queryKey: ['scheduler-jobs'],
+    queryFn: async () => {
+      const response = await apiClient.get('/scheduler/jobs')
+      return response.data
+    },
+    staleTime: 30_000,
   })
 
   const { data: allPipelinesDailyStats } = useQuery({
@@ -138,6 +130,18 @@ export default function Dashboard() {
         <p>{t('common.loading')}</p>
       </div>
     )
+  }
+
+  const scheduleByPipeline = new Map<string, { cron: string; nextRun: string | null }>()
+  for (const job of schedulerJobs ?? []) {
+    const entry = scheduleByPipeline.get(job.pipeline_name)
+    const nextRun = job.enabled ? job.next_run_time ?? null : null
+    if (!entry) {
+      scheduleByPipeline.set(job.pipeline_name, { cron: job.trigger_value, nextRun })
+    } else if (nextRun && (!entry.nextRun || nextRun < entry.nextRun)) {
+      entry.cron = job.trigger_value
+      entry.nextRun = nextRun
+    }
   }
 
   const totalRuns = pipelines?.reduce((sum, p) => sum + p.total_runs, 0) || 0
@@ -189,7 +193,7 @@ export default function Dashboard() {
           </div>
           <div className="stat-card__bottom">
             <p className="stat-value">{pipelines?.length || 0}</p>
-            <Sparkline values={(pipelines || []).map((_, i) => i + 1)} color="var(--chart-1)" />
+            {sparkRuns.length > 1 && <Sparkline data={sparkRuns} color="var(--chart-1)" />}
           </div>
         </div>
 
@@ -198,13 +202,13 @@ export default function Dashboard() {
             <p className="stat-label">{t('dashboard.totalRuns')}</p>
             {runsTrend && runsDelta != null && (
               <span className={`stat-trend ${runsTrend}`}>
-                {runsTrend === 'up' ? '↑' : '↓'} +{runsDelta}%
+                {runsTrend === 'up' ? '↑' : '↓'} {runsTrend === 'up' ? '+' : '-'}{runsDelta}%
               </span>
             )}
           </div>
           <div className="stat-card__bottom">
             <p className="stat-value">{totalRuns.toLocaleString()}</p>
-            <Sparkline values={sparkRuns} color="var(--chart-3)" />
+            {sparkRuns.length > 1 && <Sparkline data={sparkRuns} color="var(--chart-3)" />}
           </div>
         </div>
 
@@ -217,7 +221,7 @@ export default function Dashboard() {
           </div>
           <div className="stat-card__bottom">
             <p className="stat-value success">{totalSuccessful.toLocaleString()}</p>
-            <Sparkline values={sparkSuccess} color="var(--color-success)" />
+            {sparkSuccess.length > 1 && <Sparkline data={sparkSuccess} color="var(--color-success)" />}
           </div>
         </div>
 
@@ -230,36 +234,30 @@ export default function Dashboard() {
           </div>
           <div className="stat-card__bottom">
             <p className="stat-value">{successRate}{typeof successRate === 'string' && successRate !== '—' ? '%' : ''}</p>
-            <Sparkline values={sparkRate} color="var(--chart-2)" />
+            {sparkRate.length > 1 && <Sparkline data={sparkRate} color="var(--chart-2)" />}
           </div>
         </div>
       </div>
 
-      {/* Row 2: Heatmap (1.6fr) + System Status (1fr) */}
-      {allPipelinesDailyStats?.daily_stats && allPipelinesDailyStats.daily_stats.length > 0 && (
-        <div className="dashboard-row-2">
-          <div className="panel">
-            <div className="panel__head">
-              <h3 className="section-title">{t('dashboard.runHistory')}</h3>
-            </div>
-            <CalendarHeatmap dailyStats={allPipelinesDailyStats.daily_stats} days={365} showTitle={false} />
+      {/* Row 2: Heatmap (1.6fr) + System Status (1fr) — Heatmap auch ohne Daten (leere Zellen) */}
+      <div className="dashboard-row-2">
+        <div className="panel">
+          <div className="panel__head">
+            <h3 className="section-title">{t('dashboard.runHistory')}</h3>
           </div>
-          <div className="panel">
-            <div className="panel__head">
-              <h3 className="section-title">{t('dashboard.systemStatus')}</h3>
-            </div>
-            <SystemStatus />
-          </div>
+          <CalendarHeatmap
+            dailyStats={allPipelinesDailyStats?.daily_stats ?? []}
+            days={365}
+            showTitle={false}
+          />
         </div>
-      )}
-
-      {/* If no daily stats yet, show system status alone */}
-      {(!allPipelinesDailyStats?.daily_stats || allPipelinesDailyStats.daily_stats.length === 0) && (
-        <div className="dashboard-system-section">
-          <h3 className="section-title">{t('dashboard.systemStatus')}</h3>
+        <div className="panel">
+          <div className="panel__head">
+            <h3 className="section-title">{t('dashboard.systemStatus')}</h3>
+          </div>
           <SystemStatus />
         </div>
-      )}
+      </div>
 
       {/* Row 3: Summary + Concurrency + Storage */}
       <div className="dashboard-row-3">
@@ -273,35 +271,85 @@ export default function Dashboard() {
         <h3 className="section-title">{t('nav.pipelines')}</h3>
         {pipelines && pipelines.length > 0 ? (
           <div className="pipeline-grid">
-            {pipelines.map((pipeline, index) => (
-              <div
-                key={pipeline.name}
-                className="pipeline-card"
-                style={{ animationDelay: `${index * 0.04}s` }}
-              >
-                <div className="pipeline-card__head">
-                  <h4 className="pipeline-name">{pipeline.name}</h4>
-                  <span className={`badge ${pipeline.enabled ? 'badge-success' : 'badge-secondary'}`}>
-                    {pipeline.enabled ? t('common.active') : t('common.inactive')}
-                  </span>
-                </div>
-                <div className="pipeline-recent-runs">
-                  <span className="recent-runs-label">
-                    {t('dashboard.lastRuns')}
-                    <InfoIcon content={t('dashboard.lastRunsTooltip')} />
-                  </span>
-                  <RunStatusCircles pipelineName={pipeline.name} />
-                </div>
-                <div className="pipeline-card__foot">
-                  <span>{pipeline.total_runs} runs</span>
-                  {pipeline.total_runs > 0 && (
-                    <span style={{ color: 'var(--color-success-text)' }}>
-                      {Math.round((pipeline.successful_runs / pipeline.total_runs) * 100)}% ok
+            {pipelines.map((pipeline, index) => {
+              const successPct =
+                pipeline.total_runs > 0
+                  ? Math.round((pipeline.successful_runs / pipeline.total_runs) * 100)
+                  : 0
+              const barClass = successPct >= 90 ? 'success' : successPct >= 70 ? 'warning' : 'error'
+              const dotState = !pipeline.enabled
+                ? 'disabled'
+                : successPct >= 90 || pipeline.total_runs === 0
+                  ? 'success'
+                  : successPct >= 70
+                    ? 'degraded'
+                    : 'error'
+              return (
+                <div
+                  key={pipeline.name}
+                  className="pipeline-card"
+                  style={{ animationDelay: `${index * 0.04}s` }}
+                  onClick={() => navigate(`/pipelines/${encodeURIComponent(pipeline.name)}`)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      navigate(`/pipelines/${encodeURIComponent(pipeline.name)}`)
+                    }
+                  }}
+                >
+                  <div className="pipeline-card__head">
+                    <div className="pipeline-card__title">
+                      <span className={`status-dot ${dotState}`} aria-hidden />
+                      <span className="pipeline-name">{pipeline.name}</span>
+                    </div>
+                    <span
+                      className={`badge ${pipeline.enabled ? 'badge-success' : 'badge-secondary'}`}
+                      title={t('dashboard.pipelineActiveTooltip')}
+                    >
+                      {pipeline.enabled ? t('common.active') : t('common.inactive')}
                     </span>
-                  )}
+                  </div>
+
+                  <div className="pipeline-card__rate">
+                    <div className="progress">
+                      <div
+                        className={`progress__fill ${barClass}`}
+                        style={{ width: `${successPct}%` }}
+                      />
+                    </div>
+                    <span className="pipeline-card__pct mono">{successPct}%</span>
+                  </div>
+
+                  <RunStatusCircles pipelineName={pipeline.name} variant="strip" count={10} />
+
+                  <div className="pipeline-card__foot">
+                    {(() => {
+                      const schedule = scheduleByPipeline.get(pipeline.name)
+                      if (!schedule) {
+                        return <span className="mono">{t('dashboard.noSchedule', 'no schedule')}</span>
+                      }
+                      return (
+                        <>
+                          <span className="mono" title={schedule.cron}>{schedule.cron}</span>
+                          {schedule.nextRun && (
+                            <span className="mono pipeline-card__next">
+                              {t('dashboard.nextRunAt', 'next {{time}}', {
+                                time: new Date(schedule.nextRun).toLocaleString(getFormatLocale(), {
+                                  dateStyle: 'short',
+                                  timeStyle: 'short',
+                                }),
+                              })}
+                            </span>
+                          )}
+                        </>
+                      )
+                    })()}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         ) : (
           <div className="empty-state">

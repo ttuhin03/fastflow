@@ -67,12 +67,12 @@ export const showConfirm = (
             },
             style: {
               padding: '0.5rem 1rem',
-              background: '#22c55e',
-              color: 'white',
+              background: 'var(--color-primary)',
+              color: '#fff',
               border: 'none',
-              borderRadius: '4px',
+              borderRadius: 'var(--radius-md)',
               cursor: 'pointer',
-              fontWeight: '500',
+              fontWeight: 'var(--font-weight-bold)',
             }
           }, i18n.t('toast.ok')),
           React.createElement('button', {
@@ -83,12 +83,12 @@ export const showConfirm = (
             },
             style: {
               padding: '0.5rem 1rem',
-              background: '#666',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
+              background: 'var(--color-surface-4)',
+              color: 'var(--color-text-primary)',
+              border: '1px solid var(--color-border-light)',
+              borderRadius: 'var(--radius-md)',
               cursor: 'pointer',
-              fontWeight: '500',
+              fontWeight: 'var(--font-weight-medium)',
             }
           }, i18n.t('toast.cancel'))
         )

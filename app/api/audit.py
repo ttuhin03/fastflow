@@ -28,6 +28,7 @@ class AuditEntryResponse(BaseModel):
     resource_type: str
     resource_id: Optional[str]
     details: Optional[Dict[str, Any]]
+    ip_address: Optional[str]
 
 
 class AuditListResponse(BaseModel):
@@ -102,6 +103,7 @@ async def get_audit_log(
                 resource_type=e.resource_type,
                 resource_id=e.resource_id,
                 details=e.details,
+                ip_address=e.ip_address,
             )
             for e in entries
         ],

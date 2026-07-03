@@ -56,24 +56,27 @@ server {
     location / {
         proxy_pass http://localhost:8000;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 3600s;
     }
 }
 ```
 
-> **Important**: The `Upgrade` and `Connection` headers are required for Server-Sent Events (SSE), which are used for live logs.
+> **Important**: Live logs and metrics use Server-Sent Events (SSE). The app sends `X-Accel-Buffering: no`, which Nginx honors — do not force `proxy_buffering on`. A generous `proxy_read_timeout` prevents long-lived SSE connections from being cut off.
+
+> **Tip**: When running behind a trusted reverse proxy, set `PROXY_HEADERS_TRUSTED=true` in `.env` so rate limiting and the audit log use the real client IP from `X-Forwarded-For`.
 
 ## Docker Compose for Production
 
 The default `docker-compose.yaml` is already production-oriented:
 
 - **Docker proxy**: Port 2375 is not mapped to the host (only reachable internally, smaller attack surface).
-- **Orchestrator**: `ENVIRONMENT=production`, logging (json-file, max-size/max-file), restart policy.
+- **Orchestrator**: logging (json-file, max-size/max-file), restart policy, health check.
+
+**Important:** `ENVIRONMENT=production` is **not** set by the compose file — set it in `.env` (the compose file loads `.env` via `env_file`). Only then are insecure defaults (e.g. `JWT_SECRET_KEY`) blocked at startup.
 
 Start with:
 ```bash

@@ -1,65 +1,63 @@
 .concurrency-status {
   display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-  padding: var(--spacing-lg);
+  flex-direction: column;
+  padding: 18px 20px;
 }
 
-.concurrency-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: var(--radius-md);
+.concurrency-title { margin: 0 0 16px; font-size: var(--font-size-base); }
+
+.concurrency-headline {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.5rem;
-  background-color: var(--color-accent-subtle);
-  color: var(--color-primary);
-  flex-shrink: 0;
-}
-
-.concurrency-content {
-  flex: 1;
-  min-width: 0;
-}
-
-.concurrency-label {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  margin: 0 0 var(--spacing-xs) 0;
-  font-weight: var(--font-weight-medium);
+  align-items: baseline;
+  gap: 8px;
 }
 
 .concurrency-value {
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-semibold);
-  margin: 0 0 var(--spacing-xs) 0;
+  font-size: 28px;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-tighter);
+  color: var(--color-text-primary);
+  line-height: 1;
 }
 
-.concurrency-bar {
-  height: 6px;
+.concurrency-limit {
+  color: var(--color-text-disabled);
+  font-size: 18px;
+}
+
+.concurrency-sub {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+
+.concurrency-slots {
+  display: flex;
+  gap: 5px;
+  margin: 18px 0 10px;
+}
+
+.concurrency-slot {
+  flex: 1;
+  height: 7px;
   border-radius: 3px;
-  background: var(--color-bg-tertiary);
-  overflow: hidden;
-  margin-bottom: var(--spacing-xs);
+  background: var(--color-surface-3);
+  transition: background var(--transition-base);
 }
 
-.concurrency-bar-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--color-primary), var(--color-primary-light));
-  transition: width 0.3s ease;
-}
+.concurrency-slot.filled        { background: var(--color-primary); }
+.concurrency-slot.filled.medium { background: var(--color-warning); }
+.concurrency-slot.filled.high   { background: var(--color-error); }
 
-.concurrency-bar-fill.medium {
-  background: linear-gradient(90deg, var(--color-warning), var(--color-warning-text));
-}
-
-.concurrency-bar-fill.high {
-  background: linear-gradient(90deg, var(--color-warning), var(--color-error));
+.concurrency-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: var(--color-text-tertiary);
 }
 
 .concurrency-hint {
   font-size: var(--font-size-xs);
-  color: var(--color-warning);
-  margin: 0;
+  color: var(--color-warning-text);
+  margin: 8px 0 0;
 }

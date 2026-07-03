@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
 import { getFormatLocale } from '../utils/locale'
-import { LuInfo, LuCircleCheck, LuCircleX, LuTimer, LuPlay, LuTriangleAlert, LuOctagonX } from 'react-icons/lu'
+import { LuInfo, LuCircleCheck, LuCircleX, LuTimer, LuPlay, LuTriangleAlert, LuOctagonX, LuSearch, LuChevronRight } from 'react-icons/lu'
 import Tooltip from '../components/Tooltip'
 import InfoIcon from '../components/InfoIcon'
 import './Runs.css'
@@ -174,172 +174,182 @@ export default function Runs() {
     }
   }
 
+  // Map run status to a .badge variant + .status-dot kind for the redesigned pills
+  const statusBadgeClass = (status: string) => {
+    switch (status.toUpperCase()) {
+      case 'SUCCESS': return 'badge-success'
+      case 'FAILED': return 'badge-error'
+      case 'RUNNING': return 'badge-running'
+      case 'PENDING': return 'badge-warning'
+      case 'WARNING': return 'badge-warning'
+      case 'INTERRUPTED': return 'badge-secondary'
+      default: return 'badge-secondary'
+    }
+  }
+  const statusDotKind = (status: string) => {
+    switch (status.toUpperCase()) {
+      case 'SUCCESS': return 'success'
+      case 'FAILED': return 'failed'
+      case 'RUNNING': return 'running'
+      case 'PENDING': return 'checking'
+      case 'WARNING': return 'degraded'
+      case 'INTERRUPTED': return 'disabled'
+      default: return 'queued'
+    }
+  }
+
+  const runningCount = filteredAndSortedRuns.filter(
+    (r) => r.status === 'RUNNING' || r.status === 'PENDING'
+  ).length
+
   return (
     <div className="runs">
-      <div className="runs-filters card">
-        <div className="filter-group">
-          <label htmlFor="pipeline-filter" className="form-label">{t('runs.filterPipeline')}</label>
+      {/* Compact inline filter bar */}
+      <div className="runs-filterbar">
+        <label className="runs-search" htmlFor="pipeline-filter">
+          <LuSearch className="runs-search__icon" aria-hidden />
           <select
             id="pipeline-filter"
             value={pipelineFilter}
             onChange={(e) => setPipelineFilter(e.target.value)}
-            className="form-input"
+            className="runs-search__select"
+            aria-label={t('runs.filterPipeline')}
           >
-            <option value="">{t('runs.listAll')}</option>
+            <option value="">{t('runs.filterPipeline')} {t('runs.listAll')}</option>
             {pipelines?.map((p: any) => (
               <option key={p.name} value={p.name}>
                 {p.name}
               </option>
             ))}
           </select>
-        </div>
+        </label>
 
-        <div className="filter-group">
-          <label htmlFor="status-filter" className="form-label">
-            {t('runs.filterStatus')}
-            <InfoIcon content={t('runs.statusFilterHint')} />
-          </label>
+        <div className="runs-filter-control">
           <select
             id="status-filter"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="form-input"
+            className="runs-filter-select"
+            aria-label={t('runs.filterStatus')}
           >
-            <option value="">{t('runs.listAll')}</option>
+            <option value="">{t('runs.filterStatus')} {t('runs.listAll')}</option>
             <option value="PENDING">Pending</option>
             <option value="RUNNING">Running</option>
             <option value="SUCCESS">Success</option>
             <option value="FAILED">Failed</option>
           </select>
+          <InfoIcon content={t('runs.statusFilterHint')} />
         </div>
 
-        <div className="filter-group">
-          <label htmlFor="sort-order" className="form-label">{t('runs.sortLabel')}</label>
-          <select
-            id="sort-order"
-            value={sortOrder}
-            onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
-            className="form-input"
-          >
-            <option value="desc">{t('runs.sortNewest')}</option>
-            <option value="asc">{t('runs.sortOldest')}</option>
-          </select>
-        </div>
+        <select
+          id="sort-order"
+          value={sortOrder}
+          onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
+          className="runs-filter-select"
+          aria-label={t('runs.sortLabel')}
+        >
+          <option value="desc">{t('runs.sortNewest')}</option>
+          <option value="asc">{t('runs.sortOldest')}</option>
+        </select>
 
-        <div className="filter-group">
-          <label htmlFor="page-size" className="form-label">{t('runs.pageSizeLabel')}</label>
-          <select
-            id="page-size"
-            value={pageSize}
-            onChange={(e) => {
-              setPageSize(Number(e.target.value))
-              setPage(1)
-            }}
-            className="form-input"
-          >
-            <option value="25">25</option>
-            <option value="50">50</option>
-            <option value="100">100</option>
-            <option value="200">200</option>
-          </select>
-        </div>
+        <select
+          id="page-size"
+          value={pageSize}
+          onChange={(e) => {
+            setPageSize(Number(e.target.value))
+            setPage(1)
+          }}
+          className="runs-filter-select"
+          aria-label={t('runs.pageSizeLabel')}
+        >
+          <option value="25">25 / {t('runs.pageSizeLabel')}</option>
+          <option value="50">50 / {t('runs.pageSizeLabel')}</option>
+          <option value="100">100 / {t('runs.pageSizeLabel')}</option>
+          <option value="200">200 / {t('runs.pageSizeLabel')}</option>
+        </select>
 
-        <div className="filter-group">
-          <label htmlFor="start-date" className="form-label">{t('runs.dateFrom')}</label>
-          <input
-            id="start-date"
-            type="datetime-local"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="form-input"
-          />
-        </div>
+        <input
+          id="start-date"
+          type="datetime-local"
+          value={startDate}
+          onChange={(e) => setStartDate(e.target.value)}
+          className="runs-filter-select runs-filter-date"
+          aria-label={t('runs.dateFrom')}
+        />
+        <input
+          id="end-date"
+          type="datetime-local"
+          value={endDate}
+          onChange={(e) => setEndDate(e.target.value)}
+          className="runs-filter-select runs-filter-date"
+          aria-label={t('runs.dateTo')}
+        />
 
-        <div className="filter-group">
-          <label htmlFor="end-date" className="form-label">{t('runs.dateTo')}</label>
-          <input
-            id="end-date"
-            type="datetime-local"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="form-input"
-          />
-        </div>
+        <div className="runs-filterbar__spacer" />
+        <span className="runs-count mono">
+          {t('runs.countTotal', '{{total}} runs', { total: totalRuns })}
+          {runningCount > 0 && (
+            <span className="runs-count__live"> · {t('runs.countLive', '{{n}} live', { n: runningCount })}</span>
+          )}
+        </span>
       </div>
 
       {filteredAndSortedRuns.length > 0 ? (
         <>
           {/* Desktop Table View */}
-          <div className="runs-table-container card desktop-only">
-            <table className="runs-table">
-              <thead>
-                <tr>
-                  <th>{t('runs.thId')}</th>
-                  <th>{t('runs.thPipeline')}</th>
-                  <th>{t('runs.thCommit')}</th>
-                  <th>{t('runs.thStatus')}</th>
-                  <th>{t('runs.thStarted')}</th>
-                  <th>{t('runs.thDuration')}</th>
-                  <th>{t('runs.thExitCode')}</th>
-                  <th>{t('runs.thActions')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredAndSortedRuns.map((run, index) => (
-                  <tr key={run.id} style={{ animationDelay: `${index * 0.03}s` }}>
-                    <td className="run-id">{run.id.substring(0, 8)}...</td>
-                    <td>{run.pipeline_name}</td>
-                    <td className="run-commit">
-                      {run.git_sha ? (
-                        <Tooltip content={`${run.git_sha}${run.git_branch ? ` (${run.git_branch})` : ''}`}>
-                          <span className="commit-sha">{run.git_sha.slice(0, 7)}</span>
-                        </Tooltip>
-                      ) : (
-                        '-'
-                      )}
-                    </td>
-                    <td>
-                      <Tooltip content={statusTooltipText(run.status)}>
-                        <div className="status-cell">
-                          {getStatusIcon(run.status)}
-                          <span className={`status-badge status-${run.status.toLowerCase()}`}>
-                            {run.status}
-                          </span>
-                          {run.error_type && (
-                            <span className={`error-type-badge error-type-${run.error_type}`}>
-                              {run.error_type === 'pipeline_error' ? t('runs.errorTypePipeline') : t('runs.errorTypeInfrastructure')}
-                            </span>
-                          )}
-                        </div>
-                      </Tooltip>
-                    </td>
-                    <td>{new Date(run.started_at).toLocaleString(getFormatLocale())}</td>
-                    <td>
-                      <Tooltip content={t('runs.durationTooltip')}>
-                        {getDuration(run)}
-                      </Tooltip>
-                    </td>
-                    <td>
-                      {run.exit_code !== null ? (
-                        <Tooltip content={t('runs.exitCodeTooltip')}>
-                          <span className={run.exit_code === 0 ? 'exit-success' : 'exit-error'}>
-                            {run.exit_code}
-                          </span>
-                        </Tooltip>
-                      ) : (
-                        '-'
-                      )}
-                    </td>
-                    <td>
-                      <Link to={`/runs/${run.id}`} className="btn btn-outlined btn-sm details-link">
-                        <LuInfo />
-                        {t('runs.details')}
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="table runs-table-grid desktop-only">
+            <div className="table__head runs-table">
+              <span>{t('runs.thId')}</span>
+              <span>{t('runs.thPipeline')}</span>
+              <span>{t('runs.thStatus')}</span>
+              <span>{t('runs.thDuration')}</span>
+              <span>{t('runs.thStarted')}</span>
+              <span>{t('runs.thCommit')}</span>
+              <span aria-hidden />
+            </div>
+            {filteredAndSortedRuns.map((run, index) => (
+              <Link
+                key={run.id}
+                to={`/runs/${run.id}`}
+                className="table__row runs-table clickable run-row"
+                style={{ animationDelay: `${index * 0.03}s` }}
+              >
+                <span className="run-id mono">{run.id.substring(0, 8)}</span>
+                <span className="run-pipeline mono">{run.pipeline_name}</span>
+                <span className="run-status-cell">
+                  <Tooltip content={statusTooltipText(run.status)}>
+                    <span className={`badge ${statusBadgeClass(run.status)}`}>
+                      <span className={`status-dot ${statusDotKind(run.status)}`} />
+                      {run.status}
+                    </span>
+                  </Tooltip>
+                  {run.exit_code !== null && run.exit_code !== 0 && (
+                    <Tooltip content={t('runs.exitCodeTooltip')}>
+                      <span className="exit-error mono run-exit">exit {run.exit_code}</span>
+                    </Tooltip>
+                  )}
+                  {run.error_type && (
+                    <span className={`error-type-badge error-type-${run.error_type}`}>
+                      {run.error_type === 'pipeline_error' ? t('runs.errorTypePipeline') : t('runs.errorTypeInfrastructure')}
+                    </span>
+                  )}
+                </span>
+                <span className="run-duration mono">
+                  <Tooltip content={t('runs.durationTooltip')}>{getDuration(run)}</Tooltip>
+                </span>
+                <span className="run-started">{new Date(run.started_at).toLocaleString(getFormatLocale())}</span>
+                <span className="run-commit">
+                  {run.git_sha ? (
+                    <Tooltip content={`${run.git_sha}${run.git_branch ? ` (${run.git_branch})` : ''}`}>
+                      <span className="commit-sha mono">{run.git_sha.slice(0, 7)}</span>
+                    </Tooltip>
+                  ) : (
+                    <span className="run-commit-empty">—</span>
+                  )}
+                </span>
+                <LuChevronRight className="run-chevron" aria-hidden />
+              </Link>
+            ))}
           </div>
 
           {/* Mobile Card View */}

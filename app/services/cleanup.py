@@ -22,7 +22,7 @@ from sqlmodel import Session, select, update, func
 
 from app.core.config import config
 from app.core.database import get_session
-from app.models import PipelineRun, Pipeline
+from app.models import PipelineRun, Pipeline, RunStatus
 from app.services.s3_backup import _s3_backup, append_backup_failure
 from app.services.notifications import notify_s3_backup_failed
 
@@ -130,17 +130,19 @@ async def _cleanup_by_retention_runs(session: Session, max_runs: int) -> int:
                 select(func.count(PipelineRun.id))
                 .where(PipelineRun.pipeline_name == pipeline.pipeline_name)
             ).one()
-            
+
             if run_count <= max_runs:
                 continue
-            
+
             # Älteste Runs finden (mehr als max_runs)
             excess_count = run_count - max_runs
-            
+
             # Älteste Runs abrufen (sortiert nach started_at)
+            # Aktive Runs (PENDING/RUNNING, z. B. Dauerläufer) nie löschen
             old_runs = session.exec(
                 select(PipelineRun)
                 .where(PipelineRun.pipeline_name == pipeline.pipeline_name)
+                .where(PipelineRun.status.not_in([RunStatus.PENDING, RunStatus.RUNNING]))
                 .order_by(PipelineRun.started_at.asc())
                 .limit(excess_count)
             ).all()
@@ -198,9 +200,11 @@ async def _cleanup_by_retention_days(session: Session, max_days: int) -> int:
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=max_days)
         
         # Alle Runs finden, die älter als cutoff_date sind
+        # Aktive Runs (PENDING/RUNNING, z. B. Dauerläufer) nie löschen
         old_runs = session.exec(
             select(PipelineRun)
             .where(PipelineRun.started_at < cutoff_date)
+            .where(PipelineRun.status.not_in([RunStatus.PENDING, RunStatus.RUNNING]))
         ).all()
         
         # Runs löschen (Logs, Metrics und DB-Einträge)

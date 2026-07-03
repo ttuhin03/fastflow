@@ -28,10 +28,13 @@ import VersionInfo from './VersionInfo'
 import HeaderTime from './HeaderTime'
 import HeaderLanguage from './HeaderLanguage'
 import SetupWizard from './SetupWizard'
+import CommandPalette from './CommandPalette'
 import './Layout.css'
 
+const openCommandPalette = () => window.dispatchEvent(new Event('open-command-palette'))
+
 interface NavSection {
-  label: string
+  labelKey: string
   items: NavItemDef[]
 }
 
@@ -71,13 +74,13 @@ export default function Layout() {
 
   const navSections: NavSection[] = [
     {
-      label: 'Overview',
+      labelKey: 'nav.sectionOverview',
       items: [
         { path: '/', labelKey: 'nav.dashboard', icon: <LuLayoutGrid size={16} /> },
       ],
     },
     {
-      label: 'Orchestration',
+      labelKey: 'nav.sectionOrchestration',
       items: [
         { path: '/pipelines', labelKey: 'nav.pipelines', icon: <LuWorkflow size={16} /> },
         { path: '/runs', labelKey: 'nav.runs', icon: <LuActivity size={16} /> },
@@ -85,14 +88,14 @@ export default function Layout() {
       ],
     },
     {
-      label: 'Security',
+      labelKey: 'nav.sectionSecurity',
       items: [
         { path: '/secrets', labelKey: 'nav.secrets', icon: <LuKeyRound size={16} /> },
         { path: '/dependencies', labelKey: 'nav.dependencies', icon: <LuPackage size={16} /> },
       ],
     },
     {
-      label: 'System',
+      labelKey: 'nav.sectionSystem',
       items: [
         { path: '/sync', labelKey: 'nav.sync', icon: <LuRefreshCw size={16} /> },
         { path: '/audit', labelKey: 'nav.audit', icon: <LuHistory size={16} />, adminOnly: true },
@@ -104,18 +107,30 @@ export default function Layout() {
   const [backendStatus, setBackendStatus] = useState<'online' | 'offline' | 'checking'>('checking')
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
+  // Sidebar-Active-State: /pipelines und /settings bündeln mehrere Sektionen
+  // (?section=…); der aktive Nav-Eintrag richtet sich nach der Sektion.
   const isActive = useCallback((path: string) => {
-    if (path === '/') return location.pathname === '/'
-    if (path === '/pipelines') return (
-      location.pathname.startsWith('/pipelines') &&
-      !location.pathname.startsWith('/pipelines/') ||
-      false
-    )
-    if (path === '/runs') return location.pathname.startsWith('/runs') || (
-      location.pathname.startsWith('/pipelines/') && false // runs sub-path
-    )
-    return location.pathname.startsWith(path)
-  }, [location.pathname])
+    const p = location.pathname
+    const section = new URLSearchParams(location.search).get('section')
+    if (path === '/') return p === '/'
+    if (p === '/pipelines') {
+      const sectionToPath: Record<string, string> = {
+        pipelines: '/pipelines',
+        runs: '/runs',
+        scheduler: '/scheduler',
+        secrets: '/secrets',
+        dependencies: '/dependencies',
+      }
+      return (sectionToPath[section || 'pipelines'] || '/pipelines') === path
+    }
+    if (p.startsWith('/pipelines/')) return path === '/pipelines' // Pipeline-Detail
+    if (p.startsWith('/runs')) return path === '/runs' // Run-Detail
+    if (p === '/settings') {
+      if (section === 'git-sync') return path === '/sync'
+      return path === '/settings'
+    }
+    return p.startsWith(path)
+  }, [location.pathname, location.search])
 
   const healthInterval = useRefetchInterval(5000)
   const { data: health, isError, error, isFetching } = useQuery({
@@ -158,7 +173,7 @@ export default function Layout() {
     const allItems = navSections.flatMap(s => s.items)
     const activeItem = allItems.find(item => isActive(item.path))
     document.title = activeItem ? `${t(activeItem.labelKey)} · ${t('appTitle')}` : t('appTitle')
-  }, [location.pathname, t]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [location.pathname, location.search, t]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleLogout = async () => {
     await logout()
@@ -168,8 +183,8 @@ export default function Layout() {
   const toggleSidebar = () => setSidebarOpen(v => !v)
   const closeSidebar = () => setSidebarOpen(false)
 
-  // Breadcrumb: derive root + optional leaf from current route
-  const breadcrumb = useBreadcrumb(location.pathname, params, t, navSections)
+  // Breadcrumb: derive root + optional leaf from current route (incl. ?section=…)
+  const breadcrumb = useBreadcrumb(location.pathname, location.search, params, t, navSections)
 
   // User display
   const userEmail = userInfo?.email || ''
@@ -182,6 +197,7 @@ export default function Layout() {
   return (
     <div className="layout">
       <SetupWizard />
+      <CommandPalette />
 
       <div
         className={`sidebar-overlay ${sidebarOpen ? 'visible' : ''}`}
@@ -218,8 +234,8 @@ export default function Layout() {
         {/* Nav */}
         <nav className="sidebar__nav">
           {navSections.map(section => (
-            <div key={section.label}>
-              <div className="nav-group-label">{section.label}</div>
+            <div key={section.labelKey}>
+              <div className="nav-group-label">{t(section.labelKey)}</div>
               {section.items
                 .filter(item => !item.adminOnly || isAdmin)
                 .map(item => (
@@ -326,7 +342,7 @@ export default function Layout() {
           <div className="header-spacer" />
 
           {/* ⌘K search trigger */}
-          <button className="header-search" aria-label="Search">
+          <button className="header-search" aria-label="Search" onClick={openCommandPalette}>
             <LuSearch size={14} />
             <span className="label">{t('common.search') || 'Search or jump to…'}</span>
             <kbd>⌘K</kbd>
@@ -350,11 +366,27 @@ export default function Layout() {
 
 function useBreadcrumb(
   pathname: string,
+  search: string,
   params: Record<string, string | undefined>,
   t: (key: string) => string,
   sections: NavSection[],
 ): { root: string; leaf?: string } {
   const allItems = sections.flatMap(s => s.items)
+  const section = new URLSearchParams(search).get('section')
+
+  // Sections innerhalb der gebündelten Seiten (/pipelines, /settings)
+  if (pathname === '/pipelines' && section && section !== 'pipelines') {
+    const sectionLabels: Record<string, string> = {
+      runs: 'nav.runs',
+      scheduler: 'nav.scheduler',
+      secrets: 'nav.secrets',
+      dependencies: 'nav.dependencies',
+    }
+    if (sectionLabels[section]) return { root: t(sectionLabels[section]) }
+  }
+  if (pathname === '/settings' && section === 'git-sync') {
+    return { root: t('nav.sync') }
+  }
 
   // Exact match first
   const exact = allItems.find(item => item.path === pathname)

@@ -5,25 +5,19 @@
   gap: var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-md);
   background-color: var(--color-primary);
-  color: #ffffff;
-  border: 1px solid color-mix(in srgb, var(--color-primary-dark) 45%, transparent);
+  color: var(--color-background);
+  border: 1px solid var(--color-primary-dark);
   border-radius: var(--radius-md);
   cursor: pointer;
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-medium);
-  transition: background-color var(--transition-base), transform var(--transition-fast), box-shadow var(--transition-base);
+  transition: background-color var(--transition-base), transform var(--transition-fast);
   width: 100%;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.14),
-    0 1px 2px rgba(0, 0, 0, 0.28);
 }
 
 .user-management-btn:hover {
   background-color: var(--color-primary-dark);
   transform: translateY(-1px);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 4px 16px rgba(79, 70, 229, 0.42);
 }
 
 .user-management-modal-overlay {
@@ -33,7 +27,6 @@
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -42,20 +35,14 @@
 }
 
 .user-management-modal {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--color-surface) 102%, white) 0%,
-    var(--color-surface) 100%
-  );
-  border: 1px solid color-mix(in srgb, var(--color-border) 55%, transparent);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   width: 90%;
   max-width: 1000px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 24px 48px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-xl);
   color: var(--color-text-primary);
 }
 
@@ -140,7 +127,7 @@
 .user-management-modal .form-group select:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px var(--focus-ring-color);
+  box-shadow: 0 0 0 3px var(--color-accent-subtle);
 }
 
 .user-management-modal .form-actions {
@@ -187,9 +174,26 @@
   font-size: var(--font-size-sm);
 }
 
+.user-management-modal .users-table tbody tr {
+  transition: background-color var(--transition-base);
+}
+
+.user-management-modal .users-table tbody tr:hover {
+  background: var(--color-surface-2);
+}
+
 .user-management-modal .users-table tr.blocked {
   opacity: 0.65;
-  background: color-mix(in srgb, var(--color-surface-variant) 80%, transparent);
+  background: var(--color-surface-3);
+}
+
+.user-management-modal .users-email-cell {
+  display: inline-block;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
 }
 
 .user-management-modal .user-actions {
@@ -197,32 +201,55 @@
   gap: var(--spacing-sm);
 }
 
-/* Bootstrap-like badge names used in TSX → design tokens */
+/* Role / status badges → design tokens.
+   ADMIN=accent · WRITE=blue · READONLY=neutral · blocked=error · active=success */
 .user-management-modal .badge {
-  display: inline-block;
-  padding: var(--spacing-xs) var(--spacing-sm);
-  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
   font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-medium);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.user-management-modal .badge.badge-primary {
+  background: var(--color-accent-subtle);
+  border-color: var(--color-accent-border);
+  color: var(--color-primary-light);
+}
+
+.user-management-modal .badge.badge-info {
+  background: var(--color-running-subtle);
+  border-color: var(--color-running-border);
+  color: var(--color-running-text);
 }
 
 .user-management-modal .badge.badge-secondary {
-  background: var(--color-surface-variant);
+  background: var(--color-surface-3);
   color: var(--color-text-secondary);
-  border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+  border-color: var(--color-border-light);
 }
 
-.user-management-modal .badge.badge-warning {
-  background: color-mix(in srgb, var(--color-warning) 35%, transparent);
-  color: #fcd34d;
+.user-management-modal .badge.badge-warning,
+.user-management-modal .badge.badge-pending {
+  background: var(--color-warning-subtle);
+  border-color: var(--color-warning-border);
+  color: var(--color-warning-text);
 }
 
+.user-management-modal .badge.badge-error,
 .user-management-modal .badge.badge-danger {
-  background: color-mix(in srgb, var(--color-error) 35%, transparent);
-  color: #fca5a5;
+  background: var(--color-error-subtle);
+  border-color: var(--color-error-border);
+  color: var(--color-error-text);
 }
 
 .user-management-modal .badge.badge-success {
-  background: color-mix(in srgb, var(--color-success) 35%, transparent);
-  color: #86efac;
+  background: var(--color-success-subtle);
+  border-color: var(--color-success-border);
+  color: var(--color-success-text);
 }
