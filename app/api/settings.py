@@ -28,7 +28,7 @@ from app.core.notification_api_key_hash import digest_notification_api_token
 from app.models import NotificationApiKey
 from app.services.cleanup import cleanup_logs, cleanup_docker_resources
 from app.services.s3_backup import get_backup_failures, get_last_backup_timestamp
-from app.models import PipelineRun, RunStatus, User
+from app.models import PipelineRun, RunStatus, User, UserRole
 from app.services.notifications import send_email_notification, send_teams_notification
 from app.executor import _get_docker_client
 from app.executor.kubernetes_backend import get_kubernetes_system_metrics
@@ -532,6 +532,11 @@ async def get_settings(
     Returns:
         SettingsResponse: Aktuelle Konfigurationswerte
     """
+    # Sensible Infrastruktur-/Credential-Felder (Teams-Webhook-URL ist ein Secret,
+    # SMTP-/S3-Endpunkte sind interne Konfiguration) nur für Admins ausliefern.
+    # Der Schreibzugriff (PUT /settings) ist ohnehin admin-only; die Anzeige soll
+    # dem gleichen Least-Privilege-Prinzip folgen.
+    is_admin = getattr(current_user, "role", None) == UserRole.ADMIN
     keys_list: List[NotificationApiKeyItem] = []
     row = get_orchestrator_settings_or_default(session)
     try:
@@ -553,19 +558,19 @@ async def get_settings(
         auto_sync_enabled=config.AUTO_SYNC_ENABLED,
         auto_sync_interval=config.AUTO_SYNC_INTERVAL,
         email_enabled=config.EMAIL_ENABLED,
-        smtp_host=config.SMTP_HOST,
+        smtp_host=config.SMTP_HOST if is_admin else None,
         smtp_port=config.SMTP_PORT,
-        smtp_user=config.SMTP_USER,
-        smtp_from=config.SMTP_FROM,
-        email_recipients=config.EMAIL_RECIPIENTS,
+        smtp_user=config.SMTP_USER if is_admin else None,
+        smtp_from=config.SMTP_FROM if is_admin else None,
+        email_recipients=config.EMAIL_RECIPIENTS if is_admin else [],
         teams_enabled=config.TEAMS_ENABLED,
-        teams_webhook_url=config.TEAMS_WEBHOOK_URL,
+        teams_webhook_url=config.TEAMS_WEBHOOK_URL if is_admin else None,
         notification_api_enabled=getattr(config, "NOTIFICATION_API_ENABLED", False),
         notification_api_rate_limit_per_minute=getattr(config, "NOTIFICATION_API_RATE_LIMIT_PER_MINUTE", 30),
         notification_api_keys=keys_list,
         s3_backup_enabled=getattr(config, "S3_BACKUP_ENABLED", False),
-        s3_endpoint_url=getattr(config, "S3_ENDPOINT_URL", None),
-        s3_bucket=getattr(config, "S3_BUCKET", None),
+        s3_endpoint_url=getattr(config, "S3_ENDPOINT_URL", None) if is_admin else None,
+        s3_bucket=getattr(config, "S3_BUCKET", None) if is_admin else None,
         s3_region=getattr(config, "S3_REGION", "us-east-1"),
         s3_prefix=getattr(config, "S3_PREFIX", "pipeline-logs"),
         s3_use_path_style=getattr(config, "S3_USE_PATH_STYLE", True),

@@ -104,6 +104,11 @@ def verify_token(token: str) -> Optional[str]:
             config.JWT_SECRET_KEY,
             algorithms=[config.JWT_ALGORITHM]
         )
+        # Nur echte Access-Tokens dürfen als Identität gelten. Andere JWT-Typen
+        # (z. B. log_download) tragen im "sub" eine Run-ID statt eines Benutzernamens
+        # und dürfen niemals eine Authentifizierung bewirken (Token-Type-Confusion).
+        if payload.get("type") != "access":
+            return None
         username: str = payload.get("sub")
         if username is None:
             return None
