@@ -167,7 +167,7 @@ def schedule_dependency_audit_job() -> None:
     try:
         from app.services.scheduler import get_scheduler
         from app.core.database import engine
-        from app.analytics.posthog_client import get_system_settings
+        from app.services.system_settings import get_system_settings
         from sqlmodel import Session
         from apscheduler.triggers.cron import CronTrigger
 

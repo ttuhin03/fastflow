@@ -43,8 +43,7 @@ from app.auth import (
 )
 from app.core.config import config
 from app.core.database import get_session
-from app.analytics import track_user_logged_in, track_user_registered
-from app.analytics.posthog_client import get_system_settings
+from app.services.system_settings import get_system_settings
 from app.middleware.rate_limiting import limiter
 from app.models import User
 
@@ -270,20 +269,10 @@ async def github_callback(
             return _redirect_to_settings_link_error("google")
         raise
     if anklopfen_only:
-        if is_new_user:
-            track_user_registered(session, "github", invitation=False, initial_admin=False, anklopfen=True)
         return _redirect_anklopfen_screen(user)
     if link_only:
         logger.info(f"GitHub-Konto für '{user.username}' verknüpft")
         return _redirect_to_settings_linked("github")
-    if is_new_user and registration_source:
-        track_user_registered(
-            session, "github",
-            invitation=(registration_source == "invitation"),
-            initial_admin=(registration_source == "initial_admin"),
-            anklopfen=(registration_source == "anklopfen"),
-        )
-    track_user_logged_in(session, "github", is_new_user)
     if state:
         delete_oauth_state(state)
     token = create_access_token(username=user.username)
@@ -347,20 +336,10 @@ async def google_callback(
             return _redirect_to_settings_link_error("custom")
         raise
     if anklopfen_only:
-        if is_new_user:
-            track_user_registered(session, "google", invitation=False, initial_admin=False, anklopfen=True)
         return _redirect_anklopfen_screen(user)
     if link_only:
         logger.info(f"Google-Konto für '{user.username}' verknüpft")
         return _redirect_to_settings_linked("google")
-    if is_new_user and registration_source:
-        track_user_registered(
-            session, "google",
-            invitation=(registration_source == "invitation"),
-            initial_admin=(registration_source == "initial_admin"),
-            anklopfen=(registration_source == "anklopfen"),
-        )
-    track_user_logged_in(session, "google", is_new_user)
     if state:
         delete_oauth_state(state)
     token = create_access_token(username=user.username)
@@ -418,21 +397,10 @@ async def microsoft_callback(
     except HTTPException:
         raise
     if anklopfen_only:
-        if is_new_user:
-            track_user_registered(session, "microsoft", invitation=False, initial_admin=False, anklopfen=True)
         return _redirect_anklopfen_screen(user)
     if link_only:
         logger.info("Microsoft-Konto für '%s' verknüpft", user.username)
         return _redirect_to_settings_linked("microsoft")
-    if is_new_user and registration_source:
-        track_user_registered(
-            session,
-            "microsoft",
-            invitation=(registration_source == "invitation"),
-            initial_admin=(registration_source == "initial_admin"),
-            anklopfen=(registration_source == "anklopfen"),
-        )
-    track_user_logged_in(session, "microsoft", is_new_user)
     if state:
         delete_oauth_state(state)
     token = create_access_token(username=user.username)
@@ -554,21 +522,10 @@ async def custom_callback(
     except HTTPException:
         raise
     if anklopfen_only:
-        if is_new_user:
-            track_user_registered(session, "custom", invitation=False, initial_admin=False, anklopfen=True)
         return _redirect_anklopfen_screen(user)
     if link_only:
         logger.info("Custom-Konto für '%s' verknüpft", user.username)
         return _redirect_to_settings_linked("custom")
-    if is_new_user and registration_source:
-        track_user_registered(
-            session,
-            "custom",
-            invitation=(registration_source == "invitation"),
-            initial_admin=(registration_source == "initial_admin"),
-            anklopfen=(registration_source == "anklopfen"),
-        )
-    track_user_logged_in(session, "custom", is_new_user)
     if state:
         delete_oauth_state(state)
     token = create_access_token(username=user.username)

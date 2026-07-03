@@ -1,0 +1,150 @@
+name: DAST Security Pipeline
+
+# Dynamic Application Security Testing gegen den Fast-Flow Orchestrator:
+# Das echte Image (root ./Dockerfile) wird gebaut, der Container gestartet und
+# per ZAP Baseline (und optional sqlmap) auf Schwachstellen geprüft.
+#
+# Hinweis: Anders als im generischen Template wird die App pro Job auf demselben
+# Runner gebaut UND gescannt. Ein `services:`-Container mit `image: <lokal>:latest`
+# würde nicht funktionieren, weil GitHub-Actions-Jobs auf separaten Runnern laufen
+# und lokal gebaute Images dort nicht verfügbar sind.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      run_sqlmap:
+        description: "sqlmap zusätzlich zu ZAP ausführen?"
+        type: boolean
+        default: false
+  schedule:
+    # Jeden Montag 03:00 UTC einen vollständigen Scan fahren
+    - cron: '0 3 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  zap-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Orchestrator Image
+        run: docker build -t fastflow-dast:latest .
+
+      - name: Run App Container
+        run: |
+          docker run -d --name fastflow-dast \
+            -p 8000:8000 \
+            -e ENVIRONMENT=development \
+            fastflow-dast:latest
+
+      - name: Warten bis App erreichbar ist
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8000/health > /dev/null; then
+              echo "App ist erreichbar"
+              exit 0
+            fi
+            echo "Warte auf App... ($i/60)"
+            sleep 2
+          done
+          echo "App nicht erreichbar, breche ab"
+          docker logs fastflow-dast
+          exit 1
+
+      - name: ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: 'http://localhost:8000'
+          rules_file_name: '.zap/rules.tsv'
+          cmd_options: '-a'
+          fail_action: true
+          # Keine automatischen GitHub-Issues anlegen (bräuchte issues:write)
+          allow_issue_writing: false
+
+      - name: ZAP Report als Artifact hochladen
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-report
+          path: |
+            report_html.html
+            report_json.json
+          if-no-files-found: ignore
+
+      - name: Container aufräumen
+        if: always()
+        run: docker rm -f fastflow-dast || true
+
+  sqlmap-scan:
+    # Nur bei manuellem Trigger mit run_sqlmap=true oder beim wöchentlichen Scan
+    if: >
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_sqlmap == 'true')
+      || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Orchestrator Image
+        run: docker build -t fastflow-dast:latest .
+
+      - name: Run App Container
+        run: |
+          docker run -d --name fastflow-dast \
+            -p 8000:8000 \
+            -e ENVIRONMENT=development \
+            fastflow-dast:latest
+
+      - name: Warten bis App erreichbar ist
+        run: |
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:8000/health && exit 0
+            sleep 2
+          done
+          docker logs fastflow-dast
+          exit 1
+
+      - name: sqlmap installieren
+        run: git clone --depth 1 https://github.com/sqlmapproject/sqlmap.git sqlmap-dir
+
+      - name: sqlmap Scan ausführen
+        run: |
+          # ACHTUNG: Fast-Flow hat keinen offenen /search?q=-Endpoint. Die meisten
+          # API-Routen liegen hinter Auth (/api/...). Vor produktivem Einsatz hier
+          # einen echten parametrisierten Endpoint eintragen – idealerweise über
+          # eine gespeicherte Request mit Session-Cookie/Token: -r request.txt
+          python3 sqlmap-dir/sqlmap.py \
+            -u "http://localhost:8000/api/health?q=test" \
+            --batch \
+            --level=2 \
+            --risk=1 \
+            --output-dir=sqlmap-results \
+          || true
+          # "|| true" verhindert Pipeline-Abbruch bei Findings;
+          # stattdessen werten wir das Ergebnis im nächsten Schritt aus.
+
+      - name: Ergebnisse prüfen und Job ggf. fehlschlagen lassen
+        run: |
+          if grep -rl "is vulnerable" sqlmap-results/ 2>/dev/null; then
+            echo "::error::sqlmap hat eine mögliche SQL-Injection gefunden!"
+            exit 1
+          fi
+          echo "Keine SQL-Injection gefunden."
+
+      - name: sqlmap Ergebnisse als Artifact hochladen
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sqlmap-results
+          path: sqlmap-results/
+          if-no-files-found: ignore
+
+      - name: Container aufräumen
+        if: always()
+        run: docker rm -f fastflow-dast || true

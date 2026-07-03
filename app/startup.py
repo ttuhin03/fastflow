@@ -429,12 +429,6 @@ async def run_startup_tasks() -> None:
         schedule_version_check()
     await _run_step("Version-Check", False, version_check, "Version Check initialisiert und geplant")
 
-    def telemetry():
-        from app.analytics import run_instance_heartbeat_sync, schedule_telemetry_heartbeat
-        schedule_telemetry_heartbeat()
-        asyncio.create_task(asyncio.to_thread(run_instance_heartbeat_sync))
-    await _run_step("Telemetry-Heartbeat", False, telemetry, "Telemetry instance_heartbeat geplant")
-
     def pre_heat():
         from app.git_sync import run_pre_heat_at_startup
         asyncio.create_task(run_pre_heat_at_startup())
@@ -463,17 +457,11 @@ async def run_startup_tasks() -> None:
     asyncio.create_task(sync_pipelines_at_startup())
     logger.info("Git-Sync beim Start geplant (Hintergrund, wenn Repo konfiguriert)")
 
-    if config.ENVIRONMENT == "development":
-        def posthog_test():
-            from app.analytics.posthog_client import capture_startup_test_exception
-            capture_startup_test_exception()
-        await _run_step("PostHog Startup-Test", False, posthog_test, None)
-
     logger.info("Fast-Flow Orchestrator gestartet")
 
 
 async def run_shutdown_tasks() -> None:
-    """Führt alle Shutdown-Schritte aus (Scheduler stoppen, Graceful Shutdown, PostHog)."""
+    """Führt alle Shutdown-Schritte aus (Scheduler stoppen, Graceful Shutdown)."""
     logger.info("Fast-Flow Orchestrator wird heruntergefahren...")
 
     def stop_sched():
@@ -491,10 +479,5 @@ async def run_shutdown_tasks() -> None:
         finally:
             session.close()
     await _run_step("Graceful Shutdown", False, graceful, "Graceful Shutdown abgeschlossen")
-
-    def posthog_shutdown():
-        from app.analytics.posthog_client import shutdown_posthog
-        shutdown_posthog()
-    await _run_step("PostHog Shutdown", False, posthog_shutdown, None)
 
     logger.info("Fast-Flow Orchestrator heruntergefahren")

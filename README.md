@@ -426,7 +426,7 @@ Documentation lives under `docs/docs/` and is served with **Docusaurus**. Start 
 | **Pipelines** | [Overview](docs/docs/pipelines/uebersicht.md) · [First Pipeline](docs/docs/pipelines/erste-pipeline.md) · [Advanced Pipelines](docs/docs/pipelines/erweiterte-pipelines.md) · [pipeline.json Reference](docs/docs/pipelines/referenz.md) |
 | **Operations** | [Configuration](docs/docs/deployment/CONFIGURATION.md) · [Production](docs/docs/deployment/PRODUCTION.md) · [Git Deployment](docs/docs/deployment/GIT_DEPLOYMENT.md) · [Kubernetes](docs/docs/deployment/K8S.md) · [Docker Socket Proxy](docs/docs/deployment/DOCKER_PROXY.md) |
 | **Security & Ops** | [OAuth (GitHub, Google, Microsoft, Custom)](docs/docs/oauth/README.md) · [S3 Log Backup](docs/docs/deployment/S3_LOG_BACKUP.md) · [Compliance](docs/docs/compliance-security.md) |
-| **Reference** | [API](docs/docs/api/API.md) · [Database/Schema](docs/docs/database/SCHEMA.md) · [Versioning](docs/docs/deployment/VERSIONING.md) · [Telemetry](docs/docs/telemetry/README.md) |
+| **Reference** | [API](docs/docs/api/API.md) · [Database/Schema](docs/docs/database/SCHEMA.md) · [Versioning](docs/docs/deployment/VERSIONING.md) |
 | **Help** | [Troubleshooting](docs/docs/troubleshooting.md) · [Disclaimer](docs/docs/disclaimer.md) |
 
 ## 📦 Versioning & Releases

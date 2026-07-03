@@ -1,0 +1,12 @@
+# ZAP Alert-Filterregeln
+# Format: <Alert-ID>	<Aktion>	<Name (nur zur Doku)>
+# Aktion: IGNORE | WARN | FAIL
+#
+# Beispiel: X-Frame-Options fehlt nur als Warnung, nicht als Fehler behandeln
+10020	WARN	X-Frame-Options Header nicht gesetzt
+
+# Beispiel: informativen Alert zu Server-Version-Leak ignorieren
+10036	IGNORE	Server Leaks Version Information
+
+# Alles andere bleibt bei den ZAP-Standardeinstellungen (i.d.R. WARN),
+# kritische Dinge wie SQLi/XSS lässt man normalerweise auf FAIL stehen.

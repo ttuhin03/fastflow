@@ -7,7 +7,6 @@ import { UI_DISPLAY_QUERY_KEY } from '../contexts/UiPreferencesContext'
 import apiClient from '../api/client'
 import { LuSave, LuRefreshCw, LuInfo, LuTriangleAlert, LuMail, LuUsers, LuLink, LuCheck, LuUser, LuDatabase, LuCirclePlay, LuBell, LuKey, LuCopy, LuTrash2, LuLock, LuLockOpen } from 'react-icons/lu'
 import { showError, showSuccess } from '../utils/toast'
-import { captureException } from '../utils/posthog'
 import { getApiOrigin } from '../config'
 import Tooltip from '../components/Tooltip'
 import InfoIcon from '../components/InfoIcon'
@@ -220,8 +219,6 @@ export default function Settings() {
 
   const { data: systemSettings } = useQuery<{
     is_setup_completed: boolean
-    enable_telemetry: boolean
-    enable_error_reporting: boolean
     dependency_audit_enabled: boolean
     dependency_audit_cron: string
     login_branding_logo_url?: string | null
@@ -253,8 +250,6 @@ export default function Settings() {
 
   const updateSystemSettingsMutation = useMutation({
     mutationFn: async (patch: {
-      enable_telemetry?: boolean
-      enable_error_reporting?: boolean
       dependency_audit_enabled?: boolean
       dependency_audit_cron?: string
       login_branding_logo_url?: string
@@ -557,33 +552,6 @@ export default function Settings() {
     setShowCleanupInfo(false)
     forceCleanupMutation.mutate()
   }
-
-  const handleTestFrontendException = () => {
-    captureException(
-      new Error(
-        'Fast-Flow Frontend-Test: Test-Exception für PostHog (nur Development). Kein echter Fehler – nur Verifikation. In PostHog anhand dieser Meldung bzw. $fastflow_frontend_test=True als Test erkennbar.'
-      ),
-      {
-        $fastflow_frontend_test: true,
-        description: 'Test-Button: Frontend Error-Tracking. Nur in DEV sichtbar.',
-      }
-    )
-    showSuccess(t('settings.posthogFrontendSuccess'))
-  }
-
-  const triggerTestExceptionBackendMutation = useMutation({
-    mutationFn: async () => {
-      const r = await apiClient.post('/settings/trigger-test-exception')
-      return r.data as { message?: string }
-    },
-    onSuccess: (d) => {
-      showSuccess(d?.message || t('settings.posthogBackendSuccess'))
-    },
-    onError: (err: unknown) => {
-      const e = err as { response?: { data?: { detail?: string }; status?: number }; message?: string }
-      showError(e?.response?.data?.detail || e?.message || t('settings.backendTestFailed'))
-    },
-  })
 
   if (isLoading) {
     return (
@@ -989,38 +957,6 @@ export default function Settings() {
       {isAdmin && (
         <div className="settings-section card">
           <h3 className="section-title">
-            {t('settings.telemetryTitle')}
-            <InfoIcon content={t('settings.telemetryInfo')} />
-          </h3>
-          <div className="settings-telemetry-toggles">
-            <label className="settings-telemetry-toggle">
-              <input
-                type="checkbox"
-                checked={systemSettings?.enable_telemetry ?? false}
-                disabled={updateSystemSettingsMutation.isPending || fieldDisabled}
-                onChange={(e) => updateSystemSettingsMutation.mutate({ enable_telemetry: e.target.checked })}
-              />
-              {t('settings.telemetryToggle')}
-            </label>
-            <label className="settings-telemetry-toggle">
-              <input
-                type="checkbox"
-                checked={systemSettings?.enable_error_reporting ?? false}
-                disabled={updateSystemSettingsMutation.isPending || fieldDisabled}
-                onChange={(e) => updateSystemSettingsMutation.mutate({ enable_error_reporting: e.target.checked })}
-              />
-              {t('settings.errorReportingToggle')}
-            </label>
-          </div>
-          <p className="settings-telemetry-note">
-            {t('settings.noSessionRecording')}
-          </p>
-        </div>
-      )}
-
-      {isAdmin && (
-        <div className="settings-section card">
-          <h3 className="section-title">
             {t('settings.dependencyAuditTitle')}
             <InfoIcon content={t('settings.dependencyAuditInfo')} />
           </h3>
@@ -1078,33 +1014,6 @@ export default function Settings() {
       <div className="system-metrics-section">
         <SystemMetrics />
       </div>
-
-      {health?.environment === 'development' && (
-        <div className="settings-section card settings-section--dev">
-          <h3 className="section-title">{t('settings.development')}</h3>
-          <p className="setting-hint setting-hint--dev-intro">
-            {t('settings.devHint')}
-          </p>
-          <div className="settings-dev-actions">
-            <button
-              type="button"
-              onClick={handleTestFrontendException}
-              disabled={fieldDisabled}
-              className="btn btn-outlined"
-            >
-              {t('settings.testExceptionFrontend')}
-            </button>
-            <button
-              type="button"
-              onClick={() => triggerTestExceptionBackendMutation.mutate()}
-              disabled={triggerTestExceptionBackendMutation.isPending || fieldDisabled}
-              className="btn btn-outlined"
-            >
-              {triggerTestExceptionBackendMutation.isPending ? t('settings.sending') : t('settings.testExceptionBackend')}
-            </button>
-          </div>
-        </div>
-      )}
           </div>
         )}
 

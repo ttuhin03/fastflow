@@ -9,11 +9,11 @@ from app.services.audit import log_audit
 def test_build_system_settings_audit_details_detects_changes():
     from app.api.settings import _build_system_settings_audit_details
 
-    before = {"enable_telemetry": False, "is_setup_completed": False}
-    after = {"enable_telemetry": True, "is_setup_completed": False}
+    before = {"dependency_audit_enabled": False, "is_setup_completed": False}
+    after = {"dependency_audit_enabled": True, "is_setup_completed": False}
     d = _build_system_settings_audit_details(before, after)
     assert d is not None
-    assert "enable_telemetry" in d["changed_fields"]
+    assert "dependency_audit_enabled" in d["changed_fields"]
 
 
 def test_build_orchestrator_settings_audit_details_secret_flags():

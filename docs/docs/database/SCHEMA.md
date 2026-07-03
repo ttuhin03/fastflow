@@ -153,7 +153,7 @@ Triggers that start a downstream pipeline after an upstream pipeline finishes.
 
 ### 11. `SystemSettings` (Singleton)
 
-System-wide UI/telemetry settings (single row, `id=1`): setup wizard status, telemetry/error reporting opt-in, dependency audit schedule, login branding, UI display options.
+System-wide UI settings (single row, `id=1`): setup wizard status, dependency audit schedule, login branding, UI display options.
 
 ### 12. `OrchestratorSettings` (Singleton)
 

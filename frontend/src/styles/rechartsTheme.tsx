@@ -23,7 +23,7 @@
      </ResponsiveContainer>
    ========================================================================== */
 
-import type { CSSProperties, ReactElement, SVGProps } from 'react'
+import type { CSSProperties, ReactElement } from 'react'
 
 const cssVar = (name: string, fallback: string): string => {
   if (typeof window === 'undefined') return fallback
@@ -53,7 +53,7 @@ export const series = [chart.c1, chart.c2, chart.c3, chart.c4, chart.c5]
 /** Spread onto <XAxis>/<YAxis>. Thin, quiet, mono tick labels. */
 export const axisProps = {
   stroke: chart.axis,
-  tick: { fill: chart.text, fontSize: 11, fontFamily: chart.fontMono } as SVGProps<SVGTextElement>,
+  tick: { fill: chart.text, fontSize: 11, fontFamily: chart.fontMono },
   tickLine: false,
   axisLine: { stroke: chart.grid },
   tickMargin: 8,

@@ -443,9 +443,8 @@ class Invitation(SQLModel, table=True):
 class SystemSettings(SQLModel, table=True):
     """
     SystemSettings-Model (Singleton, id=1).
-    
-    Steuert First-Run-Wizard, Error-Tracking (Phase 1) und
-    zukünftig Telemetrie (Phase 2: Product Analytics, Session Replay, Survey).
+
+    Steuert First-Run-Wizard, Dependency-Audit und UI-Anzeige-Optionen.
     """
     __tablename__ = "system_settings"
 
@@ -453,15 +452,15 @@ class SystemSettings(SQLModel, table=True):
     is_setup_completed: bool = Field(default=False, description="Wizard abgeschlossen?")
     enable_telemetry: bool = Field(
         default=False,
-        description="Phase 2: Nutzungsstatistiken, Product Analytics, Session Replay, Survey",
+        description="Legacy: unused (formerly product analytics opt-in)",
     )
     enable_error_reporting: bool = Field(
         default=False,
-        description="Phase 1: PostHog Error-Tracking (Autocapture + FastAPI-Handler)",
+        description="Legacy: unused (formerly error reporting opt-in)",
     )
     telemetry_distinct_id: Optional[str] = Field(
         default=None,
-        description="Anonyme UUID für PostHog distinct_id (keine E-Mail/Klarnamen)",
+        description="Legacy: unused anonymous instance identifier",
     )
     dependency_audit_enabled: bool = Field(
         default=True,

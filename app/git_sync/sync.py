@@ -16,7 +16,6 @@ from concurrent.futures import ThreadPoolExecutor
 
 from sqlmodel import Session
 
-from app.analytics import track_sync_completed, track_sync_failed
 from app.core.config import config
 from app.models import Pipeline
 from app.services.pipeline_discovery import discover_pipelines, invalidate_cache
@@ -562,15 +561,6 @@ async def sync_pipelines(
                 "duration_seconds": sync_duration, "pipelines_cached": list(pre_heat_results.keys()),
                 "pre_heat_results": pre_heat_results,
             })
-            try:
-                pipelines_pre_heated = sum(1 for v in pre_heat_results.values() if v.get("success"))
-                pre_heat_failures = sum(1 for v in pre_heat_results.values() if not v.get("success"))
-                track_sync_completed(
-                    session, branch, sync_duration,
-                    len(discovered_pipelines), pipelines_pre_heated, pre_heat_failures,
-                )
-            except Exception:
-                pass
             return {
                 "success": True, "message": "Git-Sync erfolgreich abgeschlossen",
                 "branch": branch, "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -581,17 +571,6 @@ async def sync_pipelines(
     except Exception as e:
         error_msg = f"Fehler beim Git-Sync: {e}"
         logger.error(error_msg, exc_info=True)
-        em = (error_msg or "").lower()
-        if "git pull" in em or "fetch" in em or "reset" in em:
-            error_type = "fetch"
-        elif "pre-heating" in em or "pre_heat" in em:
-            error_type = "pre_heat"
-        else:
-            error_type = "other"
-        try:
-            track_sync_failed(session, branch, error_type)
-        except Exception:
-            pass
         try:
             await _write_sync_log({"event": "sync_failed", "branch": branch, "status": "failed", "error": error_msg})
         except Exception:

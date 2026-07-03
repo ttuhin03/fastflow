@@ -1,6 +1,5 @@
 import { Component, ErrorInfo, ReactNode } from 'react'
 import { withTranslation, WithTranslation } from 'react-i18next'
-import { captureException } from '../utils/posthog'
 
 interface Props extends WithTranslation {
   children: ReactNode
@@ -12,9 +11,7 @@ interface State {
   error: Error | null
 }
 
-/**
- * Fängt React-Render-Fehler, sendet sie an PostHog (wenn Phase 2a aktiv) und zeigt Fallback.
- */
+/** Catches React render errors and shows a fallback UI. */
 export class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props)
@@ -26,10 +23,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
-    captureException(error, {
-      $react_error_boundary: true,
-      componentStack: info.componentStack || undefined,
-    })
+    console.error('React error boundary:', error, info.componentStack)
   }
 
   render(): ReactNode {

@@ -127,8 +127,8 @@ flowchart TB
 
 The FastAPI lifecycle is bundled in **`app/startup`**:
 
-- **`run_startup_tasks()`**: Logging, security and OAuth validation, directories, database, Docker client, zombie reconciliation, scheduler, cleanup, dependency audit, version check, telemetry, UV pre-heat. Critical steps throw on error; optional ones are logged and skipped.
-- **`run_shutdown_tasks()`**: Stop scheduler, graceful shutdown (terminate running runs), PostHog flush.
+- **`run_startup_tasks()`**: Logging, security and OAuth validation, directories, database, Docker client, zombie reconciliation, scheduler, cleanup, dependency audit, version check, UV pre-heat. Critical steps throw on error; optional ones are logged and skipped.
+- **`run_shutdown_tasks()`**: Stop scheduler, graceful shutdown (terminate running runs).
 
 The actual **`lifespan`** function in `app.main` only calls these two functions.
 

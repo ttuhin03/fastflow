@@ -22,7 +22,6 @@ from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 from sqlmodel import Session, select
 
-from app.analytics import track_pipeline_run_finished, track_pipeline_run_started
 from app.core.config import config as app_config
 from app.core.database import get_session
 from app.metrics_prometheus import track_run_finished, track_run_started
@@ -430,10 +429,6 @@ async def run_container_task(
 
         duration_seconds = (run.finished_at - run.started_at).total_seconds() if run.finished_at and run.started_at else 0.0
         if exit_code_value == 0:
-            try:
-                track_pipeline_run_finished(session, pipeline.name, "SUCCESS", run.triggered_by, duration_seconds, pipeline.has_requirements)
-            except Exception:
-                pass
             try:
                 track_run_finished(pipeline.name, "completed", duration_seconds)
             except Exception:

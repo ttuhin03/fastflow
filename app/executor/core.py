@@ -39,7 +39,6 @@ from docker.errors import DockerException, APIError, ImageNotFound
 from sqlalchemy import text
 from sqlmodel import Session, select, update
 
-from app.analytics import track_pipeline_run_finished, track_pipeline_run_started
 from app.core.config import config
 from app.metrics_prometheus import track_run_started, track_run_finished
 from app.resilience import circuit_docker, CircuitBreakerOpenError
@@ -462,12 +461,7 @@ async def run_pipeline(
         session.commit()
         session.refresh(run)
 
-        try:
-            track_pipeline_run_started(session, name, triggered_by, pipeline.has_requirements)
-        except Exception:
-            pass
-
-        # Container-Start in Hintergrund-Task (Backend: Docker oder Kubernetes Jobs)
+        setup_start = time.time()
         if config.PIPELINE_EXECUTOR == "kubernetes":
             from app.executor import kubernetes_backend
             asyncio.create_task(
@@ -922,12 +916,6 @@ async def _run_container_task(
         duration_seconds = (run.finished_at - run.started_at).total_seconds() if run.finished_at and run.started_at else 0.0
 
         if exit_code_value == 0:
-            try:
-                track_pipeline_run_finished(
-                    session, pipeline.name, "SUCCESS", run.triggered_by, duration_seconds, pipeline.has_requirements
-                )
-            except Exception:
-                pass
             # Prometheus-Metriken: Run erfolgreich beendet
             try:
                 track_run_finished(pipeline.name, "completed", duration_seconds)
