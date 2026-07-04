@@ -238,30 +238,24 @@ if os.path.exists(static_dir):
         # Docusaurus-Doku: /doku und /doku/... aus static/docs servieren
         if full_path == "doku" or full_path.startswith("doku/"):
             if os.path.exists(_docs_dir):
-                docs_path = PathLib(_docs_dir)
-                subpath = full_path[5:].lstrip("/") if len(full_path) > 5 else ""
-                if not subpath:
-                    idx = docs_path / "index.html"
-                    if idx.exists():
-                        return FileResponse(str(idx))
-                else:
-                    # Gleiches Path-Traversal-Muster wie der Static-Block unten:
-                    # rohen Subpath prüfen (kein absoluter Pfad, kein ".." in den
-                    # Segmenten), erst dann joinen und via resolve()/relative_to()
-                    # verbindlich im docs-Verzeichnis einschließen.
-                    docs_root = docs_path.resolve()
-                    request_path = PathLib(subpath)
-                    if request_path.is_absolute() or ".." in request_path.parts:
-                        return JSONResponse({"detail": "Not found"}, status_code=404)
-                    safe_path = (docs_root / request_path).resolve()
-                    try:
-                        safe_path.relative_to(docs_root)
-                    except ValueError:
-                        return JSONResponse({"detail": "Not found"}, status_code=404)
-                    if safe_path.exists() and safe_path.is_file():
-                        return FileResponse(str(safe_path))
-                    if safe_path.is_dir() and (safe_path / "index.html").exists():
-                        return FileResponse(str(safe_path / "index.html"))
+                # Exakt dasselbe Path-Traversal-Muster wie der Static-Block unten:
+                # den rohen full_path direkt in PathLib prüfen (kein absoluter Pfad,
+                # kein ".." in den Segmenten), erst dann joinen und via resolve()/
+                # relative_to() verbindlich unter static_dir einschließen. Das URL-
+                # Präfix "doku" entspricht auf der Platte dem Ordner "docs".
+                static_root = PathLib(static_dir).resolve()
+                request_path = PathLib(full_path)
+                if request_path.is_absolute() or ".." in request_path.parts:
+                    return JSONResponse({"detail": "Not found"}, status_code=404)
+                safe_path = (static_root / "docs" / PathLib(*request_path.parts[1:])).resolve()
+                try:
+                    safe_path.relative_to(static_root)
+                except ValueError:
+                    return JSONResponse({"detail": "Not found"}, status_code=404)
+                if safe_path.exists() and safe_path.is_file():
+                    return FileResponse(str(safe_path))
+                if safe_path.is_dir() and (safe_path / "index.html").exists():
+                    return FileResponse(str(safe_path / "index.html"))
             return JSONResponse({"detail": "Not found"}, status_code=404)
 
         # Path Traversal-Schutz: Verwende pathlib für sichere Pfad-Auflösung
