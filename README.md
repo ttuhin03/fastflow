@@ -323,8 +323,8 @@ In Fast-Flow, your Git repository is the single source of truth. There is no "Up
 | Feature | Fast-Flow | Airflow | Dagster | Prefect | Kestra |
 |---------|-----------|---------|---------|---------|--------|
 | Pipeline definition | 🟢 Plain Python script (`main.py`) | 🔴 DAGs, operators, XComs | 🟡 Assets, ops, resources | 🟡 Python + `@flow`/`@task` decorators | 🟡 Declarative YAML |
-| Setup | 🟢 Compose or K8s manifests | 🔴 Complex cluster | 🟡 Medium | 🟡 Server + workers (or Cloud) | 🟡 Single JVM service |
-| Isolation | 🟢 Strict (container/job per run) | 🔴 Weak (shared worker) | 🟡 Medium | 🟡 Depends on worker type | 🟢 Per-task containers |
+| Setup | 🟢 Compose or K8s manifests | 🔴 Complex cluster | 🟡 Medium | 🟡 Server + workers (or Cloud) | 🟡 Standalone service (split for HA) |
+| Isolation | 🟢 Strict (container/job per run) | 🔴 Weak (shared worker) | 🟡 Medium | 🟡 Depends on worker type | 🟡 Opt-in per task (Docker/K8s runner) |
 | Dependency Speed | 🟢 Instant (uv JIT, no image build) | 🔴 Slow (image builds) | 🟡 Medium | 🟡 Env-dependent | 🟡 Plugin/image based |
 | Deployment | 🟢 Git push + auto-sync | 🔴 Complex CI/CD | 🟡 Code deployment | 🟡 Code deployment | 🟡 Push / API |
 | UI | 🟢 Modern & realtime (React) | 🔴 Dated / static | 🟢 Modern | 🟢 Modern | 🟢 Modern |
@@ -334,7 +334,13 @@ In Fast-Flow, your Git repository is the single source of truth. There is no "Up
 
 Fast-Flow is deliberately narrow: **"I have a handful of Python scripts and Airflow is overkill."** If that's you, the whole point is that there's no DAG, no decorators, no image build — you push a `main.py` and it runs in an isolated container. That's the sweet spot.
 
-It's **not** trying to be everything. If you need a large catalog of pre-built connectors/triggers, event-driven workflows across many systems, or a data-asset lineage graph, mature tools like **Prefect**, **Kestra**, or **Dagster** are built for that and worth a look. Fast-Flow trades that breadth for a radically simpler mental model and near-zero operational overhead.
+It's **not** trying to be everything, and each of these tools has a domain it owns:
+
+- **[Kestra](https://kestra.io)** — a large plugin catalog and native event-driven triggers (files, webhooks, Kafka, queues) for wiring many systems together.
+- **[Dagster](https://dagster.io)** — data-asset lineage as its core model, when you need to track how datasets depend on and produce one another.
+- **[Prefect](https://www.prefect.io)** — a richer Python-first orchestration engine (retries, state, flexible workers) when a single `main.py` isn't enough but you still want to stay in Python.
+
+Fast-Flow trades that breadth for a radically simpler mental model and near-zero operational overhead. If your problem is "a handful of Python scripts and Airflow is overkill," that trade is the whole point.
 
 ## 🎯 Why Fast-Flow Wins (The Python Advantage)
 
