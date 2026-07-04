@@ -45,7 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Trivy Config Scan
         uses: aquasecurity/trivy-action@v0.36.0
@@ -65,14 +65,14 @@ jobs:
       - name: SARIF ins Code-Scanning laden
         if: always()
         continue-on-error: true   # kein GHAS/Code-Scanning -> nicht hart failen
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-iac.sarif
           category: trivy-iac
 
       - name: SARIF als Artifact hochladen
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: trivy-iac-sarif
           path: trivy-iac.sarif
@@ -96,7 +96,7 @@ jobs:
             dockerfile: Dockerfile.worker
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: ${{ matrix.name }}-Image bauen
         run: docker build -f "${{ matrix.dockerfile }}" -t "fastflow-${{ matrix.name }}:scan" .
@@ -118,14 +118,14 @@ jobs:
       - name: SARIF ins Code-Scanning laden
         if: always()
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: "trivy-image-${{ matrix.name }}.sarif"
           category: "trivy-image-${{ matrix.name }}"
 
       - name: SARIF als Artifact hochladen
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: "trivy-image-${{ matrix.name }}-sarif"
           path: "trivy-image-${{ matrix.name }}.sarif"
@@ -141,7 +141,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout (volle History)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0   # gesamte History scannen, nicht nur den letzten Commit
 
@@ -159,14 +159,14 @@ jobs:
       - name: SARIF ins Code-Scanning laden
         if: always()
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: gitleaks.sarif
           category: gitleaks
 
       - name: SARIF als Artifact hochladen
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: gitleaks-sarif
           path: gitleaks.sarif

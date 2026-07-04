@@ -43,7 +43,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Orchestrator-Image bauen
         run: docker build -t "$APP_IMAGE" .
@@ -196,7 +196,7 @@ jobs:
 
       - name: ZAP Report als Artifact hochladen
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: zap-report
           path: |
@@ -233,7 +233,7 @@ jobs:
 
       - name: sqlmap Ergebnisse als Artifact hochladen
         if: always() && ((github.event_name == 'workflow_dispatch' && github.event.inputs.run_sqlmap == 'true') || github.event_name == 'schedule')
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sqlmap-results
           path: sqlmap-results/
