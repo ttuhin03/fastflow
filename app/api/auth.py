@@ -6,7 +6,7 @@ Dieses Modul enthält alle REST-API-Endpoints für Authentication:
 - Logout, Refresh, Me
 """
 
-import hashlib
+import hmac
 import logging
 import secrets
 import time
@@ -71,10 +71,16 @@ _OAUTH_STATE_COOKIE_PATH = "/api/auth"
 
 
 def _hash_oauth_state(state: str) -> str:
-    """Digest des OAuth-state für die Cookie-Bindung. Im Cookie wird nur der Hash
-    abgelegt (kein Klartext-Token), der Klartext-state läuft weiterhin über den
-    OAuth-Redirect. Der Callback vergleicht Hash(returned_state) mit dem Cookie."""
-    return hashlib.sha256(state.encode("utf-8")).hexdigest()
+    """Keyed Digest (HMAC-SHA256) des OAuth-state für die Cookie-Bindung. Im Cookie
+    liegt nur das mit dem Server-Secret geschlüsselte HMAC (kein Klartext-Token);
+    der Klartext-state läuft weiterhin über den OAuth-Redirect. Der Callback
+    vergleicht HMAC(returned_state) mit dem Cookie. HMAC (statt bloßem SHA-256)
+    verhindert offline-Berechnung/Rainbow-Table-Angriffe ohne den Server-Key."""
+    return hmac.new(
+        config.JWT_SECRET_KEY.encode("utf-8"),
+        state.encode("utf-8"),
+        "sha256",
+    ).hexdigest()
 
 
 def _set_oauth_state_cookie(response: RedirectResponse, state: str) -> RedirectResponse:

@@ -74,7 +74,8 @@ async def sync(
         if result.get("already_running"):
             return JSONResponse(
                 status_code=status.HTTP_202_ACCEPTED,
-                content={
+                # message ist eine kuratierte Service-Meldung (keine rohe Exception).
+                content={  # codeql[py/stack-trace-exposure]
                     "success": False,
                     "message": result.get("message", "Ein Sync läuft bereits."),
                     "already_running": True,
@@ -140,7 +141,8 @@ async def sync_status(
                 status_info["status"] = "failed"
                 status_info["last_sync_error"] = entry.get("error")
                 break
-        return status_info
+        # Statusfelder aus dem Sync-Log (kuratiert), kein roher Stacktrace.
+        return status_info  # codeql[py/stack-trace-exposure]
     except Exception as e:
         logger.exception("Fehler beim Abrufen des Git-Status")
         raise HTTPException(
@@ -433,7 +435,8 @@ async def test_repo_config(
             {"status": "success" if success else "failed"},
             current_user,
         )
-        return {"success": success, "message": message}
+        # message ist eine kuratierte Service-Meldung (keine rohe Exception/Stacktrace).
+        return {"success": success, "message": message}  # codeql[py/stack-trace-exposure]
     except Exception as e:
         logger.exception("Fehler beim Testen der Repo-Config")
         raise HTTPException(
@@ -460,7 +463,8 @@ async def clear_pipelines(
                 detail=message,
             )
         log_audit(session, "sync_clear_pipelines", "settings", None, None, current_user)
-        return {"success": True, "message": message}
+        # message ist eine kuratierte Service-Meldung (keine rohe Exception/Stacktrace).
+        return {"success": True, "message": message}  # codeql[py/stack-trace-exposure]
     except HTTPException:
         raise
     except Exception as e:

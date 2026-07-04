@@ -31,6 +31,13 @@ spec:
       initContainers:
         - name: wait-for-postgres
           image: postgres:16-alpine
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
           securityContext:
             runAsNonRoot: true
             runAsUser: 70
@@ -61,6 +68,8 @@ spec:
                 optional: true
       containers:
         - name: orchestrator
+          # Lokales Dev-Manifest: minikube-vm.sh baut das Image als :latest im Cluster.
+          # Prod nutzt den gepinnten ghcr-Tag. Trivy KSV-0013 ist in .trivyignore.
           # bei echtem Deployment "ghcr.io/ttuhin03/fastflow-orchestrator:v0.7.1",
           image: fastflow-orchestrator:latest
           imagePullPolicy: IfNotPresent

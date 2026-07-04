@@ -6,6 +6,10 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci
 
+# Non-root: node-User (uid 1000) ist im Basis-Image vorhanden (DS-0002)
+RUN chown -R node:node /app
+USER node
+
 # Exponiere Port für Vite Dev Server
 EXPOSE 3000
 

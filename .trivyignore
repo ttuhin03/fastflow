@@ -1,0 +1,23 @@
+# Trivy-Ignore-Liste (wird automatisch aus dem Repo-Root gelesen; scan-ref: .)
+# Nur bewusst akzeptierte Misconfigurations / False Positives – jeweils begründet.
+# Echte Findings werden im Manifest behoben, NICHT hier stummgeschaltet.
+
+# KSV-0048: RBAC "Manage Kubernetes workloads and pods".
+# Funktional erforderlich – der Executor erzeugt/löscht Pipeline-Jobs und liest
+# Pod-Logs. Role ist bereits minimal (namespaced, keine wildcards, kein exec/secrets).
+KSV-0048
+
+# KSV-01010: "ConfigMap with sensitive content" – False Positive.
+# k8s/configmap.yaml enthält nur nicht-sensible Werte + auskommentierte Vorlagen;
+# alle echten Secrets liegen in secrets.yaml (secretRef).
+KSV-01010
+
+# KSV-0013: Image-Tag ":latest".
+# Lokales Dev-Manifest; scripts/minikube-vm.sh baut das Image als :latest im Cluster.
+# Produktion nutzt den gepinnten ghcr-Tag (Kommentar im deployment.yaml).
+KSV-0013
+
+# KSV-0110: "Workloads in the default namespace".
+# Manifeste laufen ohne Vorab-Setup (kubectl apply -f k8s/) im aktuellen Kontext.
+# Produktion setzt den Namespace via `kubectl apply -n` bzw. kustomize/helm.
+KSV-0110

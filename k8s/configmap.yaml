@@ -1,6 +1,8 @@
 # ConfigMap: nicht-sensible Umgebungsvariablen
 # Entspricht .env.example – optionale Variablen unten auskommentiert
 ---
+# Nur nicht-sensible Werte + auskommentierte Vorlagen; echte Secrets liegen in
+# secrets.yaml (secretRef). Trivy KSV-01010 (FP) ist in .trivyignore gelistet.
 apiVersion: v1
 kind: ConfigMap
 metadata:

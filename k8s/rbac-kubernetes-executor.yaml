@@ -14,6 +14,8 @@ metadata:
   name: fastflow-executor-role
   labels:
     app: fastflow-orchestrator
+# Rechte bewusst minimal (namespaced Role, keine wildcards, kein exec/attach/secrets).
+# Job-/Pod-Verwaltung ist funktional erforderlich – Trivy KSV-0048 in .trivyignore.
 rules:
   - apiGroups: ["batch"]
     resources: ["jobs"]

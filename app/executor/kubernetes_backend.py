@@ -80,9 +80,13 @@ def _get_apis() -> tuple:
 
 
 def _shared_pipeline_run_path(run_id: UUID) -> Path:
-    """Pfad für Pipeline-Kopie im shared Volume (Orchestrator + Job)."""
+    """Pfad für Pipeline-Kopie im shared Volume (Orchestrator + Job).
+
+    run_id wird über UUID() kanonisiert: das Ergebnis besteht nur aus [0-9a-f-],
+    enthält also keine Separatoren/Traversal-Sequenzen (Path-Injection-Schranke)."""
     base = Path(app_config.KUBERNETES_SHARED_CACHE_MOUNT_PATH)
-    return base / "pipeline_runs" / str(run_id)
+    safe_id = str(UUID(str(run_id)))
+    return base / "pipeline_runs" / safe_id
 
 
 def _copy_pipeline_to_shared(pipeline: DiscoveredPipeline, run_id: UUID) -> Path:
@@ -101,12 +105,13 @@ def _copy_pipeline_to_shared(pipeline: DiscoveredPipeline, run_id: UUID) -> Path
 
 def _cleanup_shared_pipeline_run(run_id: UUID) -> None:
     """Löscht das Pipeline-Run-Verzeichnis im shared Volume (nach Run-Ende, um Speicher freizugeben)."""
+    # Pfad ist über UUID()-Kanonisierung in _shared_pipeline_run_path abgesichert.
     path = _shared_pipeline_run_path(run_id)
-    if not path.exists():
+    if not path.exists():  # codeql[py/path-injection]
         return
     try:
-        shutil.rmtree(path, ignore_errors=True)
-        if path.exists():
+        shutil.rmtree(path, ignore_errors=True)  # codeql[py/path-injection]
+        if path.exists():  # codeql[py/path-injection]
             logger.warning("Cleanup pipeline_runs/%s: Verzeichnis nicht vollständig gelöscht", run_id)
         else:
             logger.debug("Cleanup pipeline_runs/%s ok", run_id)
