@@ -6,6 +6,7 @@ Dieses Modul enthält alle REST-API-Endpoints für Authentication:
 - Logout, Refresh, Me
 """
 
+import hashlib
 import logging
 import secrets
 import time
@@ -69,12 +70,20 @@ _OAUTH_STATE_COOKIE_MAX_AGE = 600  # 10 Minuten
 _OAUTH_STATE_COOKIE_PATH = "/api/auth"
 
 
+def _hash_oauth_state(state: str) -> str:
+    """Digest des OAuth-state für die Cookie-Bindung. Im Cookie wird nur der Hash
+    abgelegt (kein Klartext-Token), der Klartext-state läuft weiterhin über den
+    OAuth-Redirect. Der Callback vergleicht Hash(returned_state) mit dem Cookie."""
+    return hashlib.sha256(state.encode("utf-8")).hexdigest()
+
+
 def _set_oauth_state_cookie(response: RedirectResponse, state: str) -> RedirectResponse:
     """Bindet den OAuth-state an den Browser (httponly, SameSite=Lax), damit der Callback
-    verifizieren kann, dass der zurückkommende state zu genau dieser Session gehört."""
+    verifizieren kann, dass der zurückkommende state zu genau dieser Session gehört.
+    Im Cookie liegt nur der SHA-256-Hash des state (kein Klartext-Token)."""
     response.set_cookie(
         key=_OAUTH_STATE_COOKIE,
-        value=state,
+        value=_hash_oauth_state(state),
         max_age=_OAUTH_STATE_COOKIE_MAX_AGE,
         httponly=True,
         samesite="lax",
@@ -94,7 +103,7 @@ def _verify_oauth_state_cookie(request: Request, state: Optional[str]) -> None:
     """Prüft, dass der im Callback zurückgegebene state exakt dem browser-gebundenen
     Cookie entspricht (CSRF-Schutz). Bei fehlendem/abweichendem state: 400."""
     cookie_state = request.cookies.get(_OAUTH_STATE_COOKIE)
-    if not state or not cookie_state or not secrets.compare_digest(state, cookie_state):
+    if not state or not cookie_state or not secrets.compare_digest(_hash_oauth_state(state), cookie_state):
         raise HTTPException(status_code=400, detail="Ungültiger oder fehlender OAuth-state (CSRF-Schutz)")
 
 

@@ -21,8 +21,15 @@ RUN npm run build --workspace=docs
 # Serve der statischen Doku (SPA-Routing)
 FROM node:20-alpine
 
+# serve zur Build-Zeit installieren, damit zur Laufzeit kein npx-Download
+# als non-root nötig ist (DS-0002).
+RUN npm install -g serve
+
 WORKDIR /app
 COPY --from=builder /app/docs/build ./build
 
+# Non-root: node-User (uid 1000) ist im Basis-Image vorhanden
+USER node
+
 EXPOSE 3001
-CMD ["npx", "serve", "-s", "build", "-l", "3001"]
+CMD ["serve", "-s", "build", "-l", "3001"]
