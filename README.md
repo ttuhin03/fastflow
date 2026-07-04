@@ -320,15 +320,21 @@ In Fast-Flow, your Git repository is the single source of truth. There is no "Up
 
 ## 🚀 Why Fast-Flow? (Comparison)
 
-| Feature | Fast-Flow | Airflow | Dagster |
-|---------|-----------|---------|---------|
-| Setup | 🟢 Compose or K8s manifests | 🔴 Complex cluster | 🟡 Medium |
-| Isolation | 🟢 Strict (container/job per task) | 🔴 Weak (shared worker) | 🟡 Medium |
-| Dependency Speed | 🟢 Instant (uv JIT) | 🔴 Slow (image builds) | 🟡 Medium |
-| UI Vibe | 🟢 Modern & realtime (React) | 🔴 Dated / static | 🟡 Modern |
-| Deployment | 🟢 Git push + auto-sync | 🔴 Complex CI/CD pipelines | 🟡 Code deployment |
-| **Onboarding Time** | 🟢 **Minutes, not days** | 🔴 **Weeks** | 🟡 **Days** |
-| **Learning Pipeline Structure** | 🟢 **Simple: main.py + requirements.txt** | 🔴 **Complex: DAGs, operators, XComs** | 🟡 **Medium: assets, ops, resources** |
+| Feature | Fast-Flow | Airflow | Dagster | Prefect | Kestra |
+|---------|-----------|---------|---------|---------|--------|
+| Pipeline definition | 🟢 Plain Python script (`main.py`) | 🔴 DAGs, operators, XComs | 🟡 Assets, ops, resources | 🟡 Python + `@flow`/`@task` decorators | 🟡 Declarative YAML |
+| Setup | 🟢 Compose or K8s manifests | 🔴 Complex cluster | 🟡 Medium | 🟡 Server + workers (or Cloud) | 🟡 Single JVM service |
+| Isolation | 🟢 Strict (container/job per run) | 🔴 Weak (shared worker) | 🟡 Medium | 🟡 Depends on worker type | 🟢 Per-task containers |
+| Dependency Speed | 🟢 Instant (uv JIT, no image build) | 🔴 Slow (image builds) | 🟡 Medium | 🟡 Env-dependent | 🟡 Plugin/image based |
+| Deployment | 🟢 Git push + auto-sync | 🔴 Complex CI/CD | 🟡 Code deployment | 🟡 Code deployment | 🟡 Push / API |
+| UI | 🟢 Modern & realtime (React) | 🔴 Dated / static | 🟢 Modern | 🟢 Modern | 🟢 Modern |
+| **Onboarding** | 🟢 **Minutes — if it runs locally, it runs here** | 🔴 **Weeks** | 🟡 **Days** | 🟡 **Days** | 🟡 **Days** |
+
+### Where Fast-Flow fits (and where it doesn't)
+
+Fast-Flow is deliberately narrow: **"I have a handful of Python scripts and Airflow is overkill."** If that's you, the whole point is that there's no DAG, no decorators, no image build — you push a `main.py` and it runs in an isolated container. That's the sweet spot.
+
+It's **not** trying to be everything. If you need a large catalog of pre-built connectors/triggers, event-driven workflows across many systems, or a data-asset lineage graph, mature tools like **Prefect**, **Kestra**, or **Dagster** are built for that and worth a look. Fast-Flow trades that breadth for a radically simpler mental model and near-zero operational overhead.
 
 ## 🎯 Why Fast-Flow Wins (The Python Advantage)
 
