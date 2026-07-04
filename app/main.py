@@ -6,7 +6,6 @@ Signal-Handling und Serving des React-Frontends.
 """
 
 import asyncio
-import re
 import signal
 import logging
 from contextlib import asynccontextmanager
@@ -246,29 +245,23 @@ if os.path.exists(static_dir):
                     if idx.exists():
                         return FileResponse(str(idx))
                 else:
-                    # Strikte Allowlist pro Segment: nur [A-Za-z0-9._-], explizit kein
-                    # "." / "..". Damit kann kein User-Input Separatoren oder Traversal
-                    # einschleusen; resolve()+relative_to() ist die zweite Schranke.
-                    # erlaubte Zeichen decken übliche Web-Asset-Namen ab (inkl. ~ und @
-                    # für Webpack-Chunks/scoped Namen); Separatoren/Traversal bleiben außen vor.
-                    parts = [p for p in subpath.split("/") if p and p != "."]
-                    if not parts or not all(
-                        p != ".." and re.fullmatch(r"[A-Za-z0-9._~@-]+", p) for p in parts
-                    ):
-                        return JSONResponse({"detail": "Not found"}, status_code=404)
+                    # Gleiches Path-Traversal-Muster wie der Static-Block unten:
+                    # rohen Subpath prüfen (kein absoluter Pfad, kein ".." in den
+                    # Segmenten), erst dann joinen und via resolve()/relative_to()
+                    # verbindlich im docs-Verzeichnis einschließen.
                     docs_root = docs_path.resolve()
-                    safe_path = docs_root
-                    for seg in parts:
-                        safe_path = safe_path / seg
-                    safe_path = safe_path.resolve()
+                    request_path = PathLib(subpath)
+                    if request_path.is_absolute() or ".." in request_path.parts:
+                        return JSONResponse({"detail": "Not found"}, status_code=404)
+                    safe_path = (docs_root / request_path).resolve()
                     try:
                         safe_path.relative_to(docs_root)
                     except ValueError:
                         return JSONResponse({"detail": "Not found"}, status_code=404)
                     if safe_path.exists() and safe_path.is_file():
-                        return FileResponse(str(safe_path))  # codeql[py/path-injection]
+                        return FileResponse(str(safe_path))
                     if safe_path.is_dir() and (safe_path / "index.html").exists():
-                        return FileResponse(str(safe_path / "index.html"))  # codeql[py/path-injection]
+                        return FileResponse(str(safe_path / "index.html"))
             return JSONResponse({"detail": "Not found"}, status_code=404)
 
         # Path Traversal-Schutz: Verwende pathlib für sichere Pfad-Auflösung

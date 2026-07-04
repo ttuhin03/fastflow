@@ -107,11 +107,11 @@ def _cleanup_shared_pipeline_run(run_id: UUID) -> None:
     """Löscht das Pipeline-Run-Verzeichnis im shared Volume (nach Run-Ende, um Speicher freizugeben)."""
     # Pfad ist über UUID()-Kanonisierung in _shared_pipeline_run_path abgesichert.
     path = _shared_pipeline_run_path(run_id)
-    if not path.exists():  # codeql[py/path-injection]
+    if not path.exists():
         return
     try:
-        shutil.rmtree(path, ignore_errors=True)  # codeql[py/path-injection]
-        if path.exists():  # codeql[py/path-injection]
+        shutil.rmtree(path, ignore_errors=True)
+        if path.exists():
             logger.warning("Cleanup pipeline_runs/%s: Verzeichnis nicht vollständig gelöscht", run_id)
         else:
             logger.debug("Cleanup pipeline_runs/%s ok", run_id)

@@ -21,3 +21,16 @@ KSV-0013
 # Manifeste laufen ohne Vorab-Setup (kubectl apply -f k8s/) im aktuellen Kontext.
 # Produktion setzt den Namespace via `kubectl apply -n` bzw. kustomize/helm.
 KSV-0110
+
+# KSV-0020 / KSV-0021: "Runs with UID/GID <= 10000".
+# UIDs sind bewusst fix an die Container-Images gebunden: postgres 70 (offizielles
+# Image) bzw. 1001 für Orchestrator/Worker (siehe Dockerfiles). Höhere IDs würden
+# Volume-Permissions/DB-Start brechen; runAsNonRoot + dropped caps sind gesetzt.
+KSV-0020
+KSV-0021
+
+# DS-0026: "No HEALTHCHECK defined".
+# Betrifft nur Dev-/Build-/Job-Images (Dockerfile.docs, Dockerfile.worker,
+# frontend/Dockerfile.dev). Der Worker ist ein kurzlebiges K8s-Job-Basisimage
+# ohne Server; das Prod-Orchestrator-Image (Dockerfile) hat einen HEALTHCHECK.
+DS-0026
