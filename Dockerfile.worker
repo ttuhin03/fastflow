@@ -12,6 +12,12 @@ FROM ghcr.io/astral-sh/uv:bookworm-slim
 LABEL maintainer="Fast-Flow Orchestrator"
 LABEL description="Pipeline-Worker: uv + Notebook-Runner, Python via uv python install"
 
+# Security-Patches der Basis-Layer nachziehen (u. a. libgnutls30
+# CVE-2026-42010 / CVE-2026-33845, fixed in 3.7.9-2+deb12u7).
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
 # Runner-Verzeichnis (nb_runner.py etc.) – in K8s gibt es keinen Host-Pfad dafür
 COPY app/runners /runner
 

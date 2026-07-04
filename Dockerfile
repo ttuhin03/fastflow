@@ -50,12 +50,20 @@ WORKDIR /app
 
 # System-Dependencies installieren (mit Retry bei transienten Netzwerkfehlern)
 # openssh-client: für Git-Sync per SSH/Deploy-Key (GIT_SSH_COMMAND)
+# apt-get upgrade zieht Security-Patches der Basis-Layer (u. a. libgnutls30
+# CVE-2026-42010 / CVE-2026-33845) nach.
 RUN for i in 1 2 3; do \
-    (apt-get update && apt-get install -y --no-install-recommends \
+    (apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends \
         git curl ca-certificates openssh-client \
     && rm -rf /var/lib/apt/lists/*) && break; \
     sleep 10; \
     done
+
+# Build-Tools patchen: wheel (CVE-2026-24049) und setuptools (vendored
+# jaraco.context CVE-2026-23949) auf sichere Versionen anheben.
+RUN pip install --no-cache-dir --upgrade "pip>=25.2" "setuptools>=80.9.0" "wheel>=0.46.2"
 
 # Python-Dependencies installieren (inkl. uv für Pre-Heating: uv pip compile)
 COPY requirements.txt .
