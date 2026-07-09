@@ -54,7 +54,7 @@ async def require_log_access(
         if verify_token(token) and get_session_by_token(session, token):
             return
 
-    if download_token and verify_log_download_token(download_token, run_id):
+    if download_token and verify_log_download_token(session, download_token, run_id):
         return
 
     raise HTTPException(status_code=401, detail="Authentifizierung erforderlich")
@@ -73,7 +73,7 @@ async def get_logs_download_url(
     run = session.get(PipelineRun, run_id)
     if run is None:
         raise HTTPException(status_code=404, detail=f"Run nicht gefunden: {run_id}")
-    token = create_log_download_token(run_id)
+    token = create_log_download_token(session, run_id)
     return {"token": token}
 
 

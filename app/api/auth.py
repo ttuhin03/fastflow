@@ -495,6 +495,7 @@ async def _microsoft_callback_impl(
 @router.post("/link-token", response_model=dict, status_code=status.HTTP_200_OK)
 async def get_link_token(
     current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
 ) -> dict:
     """
     Liefert ein kurzlebiges Link-Token (60 Sekunden) zum Starten des OAuth-Account-Link-Flows.
@@ -503,7 +504,7 @@ async def get_link_token(
     navigiert danach zu /api/auth/link/<provider>?link_token=..., statt das volle Session-JWT
     in die URL zu schreiben (das sonst in Logs, Browser-History und Referrer landen würde).
     """
-    return {"token": create_link_token(current_user.id)}
+    return {"token": create_link_token(session, current_user.id)}
 
 
 def get_link_flow_user(
@@ -521,7 +522,7 @@ def get_link_flow_user(
     user_id: Optional[Any] = None
 
     if link_token:
-        user_id = verify_link_token(link_token)
+        user_id = verify_link_token(session, link_token)
 
     if user_id is None and credentials is not None:
         token = credentials.credentials

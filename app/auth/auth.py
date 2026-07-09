@@ -12,6 +12,7 @@ UI darf NIEMALS ohne Login erreichbar sein.
 """
 
 import logging
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import uuid4, UUID
@@ -23,7 +24,14 @@ from sqlmodel import Session, select
 
 from app.core.config import config
 from app.core.database import get_session, retry_on_sqlite_io
-from app.models import User, Session as SessionModel, UserRole, UserStatus
+from app.models import (
+    User,
+    Session as SessionModel,
+    UserRole,
+    UserStatus,
+    EphemeralToken,
+    EphemeralTokenType,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -66,58 +74,88 @@ def create_access_token(username: str, expires_delta: Optional[timedelta] = None
     return encoded_jwt
 
 
-def create_log_download_token(run_id: UUID) -> str:
+def _create_ephemeral_token(
+    session: Session, token_type: EphemeralTokenType, subject: str, ttl_seconds: int
+) -> str:
+    """Erstellt ein opakes, DB-gebundenes Kurzzeit-Token (siehe EphemeralToken)."""
+    token = secrets.token_urlsafe(32)
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
+    row = EphemeralToken(
+        token=token,
+        token_type=token_type,
+        subject=subject,
+        expires_at=expires_at,
+    )
+    session.add(row)
+    session.commit()
+    return token
+
+
+def create_log_download_token(session: Session, run_id: UUID) -> str:
     """
-    Erstellt ein kurzlebiges JWT für Log-Download (60 Sekunden).
+    Erstellt ein kurzlebiges, DB-gebundenes Token für Log-Download (60 Sekunden).
     Wird für Direktlinks verwendet, damit der Browser den Download nativ ausführt.
     """
-    expire = datetime.now(timezone.utc) + timedelta(seconds=60)
-    to_encode = {"sub": str(run_id), "exp": expire, "type": "log_download"}
-    return jwt.encode(to_encode, config.JWT_SECRET_KEY, algorithm=config.JWT_ALGORITHM)
+    return _create_ephemeral_token(session, EphemeralTokenType.LOG_DOWNLOAD, str(run_id), ttl_seconds=60)
 
 
-def verify_log_download_token(token: str, run_id: UUID) -> bool:
-    """Prüft, ob ein Log-Download-Token für die angegebene run_id gültig ist."""
-    try:
-        payload = jwt.decode(token, config.JWT_SECRET_KEY, algorithms=[config.JWT_ALGORITHM])
-        return payload.get("type") == "log_download" and payload.get("sub") == str(run_id)
-    except JWTError:
-        return False
-
-
-def create_link_token(user_id: UUID) -> str:
+def verify_log_download_token(session: Session, token: str, run_id: UUID) -> bool:
     """
-    Erstellt ein kurzlebiges JWT (60 Sekunden) zum Starten des OAuth-Account-Link-Flows.
+    Prüft, ob ein Log-Download-Token für die angegebene run_id gültig ist.
+
+    Mehrfach nutzbar innerhalb der TTL (kein Single-Use), damit ein im Frontend
+    kurz gecachter Download-Link nicht bei jedem Klick erneut angefordert werden muss.
+    Das Token muss trotzdem einer aktiven DB-Zeile entsprechen (siehe EphemeralToken) –
+    reine Signaturfälschung reicht nicht mehr aus.
+    """
+    statement = select(EphemeralToken).where(
+        EphemeralToken.token == token,
+        EphemeralToken.token_type == EphemeralTokenType.LOG_DOWNLOAD,
+        EphemeralToken.subject == str(run_id),
+        EphemeralToken.expires_at > datetime.now(timezone.utc),
+    )
+    return retry_on_sqlite_io(lambda: session.exec(statement).first(), session=session) is not None
+
+
+def create_link_token(session: Session, user_id: UUID) -> str:
+    """
+    Erstellt ein kurzlebiges (60 Sekunden), DB-gebundenes Single-Use-Token zum Starten
+    des OAuth-Account-Link-Flows.
 
     Wird verwendet, damit das Frontend beim Account-Linking (volle Browser-Navigation ohne
     Authorization-Header) nicht das volle Session-JWT als Query-Parameter mitschicken muss.
-    Ein geleaktes, 60 Sekunden gültiges Link-Token ist deutlich weniger sensibel als ein
-    volles Session-JWT, das in Server-/Proxy-Logs, Browser-History und Referrer landen würde.
+    Anders als ein reines JWT reicht eine gültige Signatur allein nicht: das Token muss
+    einer nicht abgelaufenen, noch nicht eingelösten Zeile in der DB entsprechen. Das
+    verhindert, dass ein Angreifer mit Kenntnis einer fremden user_id (z.B. via GET /users)
+    und einem geleakten/schwachen JWT_SECRET_KEY einen Link-Token fälscht und so ein
+    fremdes Konto per Account-Linking übernimmt (siehe TE-11 Finding 2 / TE-15).
     """
-    expire = datetime.now(timezone.utc) + timedelta(seconds=60)
-    to_encode = {"sub": str(user_id), "exp": expire, "type": "account_link"}
-    return jwt.encode(to_encode, config.JWT_SECRET_KEY, algorithm=config.JWT_ALGORITHM)
+    return _create_ephemeral_token(session, EphemeralTokenType.ACCOUNT_LINK, str(user_id), ttl_seconds=60)
 
 
-def verify_link_token(token: str) -> Optional[UUID]:
+def verify_link_token(session: Session, token: str) -> Optional[UUID]:
     """
     Prüft ein Account-Link-Token und gibt die User-ID zurück, wenn es gültig ist.
 
-    Gibt None zurück, wenn das Token ungültig/abgelaufen ist oder nicht vom Typ
-    "account_link" ist (Schutz vor Token-Type-Confusion: ein Access- oder Log-Download-Token
-    darf niemals einen Link-Flow autorisieren).
+    Single-use: die Zeile wird beim ersten gültigen Verifizieren als eingelöst markiert,
+    ein zweiter Versuch mit demselben Token schlägt fehl. Gibt None zurück, wenn das
+    Token unbekannt, abgelaufen, bereits eingelöst ist oder nicht vom Typ "account_link"
+    ist.
     """
+    statement = select(EphemeralToken).where(
+        EphemeralToken.token == token,
+        EphemeralToken.token_type == EphemeralTokenType.ACCOUNT_LINK,
+        EphemeralToken.expires_at > datetime.now(timezone.utc),
+        EphemeralToken.consumed_at.is_(None),
+    )
+    row = retry_on_sqlite_io(lambda: session.exec(statement).first(), session=session)
+    if row is None:
+        return None
+    row.consumed_at = datetime.now(timezone.utc)
+    session.add(row)
+    session.commit()
     try:
-        payload = jwt.decode(token, config.JWT_SECRET_KEY, algorithms=[config.JWT_ALGORITHM])
-    except JWTError:
-        return None
-    if payload.get("type") != "account_link":
-        return None
-    sub = payload.get("sub")
-    if not sub:
-        return None
-    try:
-        return UUID(str(sub))
+        return UUID(row.subject)
     except (ValueError, TypeError):
         return None
 
@@ -268,6 +306,28 @@ def cleanup_expired_sessions(session: Session) -> None:
     if expired_sessions:
         session.commit()
         logger.info(f"{len(expired_sessions)} abgelaufene Sessions bereinigt")
+
+
+def cleanup_expired_ephemeral_tokens(session: Session) -> None:
+    """
+    Bereinigt abgelaufene Link-/Log-Download-Tokens aus der Datenbank.
+
+    Wird periodisch aufgerufen, um die Datenbank sauber zu halten.
+
+    Args:
+        session: Datenbank-Session
+    """
+    statement = select(EphemeralToken).where(
+        EphemeralToken.expires_at <= datetime.now(timezone.utc)
+    )
+    expired_tokens = session.exec(statement).all()
+
+    for row in expired_tokens:
+        session.delete(row)
+
+    if expired_tokens:
+        session.commit()
+        logger.info(f"{len(expired_tokens)} abgelaufene Ephemeral-Tokens bereinigt")
 
 
 async def get_current_user(

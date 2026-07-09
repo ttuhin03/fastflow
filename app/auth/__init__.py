@@ -3,6 +3,7 @@ Auth package: session auth, OAuth (GitHub/Google/Microsoft/Custom), OAuth proces
 """
 
 from app.auth.auth import (
+    cleanup_expired_ephemeral_tokens,
     create_access_token,
     create_link_token,
     create_log_download_token,
@@ -47,6 +48,7 @@ from app.auth.custom_oauth_user import (
 from app.auth.oauth_processing import process_oauth_login
 
 __all__ = [
+    "cleanup_expired_ephemeral_tokens",
     "create_access_token",
     "create_link_token",
     "create_log_download_token",
