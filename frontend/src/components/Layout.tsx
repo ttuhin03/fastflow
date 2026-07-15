@@ -152,6 +152,7 @@ export default function Layout() {
       const response = await apiClient.get('/users')
       return response.data
     },
+    enabled: isAdmin,
     retry: false,
     staleTime: 5 * 60 * 1000,
   })

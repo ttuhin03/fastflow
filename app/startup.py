@@ -371,7 +371,7 @@ async def run_startup_tasks() -> None:
         await _run_step("OAuth-State-Cleanup-Job", False, schedule_oauth_state_cleanup, "OAuth-State-Cleanup alle 5 Minuten geplant")
 
     def schedule_session_cleanup():
-        from app.auth.auth import cleanup_expired_sessions
+        from app.auth.auth import cleanup_expired_sessions, cleanup_expired_ephemeral_tokens
         from app.core.database import get_session
         from app.services.scheduler import get_scheduler
         scheduler = get_scheduler()
@@ -381,6 +381,7 @@ async def run_startup_tasks() -> None:
                 session = next(session_gen)
                 try:
                     cleanup_expired_sessions(session)
+                    cleanup_expired_ephemeral_tokens(session)
                 finally:
                     session.close()
             scheduler.add_job(
