@@ -3,9 +3,9 @@
 
 fastapi>=0.139.0,<1
 prometheus-fastapi-instrumentator>=8.0.2,<9
-uvicorn[standard]>=0.50.1,<1
+uvicorn[standard]>=0.51.0,<1
 sqlmodel>=0.0.39,<0.1
-docker>=7.1.0,<8
+docker>=7.2.0,<8
 kubernetes>=36.0.2,<37
 apscheduler>=3.11.3,<4
 pydantic>=2.13.4,<3
@@ -13,7 +13,7 @@ email-validator>=2.3.0,<3
 python-multipart>=0.0.32,<1
 aiofiles>=25.1.0,<26
 alembic>=1.18.5,<2
-boto3>=1.43.40,<2
+boto3>=1.43.46,<2
 python-dotenv>=1.2.2,<2
 python-jose[cryptography]>=3.5.0,<4
 cryptography>=49.0.0
