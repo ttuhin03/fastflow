@@ -45,7 +45,7 @@ class EncryptForPipelineResponse(BaseModel):
 @router.post("/encrypt-for-pipeline", response_model=EncryptForPipelineResponse)
 async def encrypt_for_pipeline(
     request: EncryptForPipelineRequest,
-    current_user: User = Depends(require_write),
+    current_user: User = Depends(get_current_user),
 ) -> EncryptForPipelineResponse:
     """
     Verschluesselt einen Klartext mit dem Server-ENCRYPTION_KEY.
@@ -67,10 +67,13 @@ async def get_secrets(
     limit: Optional[int] = Query(None, ge=1, le=500, description="Max. Anzahl Secrets (ohne Angabe: alle)"),
     offset: int = Query(0, ge=0, description="Offset für Pagination"),
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_write)
 ) -> Dict[str, Any]:
     """
     Gibt Secrets zurück (Values entschlüsselt), optional mit Pagination.
+
+    Erfordert WRITE- oder ADMIN-Rechte: Die Antwort enthält Klartext-Secrets
+    (API-Keys, DB-Credentials etc.), READONLY-Nutzer dürfen diese nicht einsehen.
 
     Ohne limit-Parameter werden alle Secrets zurückgegeben (Rückwärtskompatibilität).
 
