@@ -57,6 +57,40 @@ function shortCommitHash(lc: SyncStatus['last_commit']): string {
   return ''
 }
 
+type Translate = (key: string, options?: Record<string, unknown>) => string
+
+/**
+ * Backend sync-log entries never carry a "message" field (only event/status/branch and,
+ * on failure, "error") — derive a human-readable sentence instead of falling back to
+ * a generic "unknown" for every started/completed entry.
+ */
+function describeSyncLogEvent(log: any, t: Translate): string {
+  const event = String(log?.event || log?.status || '')
+  const branch = typeof log?.branch === 'string' ? log.branch : undefined
+  if (event === 'sync_started' || event === 'started') {
+    return branch ? t('sync.logStartedBranch', { branch }) : t('sync.logStarted')
+  }
+  if (event === 'sync_completed' || event === 'success') {
+    const count = Array.isArray(log?.pipelines_cached) ? log.pipelines_cached.length : undefined
+    const duration = typeof log?.duration_seconds === 'number' ? log.duration_seconds.toFixed(1) : undefined
+    if (duration !== undefined && count !== undefined) {
+      return t('sync.logCompletedDetail', { branch: branch || '?', duration, count })
+    }
+    return branch ? t('sync.logCompletedBranch', { branch }) : t('sync.logCompleted')
+  }
+  if (event === 'sync_failed' || event === 'failed') {
+    return t('sync.logFailedGeneric')
+  }
+  return t('sync.logStatusUnknown')
+}
+
+/** Full text for a sync-log entry: explicit message/error win, otherwise derive one. */
+function formatSyncLogText(log: any, t: Translate): string {
+  if (log?.message) return log.message
+  if (log?.error) return log.error
+  return describeSyncLogEvent(log, t)
+}
+
 interface SyncSettings {
   auto_sync_enabled: boolean
   auto_sync_interval: number | null
@@ -103,7 +137,8 @@ export default function Sync({ editLocked = false }: SyncProps) {
   const [generatedPublicKey, setGeneratedPublicKey] = useState<string | null>(null)
   const [showManualDeployKey, setShowManualDeployKey] = useState(false)
   const activityBodyRef = useRef<HTMLDivElement>(null)
-  // Tracks whether the user is pinned to the bottom of the activity log (follow mode).
+  // The API returns entries newest-first, so "following" the latest activity means
+  // staying pinned to the top of the list, not the bottom.
   const activityFollowRef = useRef(true)
 
   const syncInterval = useRefetchInterval(10000)
@@ -150,13 +185,14 @@ export default function Sync({ editLocked = false }: SyncProps) {
     },
   })
 
-  // Auto-scroll the "Sync activity" terminal to the bottom when new entries arrive,
-  // but only if the user is already at (or near) the bottom — log-viewer "follow" behavior.
+  // Keep the "Sync activity" terminal pinned to the newest entry (the top of the list,
+  // since the API returns entries newest-first) — but only if the user hasn't scrolled
+  // down to read older entries, and only once the list has actually loaded.
   useEffect(() => {
     const body = activityBodyRef.current
-    if (!body) return
+    if (!body || !syncLogs) return
     if (activityFollowRef.current) {
-      body.scrollTop = body.scrollHeight
+      body.scrollTop = 0
     }
   }, [syncLogs])
 
@@ -387,8 +423,8 @@ export default function Sync({ editLocked = false }: SyncProps) {
   const handleActivityScroll = () => {
     const body = activityBodyRef.current
     if (!body) return
-    // "Near bottom" threshold keeps follow active through small layout jitters.
-    activityFollowRef.current = body.scrollHeight - body.scrollTop - body.clientHeight < 40
+    // "Near top" threshold keeps follow active through small layout jitters.
+    activityFollowRef.current = body.scrollTop < 40
   }
 
   const handleClearPipelines = async () => {
@@ -577,14 +613,14 @@ export default function Sync({ editLocked = false }: SyncProps) {
                     <div key={index} className="sync-activity__line">
                       <span className="sync-activity__time">
                         {log.timestamp
-                          ? new Date(log.timestamp).toLocaleTimeString(formatLocale)
-                          : '--:--:--'}
+                          ? new Date(log.timestamp).toLocaleString(formatLocale)
+                          : '—'}
                       </span>
                       <span className={`sync-activity__level sync-activity__level--${level}`}>
                         {(log.status || log.event || 'info').toUpperCase()}
                       </span>
                       <span className="sync-activity__text">
-                        {log.message || log.error || t('sync.logStatusUnknown')}
+                        {formatSyncLogText(log, t)}
                       </span>
                     </div>
                   )
@@ -690,9 +726,7 @@ export default function Sync({ editLocked = false }: SyncProps) {
                       {log.status || log.event || t('sync.logStatusUnknown')}
                     </span>
                   </div>
-                  {log.message && (
-                    <div className="log-message">{log.message}</div>
-                  )}
+                  <div className="log-message">{log.message || describeSyncLogEvent(log, t)}</div>
                   {log.error && (
                     <div className="log-error">{t('sync.logErrorLine', { detail: log.error })}</div>
                   )}
