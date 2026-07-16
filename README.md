@@ -6,12 +6,16 @@
 
 > **Kubernetes-ready:** Fast-Flow runs with **Docker** (Compose or Socket Proxy) or natively on **Kubernetes** – pipeline runs as K8s Jobs, without a Docker socket. See [k8s/README.md](k8s/README.md) and [Kubernetes Deployment](docs/docs/deployment/K8S.md).
 
-**The lightweight, container-native, Python-centric task orchestrator for 2026.** (Docker Compose **or** Kubernetes Jobs – configurable via `PIPELINE_EXECUTOR`.)
+**The lightweight, container-native, Python-centric ETL and task orchestrator for 2026.** (Docker Compose **or** Kubernetes Jobs – configurable via `PIPELINE_EXECUTOR`.)
 
 Fast-Flow is the answer to the complexity of Airflow and the heaviness of traditional CI/CD tools. It was built for developers who want real isolation without sacrificing the speed of local scripts.
 
 <!-- 60-second overview -->
 **In 60 seconds:** One Python script per pipeline, no DAG, no image build. `git push` → sync → run. Each pipeline runs in isolation with **uv** (JIT dependencies): under Docker as an ephemeral container (optionally via [Socket Proxy](#-security-docker-socket-proxy)), under Kubernetes as a **Job pod** without Docker on the nodes. One FastAPI orchestrator, ready to go.
+
+![Fast-Flow demo](docs/static/video/first-demo.gif)
+
+_(Prefer a scrubbable player? [Watch the full-quality MP4](docs/static/video/first-demo.mp4).)_
 
 > [!NOTE]
 > Read our [Anti-Overhead Manifesto](docs/docs/manifesto.md) to understand why Fast-Flow is a better alternative to Airflow, Dagster & co.
@@ -21,9 +25,9 @@ Fast-Flow is the answer to the complexity of Airflow and the heaviness of tradit
 
 ### App Overview
 
-| [Dashboard](docs/static/img/dashboard.png) | [Pipelines](docs/static/img/pipelines-pipelines.png) | [Dependencies](docs/static/img/pipelines-abhaengigkeiten.png) | [Settings](docs/static/img/einstellungen-pipelines.png) | [Notifications](docs/static/img/einstellungen-benachrichtigungen.png) |
-|:---:|:---:|:---:|:---:|:---:|
-| **Dashboard** – Overview, metrics, heatmap | **Pipelines** – List, run, filter | **Dependencies** – Packages & CVE check | **Settings** – Pipelines, log retention | **Notifications** – Email, Teams |
+| [Dashboard](docs/static/img/dashboard.png) | [Pipelines](docs/static/img/pipelines-pipelines.png) | [Pipeline Detail](docs/static/img/pipeline-detail.png) | [Dependencies](docs/static/img/pipelines-abhaengigkeiten.png) |
+|:---:|:---:|:---:|:---:|
+| **Dashboard** – Overview, metrics, heatmap | **Pipelines** – List, run, filter | **Pipeline Detail** – Run history & logs | **Dependencies** – Packages & CVE check |
 
 <details>
 <summary>📸 Show screenshots</summary>
@@ -32,15 +36,14 @@ Fast-Flow is the answer to the complexity of Airflow and the heaviness of tradit
 
 ![Dashboard](docs/static/img/dashboard.png)
 
-**Pipelines & Dependencies**
+**Pipelines & Pipeline Detail**
 
 ![Pipelines](docs/static/img/pipelines-pipelines.png)  
+![Pipeline Detail](docs/static/img/pipeline-detail.png)
+
+**Dependencies**
+
 ![Dependencies](docs/static/img/pipelines-abhaengigkeiten.png)
-
-**Settings**
-
-![Settings Pipelines](docs/static/img/einstellungen-pipelines.png)  
-![Settings Notifications](docs/static/img/einstellungen-benachrichtigungen.png)
 
 </details>
 

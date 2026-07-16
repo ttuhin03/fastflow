@@ -1,0 +1,10 @@
+{
+  "enabled": true,
+  "description": "Syncs paid invoices from Stripe to the billing service every 15 minutes",
+  "tags": ["billing", "webhook", "sync"],
+  "timeout": 120,
+  "retry_attempts": 3,
+  "schedule_cron": "*/15 * * * *",
+  "cpu_hard_limit": 1,
+  "mem_hard_limit": "512M"
+}
