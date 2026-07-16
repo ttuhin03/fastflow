@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "fastflow.fullname" . }}-config
+  labels:
+    {{- include "fastflow.labels" . | nindent 4 }}
+data:
+  ENVIRONMENT: {{ .Values.config.environment | quote }}
+  BASE_URL: {{ .Values.config.baseUrl | quote }}
+  FRONTEND_URL: {{ .Values.config.frontendUrl | quote }}
+  LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+  LOG_JSON: {{ .Values.config.logJson | quote }}
+  PIPELINE_CACHE_TTL_SECONDS: {{ .Values.config.pipelineCacheTtlSeconds | quote }}
+  MAX_CONCURRENT_RUNS: {{ .Values.config.maxConcurrentRuns | quote }}
+  DEFAULT_PYTHON_VERSION: {{ .Values.config.defaultPythonVersion | quote }}
+  WORKER_BASE_IMAGE: {{ include "fastflow.workerImage" . | quote }}
+  {{- if eq .Values.executor.type "kubernetes" }}
+  KUBERNETES_JOB_TTL_SECONDS_AFTER_FINISHED: {{ .Values.executor.jobTtlSecondsAfterFinished | quote }}
+  {{- end }}
+  {{- if .Values.config.corsOrigins }}
+  CORS_ORIGINS: {{ .Values.config.corsOrigins | quote }}
+  {{- end }}
+  {{- range $key, $value := .Values.config.extraEnv }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
