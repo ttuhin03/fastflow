@@ -13,7 +13,9 @@ Fast-Flow is the answer to the complexity of Airflow and the heaviness of tradit
 <!-- 60-second overview -->
 **In 60 seconds:** One Python script per pipeline, no DAG, no image build. `git push` → sync → run. Each pipeline runs in isolation with **uv** (JIT dependencies): under Docker as an ephemeral container (optionally via [Socket Proxy](#-security-docker-socket-proxy)), under Kubernetes as a **Job pod** without Docker on the nodes. One FastAPI orchestrator, ready to go.
 
-<video src="docs/static/video/first-demo.mp4" controls muted playsinline width="100%"></video>
+![Fast-Flow demo](docs/static/video/first-demo.gif)
+
+_(Prefer a scrubbable player? [Watch the full-quality MP4](docs/static/video/first-demo.mp4).)_
 
 > [!NOTE]
 > Read our [Anti-Overhead Manifesto](docs/docs/manifesto.md) to understand why Fast-Flow is a better alternative to Airflow, Dagster & co.
