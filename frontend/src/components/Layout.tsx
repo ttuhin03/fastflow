@@ -90,7 +90,7 @@ export default function Layout() {
     {
       labelKey: 'nav.sectionSecurity',
       items: [
-        { path: '/secrets', labelKey: 'nav.secrets', icon: <LuKeyRound size={16} /> },
+        { path: '/secrets', labelKey: 'nav.secrets', icon: <LuKeyRound size={16} />, adminOnly: true },
         { path: '/dependencies', labelKey: 'nav.dependencies', icon: <LuPackage size={16} /> },
       ],
     },

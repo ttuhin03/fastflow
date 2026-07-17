@@ -13,6 +13,8 @@ import os
 os.environ.setdefault("GITHUB_CLIENT_ID", "test-github-client-id")
 os.environ.setdefault("GITHUB_CLIENT_SECRET", "test-github-client-secret")
 os.environ["SKIP_OAUTH_VERIFICATION"] = "1"
+# Fester Fernet-Key für Tests, die Secrets ver-/entschlüsseln (z.B. GET /api/secrets)
+os.environ.setdefault("ENCRYPTION_KEY", "U5ps1-J48SLkK-IeQ0VwF-765Jz6UWN0U8MWoORbY94=")
 # Test-Modus: Docker/Scheduler-Init überspringen (kein docker-proxy nötig)
 os.environ["TESTING"] = "1"
 

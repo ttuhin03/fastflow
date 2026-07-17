@@ -1055,6 +1055,8 @@
     "nutzer": "Nutzer"
   },
   "secrets": {
+    "adminOnlyTitle": "Nur für Administratoren",
+    "adminOnlyBody": "Entschlüsselte Secrets können nur von Administratoren eingesehen werden. Wende dich an einen Admin, falls du Zugriff benötigst.",
     "newSecret": "Wert verschlüsseln",
     "subtitle": "Verschlüsselt gespeichert (Fernet) · Werte werden nie im Klartext angezeigt",
     "intro": "Secrets kommen aus der Datenbank oder aus pipeline.json (encrypted_env / default_env). Unten siehst du beides: DB-Einträge und Keys, die in Pipelines verwendet werden.",

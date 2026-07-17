@@ -26,7 +26,7 @@ interface SecretFromPipeline {
 
 export default function Secrets() {
   const { t } = useTranslation()
-  const { isReadonly } = useAuth()
+  const { isReadonly, isAdmin } = useAuth()
   const [showValues, setShowValues] = useState<Record<string, boolean>>({})
   const [encryptOpen, setEncryptOpen] = useState(false)
   const [encryptPlaintext, setEncryptPlaintext] = useState('')
@@ -38,6 +38,7 @@ export default function Secrets() {
       const response = await apiClient.get('/secrets')
       return response.data.secrets ?? response.data
     },
+    enabled: isAdmin,
   })
 
   const { data: fromPipelines } = useQuery<SecretFromPipeline[]>({
@@ -74,6 +75,19 @@ export default function Secrets() {
 
   const toggleShowValue = (key: string) => {
     setShowValues((prev) => ({ ...prev, [key]: !prev[key] }))
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="secrets">
+        <div className="secrets-admin-only card">
+          <p className="secrets-admin-only-title">{t('secrets.adminOnlyTitle', 'Admin access only')}</p>
+          <p className="secrets-admin-only-body">
+            {t('secrets.adminOnlyBody', 'Viewing decrypted secrets is restricted to administrators. Ask an admin if you need access.')}
+          </p>
+        </div>
+      </div>
+    )
   }
 
   if (isLoading) {
