@@ -10,7 +10,7 @@ from typing import Optional, Dict, Any, List
 from urllib.parse import urlparse
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlmodel import Session
 import logging
 
@@ -27,6 +27,7 @@ from app.services.git_sync_repo_config import (
     save_sync_repo_config,
     delete_sync_repo_config,
     generate_and_save_deploy_key,
+    validate_pipelines_subdir,
 )
 
 logger = logging.getLogger(__name__)
@@ -263,6 +264,12 @@ class GenerateDeployKeyRequest(BaseModel):
     branch: Optional[str] = Field(default=None, description="Branch (z. B. main)")
     pipelines_subdir: Optional[str] = Field(default=None, description="Unterordner im Repo mit Pipeline-Ordnern")
 
+    @field_validator("pipelines_subdir")
+    @classmethod
+    def _no_path_traversal(cls, v: Optional[str]) -> Optional[str]:
+        validate_pipelines_subdir(v)
+        return v
+
 
 class RepoConfigRequest(BaseModel):
     """Request-Model für Repository-URL + Token oder Deploy Key."""
@@ -275,6 +282,12 @@ class RepoConfigRequest(BaseModel):
     deploy_key: Optional[str] = Field(default=None, description="Privater SSH-Deploy-Key (erforderlich bei SSH-URL)")
     branch: Optional[str] = Field(default=None, description="Branch (z. B. main)")
     pipelines_subdir: Optional[str] = Field(default=None, description="Unterordner im Repo mit Pipeline-Ordnern, z. B. pipelines")
+
+    @field_validator("pipelines_subdir")
+    @classmethod
+    def _no_path_traversal(cls, v: Optional[str]) -> Optional[str]:
+        validate_pipelines_subdir(v)
+        return v
 
 
 @router.get("/repo-config", response_model=Dict[str, Any])
