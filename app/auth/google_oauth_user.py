@@ -115,6 +115,10 @@ async def get_google_user_data(code: str) -> dict[str, Any]:
     # Normalisiertes Format (angleichen an GitHub: id, email, name, login, avatar_url)
     sub = info.get("sub") or ""
     email = info.get("email")
+    # Google liefert den Standard-OIDC-Claim email_verified; nur bei explizitem
+    # true vertrauen wir der Adresse für Auto-Match (Security: kein Fallback wie bei GitHub).
+    raw_verified = info.get("email_verified")
+    email_verified = raw_verified is True or str(raw_verified).lower() == "true"
     name = (info.get("name") or "").strip()
     picture = info.get("picture")
     login = name or (email.split("@")[0] if email else "user")
@@ -122,6 +126,7 @@ async def get_google_user_data(code: str) -> dict[str, Any]:
     return {
         "id": sub,
         "email": email,
+        "email_verified": email_verified,
         "name": name,
         "login": login,
         "avatar_url": picture,
