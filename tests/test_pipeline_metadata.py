@@ -66,6 +66,22 @@ class TestPipelineMetadata:
         assert len(meta.downstream_triggers) == 1
         assert meta.downstream_triggers[0]["pipeline"] == "p2"
 
+    def test_secrets_default_empty_list(self):
+        """secrets=None wird zu [] (Pipeline erhält standardmäßig KEINE DB-Secrets)."""
+        meta = PipelineMetadata()
+        assert meta.secrets == []
+
+    def test_secrets_normalized(self):
+        """secrets-Liste wird übernommen, dedupliziert, nicht-Strings werden verworfen."""
+        meta = PipelineMetadata(secrets=["API_KEY", "  DB_PASSWORD  ", "API_KEY", 123, ""])
+        assert meta.secrets == ["API_KEY", "DB_PASSWORD"]
+
+    def test_secrets_in_to_dict(self):
+        """secrets wird nur bei nicht-leerer Liste in to_dict() aufgenommen."""
+        assert "secrets" not in PipelineMetadata().to_dict()
+        meta = PipelineMetadata(secrets=["API_KEY"])
+        assert meta.to_dict()["secrets"] == ["API_KEY"]
+
 
 class TestNormalizeDownstreamTriggers:
     """Tests für _normalize_downstream_triggers."""

@@ -52,6 +52,7 @@ class PipelineMetadata:
         downstream_triggers: Optional[List[Dict[str, Any]]] = None,
         encrypted_env: Optional[Dict[str, str]] = None,
         schedules: Optional[List[Dict[str, Any]]] = None,
+        secrets: Optional[List[str]] = None,
     ):
         """
         Initialisiert Pipeline-Metadaten.
@@ -87,6 +88,9 @@ class PipelineMetadata:
             downstream_triggers: Liste von Downstream-Triggern (pipeline, on_success, on_failure).
             encrypted_env: Verschluesselte Env-Vars (Key -> Ciphertext); Nutzer traegt Ciphertext manuell in pipeline.json ein.
             schedules: Optionale Liste von Run-Konfigurationen (id, schedule_cron/schedule_interval_seconds, default_env, encrypted_env pro Eintrag). Wenn gesetzt, nur diese Runs; Top-Level-Schedule wird ignoriert.
+            secrets: Liste von Secret-Keys aus dem globalen DB-Secrets-Store, auf die diese Pipeline zugreifen darf.
+                Nur diese namentlich freigegebenen Secrets werden zur Laufzeit in die Env-Vars injiziert (Least-Privilege;
+                verhindert, dass jede Pipeline standardmäßig alle jemals gespeicherten Secrets sieht).
         """
         self.cpu_hard_limit = cpu_hard_limit
         self.mem_hard_limit = mem_hard_limit
@@ -122,6 +126,7 @@ class PipelineMetadata:
         self.downstream_triggers = self._normalize_downstream_triggers(downstream_triggers or [])
         self.encrypted_env = self._normalize_encrypted_env(encrypted_env)
         self.schedules = self._normalize_schedules(schedules) if schedules else []
+        self.secrets = self._normalize_secrets(secrets)
         self._validate_webhook_keys_no_duplicates()
 
     @staticmethod
@@ -277,6 +282,17 @@ class PipelineMetadata:
                 result[k.strip()] = v
         return result
 
+    @staticmethod
+    def _normalize_secrets(raw: Optional[List[Any]]) -> List[str]:
+        """Normalisiert secrets-Array aus JSON: Liste von Secret-Keys (Strings), die diese Pipeline nutzen darf."""
+        if not raw or not isinstance(raw, list):
+            return []
+        result: List[str] = []
+        for key in raw:
+            if isinstance(key, str) and key.strip() and key.strip() not in result:
+                result.append(key.strip())
+        return result
+
     def to_dict(self) -> Dict[str, Any]:
         """
         Konvertiert Metadaten zu Dictionary.
@@ -338,6 +354,8 @@ class PipelineMetadata:
             result["encrypted_env"] = self.encrypted_env
         if self.schedules:
             result["schedules"] = self.schedules
+        if self.secrets:
+            result["secrets"] = self.secrets
         return result
 
 
@@ -652,6 +670,10 @@ def _load_pipeline_metadata(
         schedules = PipelineMetadata._normalize_schedules(
             schedules_raw if isinstance(schedules_raw, list) else None
         )
+        secrets_raw = data.get("secrets")
+        secrets = PipelineMetadata._normalize_secrets(
+            secrets_raw if isinstance(secrets_raw, list) else None
+        )
 
         metadata = PipelineMetadata(
             cpu_hard_limit=data.get("cpu_hard_limit"),
@@ -680,8 +702,9 @@ def _load_pipeline_metadata(
             downstream_triggers=downstream_triggers,
             encrypted_env=encrypted_env if encrypted_env else None,
             schedules=schedules if schedules else None,
+            secrets=secrets if secrets else None,
         )
-        
+
         return metadata
     
     except json.JSONDecodeError as e:
