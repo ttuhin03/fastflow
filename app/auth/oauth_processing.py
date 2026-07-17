@@ -60,6 +60,7 @@ def get_or_create_initial_admin(
     id_attr = _provider_id_attr(provider)
     provider_id = str(oauth_data.get("id") or "")
     email = oauth_data.get("email")
+    email_verified = bool(oauth_data.get("email_verified"))
     login = oauth_data.get("login") or oauth_data.get("name") or "user"
     avatar = oauth_data.get("avatar_url") or oauth_data.get("picture")
 
@@ -71,7 +72,10 @@ def get_or_create_initial_admin(
         return (user, False)
 
     # 2. INITIAL_ADMIN_EMAIL: bestehenden User verknüpfen oder neuen Admin anlegen
-    if email and config.INITIAL_ADMIN_EMAIL and email == config.INITIAL_ADMIN_EMAIL:
+    # Security: nur mit verifizierter E-Mail, sonst könnte ein Angreifer die
+    # INITIAL_ADMIN_EMAIL als unverifizierte Zweit-Adresse bei seinem eigenen
+    # Provider-Konto hinterlegen und sich so Admin-Rechte erschleichen.
+    if email and email_verified and config.INITIAL_ADMIN_EMAIL and email == config.INITIAL_ADMIN_EMAIL:
         stmt = select(User).where(User.email == email)
         user = retry_on_sqlite_io(lambda: session.exec(stmt).first(), session=session)
         if user:
@@ -167,6 +171,7 @@ async def process_oauth_login(
     """
     id_attr = _provider_id_attr(provider)
     avatar = oauth_data.get("avatar_url") or oauth_data.get("picture")
+    email_verified = bool(oauth_data.get("email_verified"))
 
     # 3) Link-Flow: state mit purpose link_google / link_github / link_microsoft / link_custom
     link_purposes = ("link_google", "link_github", "link_microsoft", "link_custom")
@@ -246,7 +251,13 @@ async def process_oauth_login(
         return _oauth_return(user, False, False)
 
     # 2) Auto-Match: User mit gleicher E-Mail
-    if email:
+    # Security: nur bei verifizierter E-Mail (verified/email_verified=true vom Provider).
+    # Ohne Verifizierung könnte ein Angreifer die Opfer-E-Mail als unverifizierte
+    # Zweit-Adresse bei seinem eigenen Provider-Konto hinterlegen und sich per
+    # E-Mail-Match das bestehende Fastflow-Konto des Opfers aneignen (Account-Takeover).
+    # Fehlt eine verifizierte E-Mail, fällt der Flow weiter unten auf Anklopfen
+    # (Beitrittsanfrage) zurück statt still zu verknüpfen.
+    if email and email_verified:
         stmt = select(User).where(User.email == email)
         user = retry_on_sqlite_io(lambda: session.exec(stmt).first(), session=session)
         if user and not user.blocked:

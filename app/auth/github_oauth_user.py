@@ -109,7 +109,10 @@ async def get_github_user_data(code: str) -> dict[str, Any]:
         user = user_resp.json()
 
         # 3. E-Mail ggf. aus /user/emails
+        # GitHubs öffentliche Profil-E-Mail (user.email) ist per Definition bereits
+        # verifiziert (kann nur auf eine verifizierte Adresse gesetzt werden).
         email = user.get("email")
+        email_verified = bool(email)
         if not email:
             em_resp = await client.get(GITHUB_USER_EMAILS_API, headers=headers)
             if em_resp.status_code == 200:
@@ -117,8 +120,14 @@ async def get_github_user_data(code: str) -> dict[str, Any]:
                 for e in emails:
                     if e.get("primary") and e.get("verified"):
                         email = e.get("email")
+                        email_verified = True
                         break
                 if not email and emails:
+                    # Keine verifizierte primäre E-Mail: Adresse für Anzeige/Anklopfen
+                    # übernehmen, aber NICHT für Auto-Match vertrauen (Security: siehe
+                    # oauth_processing.process_oauth_login, Auto-Match prüft email_verified).
                     email = emails[0].get("email")
+                    email_verified = False
         user["email"] = email
+        user["email_verified"] = email_verified
         return user
