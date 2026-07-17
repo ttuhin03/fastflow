@@ -479,18 +479,35 @@ def discover_pipelines(force_refresh: bool = False) -> List[DiscoveredPipeline]:
     pipelines_dir = config.PIPELINES_DIR
     subdir = (config.PIPELINES_SUBDIR or "").strip().strip("/")
     scan_dir = (pipelines_dir / subdir) if subdir else pipelines_dir
-    
+
     # Verzeichnis prüfen
     if not pipelines_dir.exists():
         raise FileNotFoundError(
             f"Pipelines-Verzeichnis existiert nicht: {pipelines_dir}"
         )
-    
+
     if not pipelines_dir.is_dir():
         raise ValueError(
             f"Pipelines-Pfad ist kein Verzeichnis: {pipelines_dir}"
         )
-    
+
+    # Defense in depth: PIPELINES_SUBDIR kann ".."-Segmente enthalten (z. B. wenn die
+    # API-Validierung umgangen wurde oder direkt per Env gesetzt ist). scan_dir muss
+    # innerhalb von pipelines_dir bleiben, sonst könnten beliebige Verzeichnisse
+    # außerhalb der Sandbox gescannt werden (Path Traversal).
+    if subdir:
+        resolved_pipelines_dir = pipelines_dir.resolve()
+        resolved_scan_dir = scan_dir.resolve()
+        if resolved_scan_dir != resolved_pipelines_dir and resolved_pipelines_dir not in resolved_scan_dir.parents:
+            import logging
+            logging.getLogger(__name__).error(
+                f"PIPELINES_SUBDIR '{subdir}' resolviert außerhalb von PIPELINES_DIR "
+                f"({resolved_scan_dir} ist kein Nachfahre von {resolved_pipelines_dir}). "
+                "Scan wird verweigert."
+            )
+            return []
+        scan_dir = resolved_scan_dir
+
     if not scan_dir.exists() or not scan_dir.is_dir():
         return []
     

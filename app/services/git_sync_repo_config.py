@@ -27,6 +27,26 @@ def _is_ssh_url(url: str) -> bool:
     return u.startswith("git@") or u.startswith("ssh://")
 
 
+def validate_pipelines_subdir(value: Optional[str]) -> None:
+    """
+    Weist pipelines_subdir zurück, wenn es ".."-Segmente enthält.
+
+    pipelines_subdir wird mit PIPELINES_DIR zu einem Scan-Pfad zusammengesetzt
+    (siehe pipeline_discovery.discover_pipelines). Ohne diese Prüfung könnte ein
+    require_write-User per ../../ aus dem Pipelines-Sandbox-Verzeichnis ausbrechen
+    und Dateien außerhalb davon lesen (Path Traversal, CWE-22).
+
+    Raises:
+        ValueError: Wenn value ein ".."-Segment enthält.
+    """
+    if not value:
+        return
+    normalized = value.strip().replace("\\", "/")
+    segments = normalized.split("/")
+    if any(seg == ".." for seg in segments):
+        raise ValueError("pipelines_subdir darf keine '..'-Segmente enthalten")
+
+
 def get_sync_repo_config(session: Session) -> Optional[Dict[str, Any]]:
     """
     Liest die effektive Sync-Repo-Konfiguration (Env hat Vorrang vor DB).
@@ -103,6 +123,7 @@ def save_sync_repo_config(
     pipelines_subdir: Optional[str] = None,
 ) -> None:
     """Speichert Repo-URL, optional Token oder Deploy Key (verschlüsselt), Branch und Pipelines-Unterordner in der DB."""
+    validate_pipelines_subdir(pipelines_subdir)
     settings = get_orchestrator_settings_or_default(session)
     url = (repo_url or "").strip() or None
     settings.git_sync_repo_url = url
@@ -147,6 +168,7 @@ def generate_and_save_deploy_key(
     url = (repo_url or "").strip()
     if not _is_ssh_url(url):
         raise ValueError("repo_url muss SSH-Format haben (git@... oder ssh://...)")
+    validate_pipelines_subdir(pipelines_subdir)
     private_pem, public_openssh = generate_ed25519_keypair()
     settings = get_orchestrator_settings_or_default(session)
     settings.git_sync_repo_url = url

@@ -10,6 +10,7 @@ Testet die Pipeline-Erkennung und Validierung:
 import pytest
 from pathlib import Path
 
+from app.core.config import config
 from app.services.pipeline_discovery import discover_pipelines, get_pipeline
 
 
@@ -138,3 +139,30 @@ def test_pipeline_discovery_downstream_triggers(temp_pipelines_dir):
     assert triggers[0]["on_failure"] is False
     assert triggers[1]["pipeline"] == "other_b"
     assert triggers[1]["on_failure"] is True
+
+
+def test_pipeline_discovery_rejects_subdir_path_traversal(temp_pipelines_dir, tmp_path):
+    """
+    TE-21 Regression: PIPELINES_SUBDIR mit ".."-Segmenten darf nicht dazu führen,
+    dass außerhalb von PIPELINES_DIR gescannt wird (Path Traversal, CWE-22).
+
+    Auch wenn die API-Validierung umgangen würde (z. B. direkt per Env-Variable
+    gesetzt), muss discover_pipelines() als Defense-in-Depth-Schicht verhindern,
+    dass ein Verzeichnis außerhalb der Sandbox gescannt wird.
+    """
+    # Verzeichnis außerhalb von PIPELINES_DIR mit einer "Pipeline" anlegen,
+    # die NICHT über den Sandbox-Scan sichtbar sein darf.
+    outside_dir = tmp_path / "outside_secret"
+    outside_pipeline = outside_dir / "leaked_pipeline"
+    outside_pipeline.mkdir(parents=True)
+    (outside_pipeline / "main.py").write_text("print('should not be discoverable')")
+
+    original_subdir = config.PIPELINES_SUBDIR
+    try:
+        # temp_pipelines_dir liegt unter tmp_path; ".." aus PIPELINES_DIR heraus
+        # sollte in tmp_path (und damit outside_secret) landen, wird aber abgelehnt.
+        config.PIPELINES_SUBDIR = "../outside_secret"
+        pipelines = discover_pipelines(force_refresh=True)
+        assert pipelines == []
+    finally:
+        config.PIPELINES_SUBDIR = original_subdir
