@@ -57,12 +57,19 @@ def _ssh_key_env(deploy_key: str):
                 f"ssh -i {key_path} -o StrictHostKeyChecking=yes -o UserKnownHostsFile={kh_path}"
             )
         else:
+            persisted_known_hosts = config.DATA_DIR / "ssh_known_hosts"
+            persisted_known_hosts.parent.mkdir(parents=True, exist_ok=True)
+            if not persisted_known_hosts.exists():
+                persisted_known_hosts.touch(mode=0o600)
             logger.warning(
-                "GIT_SSH_KNOWN_HOSTS nicht gesetzt — SSH-Host-Key wird nicht verifiziert "
-                "(MITM-Risiko beim ersten Connect). Setze GIT_SSH_KNOWN_HOSTS für sichere Verbindungen."
+                "GIT_SSH_KNOWN_HOSTS nicht gesetzt — Host-Key wird beim ersten Connect "
+                "in %s gepinnt (TOFU) und danach bei jedem Sync verifiziert. "
+                "Setze GIT_SSH_KNOWN_HOSTS für explizit vorab konfigurierte Host-Keys.",
+                persisted_known_hosts,
             )
             env["GIT_SSH_COMMAND"] = (
-                f"ssh -i {key_path} -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null"
+                f"ssh -i {key_path} -o StrictHostKeyChecking=accept-new "
+                f"-o UserKnownHostsFile={persisted_known_hosts}"
             )
         yield env
     finally:
