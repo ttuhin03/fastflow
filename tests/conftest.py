@@ -9,10 +9,15 @@ Dieses Modul definiert gemeinsame Fixtures für alle Tests:
 
 import os
 
+from cryptography.fernet import Fernet
+
 # OAuth für Tests: mind. ein Provider vollständig; HTTP-Verifizierung überspringen
 os.environ.setdefault("GITHUB_CLIENT_ID", "test-github-client-id")
 os.environ.setdefault("GITHUB_CLIENT_SECRET", "test-github-client-secret")
 os.environ["SKIP_OAUTH_VERIFICATION"] = "1"
+# Frisch generierter Fernet-Key pro Testlauf (Secrets ver-/entschlüsseln, z.B. GET /api/secrets).
+# Bewusst nicht hartkodiert, damit kein statischer Key im Repo-Verlauf landet.
+os.environ.setdefault("ENCRYPTION_KEY", Fernet.generate_key().decode())
 # Test-Modus: Docker/Scheduler-Init überspringen (kein docker-proxy nötig)
 os.environ["TESTING"] = "1"
 

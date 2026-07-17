@@ -18,7 +18,7 @@ from app.core.database import get_session
 from app.models import Secret, User
 from app.services.secrets import encrypt, decrypt
 from app.services.pipeline_discovery import discover_pipelines
-from app.auth import require_write, get_current_user
+from app.auth import require_write, require_admin, get_current_user
 from app.core.errors import get_500_detail
 
 import logging
@@ -67,10 +67,15 @@ async def get_secrets(
     limit: Optional[int] = Query(None, ge=1, le=500, description="Max. Anzahl Secrets (ohne Angabe: alle)"),
     offset: int = Query(0, ge=0, description="Offset für Pagination"),
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_admin)
 ) -> Dict[str, Any]:
     """
     Gibt Secrets zurück (Values entschlüsselt), optional mit Pagination.
+
+    Erfordert Admin-Rechte: Die Antwort enthält Klartext-Secrets (API-Keys,
+    DB-Credentials etc.) für den GESAMTEN Secrets-Store, ungefiltert nach
+    Pipeline/Owner. Weder READONLY- noch WRITE-Nutzer dürfen diesen globalen
+    Bulk-Read ausführen (siehe TE-18).
 
     Ohne limit-Parameter werden alle Secrets zurückgegeben (Rückwärtskompatibilität).
 

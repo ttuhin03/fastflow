@@ -1055,6 +1055,8 @@
     "nutzer": "Users"
   },
   "secrets": {
+    "adminOnlyTitle": "Admin access only",
+    "adminOnlyBody": "Viewing decrypted secrets is restricted to administrators. Ask an admin if you need access.",
     "newSecret": "Encrypt value",
     "subtitle": "Encrypted at rest (Fernet) · values are never displayed",
     "intro": "Secrets come from the database or from pipeline.json (encrypted_env / default_env). Below you see both: DB entries and keys used in pipelines.",
