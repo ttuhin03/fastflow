@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { LuTriangleAlert } from 'react-icons/lu'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
@@ -16,8 +17,35 @@ interface SyncStatus {
   last_commit?: { hash: string; message: string; date: string } | string
   last_sync?: string
   status?: string
+  last_sync_error?: string
   pipelines_cached?: string[]
   repo_configured?: boolean
+}
+
+interface HostKeyEntry {
+  key_type: string
+  old_fingerprint: string
+  new_fingerprint: string | null
+  matches: boolean
+}
+
+interface HostKeyStatus {
+  applicable: boolean
+  reason?: string
+  host?: string
+  port?: number
+  repo_url?: string
+  pinned?: boolean
+  entries?: HostKeyEntry[]
+  mismatch?: boolean
+  scan_error?: string | null
+}
+
+/** True when a sync-failure message is SSH host-key-verification-related (see TE-23/TE-73). */
+function isHostKeyMismatchError(message?: string | null): boolean {
+  if (!message) return false
+  const m = message.toLowerCase()
+  return m.includes('remote host identification has changed') || m.includes('host key verification failed')
 }
 
 /** Formatiert last_commit sicher (Backend liefert Objekt { hash, message, date }); nie ein Objekt als React-Child rendern. */
@@ -117,8 +145,10 @@ interface SyncProps {
 export default function Sync({ editLocked = false }: SyncProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const { isReadonly } = useAuth()
+  const { isReadonly, isAdmin } = useAuth()
   const fieldDisabled = isReadonly || editLocked
+  const [showHostKeyPanel, setShowHostKeyPanel] = useState(false)
+  const [hostKeyConfirmText, setHostKeyConfirmText] = useState('')
   const formatLocale = getFormatLocale()
   const [syncBranch, setSyncBranch] = useState('')
   const [activeTab, setActiveTab] = useState<'status' | 'settings' | 'logs' | 'repository'>('status')
@@ -182,6 +212,34 @@ export default function Sync({ editLocked = false }: SyncProps) {
     queryFn: async () => {
       const response = await apiClient.get('/sync/repo-config')
       return response.data
+    },
+  })
+
+  // Lazy: only scans the live server host key (ssh-keyscan) when the admin actually
+  // opens the panel, not on every poll — this hits the network and is admin-only.
+  const hostKeyStatusQuery = useQuery<HostKeyStatus>({
+    queryKey: ['host-key-status'],
+    queryFn: async () => {
+      const response = await apiClient.get('/sync/host-key/status')
+      return response.data
+    },
+    enabled: isAdmin && showHostKeyPanel,
+  })
+
+  const hostKeyResetMutation = useMutation({
+    mutationFn: async (confirm_text: string) => {
+      const response = await apiClient.post('/sync/host-key/reset', { confirm_text })
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['host-key-status'] })
+      queryClient.invalidateQueries({ queryKey: ['sync-status'] })
+      queryClient.invalidateQueries({ queryKey: ['sync-logs'] })
+      showSuccess(t('sync.hostKeyResetSuccess'))
+      setHostKeyConfirmText('')
+    },
+    onError: (error: any) => {
+      showError(t('sync.hostKeyResetError', { detail: error.response?.data?.detail || error.message }))
     },
   })
 
@@ -441,6 +499,20 @@ export default function Sync({ editLocked = false }: SyncProps) {
     }
   }
 
+  const handleOpenHostKeyPanel = () => {
+    setActiveTab('repository')
+    setShowHostKeyPanel(true)
+  }
+
+  const handleHostKeyReset = () => {
+    const expected = hostKeyStatusQuery.data?.repo_url
+    if (!expected || hostKeyConfirmText.trim() !== expected) {
+      showError(t('sync.hostKeyConfirmMismatch'))
+      return
+    }
+    hostKeyResetMutation.mutate(hostKeyConfirmText.trim())
+  }
+
   if (isLoading) {
     return <div>{t('common.loading')}</div>
   }
@@ -454,6 +526,7 @@ export default function Sync({ editLocked = false }: SyncProps) {
     : '—'
   const pipelinesDetected = syncStatus?.pipelines_cached?.length ?? 0
   const repoConfigured = syncStatus?.repo_configured ?? repoConfig?.configured ?? false
+  const hostKeyMismatchDetected = isHostKeyMismatchError(syncStatus?.last_sync_error)
 
   return (
     <div className="sync">
@@ -479,6 +552,23 @@ export default function Sync({ editLocked = false }: SyncProps) {
           </button>
         )}
       </div>
+
+      {hostKeyMismatchDetected && (
+        <div className="hostkey-banner" role="alert">
+          <LuTriangleAlert size={20} />
+          <div className="hostkey-banner__body">
+            <p className="hostkey-banner__title">{t('sync.hostKeyMismatchTitle')}</p>
+            <p className="hostkey-banner__text">{t('sync.hostKeyMismatchText')}</p>
+            {isAdmin ? (
+              <button type="button" className="btn btn-error btn-sm" onClick={handleOpenHostKeyPanel}>
+                {t('sync.hostKeyOpenReset')}
+              </button>
+            ) : (
+              <p className="hostkey-banner__text">{t('sync.hostKeyContactAdmin')}</p>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="tab-strip sync-page-tabs">
         <button
@@ -943,6 +1033,112 @@ export default function Sync({ editLocked = false }: SyncProps) {
                     >
                       {clearPipelinesMutation.isPending ? t('sync.clearing') : t('sync.clearPipelinesDir')}
                     </button>
+                  </div>
+                )}
+                {isAdmin && isSshUrl(repoForm.repo_url) && !showHostKeyPanel && (
+                  <div className="clear-pipelines-section">
+                    <h4 className="setting-label">{t('sync.hostKeySectionTitle')}</h4>
+                    <p className="setting-hint">{t('sync.hostKeySectionHint')}</p>
+                    <button
+                      type="button"
+                      onClick={() => setShowHostKeyPanel(true)}
+                      className="btn btn-outlined"
+                    >
+                      {t('sync.hostKeyManageButton')}
+                    </button>
+                  </div>
+                )}
+                {isAdmin && showHostKeyPanel && (
+                  <div className="hostkey-panel">
+                    <h3>{t('sync.hostKeyPanelTitle')}</h3>
+                    {hostKeyStatusQuery.isLoading ? (
+                      <div className="setting-hint">{t('common.loading')}</div>
+                    ) : !hostKeyStatusQuery.data?.applicable ? (
+                      <p className="setting-hint">
+                        {hostKeyStatusQuery.data?.reason || t('sync.hostKeyNotApplicable')}
+                      </p>
+                    ) : (
+                      <>
+                        <p className="setting-hint">
+                          {t('sync.hostKeyPanelHint', { host: hostKeyStatusQuery.data.host })}
+                        </p>
+                        {hostKeyStatusQuery.data.scan_error && (
+                          <p className="hostkey-banner__text">
+                            {t('sync.hostKeyScanError', { detail: hostKeyStatusQuery.data.scan_error })}
+                          </p>
+                        )}
+                        {hostKeyStatusQuery.data.entries && hostKeyStatusQuery.data.entries.length > 0 ? (
+                          <div className="hostkey-compare">
+                            <div className="hostkey-compare-row hostkey-compare-header">
+                              <span>{t('sync.hostKeyType')}</span>
+                              <span>{t('sync.hostKeyOldFingerprint')}</span>
+                              <span>{t('sync.hostKeyNewFingerprint')}</span>
+                            </div>
+                            {hostKeyStatusQuery.data.entries.map((entry) => (
+                              <div key={entry.key_type} className="hostkey-compare-row">
+                                <span className="mono">{entry.key_type.toUpperCase()}</span>
+                                <span className="hostkey-fingerprint">{entry.old_fingerprint}</span>
+                                <span className={`hostkey-fingerprint ${entry.matches ? 'match' : 'mismatch'}`}>
+                                  {entry.new_fingerprint || t('sync.hostKeyUnavailable')}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="setting-hint">{t('sync.hostKeyNoPinnedEntry')}</p>
+                        )}
+                        <div className="hostkey-confirm">
+                          <label htmlFor="hostkey-confirm-input" className="setting-label">
+                            {t('sync.hostKeyConfirmLabel')}
+                          </label>
+                          <p className="hostkey-confirm-hint">
+                            {t('sync.hostKeyConfirmHintPrefix')} <code>{hostKeyStatusQuery.data.repo_url}</code>
+                          </p>
+                          <input
+                            id="hostkey-confirm-input"
+                            type="text"
+                            className="form-input"
+                            value={hostKeyConfirmText}
+                            onChange={(e) => setHostKeyConfirmText(e.target.value)}
+                            placeholder={hostKeyStatusQuery.data.repo_url || ''}
+                            autoComplete="off"
+                          />
+                        </div>
+                      </>
+                    )}
+                    <div className="sync-repo-form-actions">
+                      {hostKeyStatusQuery.data?.applicable && (
+                        <button
+                          type="button"
+                          className="btn btn-error"
+                          disabled={
+                            hostKeyResetMutation.isPending ||
+                            hostKeyConfirmText.trim() !== (hostKeyStatusQuery.data?.repo_url || '')
+                          }
+                          onClick={handleHostKeyReset}
+                        >
+                          {hostKeyResetMutation.isPending ? t('common.saving') : t('sync.hostKeyResetButton')}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="btn btn-outlined btn-sm"
+                        onClick={() => hostKeyStatusQuery.refetch()}
+                        disabled={hostKeyStatusQuery.isFetching}
+                      >
+                        {t('sync.hostKeyRefresh')}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={() => {
+                          setShowHostKeyPanel(false)
+                          setHostKeyConfirmText('')
+                        }}
+                      >
+                        {t('toast.cancel')}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
