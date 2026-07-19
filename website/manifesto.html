@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Anti-Overhead Manifesto — Fast-Flow</title>
+<meta name="description" content="Orchestration tools grew until the tool became the job. The reasoning behind Fast-Flow — and when you shouldn't use it.">
+<meta name="theme-color" content="#0A0A0C">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;padding:0;background:#0A0A0C;color:#F4F4F5;font-family:'Geist',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#ADA6FB;text-decoration:none}a:hover{color:#F4F4F5}
+::selection{background:rgba(110,98,245,.35)}
+</style>
+</helmet>
+
+<div style="min-height:100vh;background:#0A0A0C">
+
+<div style="position:sticky;top:0;z-index:50;backdrop-filter:blur(14px);background:rgba(10,10,12,0.78);border-bottom:1px solid #1E1E24">
+  <div style="max-width:1120px;margin:0 auto;padding:0 32px;height:60px;display:flex;align-items:center;justify-content:space-between">
+    <a href="index.html" style="display:flex;align-items:center;gap:10px;color:#F4F4F5">
+      <div style="width:28px;height:28px;border-radius:8px;background:#6E62F5;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:13px;color:#fff">&gt;_</div>
+      <span style="font-weight:600;font-size:15px;letter-spacing:-0.02em">Fast-Flow</span>
+    </a>
+    <div style="display:flex;align-items:center;gap:22px;font-size:13.5px">
+      <a href="index.html" style="color:#A0A0AB">← Back to site</a>
+      <a href="https://github.com/ttuhin03/fastflow" style="padding:7px 14px;border-radius:8px;background:#17171B;border:1px solid #2A2A32;color:#F4F4F5;font-size:13px;font-weight:500" style-hover="border-color:#3a3a44;color:#F4F4F5">GitHub</a>
+    </div>
+  </div>
+</div>
+
+<div style="max-width:680px;margin:0 auto;padding:88px 32px 40px">
+  <div style="font-family:'JetBrains Mono',monospace;font-size:11.5px;letter-spacing:0.06em;text-transform:uppercase;color:#6E62F5;margin-bottom:16px">docs / manifesto.md</div>
+  <h1 style="margin:0 0 20px;font-size:46px;line-height:1.08;letter-spacing:-0.03em;font-weight:700">The Anti-Overhead Manifesto</h1>
+  <p style="margin:0;font-size:17px;line-height:1.65;color:#A0A0AB;text-wrap:pretty">Orchestration tools grew until the tool became the job. We think that's backwards. This is the reasoning behind Fast-Flow — and an honest note on when you shouldn't use it.</p>
+</div>
+
+<div style="max-width:680px;margin:0 auto;padding:24px 32px 96px;font-size:15.5px;line-height:1.75;color:#C8C8D0">
+
+  <h2 style="margin:40px 0 14px;font-size:24px;letter-spacing:-0.02em;color:#F4F4F5;font-weight:700">1. The overhead crept in</h2>
+  <p style="margin:0 0 16px;text-wrap:pretty">Somewhere along the way, running a Python script on a schedule started requiring a message broker, a metadata database, a scheduler process, a webserver, a fleet of workers, and a CI pipeline that bakes Docker images for ten minutes so you can change one line of code.</p>
+  <p style="margin:0 0 16px;text-wrap:pretty">That stack makes sense at a certain scale. Most teams never reach it. They pay the operational tax anyway — because "that's what you use."</p>
+
+  <blockquote style="margin:32px 0;padding:20px 26px;border-radius:12px;background:#111114;border:1px solid #1E1E24;font-size:17px;color:#F4F4F5;font-weight:500;letter-spacing:-0.01em">"We made deployment as boring as possible so you can focus on the exciting part: your code."</blockquote>
+
+  <h2 style="margin:40px 0 14px;font-size:24px;letter-spacing:-0.02em;color:#F4F4F5;font-weight:700">2. A pipeline is a script</h2>
+  <p style="margin:0 0 16px;text-wrap:pretty">Not a DAG. Not an asset graph. Not YAML. A pipeline is a <span style="font-family:'JetBrains Mono',monospace;font-size:14px;color:#F4F4F5">main.py</span> in a folder. If it runs on your laptop, it runs in the orchestrator — same code, same environment, reproduced with one <span style="font-family:'JetBrains Mono',monospace;font-size:14px;color:#F4F4F5">uv</span> command.</p>
+  <p style="margin:0 0 16px;text-wrap:pretty">Every abstraction between "I wrote a script" and "it runs in production" must justify itself. Decorators, operators, XComs, sensors — for a handful of scripts, none of them do.</p>
+
+  <h2 style="margin:40px 0 14px;font-size:24px;letter-spacing:-0.02em;color:#F4F4F5;font-weight:700">3. Builds are the bottleneck</h2>
+  <p style="margin:0 0 16px;text-wrap:pretty">The slowest part of most orchestration setups isn't execution — it's shipping. Build image, push to registry, roll workers, wait. Fast-Flow deletes the whole step: a generic worker plus a shared uv cache means new dependencies resolve once and hardlink in milliseconds forever after. Changing <span style="font-family:'JetBrains Mono',monospace;font-size:14px;color:#F4F4F5">requirements.txt</span> is a git commit, not a build pipeline.</p>
+
+  <h2 style="margin:40px 0 14px;font-size:24px;letter-spacing:-0.02em;color:#F4F4F5;font-weight:700">4. Git is the deploy button</h2>
+  <p style="margin:0 0 16px;text-wrap:pretty">The repository is the single source of truth — code, dependencies, resource limits, schedules. What you see in the UI is what's in Git, always. Who raised the memory limit? Who bumped prophet? Your git log answers. Rollback is <span style="font-family:'JetBrains Mono',monospace;font-size:14px;color:#F4F4F5">git revert</span>, not an image archaeology expedition.</p>
+
+  <h2 style="margin:40px 0 14px;font-size:24px;letter-spacing:-0.02em;color:#F4F4F5;font-weight:700">5. Isolation is non-negotiable</h2>
+  <p style="margin:0 0 16px;text-wrap:pretty">Shared worker environments are where dependency hell lives. Every Fast-Flow run gets a disposable sandbox — an ephemeral container or a Kubernetes Job pod — with hard CPU and memory limits, then it's destroyed. One pipeline can never poison another. And the orchestrator never touches the Docker socket directly: a filtering proxy in Docker mode, plain RBAC on Kubernetes.</p>
+
+  <h2 style="margin:40px 0 14px;font-size:24px;letter-spacing:-0.02em;color:#F4F4F5;font-weight:700">6. Know what you're not</h2>
+  <p style="margin:0 0 16px;text-wrap:pretty">Fast-Flow is deliberately narrow. If you need data-asset lineage, use <a href="https://dagster.io">Dagster</a>. If you need a richer Python orchestration engine with flexible workers, use <a href="https://www.prefect.io">Prefect</a>. If you're wiring dozens of systems together with event triggers, use <a href="https://kestra.io">Kestra</a>. If you're an enterprise with a platform team and a thousand DAGs — Airflow exists for you.</p>
+  <p style="margin:0 0 16px;text-wrap:pretty">But if your problem is <em style="color:#F4F4F5">"a handful of Python scripts, and Airflow is overkill"</em> — that trade is the whole point. We traded breadth for a mental model you can hold in your head and an operational footprint of one process.</p>
+
+  <div style="margin-top:56px;padding-top:32px;border-top:1px solid #1E1E24;display:flex;justify-content:space-between;align-items:center">
+    <span style="font-size:13px;color:#71717A">Fast-Flow Orchestrator · GPL-3.0</span>
+    <a href="https://github.com/ttuhin03/fastflow" style="padding:10px 20px;border-radius:8px;background:#6E62F5;color:#fff;font-size:13.5px;font-weight:600" style-hover="background:#8075F8;color:#fff">★ Star on GitHub</a>
+  </div>
+</div>
+
+</div>
+</x-dc>
+</body>
+</html>

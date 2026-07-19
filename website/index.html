@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fast-Flow — The orchestrator for people who just have scripts.py</title>
+<meta name="description" content="No DAGs. No image builds. No YAML. A pipeline is a folder with a main.py — push it to Git and it runs in its own disposable sandbox.">
+<meta name="theme-color" content="#0A0A0C">
+<link rel="canonical" href="https://ttuhin03.github.io/fastflow/">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;padding:0;background:#0A0A0C;color:#F4F4F5;font-family:'Geist',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;-webkit-font-smoothing:antialiased;scroll-behavior:smooth}
+a{color:#ADA6FB;text-decoration:none}a:hover{color:#F4F4F5}
+::selection{background:rgba(110,98,245,.35)}
+input[type=range]{accent-color:#6E62F5}
+@keyframes ffblink{0%,55%{opacity:1}56%,100%{opacity:0}}
+@keyframes ffpulse{0%,100%{opacity:1}50%{opacity:.3}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+
+<div style="min-height:100vh;background:#0A0A0C">
+
+<!-- NAV -->
+<div style="position:sticky;top:0;z-index:50;backdrop-filter:blur(14px);background:rgba(10,10,12,0.8);border-bottom:1px solid #1E1E24">
+  <div style="max-width:1180px;margin:0 auto;padding:0 36px;height:58px;display:flex;align-items:center;justify-content:space-between">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="width:26px;height:26px;border-radius:7px;background:#6E62F5;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:12px;color:#fff">&gt;_</div>
+      <span style="font-weight:600;font-size:14.5px;letter-spacing:-0.02em">Fast-Flow</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:24px;font-size:13px;font-family:'JetBrains Mono',monospace">
+      <a href="#race" style="color:#71717A" style-hover="color:#F4F4F5">01 deploy</a>
+      <a href="#product" style="color:#71717A" style-hover="color:#F4F4F5">02 product</a>
+      <a href="#features" style="color:#71717A" style-hover="color:#F4F4F5">03 anatomy</a>
+      <a href="#config" style="color:#71717A" style-hover="color:#F4F4F5">04 config</a>
+      <a href="#compare" style="color:#71717A" style-hover="color:#F4F4F5">05 compare</a>
+      <a href="manifesto.html" style="color:#71717A" style-hover="color:#F4F4F5">manifesto</a>
+    </div>
+    <a href="https://github.com/ttuhin03/fastflow" style="display:flex;align-items:center;gap:8px;padding:7px 14px;border-radius:8px;background:#17171B;border:1px solid #2A2A32;color:#F4F4F5;font-size:13px;font-weight:500" style-hover="border-color:#3a3a44;color:#F4F4F5">GitHub <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#A0A0AB">★ {{ stars }}</span></a>
+  </div>
+</div>
+
+<!-- HERO -->
+<div style="position:relative;overflow:hidden;border-bottom:1px solid #1E1E24">
+  <div style="position:absolute;inset:0;background-image:linear-gradient(#131318 1px,transparent 1px),linear-gradient(90deg,#131318 1px,transparent 1px);background-size:64px 64px;mask-image:radial-gradient(ellipse 80% 70% at 30% 0%,black 25%,transparent 75%)"></div>
+  <div style="position:relative;max-width:1180px;margin:0 auto;padding:88px 36px 76px">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#5FE0A6;display:flex;align-items:center;gap:8px;margin-bottom:28px"><span style="width:6px;height:6px;border-radius:50%;background:#3ECF8E;animation:ffpulse 2.4s infinite"></span>{{ version }} · open source · GPL-3.0 · Docker + Kubernetes</div>
+    <h1 style="margin:0;font-size:64px;line-height:1.02;letter-spacing:-0.035em;font-weight:700;max-width:860px">The orchestrator for people who just have <span style="font-family:'JetBrains Mono',monospace;font-weight:600;color:#ADA6FB;letter-spacing:-0.02em">scripts.py</span></h1>
+    <div style="display:grid;grid-template-columns:0.9fr 1.1fr;gap:72px;margin-top:44px;align-items:start">
+      <div>
+        <p style="margin:0 0 28px;font-size:16.5px;line-height:1.65;color:#A0A0AB;text-wrap:pretty">No DAGs. No image builds. No YAML. A pipeline is a folder with a <span style="color:#F4F4F5;font-family:'JetBrains Mono',monospace;font-size:14.5px">main.py</span> — push it to Git and it runs in its own disposable sandbox, dependencies resolved in milliseconds.</p>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <a href="https://github.com/ttuhin03/fastflow" style="padding:11px 22px;border-radius:8px;background:#6E62F5;color:#fff;font-size:14px;font-weight:600;transition:all 180ms cubic-bezier(0.16,1,0.3,1)" style-hover="background:#8075F8;box-shadow:0 6px 18px rgba(110,98,245,0.4);color:#fff">Star on GitHub</a>
+          <button onClick="{{ copyCompose }}" style="display:flex;align-items:center;gap:10px;padding:11px 16px;border-radius:8px;background:#111114;border:1px solid #2A2A32;color:#A0A0AB;font-family:'JetBrains Mono',monospace;font-size:13px;cursor:pointer" style-hover="border-color:#3a3a44;color:#F4F4F5"><span style="color:#52525B">$</span> docker compose up -d <span style="font-size:11px;color:{{ copyComposeColor }}">{{ copyComposeLabel }}</span></button>
+        </div>
+        <div style="display:flex;gap:26px;margin-top:48px;font-family:'JetBrains Mono',monospace">
+          <div><div style="font-size:22px;font-weight:600;letter-spacing:-0.03em">38ms</div><div style="font-family:'Geist',sans-serif;font-size:12px;color:#71717A;margin-top:2px">cached deps, linked</div></div>
+          <div style="width:1px;background:#1E1E24"></div>
+          <div><div style="font-size:22px;font-weight:600;letter-spacing:-0.03em">1</div><div style="font-family:'Geist',sans-serif;font-size:12px;color:#71717A;margin-top:2px">process to operate</div></div>
+          <div style="width:1px;background:#1E1E24"></div>
+          <div><div style="font-size:22px;font-weight:600;letter-spacing:-0.03em">0</div><div style="font-family:'Geist',sans-serif;font-size:12px;color:#71717A;margin-top:2px">images ever built</div></div>
+        </div>
+      </div>
+      <!-- interactive terminal -->
+      <div>
+        <div style="display:flex;gap:6px;margin-bottom:10px">
+          <sc-for list="{{ termTabs }}" as="t" hint-placeholder-count="3">
+            <button onClick="{{ t.pick }}" style="padding:6px 14px;border-radius:7px;font-family:'JetBrains Mono',monospace;font-size:11.5px;cursor:pointer;transition:all 120ms;background:{{ t.bg }};border:1px solid {{ t.border }};color:{{ t.color }}" style-hover="border-color:#3a3a44">{{ t.name }}</button>
+          </sc-for>
+          <span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:#3a3a44;align-self:center">← pick a scenario</span>
+        </div>
+        <div style="border-radius:12px;background:#0B0B0E;border:1px solid #1E1E24;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,0.6)">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;background:#111114;border-bottom:1px solid #1E1E24">
+            <div style="display:flex;gap:6px"><span style="width:9px;height:9px;border-radius:50%;background:#26262D"></span><span style="width:9px;height:9px;border-radius:50%;background:#26262D"></span><span style="width:9px;height:9px;border-radius:50%;background:#26262D"></span></div>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#52525B">{{ termTitle }}</span>
+            <button onClick="{{ replayTerm }}" style="background:none;border:none;color:#52525B;font-family:'JetBrains Mono',monospace;font-size:11px;cursor:pointer;padding:0" style-hover="color:#A0A0AB">↻</button>
+          </div>
+          <div style="padding:16px 18px 20px;font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.85;height:296px;overflow:hidden">
+            <sc-for list="{{ termLines }}" as="l" hint-placeholder-count="3">
+              <div style="color:{{ l.color }};padding-left:{{ l.pad }}">{{ l.text }}</div>
+            </sc-for>
+            <span style="display:inline-block;width:7px;height:14px;background:#3ECF8E;vertical-align:middle;animation:ffblink 1s step-end infinite"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 01 DEPLOY RACE -->
+<div id="race" style="max-width:1180px;margin:0 auto;padding:88px 36px">
+  <div style="display:grid;grid-template-columns:0.85fr 1.15fr;gap:72px;align-items:start">
+    <div style="position:sticky;top:100px">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6E62F5;margin-bottom:14px">01 / deployment</div>
+      <h2 style="margin:0 0 16px;font-size:36px;line-height:1.1;letter-spacing:-0.03em;font-weight:700">The ten-minute deploy, deleted.</h2>
+      <p style="margin:0 0 24px;font-size:15px;line-height:1.7;color:#A0A0AB;text-wrap:pretty">You changed one line in <span style="font-family:'JetBrains Mono',monospace;font-size:13.5px;color:#F4F4F5">requirements.txt</span>. Here's what happens next — in a classic image-build pipeline versus Fast-Flow. Press deploy.</p>
+      <button onClick="{{ startRace }}" style="padding:11px 24px;border-radius:8px;background:{{ raceBtnBg }};border:1px solid {{ raceBtnBorder }};color:{{ raceBtnColor }};font-size:14px;font-weight:600;cursor:pointer;font-family:'Geist',sans-serif;transition:all 180ms cubic-bezier(0.16,1,0.3,1)" style-hover="box-shadow:0 6px 18px rgba(110,98,245,0.4)">{{ raceBtnLabel }}</button>
+      <div style="margin-top:18px;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#52525B">simulated · 1s ≈ 45s of real time</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <!-- traditional -->
+      <div style="border:1px solid #1E1E24;border-radius:12px;background:#111114;padding:20px 22px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px">
+          <span style="font-size:14px;font-weight:600;color:#A0A0AB">Image-build pipeline</span>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:600;letter-spacing:-0.03em;color:{{ tradClockColor }}">{{ tradClock }}</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <sc-for list="{{ tradSteps }}" as="st" hint-placeholder-count="5">
+            <div style="display:flex;align-items:center;gap:12px">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:11px;width:14px;color:{{ st.iconColor }}">{{ st.icon }}</span>
+              <span style="font-size:13px;flex:1;color:{{ st.textColor }}">{{ st.label }}</span>
+              <span style="width:130px;height:4px;border-radius:2px;background:#26262D;overflow:hidden"><span style="display:block;height:100%;background:{{ st.barColor }};width:{{ st.pct }};transition:width 120ms linear"></span></span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#52525B;width:52px;text-align:right">{{ st.dur }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <!-- fastflow -->
+      <div style="border:1px solid {{ ffCardBorder }};border-radius:12px;background:#111114;padding:20px 22px;transition:border-color 300ms">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px">
+          <span style="font-size:14px;font-weight:600">Fast-Flow</span>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:600;letter-spacing:-0.03em;color:{{ ffClockColor }}">{{ ffClock }}</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <sc-for list="{{ ffSteps }}" as="st" hint-placeholder-count="3">
+            <div style="display:flex;align-items:center;gap:12px">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:11px;width:14px;color:{{ st.iconColor }}">{{ st.icon }}</span>
+              <span style="font-size:13px;flex:1;color:{{ st.textColor }}">{{ st.label }}</span>
+              <span style="width:130px;height:4px;border-radius:2px;background:#26262D;overflow:hidden"><span style="display:block;height:100%;background:{{ st.barColor }};width:{{ st.pct }};transition:width 120ms linear"></span></span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#52525B;width:52px;text-align:right">{{ st.dur }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="margin-top:14px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#5FE0A6;min-height:16px">{{ raceVerdict }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 02 PRODUCT -->
+<div id="product" style="border-top:1px solid #1E1E24;background:#0D0D10">
+<div style="max-width:1180px;margin:0 auto;padding:80px 36px">
+  <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:28px">
+    <div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6E62F5;margin-bottom:14px">02 / product</div>
+      <h2 style="margin:0;font-size:36px;letter-spacing:-0.03em;font-weight:700">A control room, not a config maze.</h2>
+    </div>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#52525B">live mock — click the sidebar</span>
+  </div>
+
+  <div style="border-radius:12px;border:1px solid #1E1E24;background:#0A0A0C;overflow:hidden;display:grid;grid-template-columns:200px 1fr;min-height:480px">
+    <div style="background:#0D0D10;border-right:1px solid #1E1E24;padding:16px 10px;display:flex;flex-direction:column;gap:2px">
+      <div style="display:flex;align-items:center;gap:8px;padding:0 8px 16px">
+        <div style="width:22px;height:22px;border-radius:6px;background:#6E62F5;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:10px;color:#fff">&gt;_</div>
+        <span style="font-weight:600;font-size:13px">FastFlow</span>
+      </div>
+      <div style="font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#52525B;padding:6px 8px 4px">Overview</div>
+      <button onClick="{{ goDash }}" style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:7px;border:none;text-align:left;font-size:13px;cursor:pointer;font-family:'Geist',sans-serif;background:{{ dashBg }};color:{{ dashColor }};box-shadow:{{ dashInset }}" style-hover="background:#17171B">▦ Dashboard</button>
+      <div style="font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#52525B;padding:12px 8px 4px">Orchestration</div>
+      <button onClick="{{ goPipes }}" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:7px;border:none;text-align:left;font-size:13px;cursor:pointer;font-family:'Geist',sans-serif;background:{{ pipesBg }};color:{{ pipesColor }};box-shadow:{{ pipesInset }}" style-hover="background:#17171B"><span>⑃ Pipelines</span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#52525B">24</span></button>
+      <button onClick="{{ goRuns }}" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:7px;border:none;text-align:left;font-size:13px;cursor:pointer;font-family:'Geist',sans-serif;background:{{ runsBg }};color:{{ runsColor }};box-shadow:{{ runsInset }}" style-hover="background:#17171B"><span>∿ Runs</span><span style="display:flex;align-items:center;gap:5px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#86C0FF"><span style="width:6px;height:6px;border-radius:50%;background:#4D9CF7;animation:ffpulse 1.6s infinite"></span>3</span></button>
+      <button onClick="{{ goSched }}" style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:7px;border:none;text-align:left;font-size:13px;cursor:pointer;font-family:'Geist',sans-serif;background:{{ schedBg }};color:{{ schedColor }};box-shadow:{{ schedInset }}" style-hover="background:#17171B">◷ Scheduler</button>
+      <div style="font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#52525B;padding:12px 8px 4px">Security</div>
+      <div style="display:flex;align-items:center;gap:9px;padding:8px 10px;font-size:13px;color:#71717A">⚿ Secrets</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;font-size:13px;color:#71717A"><span>◫ Dependencies</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#FF8388;background:rgba(241,86,92,0.12);border-radius:9999px;padding:1px 7px">2</span></div>
+      <div style="margin-top:auto;display:flex;align-items:center;gap:8px;padding:9px 10px;border-radius:7px;background:#111114;font-size:11.5px;color:#A0A0AB"><span style="width:7px;height:7px;border-radius:50%;background:#3ECF8E;box-shadow:0 0 8px rgba(62,207,142,0.7)"></span>All systems operational</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column">
+      <div style="height:46px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;border-bottom:1px solid #1E1E24;background:#0D0D10">
+        <span style="font-size:13px;color:#A0A0AB">{{ demoCrumb }}</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#52525B;background:#17171B;border:1px solid #1E1E24;border-radius:7px;padding:5px 12px">Search or jump to… ⌘K</span>
+      </div>
+      <div style="flex:1;padding:20px;overflow:hidden">
+
+        <sc-if value="{{ isDash }}" hint-placeholder-val="{{ true }}">
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px">
+            <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="3">
+              <div style="background:#111114;border:1px solid #1E1E24;border-radius:12px;padding:16px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><span style="font-size:12px;color:#A0A0AB">{{ k.label }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#5FE0A6;background:rgba(62,207,142,0.12);border-radius:9999px;padding:2px 8px">{{ k.delta }}</span></div>
+                <div style="display:flex;justify-content:space-between;align-items:flex-end"><span style="font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:600;letter-spacing:-0.03em">{{ k.value }}</span><svg width="72" height="26" viewBox="0 0 72 26" style="overflow:visible"><polyline points="{{ k.spark }}" fill="none" stroke="{{ k.sparkColor }}" stroke-width="1.5"></polyline></svg></div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="background:#111114;border:1px solid #1E1E24;border-radius:12px;padding:16px;margin-bottom:14px">
+            <div style="display:flex;justify-content:space-between;margin-bottom:12px"><span style="font-size:13.5px;font-weight:600">Run activity</span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#71717A">last 26 weeks · 412,338 runs</span></div>
+            <div style="display:grid;grid-template-rows:repeat(7,1fr);grid-auto-flow:column;gap:3px">
+              <sc-for list="{{ heatCells }}" as="c" hint-placeholder-count="20"><span title="{{ c.tip }}" style="width:100%;aspect-ratio:1;border-radius:2px;background:{{ c.bg }}"></span></sc-for>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
+            <sc-for list="{{ pipeCards }}" as="p" hint-placeholder-count="3">
+              <div style="background:#111114;border:1px solid #1E1E24;border-radius:12px;padding:14px;cursor:pointer" style-hover="border-color:#2A2A32;background:#17171B">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="width:7px;height:7px;border-radius:50%;background:{{ p.dot }}"></span><span style="font-family:'JetBrains Mono',monospace;font-size:12.5px;font-weight:500">{{ p.name }}</span></div>
+                <div style="display:flex;gap:2px;margin-bottom:10px"><sc-for list="{{ p.last12 }}" as="r" hint-placeholder-count="12"><span style="flex:1;height:14px;border-radius:2px;background:{{ r }}"></span></sc-for></div>
+                <div style="display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#71717A"><span>{{ p.cron }}</span><span>next {{ p.next }}</span></div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isPipes }}" hint-placeholder-val="{{ false }}">
+          <div style="border:1px solid #1E1E24;border-radius:12px;overflow:hidden">
+            <div style="display:grid;grid-template-columns:2fr 1fr 1.2fr 1fr 1fr;padding:10px 16px;background:#0D0D10;font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;color:#71717A;border-bottom:1px solid #1E1E24"><span>Pipeline</span><span>Status</span><span>Success rate</span><span>Schedule</span><span>Last run</span></div>
+            <sc-for list="{{ pipeRows }}" as="p" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:2fr 1fr 1.2fr 1fr 1fr;align-items:center;padding:13px 16px;border-bottom:1px solid #161619;cursor:pointer" style-hover="background:#17171B">
+                <span style="font-family:'JetBrains Mono',monospace;font-size:12.5px">{{ p.name }}</span>
+                <span><span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;padding:3px 9px;border-radius:9999px;color:{{ p.stColor }};background:{{ p.stBg }};border:1px solid {{ p.stBorder }}">{{ p.status }}</span></span>
+                <span style="display:flex;align-items:center;gap:8px"><span style="width:56px;height:4px;border-radius:2px;background:#26262D;overflow:hidden;display:inline-block"><span style="display:block;height:100%;background:#3ECF8E;width:{{ p.rate }}"></span></span><span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#A0A0AB">{{ p.rate }}</span></span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#71717A">{{ p.cron }}</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#71717A">{{ p.last }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isRuns }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600">run_8f3a2c</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;padding:3px 9px;border-radius:9999px;color:#86C0FF;background:rgba(77,156,247,0.12);border:1px solid rgba(77,156,247,0.30)">RUNNING</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#71717A">daily_etl · py3.12 · 0.5 CPU / 512m</span>
+          </div>
+          <div style="border-radius:12px;border:1px solid #1E1E24;background:#0B0B0E;overflow:hidden">
+            <div style="display:flex;align-items:center;gap:14px;padding:8px 14px;border-bottom:1px solid #1E1E24;background:#111114;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#71717A"><span style="color:#F4F4F5;background:#26262D;border-radius:5px;padding:2px 8px">All</span><span>stdout</span><span>stderr</span><span style="margin-left:auto;display:flex;align-items:center;gap:5px;color:#5FE0A6"><span style="width:5px;height:5px;border-radius:50%;background:#3ECF8E;animation:ffpulse 1.4s infinite"></span>Follow</span></div>
+            <div style="padding:12px 0;font-family:'JetBrains Mono',monospace;font-size:11.5px;line-height:1.8;height:280px;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end">
+              <sc-for list="{{ logLines }}" as="l" hint-placeholder-count="6">
+                <div style="display:flex;gap:14px;padding:0 14px" style-hover="background:#17171B"><span style="color:#3a3a44;min-width:24px;text-align:right">{{ l.n }}</span><span style="color:{{ l.color }}">{{ l.text }}</span></div>
+              </sc-for>
+              <div style="padding:2px 14px 0 52px"><span style="display:inline-block;width:7px;height:13px;background:#3ECF8E;animation:ffblink 1s step-end infinite"></span></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:7px 14px;border-top:1px solid #1E1E24;background:#111114;font-family:'JetBrains Mono',monospace;font-size:10px;color:#52525B"><span style="color:#5FE0A6">● streaming via SSE</span><span>{{ logCount }} lines</span></div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isSched }}" hint-placeholder-val="{{ false }}">
+          <div style="border:1px solid #1E1E24;border-radius:12px;overflow:hidden">
+            <div style="display:grid;grid-template-columns:1.8fr 1.2fr 1fr 1fr 0.6fr;padding:10px 16px;background:#0D0D10;font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;color:#71717A;border-bottom:1px solid #1E1E24"><span>Schedule</span><span>Cron</span><span>Environment</span><span>Next run</span><span>Enabled</span></div>
+            <sc-for list="{{ schedRows }}" as="sr" hint-placeholder-count="5">
+              <div style="display:grid;grid-template-columns:1.8fr 1.2fr 1fr 1fr 0.6fr;align-items:center;padding:12px 16px;border-bottom:1px solid #161619" style-hover="background:#17171B">
+                <span style="font-family:'JetBrains Mono',monospace;font-size:12px;padding-left:{{ sr.indent }};color:{{ sr.nameColor }}">{{ sr.name }}</span>
+                <span><span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;background:#17171B;border:1px solid #1E1E24;border-radius:5px;padding:2px 8px;color:#A0A0AB">{{ sr.cron }}</span></span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:{{ sr.envColor }}">{{ sr.env }}</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#71717A">{{ sr.next }}</span>
+                <span><span style="display:inline-block;width:28px;height:16px;border-radius:9999px;background:{{ sr.togBg }};position:relative"><span style="position:absolute;top:2px;left:{{ sr.togLeft }};width:12px;height:12px;border-radius:50%;background:#F4F4F5;transition:left 180ms cubic-bezier(0.34,1.4,0.64,1)"></span></span></span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- 03 ANATOMY / feature explorer -->
+<div id="features" style="max-width:1180px;margin:0 auto;padding:88px 36px">
+  <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6E62F5;margin-bottom:14px">03 / anatomy</div>
+  <h2 style="margin:0 0 36px;font-size:36px;letter-spacing:-0.03em;font-weight:700;max-width:620px">Six decisions that make it fast.</h2>
+  <div style="display:grid;grid-template-columns:0.9fr 1.1fr;gap:40px;align-items:start">
+    <div style="display:flex;flex-direction:column">
+      <sc-for list="{{ featList }}" as="f" hint-placeholder-count="6">
+        <button onClick="{{ f.pick }}" onMouseEnter="{{ f.pick }}" style="display:flex;align-items:center;gap:18px;padding:17px 18px;border:none;border-bottom:1px solid #161619;text-align:left;cursor:pointer;font-family:'Geist',sans-serif;border-radius:9px;transition:background 120ms;background:{{ f.bg }}">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:{{ f.numColor }}">{{ f.num }}</span>
+          <span style="flex:1"><span style="display:block;font-size:15px;font-weight:600;color:{{ f.titleColor }}">{{ f.title }}</span><span style="display:block;font-size:12.5px;color:#71717A;margin-top:2px">{{ f.sub }}</span></span>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:{{ f.arrowColor }}">→</span>
+        </button>
+      </sc-for>
+    </div>
+    <div style="position:sticky;top:100px">
+      <div style="border-radius:12px;border:1px solid #1E1E24;background:#0B0B0E;overflow:hidden">
+        <div style="display:flex;justify-content:space-between;padding:10px 16px;background:#111114;border-bottom:1px solid #1E1E24"><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#52525B">{{ featFile }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#ADA6FB">{{ featTag }}</span></div>
+        <pre style="margin:0;padding:20px;font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.75;color:#A0A0AB;overflow-x:auto;min-height:200px;white-space:pre-wrap">{{ featCode }}</pre>
+      </div>
+      <p style="margin:16px 4px 0;font-size:14px;line-height:1.7;color:#A0A0AB;text-wrap:pretty">{{ featBody }}</p>
+    </div>
+  </div>
+</div>
+
+<!-- 04 CONFIG BUILDER -->
+<div id="config" style="border-top:1px solid #1E1E24;background:#0D0D10">
+<div style="max-width:1180px;margin:0 auto;padding:88px 36px">
+  <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6E62F5;margin-bottom:14px">04 / configuration</div>
+  <h2 style="margin:0 0 12px;font-size:36px;letter-spacing:-0.03em;font-weight:700">The entire config surface fits on this page.</h2>
+  <p style="margin:0 0 36px;font-size:15px;color:#A0A0AB;max-width:560px;text-wrap:pretty">Resource limits, retries, timeout, Python version — one JSON file next to your code, versioned in Git. Try it:</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:start">
+    <div style="display:flex;flex-direction:column;gap:24px">
+      <div>
+        <div style="font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#71717A;margin-bottom:10px">CPU limit</div>
+        <div style="display:flex;gap:8px">
+          <sc-for list="{{ cpuOpts }}" as="o" hint-placeholder-count="3"><button onClick="{{ o.pick }}" style="padding:8px 18px;border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:13px;cursor:pointer;transition:all 120ms;background:{{ o.bg }};border:1px solid {{ o.border }};color:{{ o.color }}" style-hover="border-color:#3a3a44">{{ o.label }}</button></sc-for>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#71717A;margin-bottom:10px">Memory limit</div>
+        <div style="display:flex;gap:8px">
+          <sc-for list="{{ memOpts }}" as="o" hint-placeholder-count="3"><button onClick="{{ o.pick }}" style="padding:8px 18px;border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:13px;cursor:pointer;transition:all 120ms;background:{{ o.bg }};border:1px solid {{ o.border }};color:{{ o.color }}" style-hover="border-color:#3a3a44">{{ o.label }}</button></sc-for>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#71717A;margin-bottom:10px">Python version</div>
+        <div style="display:flex;gap:8px">
+          <sc-for list="{{ pyOpts }}" as="o" hint-placeholder-count="3"><button onClick="{{ o.pick }}" style="padding:8px 18px;border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:13px;cursor:pointer;transition:all 120ms;background:{{ o.bg }};border:1px solid {{ o.border }};color:{{ o.color }}" style-hover="border-color:#3a3a44">{{ o.label }}</button></sc-for>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+        <div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:10px"><span style="font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#71717A">Retries</span><span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#ADA6FB">{{ retries }}</span></div>
+          <input type="range" min="0" max="5" step="1" value="{{ retries }}" onChange="{{ setRetries }}" style="width:100%">
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:10px"><span style="font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#71717A">Timeout</span><span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#ADA6FB">{{ timeoutLabel }}</span></div>
+          <input type="range" min="300" max="7200" step="300" value="{{ timeout }}" onChange="{{ setTimeout_ }}" style="width:100%">
+        </div>
+      </div>
+      <div style="font-size:12.5px;color:#52525B;line-height:1.6">Soft limits are monitored and surfaced as warnings in the UI; hard limits are enforced by cgroups (Docker) or <span style="font-family:'JetBrains Mono',monospace">resources.limits</span> (K8s). Exceed memory → OOM kill, exit 137, visible in the run detail.</div>
+    </div>
+    <div style="border-radius:12px;border:1px solid #1E1E24;background:#0B0B0E;overflow:hidden;position:sticky;top:100px">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 16px;background:#111114;border-bottom:1px solid #1E1E24">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#52525B">pipelines/daily_etl/pipeline.json</span>
+        <button onClick="{{ copyCfg }}" style="background:none;border:1px solid #2A2A32;border-radius:6px;color:#A0A0AB;font-family:'JetBrains Mono',monospace;font-size:11px;cursor:pointer;padding:4px 10px" style-hover="color:#F4F4F5;border-color:#3a3a44">{{ cfgCopyLabel }}</button>
+      </div>
+      <pre style="margin:0;padding:20px;font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.8;color:#A0A0AB">{{ cfgJson }}</pre>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- 05 COMPARE -->
+<div id="compare" style="max-width:1180px;margin:0 auto;padding:88px 36px">
+  <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6E62F5;margin-bottom:14px">05 / positioning</div>
+  <h2 style="margin:0 0 12px;font-size:36px;letter-spacing:-0.03em;font-weight:700;max-width:720px">"A handful of Python scripts, and Airflow is overkill."</h2>
+  <p style="margin:0 0 28px;font-size:15px;color:#A0A0AB;max-width:560px;text-wrap:pretty">If that sentence is you, this is your tool. If not — we'll tell you what to use instead. Pick a comparison:</p>
+  <div style="display:flex;gap:8px;margin-bottom:20px">
+    <sc-for list="{{ compChips }}" as="c" hint-placeholder-count="4">
+      <button onClick="{{ c.pick }}" style="padding:7px 16px;border-radius:9999px;font-size:13px;cursor:pointer;font-family:'Geist',sans-serif;transition:all 120ms cubic-bezier(0.16,1,0.3,1);background:{{ c.bg }};border:1px solid {{ c.border }};color:{{ c.color }}" style-hover="border-color:#3a3a44">{{ c.name }}</button>
+    </sc-for>
+  </div>
+  <div style="border:1px solid #1E1E24;border-radius:12px;overflow:hidden">
+    <div style="display:grid;grid-template-columns:1.1fr 1.4fr 1.4fr;padding:12px 20px;background:#0D0D10;border-bottom:1px solid #1E1E24;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#71717A"><span></span><span style="color:#ADA6FB">Fast-Flow</span><span>{{ compName }}</span></div>
+    <sc-for list="{{ compRows }}" as="r" hint-placeholder-count="7">
+      <div style="display:grid;grid-template-columns:1.1fr 1.4fr 1.4fr;padding:14px 20px;border-bottom:1px solid #161619;align-items:center" style-hover="background:#111114">
+        <span style="font-size:13px;color:#A0A0AB">{{ r.label }}</span>
+        <span style="display:flex;align-items:center;gap:9px;font-size:13.5px;padding-right:16px"><span style="width:7px;height:7px;border-radius:50%;flex-shrink:0;background:{{ r.ffDot }}"></span>{{ r.ff }}</span>
+        <span style="display:flex;align-items:center;gap:9px;font-size:13.5px;color:#A0A0AB"><span style="width:7px;height:7px;border-radius:50%;flex-shrink:0;background:{{ r.oDot }}"></span>{{ r.other }}</span>
+      </div>
+    </sc-for>
+  </div>
+  <div style="margin-top:20px;border:1px solid #1E1E24;border-radius:12px;padding:20px 24px;background:#111114">
+    <div style="font-size:13px;font-weight:600;margin-bottom:6px;color:#FFC163">When you should use {{ compName }} instead</div>
+    <p style="margin:0;font-size:13.5px;line-height:1.7;color:#A0A0AB;text-wrap:pretty">{{ compCaveat }}</p>
+  </div>
+</div>
+
+<!-- QUICKSTART + CTA -->
+<div id="quickstart" style="border-top:1px solid #1E1E24;background:#0D0D10">
+  <div style="max-width:1180px;margin:0 auto;padding:88px 36px;display:grid;grid-template-columns:0.85fr 1.15fr;gap:72px;align-items:start">
+    <div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6E62F5;margin-bottom:14px">06 / quickstart</div>
+      <h2 style="margin:0 0 16px;font-size:36px;line-height:1.1;letter-spacing:-0.03em;font-weight:700">Running before your coffee is.</h2>
+      <p style="margin:0 0 28px;font-size:15px;line-height:1.7;color:#A0A0AB;text-wrap:pretty">Clone, set one encryption key, compose up. Then open <span style="font-family:'JetBrains Mono',monospace;font-size:13.5px;color:#F4F4F5">localhost:8000</span> and push your first pipeline from the <a href="https://github.com/ttuhin03/fastflow-pipeline-template">template repo</a>.</p>
+      <div style="display:flex;gap:12px">
+        <a href="https://github.com/ttuhin03/fastflow" style="padding:11px 22px;border-radius:8px;background:#6E62F5;color:#fff;font-size:14px;font-weight:600" style-hover="background:#8075F8;box-shadow:0 6px 18px rgba(110,98,245,0.4);color:#fff">★ Star on GitHub</a>
+        <a href="manifesto.html" style="padding:11px 22px;border-radius:8px;background:#111114;border:1px solid #2A2A32;color:#F4F4F5;font-size:14px;font-weight:500" style-hover="border-color:#3a3a44;color:#F4F4F5">Read the manifesto</a>
+      </div>
+    </div>
+    <div>
+      <div style="display:flex;gap:4px;background:#111114;border:1px solid #1E1E24;border-radius:10px;padding:4px;width:fit-content;margin-bottom:14px">
+        <sc-for list="{{ qsTabs }}" as="t" hint-placeholder-count="3"><button onClick="{{ t.pick }}" style="padding:7px 18px;border-radius:7px;border:none;font-size:13px;font-weight:500;cursor:pointer;font-family:'Geist',sans-serif;background:{{ t.bg }};color:{{ t.color }}">{{ t.name }}</button></sc-for>
+      </div>
+      <div style="border-radius:12px;border:1px solid #1E1E24;background:#0B0B0E;overflow:hidden">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 16px;background:#111114;border-bottom:1px solid #1E1E24">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#52525B">{{ qsFile }}</span>
+          <button onClick="{{ copyQs }}" style="background:none;border:1px solid #2A2A32;border-radius:6px;color:#A0A0AB;font-family:'JetBrains Mono',monospace;font-size:11px;cursor:pointer;padding:4px 10px" style-hover="color:#F4F4F5;border-color:#3a3a44">{{ qsCopyLabel }}</button>
+        </div>
+        <pre style="margin:0;padding:20px;font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.8;color:#A0A0AB;overflow-x:auto;min-height:220px">{{ qsCode }}</pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<div style="border-top:1px solid #1E1E24">
+  <div style="max-width:1180px;margin:0 auto;padding:36px;display:flex;justify-content:space-between;align-items:center">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="width:22px;height:22px;border-radius:6px;background:#6E62F5;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:10px;color:#fff">&gt;_</div>
+      <span style="font-size:13px;color:#71717A">Fast-Flow Orchestrator · GPL-3.0 · {{ version }}</span>
+    </div>
+    <div style="display:flex;gap:20px;font-size:13px">
+      <a href="https://github.com/ttuhin03/fastflow" style="color:#A0A0AB">GitHub</a>
+      <a href="https://github.com/ttuhin03/fastflow/tree/main/docs" style="color:#A0A0AB">Docs</a>
+      <a href="manifesto.html" style="color:#A0A0AB">Manifesto</a>
+      <a href="https://github.com/ttuhin03/fastflow/releases" style="color:#A0A0AB">Releases</a>
+    </div>
+  </div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440},&quot;stars&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;18&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Content&quot;},&quot;version&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;v1.0.4&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Content&quot;},&quot;animate&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Behavior&quot;}}">
+class Component extends DCLogic {
+  state = { scenario: 'git push', termStep: 0, demoView: 'dash', logN: 8, comp: 'Airflow', qsTab: 'Docker',
+    copiedCompose: false, copiedQs: false, copiedCfg: false, feat: 0,
+    raceT: 0, racing: false, raceDone: false,
+    cpu: '1.0', mem: '1g', py: '3.12', retries: 2, timeout: 3600 };
+
+  termScripts() {
+    const g = '#5FE0A6', w = '#F4F4F5', d = '#52525B', mut = '#A0A0AB', bl = '#86C0FF', ac = '#ADA6FB', er = '#FF8388', am = '#FFC163';
+    return {
+      'git push': { title: 'push → sync → run', lines: [
+        { text: '$ git push origin main', color: w, pad: '0' },
+        { text: 'Enumerating objects: 5, done. → main 3f9a2c1', color: d, pad: '0' },
+        { text: '', color: d, pad: '0' },
+        { text: '● fastflow · change detected on main', color: ac, pad: '0' },
+        { text: '→ sync: pulled 3f9a2c1 · atomic · 0.4s', color: mut, pad: '0' },
+        { text: '→ preheat: uv python 3.12 ✓ cached', color: mut, pad: '0' },
+        { text: '→ preheat: 11 packages linked in 38ms', color: mut, pad: '0' },
+        { text: '', color: d, pad: '0' },
+        { text: '▶ run daily_etl · schedule 0 6 * * *', color: bl, pad: '0' },
+        { text: 'worker: ephemeral container spawned (0.3s)', color: d, pad: '12px' },
+        { text: 'Pipeline started · 41,203 rows processed', color: mut, pad: '12px' },
+        { text: '✓ success · 12.4s · exit 0 · sandbox destroyed', color: g, pad: '0' } ] },
+      'manual run': { title: 'trigger via API or UI', lines: [
+        { text: '$ curl -X POST localhost:8000/api/pipelines/\\', color: w, pad: '0' },
+        { text: 'daily_etl/run -H "Authorization: Bearer $TOK"', color: w, pad: '12px' },
+        { text: '{"run_id": "run_8f3a2c", "status": "PENDING"}', color: d, pad: '0' },
+        { text: '', color: d, pad: '0' },
+        { text: '● validating pipeline · loading secrets (fernet)', color: mut, pad: '0' },
+        { text: '● merging env: 6 base + 2 schedule overrides', color: mut, pad: '0' },
+        { text: '▶ worker: uv run --python 3.12 main.py', color: bl, pad: '0' },
+        { text: 'streaming logs via SSE →', color: d, pad: '12px' },
+        { text: 'INFO  extract: 41,203 rows', color: mut, pad: '12px' },
+        { text: 'INFO  load: upsert complete', color: mut, pad: '12px' },
+        { text: '✓ success · 12.4s · logs archived', color: g, pad: '0' } ] },
+      'OOM + retry': { title: 'failure handling, honestly', lines: [
+        { text: '▶ run ml_train · attempt 1/3', color: bl, pad: '0' },
+        { text: 'worker: limits 2.0 CPU / 2g RAM (cgroups)', color: d, pad: '12px' },
+        { text: 'training epoch 3/10 …', color: mut, pad: '12px' },
+        { text: 'mem: 1.9g / 2g — soft limit exceeded ⚠', color: am, pad: '12px' },
+        { text: '✗ OOM killed · exit 137', color: er, pad: '0' },
+        { text: '', color: d, pad: '0' },
+        { text: '↻ retry 2/3 in 30s · same fresh sandbox', color: ac, pad: '0' },
+        { text: 'worker: container spawned (0.3s)', color: d, pad: '12px' },
+        { text: 'training with BATCH_SIZE=64 …', color: mut, pad: '12px' },
+        { text: '✓ success · 4m 02s · exit 0', color: g, pad: '0' },
+        { text: 'tip: bump mem_hard_limit in pipeline.json → git push', color: d, pad: '0' } ] },
+    };
+  }
+
+  logScript() {
+    return [
+      { t: '[06:00:01] pipeline daily_etl starting', c: '#A0A0AB' },
+      { t: '[06:00:01] uv: resolved 11 packages in 38ms', c: '#52525B' },
+      { t: '[06:00:02] connecting to warehouse…', c: '#A0A0AB' },
+      { t: '[06:00:02] INFO  extract: 41,203 rows from s3://raw/events', c: '#A0A0AB' },
+      { t: '[06:00:04] INFO  transform: dedupe → 40,988 rows', c: '#A0A0AB' },
+      { t: '[06:00:05] WARN  3 rows failed schema check, quarantined', c: '#FFC163' },
+      { t: '[06:00:06] INFO  load: upsert into analytics.events', c: '#A0A0AB' },
+      { t: '[06:00:08] INFO  vacuum + analyze complete', c: '#52525B' },
+      { t: '[06:00:09] INFO  publishing run metrics', c: '#A0A0AB' },
+      { t: '[06:00:10] INFO  checkpoint saved', c: '#52525B' },
+      { t: '[06:00:11] batch 2/4: 10,247 rows', c: '#A0A0AB' },
+      { t: '[06:00:12] batch 3/4: 10,251 rows', c: '#A0A0AB' },
+      { t: '[06:00:13] batch 4/4: 10,243 rows', c: '#A0A0AB' },
+    ];
+  }
+
+  raceDef() {
+    return {
+      trad: [
+        { label: 'git push + CI trigger', dur: 25 },
+        { label: 'docker build (deps layer busted)', dur: 270 },
+        { label: 'push to registry', dur: 60 },
+        { label: 'roll / restart workers', dur: 45 },
+        { label: 'pipeline runs', dur: 15 },
+      ],
+      ff: [
+        { label: 'git push', dur: 2 },
+        { label: 'atomic sync + discovery', dur: 0.4 },
+        { label: 'uv preheat (new dep, once)', dur: 6 },
+        { label: 'pipeline runs', dur: 15 },
+      ],
+    };
+  }
+
+  featDefs() {
+    return [
+      { title: 'Zero-build execution', sub: 'uv JIT · shared cache', tag: 'uv', file: 'worker stdout',
+        code: `$ uv run --python 3.12 main.py\nResolved 11 packages in 38ms\nInstalled 11 packages in 0.21s\n  + pandas==2.1.0  (hardlinked)\n  + requests==2.31.0  (hardlinked)\nPipeline started`,
+        body: 'No pipeline images, ever. A generic worker resolves dependencies from a persistent shared uv cache — cached packages hardlink in milliseconds, new ones download once and are shared forever. Python version is per-pipeline.' },
+      { title: 'Plain Python, no DSL', sub: 'main.py is the whole contract', tag: 'main.py', file: 'pipelines/daily_etl/main.py',
+        code: `import os, requests\n\ndata = requests.get(URL, headers={\n  "Authorization": f"Bearer {os.getenv('API_KEY')}"\n}).json()\n\ntransform(data)   # your code, top to bottom\nsave(data)        # no decorators, no operators`,
+        body: 'If it runs on your laptop, it runs here — same code, same environment. No @dag, no XComs, no operator classes. New developers push their first pipeline in minutes, not weeks.' },
+      { title: 'Git-native deployment', sub: 'the repo is law', tag: 'git', file: 'terminal',
+        code: `$ git log --oneline pipeline.json\n3f9a2c1 raise mem limit to 2g   (anna)\nb82fe01 bump prophet to 1.1.5   (jonas)\n\n$ git revert 3f9a2c1   # ← that's a rollback`,
+        body: 'Code, dependencies, limits and schedules all live in Git. What the UI shows is what the repo says — always. Sync is atomic, so pipelines never read half-written files.' },
+      { title: 'Disposable sandboxes', sub: 'container or K8s Job per run', tag: 'cgroups', file: 'run detail',
+        code: `worker:  ephemeral · --rm\nlimits:  cpu 1.0 · mem 1g (hard, cgroups)\nsoft:    cpu 0.8 · mem 800m (monitored)\nexit:    137 → OOM detected + surfaced\ncleanup: sandbox destroyed after run`,
+        body: 'Every run gets a fresh, isolated worker with hard CPU/RAM limits, timeout and retries. pipeline_a can never poison pipeline_b. No shared environments, no dependency hell.' },
+      { title: 'Locked-down daemon access', sub: 'socket proxy / RBAC only', tag: 'security', file: 'docker-compose.yaml',
+        code: `docker-proxy:\n  image: tecnativa/docker-socket-proxy\n  environment:\n    CONTAINERS: 1   # run workers\n    STATS: 1        # metrics\n    NETWORKS: 0     # denied\n    SYSTEM: 0       # denied`,
+        body: 'The Docker socket is root — so the orchestrator never touches it directly. A filtering proxy allows only container ops, logs and stats. On Kubernetes there is no socket at all: Jobs via the Batch API under minimal RBAC.' },
+      { title: 'One-process footprint', sub: 'FastAPI + SQLite, that\u2019s it', tag: 'ops', file: 'docker ps',
+        code: `CONTAINER          STATUS    MEM\nfastflow-app       Up 41d    212 MiB\nfastflow-proxy     Up 41d     8 MiB\n\n# no redis · no broker · no worker fleet\n# postgres optional for production`,
+        body: 'One orchestrator process handles state, scheduling, git sync and log streaming. SQLite with WAL by default, Postgres when you want it. Runs happily on an edge box or a small VM.' },
+    ];
+  }
+
+  compData() {
+    const g = '#3ECF8E', m = '#F5A623', b = '#F1565C';
+    return {
+      Airflow: {
+        caveat: 'You\u2019re an enterprise with a platform team, a thousand DAGs, cross-team dependencies, sensors and a provider ecosystem you actually use. Airflow owns that world. With a handful of scripts, you\u2019re paying its operational tax for nothing.',
+        rows: [
+          ['Pipeline definition', 'Plain Python script (main.py)', g, 'DAGs, operators, XComs', b],
+          ['Setup', 'Compose file or K8s manifests', g, 'Scheduler + webserver + workers + Redis + Postgres', b],
+          ['Isolation', 'Fresh container/Job per run', g, 'Shared worker environments', b],
+          ['Dependency speed', 'uv JIT — ms from cache, no builds', g, 'Rebuild images per change', b],
+          ['Deployment', 'git push + auto-sync', g, 'CI/CD + registry + sidecars', b],
+          ['UI', 'Realtime React, SSE logs', g, 'Dated, mostly static', b],
+          ['Onboarding', 'Minutes — it\u2019s just Python', g, 'Days to weeks (DSL, providers)', b],
+        ] },
+      Dagster: {
+        caveat: 'You need data-asset lineage: tracking how datasets depend on and produce one another across a large graph. Dagster\u2019s asset model is genuinely the right abstraction for that — Fast-Flow doesn\u2019t try to compete there.',
+        rows: [
+          ['Pipeline definition', 'Plain Python script (main.py)', g, 'Assets, ops, resources', m],
+          ['Setup', 'Compose file or K8s manifests', g, 'Dagit + daemon + code locations', m],
+          ['Isolation', 'Fresh container/Job per run', g, 'Per code-location, configurable', m],
+          ['Dependency speed', 'uv JIT — ms from cache, no builds', g, 'Image / env based', m],
+          ['Deployment', 'git push + auto-sync', g, 'Code deployment workflow', m],
+          ['UI', 'Realtime React, SSE logs', g, 'Modern, asset-centric', g],
+          ['Onboarding', 'Minutes — it\u2019s just Python', g, 'Days (new mental model)', m],
+        ] },
+      Prefect: {
+        caveat: 'A single main.py isn\u2019t enough — you need retries as state machines, dynamic task graphs and flexible work pools, while staying in Python. Prefect is the natural step up in engine richness.',
+        rows: [
+          ['Pipeline definition', 'Plain Python script (main.py)', g, '@flow / @task decorators', m],
+          ['Setup', 'Compose file or K8s manifests', g, 'Server + workers (or Cloud)', m],
+          ['Isolation', 'Fresh container/Job per run', g, 'Depends on worker type', m],
+          ['Dependency speed', 'uv JIT — ms from cache, no builds', g, 'Environment-dependent', m],
+          ['Deployment', 'git push + auto-sync', g, 'Code deployment + work pools', m],
+          ['UI', 'Realtime React, SSE logs', g, 'Modern', g],
+          ['Onboarding', 'Minutes — it\u2019s just Python', g, 'Days (flows, deployments, pools)', m],
+        ] },
+      Kestra: {
+        caveat: 'Your job is wiring many systems together with event-driven triggers — files landing, webhooks, Kafka, queues — and you want a big plugin catalog. That\u2019s Kestra\u2019s home turf.',
+        rows: [
+          ['Pipeline definition', 'Plain Python script (main.py)', g, 'Declarative YAML flows', m],
+          ['Setup', 'Compose file or K8s manifests', g, 'Standalone service (split for HA)', m],
+          ['Isolation', 'Fresh container/Job per run', g, 'Opt-in per task (Docker/K8s runner)', m],
+          ['Dependency speed', 'uv JIT — ms from cache, no builds', g, 'Plugin / image based', m],
+          ['Deployment', 'git push + auto-sync', g, 'Push / API', m],
+          ['UI', 'Realtime React, SSE logs', g, 'Modern', g],
+          ['Onboarding', 'Minutes — it\u2019s just Python', g, 'Days (YAML schema, plugins)', m],
+        ] },
+    };
+  }
+
+  qsData() {
+    return {
+      Docker: { file: 'terminal — 4 commands', code: `# 1. clone & configure\ngit clone https://github.com/ttuhin03/fastflow && cd fastflow\ncp .env.example .env\n\n# 2. generate the encryption key → paste into .env\npython3 -c "from cryptography.fernet import Fernet; \\\\\n  print(Fernet.generate_key().decode())"\n\n# 3. up\ndocker compose up -d\n\n# 4. open http://localhost:8000` },
+      Kubernetes: { file: 'kubectl — runs as K8s Jobs, no Docker socket', code: `kubectl apply -f k8s/pvc.yaml\nkubectl apply -f k8s/secrets.yaml       # keys + OAuth\nkubectl apply -f k8s/configmap.yaml\nkubectl apply -f k8s/rbac-kubernetes-executor.yaml\nkubectl apply -f k8s/deployment.yaml\nkubectl apply -f k8s/service.yaml\n\nkubectl port-forward svc/fastflow-orchestrator 8000:80\n# → http://localhost:8000` },
+      Local: { file: 'terminal — dev mode with hot reload', code: `python3 -m venv venv && source venv/bin/activate\npip install -r requirements.txt\ncp .env.example .env   # set ENCRYPTION_KEY\n\n# backend (terminal 1)\nuvicorn app.main:app --reload\n\n# frontend (terminal 2)\ncd frontend && npm run dev` },
+    };
+  }
+
+  componentDidMount() {
+    if (this.props.animate ?? true) {
+      this.termTimer = setInterval(() => {
+        this.setState(s => {
+          const total = this.termScripts()[s.scenario].lines.length;
+          if (s.termStep >= total) return null;
+          return { termStep: s.termStep + 1 };
+        });
+      }, 520);
+      this.logTimer = setInterval(() => {
+        this.setState(s => ({ logN: s.logN >= this.logScript().length ? 8 : s.logN + 1 }));
+      }, 900);
+    } else {
+      this.setState({ termStep: 99, logN: this.logScript().length });
+    }
+  }
+  componentWillUnmount() { clearInterval(this.termTimer); clearInterval(this.logTimer); clearInterval(this.raceTimer); }
+
+  startRace() {
+    clearInterval(this.raceTimer);
+    this.setState({ raceT: 0, racing: true, raceDone: false });
+    this.raceTimer = setInterval(() => {
+      this.setState(s => {
+        const t = s.raceT + 4.5; // 100ms tick ≈ 4.5s sim
+        const tradTotal = this.raceDef().trad.reduce((a, x) => a + x.dur, 0);
+        if (t >= tradTotal) { clearInterval(this.raceTimer); return { raceT: tradTotal, racing: false, raceDone: true }; }
+        return { raceT: t };
+      });
+    }, 100);
+  }
+
+  raceSteps(defs, t) {
+    let acc = 0;
+    return defs.map(d => {
+      const start = acc; acc += d.dur;
+      const done = t >= acc, active = t >= start && !done;
+      const pct = done ? 100 : active ? Math.round(((t - start) / d.dur) * 100) : 0;
+      return {
+        label: d.label, dur: d.dur < 1 ? `${d.dur * 1000}ms` : d.dur >= 60 ? `${Math.round(d.dur / 60)}m ${d.dur % 60 ? (d.dur % 60) + 's' : ''}`.trim() : `${d.dur}s`,
+        icon: done ? '✓' : active ? '▸' : '·',
+        iconColor: done ? '#3ECF8E' : active ? '#86C0FF' : '#3a3a44',
+        textColor: done ? '#A0A0AB' : active ? '#F4F4F5' : '#52525B',
+        barColor: done ? '#3ECF8E' : '#4D9CF7',
+        pct: pct + '%',
+      };
+    });
+  }
+
+  fmtClock(sec) { const m = Math.floor(sec / 60), s = Math.round(sec % 60); return `${m}:${String(s).padStart(2, '0')}`; }
+
+  heat() {
+    const cells = []; let seed = 42;
+    const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+    const ramp = ['#17171B', 'rgba(62,207,142,0.22)', 'rgba(62,207,142,0.42)', 'rgba(62,207,142,0.65)', '#3ECF8E'];
+    for (let i = 0; i < 26 * 7; i++) { const r = rnd(); const lvl = r < 0.18 ? 0 : r < 0.42 ? 1 : r < 0.68 ? 2 : r < 0.9 ? 3 : 4; cells.push({ bg: ramp[lvl], tip: `${Math.round(r * 90)} runs` }); }
+    return cells;
+  }
+
+  chip(sel) { return sel ? { bg: 'rgba(110,98,245,0.12)', border: 'rgba(110,98,245,0.34)', color: '#ADA6FB' } : { bg: '#111114', border: '#1E1E24', color: '#A0A0AB' }; }
+
+  renderVals() {
+    const s = this.state;
+    const ok = '#3ECF8E', er = '#F1565C', bl = '#4D9CF7', nt = '#26262D';
+    const navBtn = (key) => ({ bg: s.demoView === key ? '#17171B' : 'transparent', color: s.demoView === key ? '#F4F4F5' : '#A0A0AB', inset: s.demoView === key ? 'inset 2px 0 0 #6E62F5' : 'none' });
+    const d = navBtn('dash'), p = navBtn('pipes'), r = navBtn('runs'), sc = navBtn('sched');
+    const comp = this.compData()[s.comp];
+    const qs = this.qsData()[s.qsTab];
+    const scen = this.termScripts()[s.scenario];
+    const feat = this.featDefs()[s.feat];
+    const tradTotal = this.raceDef().trad.reduce((a, x) => a + x.dur, 0);
+    const ffTotal = this.raceDef().ff.reduce((a, x) => a + x.dur, 0);
+    const ffT = Math.min(s.raceT, ffTotal);
+    const cfg = `{\n  "cpu_hard_limit": ${s.cpu},\n  "mem_hard_limit": "${s.mem}",\n  "cpu_soft_limit": ${(parseFloat(s.cpu) * 0.8).toFixed(1)},\n  "mem_soft_limit": "${s.mem === '512m' ? '400m' : s.mem === '1g' ? '800m' : '1.6g'}",\n  "python_version": "${s.py}",\n  "timeout": ${s.timeout},\n  "retry_attempts": ${s.retries},\n  "tags": ["etl", "daily"],\n  "enabled": true\n}`;
+    return {
+      version: this.props.version ?? 'v1.0.4', stars: this.props.stars ?? '18',
+      // terminal
+      termTabs: Object.keys(this.termScripts()).map(name => { const c = this.chip(s.scenario === name); return { name, pick: () => this.setState({ scenario: name, termStep: 0 }), ...c }; }),
+      termTitle: scen.title,
+      termLines: scen.lines.slice(0, s.termStep),
+      replayTerm: () => this.setState({ termStep: 0 }),
+      copyCompose: () => { navigator.clipboard && navigator.clipboard.writeText('docker compose up -d'); this.setState({ copiedCompose: true }); setTimeout(() => this.setState({ copiedCompose: false }), 1600); },
+      copyComposeLabel: s.copiedCompose ? '✓ copied' : '⧉', copyComposeColor: s.copiedCompose ? '#5FE0A6' : '#52525B',
+      // race
+      startRace: () => this.startRace(),
+      raceBtnLabel: s.racing ? 'deploying…' : s.raceDone ? '↻ deploy again' : '▶ Deploy the change',
+      raceBtnBg: s.racing ? '#111114' : '#6E62F5', raceBtnBorder: s.racing ? '#2A2A32' : '#6E62F5', raceBtnColor: s.racing ? '#A0A0AB' : '#fff',
+      tradSteps: this.raceSteps(this.raceDef().trad, s.raceT),
+      ffSteps: this.raceSteps(this.raceDef().ff, ffT),
+      tradClock: this.fmtClock(s.raceT), ffClock: this.fmtClock(ffT),
+      tradClockColor: s.raceT >= tradTotal ? '#A0A0AB' : '#F4F4F5',
+      ffClockColor: ffT >= ffTotal ? '#5FE0A6' : '#F4F4F5',
+      ffCardBorder: ffT >= ffTotal && s.raceT > 0 ? 'rgba(62,207,142,0.30)' : '#1E1E24',
+      raceVerdict: s.raceT === 0 ? '' : ffT >= ffTotal ? `✓ done — while the other pipeline ${s.raceT >= tradTotal ? 'took ' + this.fmtClock(tradTotal) : 'is still building'}` : '',
+      // demo
+      goDash: () => this.setState({ demoView: 'dash' }), goPipes: () => this.setState({ demoView: 'pipes' }), goRuns: () => this.setState({ demoView: 'runs' }), goSched: () => this.setState({ demoView: 'sched' }),
+      dashBg: d.bg, dashColor: d.color, dashInset: d.inset,
+      pipesBg: p.bg, pipesColor: p.color, pipesInset: p.inset,
+      runsBg: r.bg, runsColor: r.color, runsInset: r.inset,
+      schedBg: sc.bg, schedColor: sc.color, schedInset: sc.inset,
+      isDash: s.demoView === 'dash', isPipes: s.demoView === 'pipes', isRuns: s.demoView === 'runs', isSched: s.demoView === 'sched',
+      demoCrumb: s.demoView === 'dash' ? 'Dashboard' : s.demoView === 'pipes' ? 'Pipelines' : s.demoView === 'sched' ? 'Scheduler' : 'Runs / run_8f3a2c',
+      kpis: [
+        { label: 'Total pipelines', value: '24', delta: '↑ +3', spark: '0,20 12,17 24,18 36,13 48,14 60,8 72,5', sparkColor: '#6E62F5' },
+        { label: 'Runs today', value: '1,284', delta: '↑ +12.4%', spark: '0,22 12,18 24,19 36,12 48,10 60,11 72,4', sparkColor: '#4D9CF7' },
+        { label: 'Success rate', value: '98.6%', delta: '↑ +0.4pp', spark: '0,14 12,12 24,15 36,9 48,10 60,6 72,4', sparkColor: '#3ECF8E' },
+      ],
+      heatCells: this.heat(),
+      pipeCards: [
+        { name: 'daily_etl', dot: ok, cron: '0 6 * * *', next: '4h 12m', last12: [ok, ok, ok, ok, er, ok, ok, ok, ok, ok, ok, bl] },
+        { name: 'ml_feature_sync', dot: bl, cron: '*/30 * * * *', next: '18m', last12: [ok, ok, ok, ok, ok, ok, ok, ok, ok, ok, ok, bl] },
+        { name: 'weekly_report', dot: er, cron: '0 8 * * 1', next: 'Mon 08:00', last12: [ok, ok, nt, ok, ok, ok, ok, ok, ok, ok, er, er] },
+      ],
+      pipeRows: [
+        { name: 'daily_etl', status: 'SUCCESS', stColor: '#5FE0A6', stBg: 'rgba(62,207,142,0.12)', stBorder: 'rgba(62,207,142,0.30)', rate: '99.2%', cron: '0 6 * * *', last: '2m ago' },
+        { name: 'ml_feature_sync', status: 'RUNNING', stColor: '#86C0FF', stBg: 'rgba(77,156,247,0.12)', stBorder: 'rgba(77,156,247,0.30)', rate: '100%', cron: '*/30 * * * *', last: 'now' },
+        { name: 'weekly_report', status: 'FAILED', stColor: '#FF8388', stBg: 'rgba(241,86,92,0.12)', stBorder: 'rgba(241,86,92,0.30)', rate: '91.7%', cron: '0 8 * * 1', last: '3d ago' },
+        { name: 'crm_backfill', status: 'SUCCESS', stColor: '#5FE0A6', stBg: 'rgba(62,207,142,0.12)', stBorder: 'rgba(62,207,142,0.30)', rate: '98.1%', cron: '0 2 * * *', last: '6h ago' },
+        { name: 'log_compactor', status: 'QUEUED', stColor: '#8B8B96', stBg: 'rgba(139,139,150,0.12)', stBorder: 'rgba(139,139,150,0.30)', rate: '100%', cron: '0 * * * *', last: '52m ago' },
+        { name: 'price_scraper', status: 'SUCCESS', stColor: '#5FE0A6', stBg: 'rgba(62,207,142,0.12)', stBorder: 'rgba(62,207,142,0.30)', rate: '97.4%', cron: '15 */2 * * *', last: '1h ago' },
+      ],
+      schedRows: [
+        { name: 'ml_train', cron: '—', env: '6 base vars', envColor: '#71717A', next: '—', indent: '0', nameColor: '#F4F4F5', togBg: '#26262D', togLeft: '2px' },
+        { name: '↳ full_nightly', cron: '0 2 * * *', env: 'TRAIN_MODE=full +1', envColor: '#ADA6FB', next: '6h 40m', indent: '12px', nameColor: '#A0A0AB', togBg: '#6E62F5', togLeft: '14px' },
+        { name: '↳ incremental', cron: '*/20 * * * *', env: 'TRAIN_MODE=incremental', envColor: '#ADA6FB', next: '11m', indent: '12px', nameColor: '#A0A0AB', togBg: '#6E62F5', togLeft: '14px' },
+        { name: '↳ backfill_q2', cron: '0 4 1 * *', env: 'TRAIN_MODE=backfill +2', envColor: '#ADA6FB', next: 'Aug 1', indent: '12px', nameColor: '#A0A0AB', togBg: '#26262D', togLeft: '2px' },
+        { name: 'daily_etl', cron: '0 6 * * *', env: 'base env', envColor: '#71717A', next: '4h 12m', indent: '0', nameColor: '#F4F4F5', togBg: '#6E62F5', togLeft: '14px' },
+      ],
+      logLines: this.logScript().slice(0, s.logN).map((l, i) => ({ n: i + 1, text: l.t, color: l.c })),
+      logCount: `${s.logN} / 3,412`,
+      // features
+      featList: this.featDefs().map((f, i) => ({
+        num: '0' + (i + 1), title: f.title, sub: f.sub,
+        pick: () => this.setState({ feat: i }),
+        bg: s.feat === i ? '#111114' : 'transparent',
+        numColor: s.feat === i ? '#ADA6FB' : '#3a3a44',
+        titleColor: s.feat === i ? '#F4F4F5' : '#A0A0AB',
+        arrowColor: s.feat === i ? '#ADA6FB' : 'transparent',
+      })),
+      featFile: feat.file, featTag: feat.tag, featCode: feat.code, featBody: feat.body,
+      // config builder
+      cpuOpts: ['0.5', '1.0', '2.0'].map(v => { const c = this.chip(s.cpu === v); return { label: v + ' cores', pick: () => this.setState({ cpu: v }), ...c }; }),
+      memOpts: ['512m', '1g', '2g'].map(v => { const c = this.chip(s.mem === v); return { label: v, pick: () => this.setState({ mem: v }), ...c }; }),
+      pyOpts: ['3.11', '3.12', '3.13'].map(v => { const c = this.chip(s.py === v); return { label: v, pick: () => this.setState({ py: v }), ...c }; }),
+      retries: s.retries, setRetries: (e) => this.setState({ retries: parseInt(e.target.value, 10) }),
+      timeout: s.timeout, setTimeout_: (e) => this.setState({ timeout: parseInt(e.target.value, 10) }),
+      timeoutLabel: (s.timeout / 60) + 'min',
+      cfgJson: cfg,
+      copyCfg: () => { navigator.clipboard && navigator.clipboard.writeText(cfg); this.setState({ copiedCfg: true }); setTimeout(() => this.setState({ copiedCfg: false }), 1600); },
+      cfgCopyLabel: s.copiedCfg ? '✓ copied' : 'copy',
+      // compare
+      compChips: ['Airflow', 'Dagster', 'Prefect', 'Kestra'].map(name => { const c = this.chip(s.comp === name); return { name, pick: () => this.setState({ comp: name }), ...c }; }),
+      compName: s.comp,
+      compRows: comp.rows.map(rw => ({ label: rw[0], ff: rw[1], ffDot: rw[2], other: rw[3], oDot: rw[4] })),
+      compCaveat: comp.caveat,
+      // quickstart
+      qsTabs: ['Docker', 'Kubernetes', 'Local'].map(name => ({ name, pick: () => this.setState({ qsTab: name, copiedQs: false }), bg: s.qsTab === name ? '#26262D' : 'transparent', color: s.qsTab === name ? '#F4F4F5' : '#71717A' })),
+      qsFile: qs.file, qsCode: qs.code,
+      copyQs: () => { navigator.clipboard && navigator.clipboard.writeText(qs.code); this.setState({ copiedQs: true }); setTimeout(() => this.setState({ copiedQs: false }), 1600); },
+      qsCopyLabel: s.copiedQs ? '✓ copied' : 'copy',
+    };
+  }
+}
+</script>
+</body>
+</html>
