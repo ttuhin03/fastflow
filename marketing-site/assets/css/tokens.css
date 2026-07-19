@@ -1,0 +1,90 @@
+/* ============================================================================
+   Fast-Flow Marketing Site · Design Tokens
+   Mirrors frontend/src/styles/variables.css so the marketing site feels like
+   a natural extension of the product UI.
+   ========================================================================== */
+:root {
+  --color-background:       #0A0A0C;
+  --color-bg-subtle:        #0D0D10;
+  --color-surface:          #111114;
+  --color-surface-variant:  #1D1D22;
+  --color-surface-2:        #17171B;
+  --color-surface-3:        #1D1D22;
+  --color-surface-4:        #26262D;
+
+  --color-border:           #1E1E24;
+  --color-border-light:     #2A2A32;
+  --color-border-soft:      #161619;
+
+  --color-text-primary:     #F4F4F5;
+  --color-text-secondary:   #A0A0AB;
+  --color-text-tertiary:    #71717A;
+  --color-text-disabled:    #52525B;
+
+  --color-primary:          #6E62F5;
+  --color-primary-dark:     #5A4FE0;
+  --color-primary-light:    #ADA6FB;
+  --color-primary-hover:    #8075F8;
+  --color-accent-subtle:    rgba(110, 98, 245, 0.12);
+  --color-accent-border:    rgba(110, 98, 245, 0.34);
+  --color-accent-glow:      rgba(110, 98, 245, 0.40);
+
+  --color-success:          #3ECF8E;
+  --color-success-text:     #5FE0A6;
+  --color-success-subtle:   rgba(62, 207, 142, 0.12);
+  --color-success-border:   rgba(62, 207, 142, 0.30);
+
+  --color-error:            #F1565C;
+  --color-error-text:       #FF8388;
+  --color-error-subtle:     rgba(241, 86, 92, 0.12);
+  --color-error-border:     rgba(241, 86, 92, 0.30);
+
+  --color-warning:          #F5A623;
+  --color-warning-text:     #FFC163;
+  --color-warning-subtle:   rgba(245, 166, 35, 0.12);
+  --color-warning-border:   rgba(245, 166, 35, 0.30);
+
+  --color-running:          #4D9CF7;
+  --color-running-text:     #86C0FF;
+  --color-running-subtle:   rgba(77, 156, 247, 0.12);
+  --color-running-border:   rgba(77, 156, 247, 0.30);
+
+  --font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono:   'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  --font-size-xs:   0.6875rem;
+  --font-size-sm:   0.8125rem;
+  --font-size-base: 0.9375rem;
+  --font-size-md:   1.0625rem;
+  --font-size-lg:   1.25rem;
+  --font-size-xl:   1.5rem;
+  --font-size-2xl:  1.875rem;
+  --font-size-3xl:  2.375rem;
+  --font-size-4xl:  3.25rem;
+  --font-size-5xl:  4rem;
+
+  --tracking-tight:  -0.02em;
+  --tracking-tighter: -0.03em;
+  --tracking-wide:    0.06em;
+
+  --radius-sm:  6px;
+  --radius-md:  8px;
+  --radius-lg:  12px;
+  --radius-xl:  16px;
+  --radius-2xl: 22px;
+  --radius-full: 9999px;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.40);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55);
+  --shadow-xl: 0 24px 64px rgba(0, 0, 0, 0.60);
+  --shadow-cta: 0 6px 18px var(--color-accent-glow);
+
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --transition-fast: 120ms var(--ease-out);
+  --transition-base: 180ms var(--ease-out);
+  --transition-slow: 280ms var(--ease-out);
+
+  --content-max: 1160px;
+}

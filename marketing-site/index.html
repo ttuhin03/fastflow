@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fast-Flow — The lightweight, container-native Python orchestrator</title>
+  <meta name="description" content="Fast-Flow is the lightweight, container-native, Python-centric ETL and task orchestrator. One Python script per pipeline, no DAG, no image build. Git push to deploy, isolated Docker or Kubernetes execution." />
+
+  <link rel="icon" type="image/svg+xml" href="assets/img/logo.svg" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="assets/css/tokens.css" />
+  <link rel="stylesheet" href="assets/css/style.css" />
+
+  <meta property="og:title" content="Fast-Flow — The lightweight, container-native Python orchestrator" />
+  <meta property="og:description" content="No DAG. No image build. git push → sync → run. Isolated Docker containers or Kubernetes Jobs." />
+  <meta property="og:type" content="website" />
+</head>
+<body>
+
+  <nav class="nav" id="nav">
+    <div class="wrap">
+      <a href="#top" class="nav-brand">
+        <img src="assets/img/logo.svg" alt="Fast-Flow logo" />
+        <span>Fast-Flow</span>
+      </a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#how-it-works">How it works</a>
+        <a href="#compare">Compare</a>
+        <a href="#quickstart">Quick start</a>
+        <a href="https://github.com/ttuhin03/fastflow" target="_blank" rel="noopener">Docs</a>
+      </div>
+      <div class="nav-cta">
+        <a class="btn btn-secondary" href="https://github.com/ttuhin03/fastflow" target="_blank" rel="noopener">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+          GitHub
+        </a>
+        <a class="btn btn-primary" href="#quickstart">Get started</a>
+      </div>
+    </div>
+  </nav>
+
+  <main id="top">
+    <!-- ============================= HERO ============================= -->
+    <section class="hero">
+      <div class="hero-grid"></div>
+      <div class="hero-glow"></div>
+      <div class="wrap">
+        <div class="hero-content">
+          <span class="eyebrow">
+            <span class="status-dot" style="width:6px;height:6px;border-radius:50%;background:var(--color-success);display:inline-block;"></span>
+            v1.0.7 · Kubernetes-ready · Apache 2 pipelines, GPLv3 core
+          </span>
+          <h1>The lightweight orchestrator for people who <span class="text-gradient">just want to run a script.</span></h1>
+          <p class="hero-sub">
+            Fast-Flow is a container-native, Python-centric ETL and task orchestrator. One <code class="mono">main.py</code> per pipeline —
+            no DAGs, no decorators, no image builds. <code class="mono">git push</code> → sync → run, isolated in a fresh
+            Docker container or Kubernetes Job every time.
+          </p>
+          <div class="hero-cta">
+            <a class="btn btn-primary btn-lg" href="#quickstart">
+              Start in 60 seconds
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
+            </a>
+            <a class="btn btn-secondary btn-lg" href="https://github.com/ttuhin03/fastflow" target="_blank" rel="noopener">
+              View on GitHub
+            </a>
+          </div>
+          <div class="hero-cmd">
+            <span>$ docker compose up -d</span>
+            <span class="mono-accent">✓ orchestrator ready on :8000</span>
+            <button type="button" id="copy-cmd" title="Copy install command" aria-label="Copy install command">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M2 10.5V3a1.5 1.5 0 0 1 1.5-1.5H10"/></svg>
+            </button>
+          </div>
+
+          <div class="hero-badges">
+            <span class="badge">🐍 Python 3.11+</span>
+            <span class="badge">🐳 Docker or Kubernetes Jobs</span>
+            <span class="badge">⚡ FastAPI + React</span>
+            <span class="badge">🔒 Encrypted secrets (Fernet)</span>
+            <span class="badge">🔄 Git-native deploys</span>
+          </div>
+        </div>
+
+        <div class="hero-showcase reveal">
+          <div class="hero-showcase-frame">
+            <div class="hero-showcase-bar">
+              <span style="background:var(--color-error);"></span>
+              <span style="background:var(--color-warning);"></span>
+              <span style="background:var(--color-success);"></span>
+            </div>
+            <img src="assets/img/dashboard.png" alt="Fast-Flow dashboard showing pipeline overview, metrics, and run heatmap" loading="lazy" />
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================= TRUST STRIP ========================= -->
+    <section class="trust-strip">
+      <div class="wrap">
+        <span><strong>Zero-Build</strong> deploys</span>
+        <span><strong>Docker</strong> or <strong>Kubernetes Jobs</strong></span>
+        <span><strong>uv</strong> JIT dependency cache</span>
+        <span><strong>GitHub · Google · Microsoft</strong> OAuth</span>
+        <span><strong>SSE</strong> live logs &amp; metrics</span>
+      </div>
+    </section>
+
+    <!-- ============================ FEATURES ============================ -->
+    <section class="section" id="features">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <span class="eyebrow">Why teams pick Fast-Flow</span>
+          <h2>Everything an orchestrator needs. Nothing it doesn't.</h2>
+          <p>Fast-Flow trades the breadth of Airflow-style platforms for a radically simpler mental model — if it runs locally, it runs here.</p>
+        </div>
+
+        <div class="feature-grid">
+          <div class="feature-card reveal">
+            <div class="feature-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18l-6-6 6-6M15 6l6 6-6 6"/></svg>
+            </div>
+            <h3>Plain Python pipelines</h3>
+            <p>A pipeline is just <code class="mono">main.py</code>. No <code class="mono">@dag</code>, no operators, no XComs — code that runs on your laptop runs here unmodified.</p>
+          </div>
+          <div class="feature-card reveal">
+            <div class="feature-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+            </div>
+            <h3>Zero-build deployment</h3>
+            <p>No Docker image to build per pipeline. Change <code class="mono">requirements.txt</code> in Git — the orchestrator warms the cache automatically.</p>
+          </div>
+          <div class="feature-card reveal">
+            <div class="feature-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2l8 4v6c0 5-3.4 8.5-8 10-4.6-1.5-8-5-8-10V6l8-4z"/></svg>
+            </div>
+            <h3>Strict isolation</h3>
+            <p>Every run gets its own ephemeral Docker container or Kubernetes Job pod. A crash in one pipeline can never leak into another.</p>
+          </div>
+          <div class="feature-card reveal">
+            <div class="feature-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z"/></svg>
+            </div>
+            <h3>uv-powered JIT dependencies</h3>
+            <p>A persistent uv cache and pre-installed Python versions mean dependencies resolve via hardlink in milliseconds, not minutes.</p>
+          </div>
+          <div class="feature-card reveal">
+            <div class="feature-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>
+            </div>
+            <h3>Live logs &amp; metrics</h3>
+            <p>Streaming stdout/stderr and CPU/RAM over SSE, whichever executor you use — Docker stats via socket proxy, or the Kubernetes Metrics API.</p>
+          </div>
+          <div class="feature-card reveal">
+            <div class="feature-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+            </div>
+            <h3>Secrets &amp; RBAC-ready auth</h3>
+            <p>Fernet-encrypted secrets, per-pipeline scoping, and OAuth via GitHub, Google, Microsoft Entra ID, or any custom OIDC provider.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================= HOW IT WORKS ========================= -->
+    <section class="section" id="how-it-works" style="background:var(--color-bg-subtle); border-top:1px solid var(--color-border-soft); border-bottom:1px solid var(--color-border-soft);">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <span class="eyebrow">Git-native deployment</span>
+          <h2>Push to deploy. No build needed.</h2>
+          <p>Your Git repository is the single source of truth. There's no upload button and no manual build step.</p>
+        </div>
+
+        <div class="flow-steps">
+          <div class="flow-step reveal">
+            <span class="num">1</span>
+            <h4>Develop</h4>
+            <p>Write a normal Python script locally — <code class="mono">requirements.txt</code> and an optional <code class="mono">pipeline.json</code> alongside it.</p>
+            <svg class="flow-arrow" width="24" height="16" viewBox="0 0 24 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M0 8h20M14 2l6 6-6 6"/></svg>
+          </div>
+          <div class="flow-step reveal">
+            <span class="num">2</span>
+            <h4>git push</h4>
+            <p>Push to your pipelines repository — the same one Fast-Flow watches, no CI pipeline required.</p>
+            <svg class="flow-arrow" width="24" height="16" viewBox="0 0 24 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M0 8h20M14 2l6 6-6 6"/></svg>
+          </div>
+          <div class="flow-step reveal">
+            <span class="num">3</span>
+            <h4>Auto sync</h4>
+            <p>The orchestrator detects the change and pulls it atomically — pipelines never read half-written files.</p>
+            <svg class="flow-arrow" width="24" height="16" viewBox="0 0 24 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M0 8h20M14 2l6 6-6 6"/></svg>
+          </div>
+          <div class="flow-step reveal">
+            <span class="num">4</span>
+            <h4>Run, isolated</h4>
+            <p>A fresh Docker container or Kubernetes Job starts via <code class="mono">uv run --python</code>. No image build, no waiting.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================== CODE / SIMPLICITY ======================== -->
+    <section class="section">
+      <div class="wrap">
+        <div class="split">
+          <div class="reveal">
+            <span class="eyebrow">No DSL to learn</span>
+            <h2>If it runs locally, it runs in Fast-Flow.</h2>
+            <p>No proprietary decorators, no operator classes, no serialization rules. A pipeline is a directory with a <code class="mono">main.py</code> — that's the whole contract.</p>
+            <ul class="check-list">
+              <li>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8.5l3 3 7-7"/></svg>
+                <span><strong>Automatic discovery</strong> — drop a folder with <code class="mono">main.py</code> in Git and it appears in the UI.</span>
+              </li>
+              <li>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8.5l3 3 7-7"/></svg>
+                <span><strong>Per-pipeline resource limits</strong> — CPU/RAM hard and soft limits via <code class="mono">pipeline.json</code>.</span>
+              </li>
+              <li>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8.5l3 3 7-7"/></svg>
+                <span><strong>Cron &amp; interval scheduling</strong>, plus webhook triggers out of the box.</span>
+              </li>
+              <li>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8.5l3 3 7-7"/></svg>
+                <span><strong>Selectable Python version</strong> per pipeline — 3.11, 3.12, whatever <code class="mono">uv</code> supports.</span>
+              </li>
+            </ul>
+          </div>
+          <div class="reveal">
+            <div class="code-panel">
+              <div class="code-panel-bar">
+                <span>pipelines/data_processor/main.py</span>
+                <span>python</span>
+              </div>
+              <pre><span class="tok-kw">import</span> os
+<span class="tok-kw">import</span> requests
+
+<span class="tok-kw">def</span> <span class="tok-fn">process_data</span>():
+    api_key = os.getenv(<span class="tok-str">"API_KEY"</span>)
+    data = fetch_data(api_key)
+    save_result(transform(data))
+
+<span class="tok-kw">def</span> <span class="tok-fn">fetch_data</span>(api_key):
+    resp = requests.get(
+        <span class="tok-str">"https://api.example.com/data"</span>,
+        headers={<span class="tok-str">"Authorization"</span>: <span class="tok-str">f"Bearer {api_key}"</span>},
+    )
+    <span class="tok-kw">return</span> resp.json()
+
+<span class="tok-cm"># no decorators. no DAG object. no orchestrator import.</span>
+<span class="tok-kw">if</span> __name__ == <span class="tok-str">"__main__"</span>:
+    process_data()</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================== SCREENSHOTS SHOWCASE ====================== -->
+    <section class="section" style="background:var(--color-bg-subtle); border-top:1px solid var(--color-border-soft); border-bottom:1px solid var(--color-border-soft);">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <span class="eyebrow">Inside the app</span>
+          <h2>A modern, realtime dashboard</h2>
+          <p>Built with React + TypeScript. Live run status, dependency &amp; CVE checks, and full run history — no dated Airflow-style UI.</p>
+        </div>
+        <div class="feature-grid">
+          <div class="feature-card reveal" style="padding:0; overflow:hidden;">
+            <img src="assets/img/pipelines-pipelines.png" alt="Pipelines list view" loading="lazy" />
+            <div style="padding:18px 22px;">
+              <h3 style="font-size:var(--font-size-sm); margin-bottom:2px;">Pipelines</h3>
+              <p style="font-size:var(--font-size-xs);">List, run, and filter every pipeline in the repo.</p>
+            </div>
+          </div>
+          <div class="feature-card reveal" style="padding:0; overflow:hidden;">
+            <img src="assets/img/pipeline-detail.png" alt="Pipeline detail and run history view" loading="lazy" />
+            <div style="padding:18px 22px;">
+              <h3 style="font-size:var(--font-size-sm); margin-bottom:2px;">Pipeline detail</h3>
+              <p style="font-size:var(--font-size-xs);">Full run history, logs, and resource usage per run.</p>
+            </div>
+          </div>
+          <div class="feature-card reveal" style="padding:0; overflow:hidden;">
+            <img src="assets/img/pipelines-abhaengigkeiten.png" alt="Dependency and CVE check view" loading="lazy" />
+            <div style="padding:18px 22px;">
+              <h3 style="font-size:var(--font-size-sm); margin-bottom:2px;">Dependencies</h3>
+              <p style="font-size:var(--font-size-xs);">Every package in use, with CVE checks built in.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================== COMPARISON ========================== -->
+    <section class="section" id="compare">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <span class="eyebrow">Why Fast-Flow?</span>
+          <h2>Deliberately narrow, on purpose</h2>
+          <p>"I have a handful of Python scripts and Airflow is overkill." If that's you, this is the sweet spot.</p>
+        </div>
+
+        <div class="compare-table-wrap reveal">
+          <table class="compare">
+            <thead>
+              <tr>
+                <th>Feature</th>
+                <th class="highlight col-highlight">Fast-Flow</th>
+                <th>Airflow</th>
+                <th>Dagster</th>
+                <th>Prefect</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="feature-name">Pipeline definition</td>
+                <td class="highlight">🟢 Plain Python (<code class="mono">main.py</code>)</td>
+                <td>🔴 DAGs, operators, XComs</td>
+                <td>🟡 Assets, ops, resources</td>
+                <td>🟡 <code class="mono">@flow</code>/<code class="mono">@task</code> decorators</td>
+              </tr>
+              <tr>
+                <td class="feature-name">Setup</td>
+                <td class="highlight">🟢 Compose or K8s manifests</td>
+                <td>🔴 Complex cluster</td>
+                <td>🟡 Medium</td>
+                <td>🟡 Server + workers</td>
+              </tr>
+              <tr>
+                <td class="feature-name">Isolation</td>
+                <td class="highlight">🟢 Container/Job per run</td>
+                <td>🔴 Weak (shared worker)</td>
+                <td>🟡 Medium</td>
+                <td>🟡 Depends on worker type</td>
+              </tr>
+              <tr>
+                <td class="feature-name">Dependency speed</td>
+                <td class="highlight">🟢 Instant (uv JIT)</td>
+                <td>🔴 Slow (image builds)</td>
+                <td>🟡 Medium</td>
+                <td>🟡 Env-dependent</td>
+              </tr>
+              <tr>
+                <td class="feature-name">Deployment</td>
+                <td class="highlight">🟢 Git push + auto-sync</td>
+                <td>🔴 Complex CI/CD</td>
+                <td>🟡 Code deployment</td>
+                <td>🟡 Code deployment</td>
+              </tr>
+              <tr>
+                <td class="feature-name">Onboarding</td>
+                <td class="highlight">🟢 Minutes</td>
+                <td>🔴 Weeks</td>
+                <td>🟡 Days</td>
+                <td>🟡 Days</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p style="text-align:center; margin-top:24px; color:var(--color-text-tertiary); font-size:var(--font-size-sm);">
+          Need a large plugin catalog and event triggers? Try <a href="https://kestra.io" target="_blank" rel="noopener" style="color:var(--color-primary-light);">Kestra</a>.
+          Need data-asset lineage? Try <a href="https://dagster.io" target="_blank" rel="noopener" style="color:var(--color-primary-light);">Dagster</a>.
+          Need a richer Python engine? Try <a href="https://www.prefect.io" target="_blank" rel="noopener" style="color:var(--color-primary-light);">Prefect</a>.
+        </p>
+      </div>
+    </section>
+
+    <!-- ============================ QUICKSTART ============================ -->
+    <section class="section" id="quickstart" style="background:var(--color-bg-subtle); border-top:1px solid var(--color-border-soft); border-bottom:1px solid var(--color-border-soft);">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <span class="eyebrow">Quick start</span>
+          <h2>Running in about a minute</h2>
+          <p>Docker Compose, a local dev setup, or Kubernetes — pick what fits.</p>
+        </div>
+
+        <div class="reveal" style="max-width:760px; margin:0 auto;">
+          <div class="quickstart-tabs" role="tablist">
+            <button class="active" data-tab="docker">Docker</button>
+            <button data-tab="local">Local dev</button>
+            <button data-tab="k8s">Kubernetes</button>
+          </div>
+
+          <div class="quickstart-panel active" data-panel="docker">
+            <div class="code-panel">
+              <div class="code-panel-bar"><span>terminal</span><span>bash</span></div>
+              <pre><span class="tok-cm"># 1. Prepare your .env</span>
+cp .env.example .env
+
+<span class="tok-cm"># 2. Generate an encryption key (required)</span>
+python3 -c <span class="tok-str">"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"</span>
+<span class="tok-cm"># → paste into .env as ENCRYPTION_KEY</span>
+
+<span class="tok-cm"># 3. Start everything</span>
+docker compose up -d
+
+<span class="tok-cm"># Open http://localhost:8000</span></pre>
+            </div>
+          </div>
+
+          <div class="quickstart-panel" data-panel="local">
+            <div class="code-panel">
+              <div class="code-panel-bar"><span>terminal</span><span>bash</span></div>
+              <pre>python3 -m venv venv
+<span class="tok-kw">source</span> venv/bin/activate
+pip install -r requirements.txt
+
+cp .env.example .env
+<span class="tok-cm"># set ENCRYPTION_KEY in .env</span>
+
+<span class="tok-cm"># Terminal 1 — backend</span>
+uvicorn app.main:app --reload
+
+<span class="tok-cm"># Terminal 2 — frontend</span>
+<span class="tok-kw">cd</span> frontend &amp;&amp; npm run dev</pre>
+            </div>
+          </div>
+
+          <div class="quickstart-panel" data-panel="k8s">
+            <div class="code-panel">
+              <div class="code-panel-bar"><span>terminal</span><span>bash</span></div>
+              <pre>kubectl apply -f k8s/pvc.yaml
+kubectl apply -f k8s/postgres.yaml   <span class="tok-cm"># optional</span>
+kubectl apply -f k8s/secrets.yaml
+kubectl apply -f k8s/configmap.yaml
+kubectl apply -f k8s/rbac-kubernetes-executor.yaml
+kubectl apply -f k8s/deployment.yaml
+kubectl apply -f k8s/service.yaml
+
+<span class="tok-cm"># port-forward to try it locally</span>
+kubectl port-forward svc/fastflow-orchestrator 8000:80</pre>
+            </div>
+          </div>
+
+          <p style="text-align:center; margin-top:20px; color:var(--color-text-tertiary); font-size:var(--font-size-sm);">
+            Pipeline runs execute as Kubernetes <strong style="color:var(--color-text-secondary);">Jobs</strong> — no Docker socket required on the cluster.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ CTA BANNER ============================ -->
+    <section class="section">
+      <div class="cta-banner reveal">
+        <h2>Ready to stop fighting your orchestrator?</h2>
+        <p>Fast-Flow is open source under the GPLv3 license. Clone it, run it, ship your first pipeline today.</p>
+        <div class="cta-actions">
+          <a class="btn btn-primary btn-lg" href="https://github.com/ttuhin03/fastflow" target="_blank" rel="noopener">Get Fast-Flow on GitHub</a>
+          <a class="btn btn-secondary btn-lg" href="https://github.com/ttuhin03/fastflow/blob/main/docs/docs/manifesto.md" target="_blank" rel="noopener">Read the manifesto</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <a href="#top" class="nav-brand">
+            <img src="assets/img/logo.svg" alt="Fast-Flow logo" />
+            <span>Fast-Flow</span>
+          </a>
+          <p>The lightweight, container-native, Python-centric ETL and task orchestrator for 2026.</p>
+        </div>
+        <div class="footer-cols">
+          <div class="footer-col">
+            <h4>Product</h4>
+            <ul>
+              <li><a href="#features">Features</a></li>
+              <li><a href="#how-it-works">How it works</a></li>
+              <li><a href="#compare">Comparison</a></li>
+              <li><a href="#quickstart">Quick start</a></li>
+            </ul>
+          </div>
+          <div class="footer-col">
+            <h4>Docs</h4>
+            <ul>
+              <li><a href="https://github.com/ttuhin03/fastflow/blob/main/README.md" target="_blank" rel="noopener">README</a></li>
+              <li><a href="https://github.com/ttuhin03/fastflow/blob/main/docs/docs/manifesto.md" target="_blank" rel="noopener">Manifesto</a></li>
+              <li><a href="https://github.com/ttuhin03/fastflow/blob/main/k8s/README.md" target="_blank" rel="noopener">Kubernetes guide</a></li>
+              <li><a href="https://github.com/ttuhin03/fastflow/blob/main/docs/docs/api/API.md" target="_blank" rel="noopener">API reference</a></li>
+            </ul>
+          </div>
+          <div class="footer-col">
+            <h4>Project</h4>
+            <ul>
+              <li><a href="https://github.com/ttuhin03/fastflow" target="_blank" rel="noopener">GitHub</a></li>
+              <li><a href="https://github.com/ttuhin03/fastflow/releases" target="_blank" rel="noopener">Releases</a></li>
+              <li><a href="https://github.com/ttuhin03/fastflow/blob/main/LICENSE" target="_blank" rel="noopener">License</a></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>© 2026 Fast-Flow. Not affiliated with Apache Airflow, Dagster, or Prefect.</span>
+        <span class="license">GPL-3.0</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="assets/js/main.js"></script>
+</body>
+</html>
