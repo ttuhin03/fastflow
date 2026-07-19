@@ -30,6 +30,10 @@ marketing-site/
 
 ## Deploying
 
-Any static host works (GitHub Pages, Netlify, Vercel, S3). For GitHub Pages,
-point it at this directory (e.g. via a `gh-pages` workflow or the "Pages"
-build source set to `/marketing-site` on this branch once merged).
+Deployed to GitHub Pages automatically via `.github/workflows/pages.yml`,
+which publishes this directory whenever it changes on `main`. In the repo
+settings, set **Pages → Build and deployment → Source** to "GitHub Actions"
+(one-time setup) and the workflow takes care of the rest.
+
+Any other static host also works (Netlify, Vercel, S3) if you'd rather point
+one of those at this directory instead.

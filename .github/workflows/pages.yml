@@ -1,0 +1,44 @@
+name: Deploy GitHub Pages (Marketing Site)
+
+# Publishes marketing-site/ (static, no build step) to GitHub Pages whenever
+# it changes on main. Uses the official Pages Actions flow instead of a
+# gh-pages branch, so no extra branch/history to maintain.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'marketing-site/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload marketing-site as Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: marketing-site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
