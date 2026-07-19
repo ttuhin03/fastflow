@@ -22,6 +22,20 @@ input[type=range]{accent-color:#6E62F5}
 @keyframes ffblink{0%,55%{opacity:1}56%,100%{opacity:0}}
 @keyframes ffpulse{0%,100%{opacity:1}50%{opacity:.3}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.gh-star{display:inline-flex;align-items:stretch;height:28px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif;font-size:12px;font-weight:500;line-height:20px;color:#c9d1d9;text-decoration:none;user-select:none}
+.gh-star:hover{color:#c9d1d9}
+.gh-star__btn,.gh-star__count{display:inline-flex;align-items:center;gap:4px;padding:0 10px;background:#21262d;border:1px solid #30363d;transition:background-color 80ms cubic-bezier(0.33,1,0.68,1),border-color 80ms}
+.gh-star__btn{border-radius:6px 0 0 6px;border-right:0}
+.gh-star__count{position:relative;border-radius:0 6px 6px 0;min-width:28px;justify-content:center;font-variant-numeric:tabular-nums}
+.gh-star__count::before{content:'';position:absolute;top:50%;left:-1px;width:0;height:0;border:4px solid transparent;border-right-color:#30363d;margin-top:-4px;margin-left:-8px}
+.gh-star__count::after{content:'';position:absolute;top:50%;left:0;width:0;height:0;border:4px solid transparent;border-right-color:#21262d;margin-top:-4px;margin-left:-8px}
+.gh-star:hover .gh-star__btn,.gh-star:hover .gh-star__count{background:#30363d;border-color:#8b949e}
+.gh-star:hover .gh-star__count::before{border-right-color:#8b949e}
+.gh-star:hover .gh-star__count::after{border-right-color:#30363d}
+.gh-star svg{display:block;flex-shrink:0}
+.gh-star--lg{height:32px;font-size:14px}
+.gh-star--lg .gh-star__btn,.gh-star--lg .gh-star__count{padding:0 14px}
+.gh-star--lg svg{width:16px;height:16px}
 </style>
 </helmet>
 
@@ -42,13 +56,17 @@ input[type=range]{accent-color:#6E62F5}
       <a href="#compare" style="color:#71717A" style-hover="color:#F4F4F5">05 compare</a>
       <a href="manifesto.html" style="color:#71717A" style-hover="color:#F4F4F5">manifesto</a>
     </div>
-    <a href="https://github.com/ttuhin03/fastflow" style="display:flex;align-items:center;gap:8px;padding:7px 14px;border-radius:8px;background:#17171B;border:1px solid #2A2A32;color:#F4F4F5;font-size:13px;font-weight:500" style-hover="border-color:#3a3a44;color:#F4F4F5">GitHub <span style="display:inline-flex;align-items:center;gap:5px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#A0A0AB"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>{{ stars }}</span></a>
+    <a href="https://github.com/ttuhin03/fastflow" class="gh-star" aria-label="Star ttuhin03/fastflow on GitHub">
+      <span class="gh-star__btn"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>Star</span>
+      <span class="gh-star__count">{{ stars }}</span>
+    </a>
   </div>
 </div>
 
 <!-- HERO -->
 <div style="position:relative;overflow:hidden;border-bottom:1px solid #1E1E24">
   <div style="position:absolute;inset:0;background-image:linear-gradient(#131318 1px,transparent 1px),linear-gradient(90deg,#131318 1px,transparent 1px);background-size:64px 64px;mask-image:radial-gradient(ellipse 80% 70% at 30% 0%,black 25%,transparent 75%)"></div>
+  <canvas ref="{{ golRef }}" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;mask-image:radial-gradient(ellipse 80% 70% at 30% 0%,black 25%,transparent 75%)"></canvas>
   <div style="position:relative;max-width:1180px;margin:0 auto;padding:88px 36px 76px">
     <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#5FE0A6;display:flex;align-items:center;gap:8px;margin-bottom:28px"><span style="width:6px;height:6px;border-radius:50%;background:#3ECF8E;animation:ffpulse 2.4s infinite"></span>{{ version }} · open source · GPL-3.0 · Docker + Kubernetes</div>
     <h1 style="margin:0;font-size:64px;line-height:1.02;letter-spacing:-0.035em;font-weight:700;max-width:860px">The orchestrator for people who just have <span style="font-family:'JetBrains Mono',monospace;font-weight:600;color:#ADA6FB;letter-spacing:-0.02em">scripts.py</span></h1>
@@ -56,7 +74,10 @@ input[type=range]{accent-color:#6E62F5}
       <div>
         <p style="margin:0 0 28px;font-size:16.5px;line-height:1.65;color:#A0A0AB;text-wrap:pretty">No DAGs. No image builds. No YAML. A pipeline is a folder with a <span style="color:#F4F4F5;font-family:'JetBrains Mono',monospace;font-size:14.5px">main.py</span> — push it to Git and it runs in its own disposable sandbox, dependencies resolved in milliseconds.</p>
         <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-          <a href="https://github.com/ttuhin03/fastflow" style="display:inline-flex;align-items:center;gap:8px;padding:11px 22px;border-radius:8px;background:#6E62F5;color:#fff;font-size:14px;font-weight:600;transition:all 180ms cubic-bezier(0.16,1,0.3,1)" style-hover="background:#8075F8;box-shadow:0 6px 18px rgba(110,98,245,0.4);color:#fff"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>Star on GitHub</a>
+          <a href="https://github.com/ttuhin03/fastflow" class="gh-star gh-star--lg" aria-label="Star ttuhin03/fastflow on GitHub">
+            <span class="gh-star__btn"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>Star</span>
+            <span class="gh-star__count">{{ stars }}</span>
+          </a>
           <button onClick="{{ copyCompose }}" style="display:flex;align-items:center;gap:10px;padding:11px 16px;border-radius:8px;background:#111114;border:1px solid #2A2A32;color:#A0A0AB;font-family:'JetBrains Mono',monospace;font-size:13px;cursor:pointer" style-hover="border-color:#3a3a44;color:#F4F4F5"><span style="color:#52525B">$</span> docker compose up -d <span style="font-size:11px;color:{{ copyComposeColor }}">{{ copyComposeLabel }}</span></button>
         </div>
         <div style="display:flex;gap:26px;margin-top:48px;font-family:'JetBrains Mono',monospace">
@@ -167,8 +188,8 @@ input[type=range]{accent-color:#6E62F5}
       <button onClick="{{ goRuns }}" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:7px;border:none;text-align:left;font-size:13px;cursor:pointer;font-family:'Geist',sans-serif;background:{{ runsBg }};color:{{ runsColor }};box-shadow:{{ runsInset }}" style-hover="background:#17171B"><span>∿ Runs</span><span style="display:flex;align-items:center;gap:5px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#86C0FF"><span style="width:6px;height:6px;border-radius:50%;background:#4D9CF7;animation:ffpulse 1.6s infinite"></span>3</span></button>
       <button onClick="{{ goSched }}" style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:7px;border:none;text-align:left;font-size:13px;cursor:pointer;font-family:'Geist',sans-serif;background:{{ schedBg }};color:{{ schedColor }};box-shadow:{{ schedInset }}" style-hover="background:#17171B">◷ Scheduler</button>
       <div style="font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#52525B;padding:12px 8px 4px">Security</div>
-      <div style="display:flex;align-items:center;gap:9px;padding:8px 10px;font-size:13px;color:#71717A">⚿ Secrets</div>
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;font-size:13px;color:#71717A"><span>◫ Dependencies</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#FF8388;background:rgba(241,86,92,0.12);border-radius:9999px;padding:1px 7px">2</span></div>
+      <button onClick="{{ goSecrets }}" style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:7px;border:none;text-align:left;font-size:13px;cursor:pointer;font-family:'Geist',sans-serif;background:{{ secBg }};color:{{ secColor }};box-shadow:{{ secInset }}" style-hover="background:#17171B">⚿ Secrets</button>
+      <button onClick="{{ goDeps }}" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:7px;border:none;text-align:left;font-size:13px;cursor:pointer;font-family:'Geist',sans-serif;background:{{ depsBg }};color:{{ depsColor }};box-shadow:{{ depsInset }}" style-hover="background:#17171B"><span>◫ Dependencies</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#FF8388;background:rgba(241,86,92,0.12);border-radius:9999px;padding:1px 7px">2</span></button>
       <div style="margin-top:auto;display:flex;align-items:center;gap:8px;padding:9px 10px;border-radius:7px;background:#111114;font-size:11.5px;color:#A0A0AB"><span style="width:7px;height:7px;border-radius:50%;background:#3ECF8E;box-shadow:0 0 8px rgba(62,207,142,0.7)"></span>All systems operational</div>
     </div>
 
@@ -235,6 +256,42 @@ input[type=range]{accent-color:#6E62F5}
               <div style="padding:2px 14px 0 52px"><span style="display:inline-block;width:7px;height:13px;background:#3ECF8E;animation:ffblink 1s step-end infinite"></span></div>
             </div>
             <div style="display:flex;justify-content:space-between;padding:7px 14px;border-top:1px solid #1E1E24;background:#111114;font-family:'JetBrains Mono',monospace;font-size:10px;color:#52525B"><span style="color:#5FE0A6">● streaming via SSE</span><span>{{ logCount }} lines</span></div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isSecrets }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <span style="font-size:12px;color:#71717A">Encrypted at rest with Fernet · never shown in logs</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;padding:3px 10px;border-radius:9999px;color:#5FE0A6;background:rgba(62,207,142,0.12);border:1px solid rgba(62,207,142,0.30)">⚿ encryption key loaded</span>
+          </div>
+          <div style="border:1px solid #1E1E24;border-radius:12px;overflow:hidden">
+            <div style="display:grid;grid-template-columns:1.6fr 1.4fr 1fr 1fr;padding:10px 16px;background:#0D0D10;font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;color:#71717A;border-bottom:1px solid #1E1E24"><span>Key</span><span>Value</span><span>Scope</span><span>Updated</span></div>
+            <sc-for list="{{ secretRows }}" as="sr" hint-placeholder-count="5">
+              <div style="display:grid;grid-template-columns:1.6fr 1.4fr 1fr 1fr;align-items:center;padding:13px 16px;border-bottom:1px solid #161619" style-hover="background:#17171B">
+                <span style="font-family:'JetBrains Mono',monospace;font-size:12.5px">{{ sr.key }}</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#52525B;letter-spacing:2px">••••••••••••</span>
+                <span><span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;padding:2px 9px;border-radius:9999px;color:{{ sr.scopeColor }};background:{{ sr.scopeBg }};border:1px solid {{ sr.scopeBorder }}">{{ sr.scope }}</span></span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#71717A">{{ sr.updated }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isDeps }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <span style="font-size:12px;color:#71717A">Aggregated from all requirements.txt · CVE check nightly</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;padding:3px 10px;border-radius:9999px;color:#FF8388;background:rgba(241,86,92,0.12);border:1px solid rgba(241,86,92,0.30)">2 advisories</span>
+          </div>
+          <div style="border:1px solid #1E1E24;border-radius:12px;overflow:hidden">
+            <div style="display:grid;grid-template-columns:1.5fr 1fr 1.3fr 1.2fr;padding:10px 16px;background:#0D0D10;font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;color:#71717A;border-bottom:1px solid #1E1E24"><span>Package</span><span>Version</span><span>Used by</span><span>Security</span></div>
+            <sc-for list="{{ depRows }}" as="dr" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:1.5fr 1fr 1.3fr 1.2fr;align-items:center;padding:13px 16px;border-bottom:1px solid #161619" style-hover="background:#17171B">
+                <span style="font-family:'JetBrains Mono',monospace;font-size:12.5px">{{ dr.pkg }}</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#A0A0AB">{{ dr.ver }}</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#71717A">{{ dr.used }}</span>
+                <span><span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;padding:2px 9px;border-radius:9999px;color:{{ dr.cveColor }};background:{{ dr.cveBg }};border:1px solid {{ dr.cveBorder }}">{{ dr.cve }}</span></span>
+              </div>
+            </sc-for>
           </div>
         </sc-if>
 
@@ -319,6 +376,27 @@ input[type=range]{accent-color:#6E62F5}
           <input type="range" min="300" max="7200" step="300" value="{{ timeout }}" onChange="{{ setTimeout_ }}" style="width:100%">
         </div>
       </div>
+      <div>
+        <div style="font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#71717A;margin-bottom:10px">Schedule</div>
+        <div style="display:flex;gap:8px">
+          <sc-for list="{{ schedOpts }}" as="o" hint-placeholder-count="3"><button onClick="{{ o.pick }}" style="padding:8px 18px;border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:13px;cursor:pointer;transition:all 120ms;background:{{ o.bg }};border:1px solid {{ o.border }};color:{{ o.color }}" style-hover="border-color:#3a3a44">{{ o.label }}</button></sc-for>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#71717A;margin-bottom:10px">Env variable · LOG_LEVEL</div>
+        <div style="display:flex;gap:8px">
+          <sc-for list="{{ envOpts }}" as="o" hint-placeholder-count="3"><button onClick="{{ o.pick }}" style="padding:8px 18px;border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:13px;cursor:pointer;transition:all 120ms;background:{{ o.bg }};border:1px solid {{ o.border }};color:{{ o.color }}" style-hover="border-color:#3a3a44">{{ o.label }}</button></sc-for>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#71717A;margin-bottom:10px">Custom env variable</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="text" value="{{ customKey }}" onChange="{{ setCustomKey }}" placeholder="KEY" spellcheck="false" style="width:160px;padding:9px 12px;border-radius:8px;background:#111114;border:1px solid #2A2A32;color:#F4F4F5;font-family:'JetBrains Mono',monospace;font-size:13px;outline:none" style-focus="border-color:rgba(110,98,245,0.34);box-shadow:0 0 0 3px rgba(110,98,245,0.12)">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#52525B">=</span>
+          <input type="text" value="{{ customVal }}" onChange="{{ setCustomVal }}" placeholder="value" spellcheck="false" style="flex:1;padding:9px 12px;border-radius:8px;background:#111114;border:1px solid #2A2A32;color:#F4F4F5;font-family:'JetBrains Mono',monospace;font-size:13px;outline:none" style-focus="border-color:rgba(110,98,245,0.34);box-shadow:0 0 0 3px rgba(110,98,245,0.12)">
+        </div>
+        <div style="font-size:11.5px;color:#52525B;margin-top:8px">Merged into <span style="font-family:'JetBrains Mono',monospace">default_env</span> — secrets belong in the Secrets UI, not here.</div>
+      </div>
       <div style="font-size:12.5px;color:#52525B;line-height:1.6">Soft limits are monitored and surfaced as warnings in the UI; hard limits are enforced by cgroups (Docker) or <span style="font-family:'JetBrains Mono',monospace">resources.limits</span> (K8s). Exceed memory → OOM kill, exit 137, visible in the run detail.</div>
     </div>
     <div style="border-radius:12px;border:1px solid #1E1E24;background:#0B0B0E;overflow:hidden;position:sticky;top:100px">
@@ -366,7 +444,10 @@ input[type=range]{accent-color:#6E62F5}
       <h2 style="margin:0 0 16px;font-size:36px;line-height:1.1;letter-spacing:-0.03em;font-weight:700">Running before your coffee is.</h2>
       <p style="margin:0 0 28px;font-size:15px;line-height:1.7;color:#A0A0AB;text-wrap:pretty">Clone, set one encryption key, compose up. Then open <span style="font-family:'JetBrains Mono',monospace;font-size:13.5px;color:#F4F4F5">localhost:8000</span> and push your first pipeline from the <a href="https://github.com/ttuhin03/fastflow-pipeline-template">template repo</a>.</p>
       <div style="display:flex;gap:12px">
-        <a href="https://github.com/ttuhin03/fastflow" style="display:inline-flex;align-items:center;gap:8px;padding:11px 22px;border-radius:8px;background:#6E62F5;color:#fff;font-size:14px;font-weight:600" style-hover="background:#8075F8;box-shadow:0 6px 18px rgba(110,98,245,0.4);color:#fff"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>Star on GitHub</a>
+        <a href="https://github.com/ttuhin03/fastflow" class="gh-star gh-star--lg" aria-label="Star ttuhin03/fastflow on GitHub">
+          <span class="gh-star__btn"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>Star</span>
+          <span class="gh-star__count">{{ stars }}</span>
+        </a>
         <a href="manifesto.html" style="padding:11px 22px;border-radius:8px;background:#111114;border:1px solid #2A2A32;color:#F4F4F5;font-size:14px;font-weight:500" style-hover="border-color:#3a3a44;color:#F4F4F5">Read the manifesto</a>
       </div>
     </div>
@@ -409,12 +490,62 @@ class Component extends DCLogic {
     copiedCompose: false, copiedQs: false, copiedCfg: false, feat: 0,
     raceT: 0, racing: false, raceDone: false,
     cpu: '1.0', mem: '1g', py: '3.12', retries: 2, timeout: 3600,
+    sched: 'daily 06:00', logLevel: 'INFO', customKey: 'API_ENDPOINT', customVal: 'https://api.example.com',
     stars: null, version: null };
+
+  golRef = React.createRef();
+
+  startGol() {
+    const cv = this.golRef.current;
+    if (!cv || !(this.props.animate ?? true)) return;
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const CELL = 64;
+    const resize = () => { cv.width = cv.offsetWidth; cv.height = cv.offsetHeight; };
+    resize();
+    const cols = Math.ceil(cv.width / CELL), rows = Math.ceil(cv.height / CELL);
+    let grid = [], age = [];
+    const seed = () => {
+      grid = Array.from({ length: rows }, () => Array.from({ length: cols }, () => Math.random() < 0.14 ? 1 : 0));
+      age = Array.from({ length: rows }, () => new Array(cols).fill(0));
+    };
+    seed();
+    let steps = 0;
+    const ctx = cv.getContext('2d');
+    const draw = () => {
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+        if (!grid[y][x]) continue;
+        const a = Math.min(age[y][x], 4);
+        ctx.fillStyle = a === 0 ? 'rgba(110,98,245,0.16)' : `rgba(110,98,245,${0.11 - a * 0.015})`;
+        ctx.fillRect(x * CELL + 1.5, y * CELL + 1.5, CELL - 2, CELL - 2);
+      }
+    };
+    const step = () => {
+      const next = grid.map((row, y) => row.map((c, x) => {
+        let n = 0;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          if (!dy && !dx) continue;
+          n += grid[(y + dy + rows) % rows][(x + dx + cols) % cols];
+        }
+        return c ? (n === 2 || n === 3 ? 1 : 0) : (n === 3 ? 1 : 0);
+      }));
+      let pop = 0;
+      for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+        age[y][x] = next[y][x] ? (grid[y][x] ? age[y][x] + 1 : 0) : 0;
+        pop += next[y][x];
+      }
+      grid = next;
+      if (++steps > 90 || pop < cols * rows * 0.02) { steps = 0; seed(); }
+      draw();
+    };
+    draw();
+    this.golTimer = setInterval(step, 700);
+  }
 
   fmtStars(n) {
     if (n >= 10000) return Math.round(n / 1000) + 'k';
     if (n >= 1000) return (Math.round(n / 100) / 10) + 'k';
-    return String(n);
+    return n.toLocaleString('en-US');
   }
 
   fetchGitHubMeta() {
@@ -598,6 +729,7 @@ class Component extends DCLogic {
 
   componentDidMount() {
     this.fetchGitHubMeta();
+    setTimeout(() => this.startGol(), 300);
     if (this.props.animate ?? true) {
       this.termTimer = setInterval(() => {
         this.setState(s => {
@@ -613,7 +745,7 @@ class Component extends DCLogic {
       this.setState({ termStep: 99, logN: this.logScript().length });
     }
   }
-  componentWillUnmount() { clearInterval(this.termTimer); clearInterval(this.logTimer); clearInterval(this.raceTimer); }
+  componentWillUnmount() { clearInterval(this.termTimer); clearInterval(this.logTimer); clearInterval(this.raceTimer); clearInterval(this.golTimer); }
 
   startRace() {
     clearInterval(this.raceTimer);
@@ -661,7 +793,7 @@ class Component extends DCLogic {
     const s = this.state;
     const ok = '#3ECF8E', er = '#F1565C', bl = '#4D9CF7', nt = '#26262D';
     const navBtn = (key) => ({ bg: s.demoView === key ? '#17171B' : 'transparent', color: s.demoView === key ? '#F4F4F5' : '#A0A0AB', inset: s.demoView === key ? 'inset 2px 0 0 #6E62F5' : 'none' });
-    const d = navBtn('dash'), p = navBtn('pipes'), r = navBtn('runs'), sc = navBtn('sched');
+    const d = navBtn('dash'), p = navBtn('pipes'), r = navBtn('runs'), sc = navBtn('sched'), se = navBtn('secrets'), de = navBtn('deps');
     const comp = this.compData()[s.comp];
     const qs = this.qsData()[s.qsTab];
     const scen = this.termScripts()[s.scenario];
@@ -669,9 +801,11 @@ class Component extends DCLogic {
     const tradTotal = this.raceDef().trad.reduce((a, x) => a + x.dur, 0);
     const ffTotal = this.raceDef().ff.reduce((a, x) => a + x.dur, 0);
     const ffT = Math.min(s.raceT, ffTotal);
-    const cfg = `{\n  "cpu_hard_limit": ${s.cpu},\n  "mem_hard_limit": "${s.mem}",\n  "cpu_soft_limit": ${(parseFloat(s.cpu) * 0.8).toFixed(1)},\n  "mem_soft_limit": "${s.mem === '512m' ? '400m' : s.mem === '1g' ? '800m' : '1.6g'}",\n  "python_version": "${s.py}",\n  "timeout": ${s.timeout},\n  "retry_attempts": ${s.retries},\n  "tags": ["etl", "daily"],\n  "enabled": true\n}`;
+    const cronMap = { 'hourly': '0 * * * *', 'daily 06:00': '0 6 * * *', 'weekly Mon': '0 8 * * 1' };
+    const cfg = `{\n  "cpu_hard_limit": ${s.cpu},\n  "mem_hard_limit": "${s.mem}",\n  "cpu_soft_limit": ${(parseFloat(s.cpu) * 0.8).toFixed(1)},\n  "mem_soft_limit": "${s.mem === '512m' ? '400m' : s.mem === '1g' ? '800m' : '1.6g'}",\n  "python_version": "${s.py}",\n  "timeout": ${s.timeout},\n  "retry_attempts": ${s.retries},\n  "default_env": {\n    "LOG_LEVEL": "${s.logLevel}"${s.customKey.trim() ? `,\n    "${s.customKey.trim()}": "${s.customVal}"` : ''}\n  },\n  "schedules": [\n    {\n      "name": "${s.sched.replace(/[ :]/g, '_').toLowerCase()}",\n      "cron": "${cronMap[s.sched]}",\n      "enabled": true\n    }\n  ],\n  "tags": ["etl", "daily"],\n  "enabled": true\n}`;
     return {
       version: s.version ?? '…', stars: s.stars ?? '…',
+      golRef: this.golRef,
       // terminal
       termTabs: Object.keys(this.termScripts()).map(name => { const c = this.chip(s.scenario === name); return { name, pick: () => this.setState({ scenario: name, termStep: 0 }), ...c }; }),
       termTitle: scen.title,
@@ -696,8 +830,27 @@ class Component extends DCLogic {
       pipesBg: p.bg, pipesColor: p.color, pipesInset: p.inset,
       runsBg: r.bg, runsColor: r.color, runsInset: r.inset,
       schedBg: sc.bg, schedColor: sc.color, schedInset: sc.inset,
+      goSecrets: () => this.setState({ demoView: 'secrets' }), goDeps: () => this.setState({ demoView: 'deps' }),
+      secBg: se.bg, secColor: se.color, secInset: se.inset,
+      depsBg: de.bg, depsColor: de.color, depsInset: de.inset,
       isDash: s.demoView === 'dash', isPipes: s.demoView === 'pipes', isRuns: s.demoView === 'runs', isSched: s.demoView === 'sched',
-      demoCrumb: s.demoView === 'dash' ? 'Dashboard' : s.demoView === 'pipes' ? 'Pipelines' : s.demoView === 'sched' ? 'Scheduler' : 'Runs / run_8f3a2c',
+      isSecrets: s.demoView === 'secrets', isDeps: s.demoView === 'deps',
+      demoCrumb: s.demoView === 'dash' ? 'Dashboard' : s.demoView === 'pipes' ? 'Pipelines' : s.demoView === 'sched' ? 'Scheduler' : s.demoView === 'secrets' ? 'Secrets' : s.demoView === 'deps' ? 'Dependencies' : 'Runs / run_8f3a2c',
+      secretRows: [
+        { key: 'WAREHOUSE_DSN', scope: 'global', scopeColor: '#ADA6FB', scopeBg: 'rgba(110,98,245,0.12)', scopeBorder: 'rgba(110,98,245,0.34)', updated: '12d ago' },
+        { key: 'API_KEY_STRIPE', scope: 'daily_etl', scopeColor: '#8B8B96', scopeBg: 'rgba(139,139,150,0.12)', scopeBorder: 'rgba(139,139,150,0.30)', updated: '3d ago' },
+        { key: 'S3_ACCESS_KEY', scope: 'global', scopeColor: '#ADA6FB', scopeBg: 'rgba(110,98,245,0.12)', scopeBorder: 'rgba(110,98,245,0.34)', updated: '41d ago' },
+        { key: 'SLACK_WEBHOOK_URL', scope: 'global', scopeColor: '#ADA6FB', scopeBg: 'rgba(110,98,245,0.12)', scopeBorder: 'rgba(110,98,245,0.34)', updated: '8d ago' },
+        { key: 'HF_TOKEN', scope: 'ml_train', scopeColor: '#8B8B96', scopeBg: 'rgba(139,139,150,0.12)', scopeBorder: 'rgba(139,139,150,0.30)', updated: '1d ago' },
+      ],
+      depRows: [
+        { pkg: 'urllib3', ver: '1.26.5', used: '3 pipelines', cve: 'CVE-2023-43804', cveColor: '#FF8388', cveBg: 'rgba(241,86,92,0.12)', cveBorder: 'rgba(241,86,92,0.30)' },
+        { pkg: 'pillow', ver: '9.4.0', used: '1 pipeline', cve: 'CVE-2023-50447', cveColor: '#FFC163', cveBg: 'rgba(245,166,35,0.12)', cveBorder: 'rgba(245,166,35,0.30)' },
+        { pkg: 'pandas', ver: '2.1.0', used: '9 pipelines', cve: 'clean', cveColor: '#5FE0A6', cveBg: 'rgba(62,207,142,0.12)', cveBorder: 'rgba(62,207,142,0.30)' },
+        { pkg: 'requests', ver: '2.31.0', used: '14 pipelines', cve: 'clean', cveColor: '#5FE0A6', cveBg: 'rgba(62,207,142,0.12)', cveBorder: 'rgba(62,207,142,0.30)' },
+        { pkg: 'prophet', ver: '1.1.5', used: '2 pipelines', cve: 'clean', cveColor: '#5FE0A6', cveBg: 'rgba(62,207,142,0.12)', cveBorder: 'rgba(62,207,142,0.30)' },
+        { pkg: 'sqlmodel', ver: '0.0.16', used: '4 pipelines', cve: 'clean', cveColor: '#5FE0A6', cveBg: 'rgba(62,207,142,0.12)', cveBorder: 'rgba(62,207,142,0.30)' },
+      ],
       kpis: [
         { label: 'Total pipelines', value: '24', delta: '↑ +3', spark: '0,20 12,17 24,18 36,13 48,14 60,8 72,5', sparkColor: '#6E62F5' },
         { label: 'Runs today', value: '1,284', delta: '↑ +12.4%', spark: '0,22 12,18 24,19 36,12 48,10 60,11 72,4', sparkColor: '#4D9CF7' },
@@ -740,6 +893,10 @@ class Component extends DCLogic {
       cpuOpts: ['0.5', '1.0', '2.0'].map(v => { const c = this.chip(s.cpu === v); return { label: v + ' cores', pick: () => this.setState({ cpu: v }), ...c }; }),
       memOpts: ['512m', '1g', '2g'].map(v => { const c = this.chip(s.mem === v); return { label: v, pick: () => this.setState({ mem: v }), ...c }; }),
       pyOpts: ['3.11', '3.12', '3.13'].map(v => { const c = this.chip(s.py === v); return { label: v, pick: () => this.setState({ py: v }), ...c }; }),
+      schedOpts: ['hourly', 'daily 06:00', 'weekly Mon'].map(v => { const c = this.chip(s.sched === v); return { label: v, pick: () => this.setState({ sched: v }), ...c }; }),
+      envOpts: ['DEBUG', 'INFO', 'WARNING'].map(v => { const c = this.chip(s.logLevel === v); return { label: v, pick: () => this.setState({ logLevel: v }), ...c }; }),
+      customKey: s.customKey, setCustomKey: (e) => this.setState({ customKey: e.target.value }),
+      customVal: s.customVal, setCustomVal: (e) => this.setState({ customVal: e.target.value }),
       retries: s.retries, setRetries: (e) => this.setState({ retries: parseInt(e.target.value, 10) }),
       timeout: s.timeout, setTimeout_: (e) => this.setState({ timeout: parseInt(e.target.value, 10) }),
       timeoutLabel: (s.timeout / 60) + 'min',

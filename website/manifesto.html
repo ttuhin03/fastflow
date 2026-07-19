@@ -17,6 +17,19 @@
 html,body{margin:0;padding:0;background:#0A0A0C;color:#F4F4F5;font-family:'Geist',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
 a{color:#ADA6FB;text-decoration:none}a:hover{color:#F4F4F5}
 ::selection{background:rgba(110,98,245,.35)}
+.gh-star{display:inline-flex;align-items:stretch;height:28px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif;font-size:12px;font-weight:500;line-height:20px;color:#c9d1d9;text-decoration:none;user-select:none}
+.gh-star:hover{color:#c9d1d9}
+.gh-star__btn,.gh-star__count{display:inline-flex;align-items:center;gap:4px;padding:0 10px;background:#21262d;border:1px solid #30363d;transition:background-color 80ms,border-color 80ms}
+.gh-star__btn{border-radius:6px 0 0 6px;border-right:0}
+.gh-star__count{position:relative;border-radius:0 6px 6px 0;min-width:28px;justify-content:center;font-variant-numeric:tabular-nums}
+.gh-star__count::before{content:'';position:absolute;top:50%;left:-1px;width:0;height:0;border:4px solid transparent;border-right-color:#30363d;margin-top:-4px;margin-left:-8px}
+.gh-star__count::after{content:'';position:absolute;top:50%;left:0;width:0;height:0;border:4px solid transparent;border-right-color:#21262d;margin-top:-4px;margin-left:-8px}
+.gh-star:hover .gh-star__btn,.gh-star:hover .gh-star__count{background:#30363d;border-color:#8b949e}
+.gh-star:hover .gh-star__count::before{border-right-color:#8b949e}
+.gh-star:hover .gh-star__count::after{border-right-color:#30363d}
+.gh-star svg{display:block;flex-shrink:0}
+.gh-star--lg{height:32px;font-size:14px}
+.gh-star--lg .gh-star__btn,.gh-star--lg .gh-star__count{padding:0 14px}
 </style>
 </helmet>
 
@@ -30,7 +43,10 @@ a{color:#ADA6FB;text-decoration:none}a:hover{color:#F4F4F5}
     </a>
     <div style="display:flex;align-items:center;gap:22px;font-size:13.5px">
       <a href="index.html" style="color:#A0A0AB">← Back to site</a>
-      <a href="https://github.com/ttuhin03/fastflow" style="padding:7px 14px;border-radius:8px;background:#17171B;border:1px solid #2A2A32;color:#F4F4F5;font-size:13px;font-weight:500" style-hover="border-color:#3a3a44;color:#F4F4F5">GitHub</a>
+      <a href="https://github.com/ttuhin03/fastflow" class="gh-star" aria-label="Star ttuhin03/fastflow on GitHub">
+        <span class="gh-star__btn"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>Star</span>
+        <span class="gh-star__count" data-stars>…</span>
+      </a>
     </div>
   </div>
 </div>
@@ -68,11 +84,25 @@ a{color:#ADA6FB;text-decoration:none}a:hover{color:#F4F4F5}
 
   <div style="margin-top:56px;padding-top:32px;border-top:1px solid #1E1E24;display:flex;justify-content:space-between;align-items:center">
     <span style="font-size:13px;color:#71717A">Fast-Flow Orchestrator · GPL-3.0</span>
-    <a href="https://github.com/ttuhin03/fastflow" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;border-radius:8px;background:#6E62F5;color:#fff;font-size:13.5px;font-weight:600" style-hover="background:#8075F8;color:#fff"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>Star on GitHub</a>
+    <a href="https://github.com/ttuhin03/fastflow" class="gh-star gh-star--lg" aria-label="Star ttuhin03/fastflow on GitHub">
+      <span class="gh-star__btn"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>Star</span>
+      <span class="gh-star__count" data-stars>…</span>
+    </a>
   </div>
 </div>
 
 </div>
 </x-dc>
+<script>
+fetch('https://api.github.com/repos/ttuhin03/fastflow')
+  .then(r => r.ok ? r.json() : Promise.reject())
+  .then(d => {
+    if (typeof d.stargazers_count !== 'number') return;
+    const n = d.stargazers_count;
+    const label = n >= 1000 ? (Math.round(n / 100) / 10) + 'k' : n.toLocaleString('en-US');
+    document.querySelectorAll('[data-stars]').forEach(el => { el.textContent = label; });
+  })
+  .catch(() => {});
+</script>
 </body>
 </html>
