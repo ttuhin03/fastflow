@@ -22,20 +22,6 @@ input[type=range]{accent-color:#6E62F5}
 @keyframes ffblink{0%,55%{opacity:1}56%,100%{opacity:0}}
 @keyframes ffpulse{0%,100%{opacity:1}50%{opacity:.3}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
-.gh-star{display:inline-flex;align-items:stretch;height:32px;isolation:isolate;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif;font-size:14px;font-weight:500;line-height:20px;color:#f0f6fc;text-decoration:none;user-select:none;border-radius:6px}
-.gh-star:hover{color:#f0f6fc}
-.gh-star__btn,.gh-star__count{display:inline-flex;align-items:center;background:#21262d;border:1px solid #3d444d;box-shadow:0 1px transparent;transition:background-color .08s ease-out,border-color .08s ease-out,box-shadow .08s ease-out}
-.gh-star__btn{gap:8px;padding:0 12px;border-radius:6px 0 0 6px;border-right:0}
-.gh-star__count{padding:0 10px;border-radius:0 6px 6px 0;justify-content:center;min-width:2.25em;font-weight:600;font-variant-numeric:tabular-nums;background:#151b23;color:#f0f6fc}
-.gh-star:hover .gh-star__btn{background:#262c36;border-color:#3d444d}
-.gh-star:hover .gh-star__count{background:#21262d;border-color:#3d444d}
-.gh-star:active .gh-star__btn,.gh-star:active .gh-star__count{background:#2a313c}
-.gh-star svg{display:block;flex-shrink:0;fill:#9198a1}
-.gh-star:hover svg{fill:#f0f6fc}
-.gh-star--sm{height:28px;font-size:12px}
-.gh-star--sm .gh-star__btn{gap:4px;padding:0 10px}
-.gh-star--sm .gh-star__count{padding:0 8px}
-.gh-star--sm svg{width:14px;height:14px}
 </style>
 </helmet>
 
@@ -56,10 +42,7 @@ input[type=range]{accent-color:#6E62F5}
       <a href="#compare" style="color:#71717A" style-hover="color:#F4F4F5">05 compare</a>
       <a href="manifesto.html" style="color:#71717A" style-hover="color:#F4F4F5">manifesto</a>
     </div>
-    <a href="https://github.com/ttuhin03/fastflow" class="gh-star gh-star--sm" aria-label="Star ttuhin03/fastflow on GitHub">
-      <span class="gh-star__btn"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>Star</span>
-      <span class="gh-star__count">{{ stars }}</span>
-    </a>
+    <a href="https://github.com/ttuhin03/fastflow" style="display:flex;align-items:center;gap:8px;padding:7px 14px;border-radius:8px;background:#17171B;border:1px solid #2A2A32;color:#F4F4F5;font-size:13px;font-weight:500" style-hover="border-color:#3a3a44;color:#F4F4F5"><svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"></path></svg>GitHub <span style="display:inline-flex;align-items:center;gap:4px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#A0A0AB;border-left:1px solid #2A2A32;padding-left:8px"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>{{ stars }}</span></a>
   </div>
 </div>
 
@@ -74,10 +57,7 @@ input[type=range]{accent-color:#6E62F5}
       <div>
         <p style="margin:0 0 28px;font-size:16.5px;line-height:1.65;color:#A0A0AB;text-wrap:pretty">No DAGs. No image builds. No YAML. A pipeline is a folder with a <span style="color:#F4F4F5;font-family:'JetBrains Mono',monospace;font-size:14.5px">main.py</span> — push it to Git and it runs in its own disposable sandbox, dependencies resolved in milliseconds.</p>
         <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-          <a href="https://github.com/ttuhin03/fastflow" class="gh-star" aria-label="Star ttuhin03/fastflow on GitHub">
-            <span class="gh-star__btn"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>Star</span>
-            <span class="gh-star__count">{{ stars }}</span>
-          </a>
+          <a href="https://github.com/ttuhin03/fastflow" style="display:inline-flex;align-items:center;gap:9px;padding:11px 20px;border-radius:8px;background:#6E62F5;color:#fff;font-size:14px;font-weight:600;transition:all 180ms cubic-bezier(0.16,1,0.3,1)" style-hover="background:#8075F8;box-shadow:0 6px 18px rgba(110,98,245,0.4);color:#fff"><svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>Star on GitHub<span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:500;background:rgba(255,255,255,0.16);border-radius:9999px;padding:2px 9px">{{ stars }}</span></a>
           <button onClick="{{ copyCompose }}" style="display:flex;align-items:center;gap:10px;padding:11px 16px;border-radius:8px;background:#111114;border:1px solid #2A2A32;color:#A0A0AB;font-family:'JetBrains Mono',monospace;font-size:13px;cursor:pointer" style-hover="border-color:#3a3a44;color:#F4F4F5"><span style="color:#52525B">$</span> docker compose up -d <span style="font-size:11px;color:{{ copyComposeColor }}">{{ copyComposeLabel }}</span></button>
         </div>
         <div style="display:flex;gap:26px;margin-top:48px;font-family:'JetBrains Mono',monospace">
@@ -444,10 +424,7 @@ input[type=range]{accent-color:#6E62F5}
       <h2 style="margin:0 0 16px;font-size:36px;line-height:1.1;letter-spacing:-0.03em;font-weight:700">Running before your coffee is.</h2>
       <p style="margin:0 0 28px;font-size:15px;line-height:1.7;color:#A0A0AB;text-wrap:pretty">Clone, set one encryption key, compose up. Then open <span style="font-family:'JetBrains Mono',monospace;font-size:13.5px;color:#F4F4F5">localhost:8000</span> and push your first pipeline from the <a href="https://github.com/ttuhin03/fastflow-pipeline-template">template repo</a>.</p>
       <div style="display:flex;gap:12px">
-        <a href="https://github.com/ttuhin03/fastflow" class="gh-star" aria-label="Star ttuhin03/fastflow on GitHub">
-          <span class="gh-star__btn"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>Star</span>
-          <span class="gh-star__count">{{ stars }}</span>
-        </a>
+        <a href="https://github.com/ttuhin03/fastflow" style="display:inline-flex;align-items:center;gap:9px;padding:11px 20px;border-radius:8px;background:#6E62F5;color:#fff;font-size:14px;font-weight:600" style-hover="background:#8075F8;box-shadow:0 6px 18px rgba(110,98,245,0.4);color:#fff"><svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>Star on GitHub<span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:500;background:rgba(255,255,255,0.16);border-radius:9999px;padding:2px 9px">{{ stars }}</span></a>
         <a href="manifesto.html" style="padding:11px 22px;border-radius:8px;background:#111114;border:1px solid #2A2A32;color:#F4F4F5;font-size:14px;font-weight:500" style-hover="border-color:#3a3a44;color:#F4F4F5">Read the manifesto</a>
       </div>
     </div>
