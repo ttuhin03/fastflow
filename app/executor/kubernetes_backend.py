@@ -416,6 +416,13 @@ async def run_container_task(
         if not run:
             logger.error("Run %s beim Status-Update nicht gefunden", run_id)
             return
+        if run.status not in (RunStatus.PENDING, RunStatus.RUNNING):
+            logger.info(
+                "Run %s bereits in nicht-laufendem Status %s (z.B. durch Cancel), "
+                "überspringe Completion-Update",
+                run_id, run.status.value,
+            )
+            return
         run.exit_code = exit_code_value
         run.finished_at = datetime.now(timezone.utc)
         if exit_code_value == 0:
@@ -957,29 +964,60 @@ async def cancel_run(run_id: UUID, session: Session) -> bool:
     """Löscht den Job für run_id."""
     batch_api, _ = _get_apis()
     namespace = app_config.KUBERNETES_NAMESPACE
+
+    def _mark_interrupted() -> None:
+        run = session.get(PipelineRun, run_id)
+        if run and run.status in (RunStatus.PENDING, RunStatus.RUNNING):
+            run.status = RunStatus.INTERRUPTED
+            run.finished_at = datetime.now(timezone.utc)
+            session.add(run)
+            session.commit()
+        _cleanup_shared_pipeline_run(run_id)
+
     try:
         jobs = batch_api.list_namespaced_job(
             namespace=namespace,
             label_selector=f"{JOB_LABEL_RUN_ID}={run_id}",
         )
-        for job in jobs.items or []:
-            if job.metadata and job.metadata.name:
-                batch_api.delete_namespaced_job(
-                    name=job.metadata.name,
-                    namespace=namespace,
-                    propagation_policy="Background",
-                )
-                run = session.get(PipelineRun, run_id)
-                if run:
-                    run.status = RunStatus.INTERRUPTED
-                    run.finished_at = datetime.now(timezone.utc)
-                    session.add(run)
-                    session.commit()
-                _cleanup_shared_pipeline_run(run_id)
-                return True
     except ApiException as e:
-        logger.warning("Job-Löschung für Run %s: %s", run_id, e)
-    return False
+        logger.error("Job-Liste für Run %s fehlgeschlagen: %s", run_id, e, exc_info=True)
+        return False
+
+    job_names = [
+        job.metadata.name for job in (jobs.items or []) if job.metadata and job.metadata.name
+    ]
+
+    if not job_names:
+        logger.info(
+            "Run %s: kein Job gefunden, vermutlich bereits beendet (z.B. durch TTL-Controller aufgeräumt)",
+            run_id,
+        )
+        _mark_interrupted()
+        return True
+
+    for job_name in job_names:
+        try:
+            batch_api.delete_namespaced_job(
+                name=job_name,
+                namespace=namespace,
+                propagation_policy="Background",
+            )
+        except ApiException as e:
+            if e.status == 404:
+                logger.info(
+                    "Run %s: Job %s war beim Löschen bereits weg (Race mit TTL-Controller "
+                    "oder parallelem Cancel-Call), behandle als bereits beendet",
+                    run_id, job_name,
+                )
+                continue
+            logger.error(
+                "Job-Löschung für Run %s (Job %s) fehlgeschlagen: %s",
+                run_id, job_name, e, exc_info=True,
+            )
+            return False
+
+    _mark_interrupted()
+    return True
 
 
 async def check_container_health(run_id: UUID, session: Session) -> Dict[str, Any]:
