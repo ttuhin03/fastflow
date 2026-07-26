@@ -22,7 +22,7 @@
     "protobufjs": ">=7.5.5",
     "fast-uri": ">=3.1.2",
     "axios": ">=1.15.2",
-    "shell-quote": ">=1.8.4",
+    "shell-quote": ">=1.10.0",
     "vitest": ">=3.2.6"
   },
   "dependencies": {
