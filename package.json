@@ -17,7 +17,7 @@
     "rollup": ">=4.59.0",
     "serialize-javascript": ">=7.0.3",
     "minimatch": ">=10.2.3",
-    "svgo": ">=3.3.3",
+    "svgo": ">=3.3.4",
     "dompurify": ">=3.4.11",
     "protobufjs": ">=7.5.5",
     "fast-uri": ">=4.1.1",
