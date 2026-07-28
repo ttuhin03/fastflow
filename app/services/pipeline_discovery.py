@@ -102,7 +102,11 @@ class PipelineMetadata:
         self.description = description
         self.tags = tags or []
         self.enabled = enabled
-        self.default_env = default_env or {}
+        self.default_env = (
+            {str(k): str(v) for k, v in default_env.items() if isinstance(k, str) and k.strip() and isinstance(v, str)}
+            if default_env
+            else {}
+        )
         # Normalize empty strings to None (webhooks disabled)
         self.webhook_key = webhook_key if webhook_key and webhook_key.strip() else None
         self.python_version = python_version if python_version and str(python_version).strip() else None

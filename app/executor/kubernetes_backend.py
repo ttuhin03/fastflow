@@ -278,7 +278,7 @@ async def run_container_task(
         job_name = f"ff-{pipeline_slug}-{run_id_short}"[:63]
 
         base_env = worker_base_env(env_vars)
-        container_env = [client.V1EnvVar(name=k, value=v) for k, v in base_env.items()]
+        container_env = [client.V1EnvVar(name=k, value=str(v)) for k, v in base_env.items()]
 
         resources: Dict[str, Any] = {}
         if effective_mem:
