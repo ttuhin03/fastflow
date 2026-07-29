@@ -493,7 +493,9 @@ async def _microsoft_callback_impl(
 
 
 @router.post("/link-token", response_model=dict, status_code=status.HTTP_200_OK)
+@limiter.limit("20/minute")
 async def get_link_token(
+    request: Request,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> dict:

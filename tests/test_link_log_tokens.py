@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from jose import jwt
+from sqlmodel import Session
 
 from app.auth.auth import (
     create_link_token,
@@ -43,6 +44,26 @@ def test_link_token_round_trip_and_single_use(test_session, test_user):
     assert verify_link_token(test_session, token) == test_user.id
     # Single-use: der zweite Versuch mit demselben Token schlägt fehl.
     assert verify_link_token(test_session, token) is None
+
+
+def test_link_token_single_use_is_atomic_across_sessions(test_db, test_user):
+    """
+    Regression für die TOCTOU-Race in verify_link_token (SELECT gefolgt von separatem
+    UPDATE war nicht atomar): zwei "gleichzeitige" Requests werden hier als zwei
+    unabhängige DB-Sessions auf demselben Token simuliert, wie es bei zwei parallelen
+    HTTP-Requests in Produktion der Fall wäre. Das Einlösen muss jetzt eine einzige
+    atomare UPDATE-Anweisung mit "consumed_at IS NULL" in der WHERE-Klausel sein,
+    sodass nur eine der beiden Sessions einen Treffer bekommt.
+    """
+    with Session(test_db) as setup_session:
+        token = create_link_token(setup_session, test_user.id)
+
+    with Session(test_db) as session_a, Session(test_db) as session_b:
+        result_a = verify_link_token(session_a, token)
+        result_b = verify_link_token(session_b, token)
+
+    results = {result_a, result_b}
+    assert results == {test_user.id, None}
 
 
 def test_link_token_expired_is_rejected(test_session, test_user):

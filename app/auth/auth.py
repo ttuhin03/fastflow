@@ -20,7 +20,7 @@ from uuid import uuid4, UUID
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
-from sqlmodel import Session, select
+from sqlmodel import Session, select, update
 
 from app.core.config import config
 from app.core.database import get_session, retry_on_sqlite_io
@@ -137,23 +137,38 @@ def verify_link_token(session: Session, token: str) -> Optional[UUID]:
     """
     Prüft ein Account-Link-Token und gibt die User-ID zurück, wenn es gültig ist.
 
-    Single-use: die Zeile wird beim ersten gültigen Verifizieren als eingelöst markiert,
-    ein zweiter Versuch mit demselben Token schlägt fehl. Gibt None zurück, wenn das
-    Token unbekannt, abgelaufen, bereits eingelöst ist oder nicht vom Typ "account_link"
-    ist.
+    Single-use: das Einlösen erfolgt als eine einzige atomare UPDATE-Anweisung mit
+    "consumed_at IS NULL" in der WHERE-Klausel, nicht als SELECT gefolgt von einem
+    separaten UPDATE. Ein reines "check-then-act" (SELECT, dann UPDATE) wäre unter
+    Postgres READ COMMITTED nicht race-sicher: zwei gleichzeitige Requests mit
+    demselben Token könnten beide die SELECT-Prüfung passieren, bevor eine der
+    beiden Transaktionen committet, und beide würden autorisiert. Die atomare
+    UPDATE stellt sicher, dass nur eine Zeile pro Token jemals eingelöst wird.
+    Gibt None zurück, wenn das Token unbekannt, abgelaufen, bereits eingelöst ist
+    oder nicht vom Typ "account_link" ist.
     """
-    statement = select(EphemeralToken).where(
-        EphemeralToken.token == token,
-        EphemeralToken.token_type == EphemeralTokenType.ACCOUNT_LINK,
-        EphemeralToken.expires_at > datetime.now(timezone.utc),
-        EphemeralToken.consumed_at.is_(None),
+    now = datetime.now(timezone.utc)
+    statement = (
+        update(EphemeralToken)
+        .where(
+            EphemeralToken.token == token,
+            EphemeralToken.token_type == EphemeralTokenType.ACCOUNT_LINK,
+            EphemeralToken.expires_at > now,
+            EphemeralToken.consumed_at.is_(None),
+        )
+        .values(consumed_at=now)
     )
-    row = retry_on_sqlite_io(lambda: session.exec(statement).first(), session=session)
+    result = retry_on_sqlite_io(lambda: session.exec(statement), session=session)
+    if result.rowcount != 1:
+        session.rollback()
+        return None
+    session.commit()
+    row = retry_on_sqlite_io(
+        lambda: session.exec(select(EphemeralToken).where(EphemeralToken.token == token)).first(),
+        session=session,
+    )
     if row is None:
         return None
-    row.consumed_at = datetime.now(timezone.utc)
-    session.add(row)
-    session.commit()
     try:
         return UUID(row.subject)
     except (ValueError, TypeError):

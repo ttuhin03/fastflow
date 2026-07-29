@@ -32,6 +32,7 @@ from app.auth import (
     get_session_by_token,
 )
 from app.core.errors import get_500_detail
+from app.middleware.rate_limiting import limiter
 import logging
 
 logger = logging.getLogger(__name__)
@@ -61,7 +62,9 @@ async def require_log_access(
 
 
 @router.get("/{run_id}/logs/download-url")
+@limiter.limit("20/minute")
 async def get_logs_download_url(
+    request: Request,
     run_id: UUID,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
