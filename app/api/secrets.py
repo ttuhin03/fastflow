@@ -45,7 +45,7 @@ class EncryptForPipelineResponse(BaseModel):
 @router.post("/encrypt-for-pipeline", response_model=EncryptForPipelineResponse)
 async def encrypt_for_pipeline(
     request: EncryptForPipelineRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_write),
 ) -> EncryptForPipelineResponse:
     """
     Verschluesselt einen Klartext mit dem Server-ENCRYPTION_KEY.

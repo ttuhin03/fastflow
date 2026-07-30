@@ -62,3 +62,32 @@ def test_write_user_can_read_decrypted_secrets(client, test_session):
     assert response.status_code == 200
     body = response.json()
     assert any(s["key"] == "DB_PASSWORD" and s["value"] == "super-secret-value" for s in body["secrets"])
+
+
+def test_readonly_user_cannot_encrypt_for_pipeline(client, test_session):
+    from app.auth import get_current_user
+
+    readonly_user = _override_current_user(client, test_session, UserRole.READONLY)
+
+    app.dependency_overrides[get_current_user] = lambda: readonly_user
+    try:
+        response = client.post("/api/secrets/encrypt-for-pipeline", json={"value": "some-plaintext"})
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+    assert response.status_code == 403
+
+
+def test_write_user_can_encrypt_for_pipeline(client, test_session):
+    from app.auth import get_current_user
+
+    write_user = _override_current_user(client, test_session, UserRole.WRITE)
+
+    app.dependency_overrides[get_current_user] = lambda: write_user
+    try:
+        response = client.post("/api/secrets/encrypt-for-pipeline", json={"value": "some-plaintext"})
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+    assert response.status_code == 200
+    assert "encrypted" in response.json()
