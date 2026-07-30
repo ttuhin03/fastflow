@@ -277,6 +277,7 @@ Fastflow sets `FASTFLOW_ROUTE_FILE` as an env var with the path to a writable fi
 |------|-----|--------------|
 | `default_env` | Object, optional | Default env vars on every run. Merged with UI env vars (UI takes precedence). **Do not put secrets here** – use `encrypted_env` (see next row). |
 | `encrypted_env` | Object, optional | **Encrypted** env vars (key → ciphertext). Values are encrypted with the server `ENCRYPTION_KEY`; plaintext never in the file. In the UI under "Secrets" → "Encrypt for pipeline.json", enter plaintext, generate ciphertext, and **manually** enter it here. At runtime the server decrypts and provides values to the pipeline environment. |
+| `secrets` | Array[String], optional | Allow-list of secret **keys** from the global database-backed Secrets store that this pipeline is entitled to receive as env vars at runtime. Each run only gets the keys listed here – nothing is injected by default. A pipeline that doesn't need database secrets should omit this field. |
 
 **Example `encrypted_env`:** Encrypt plaintext in the UI, then enter in pipeline.json:
 
@@ -287,6 +288,14 @@ Fastflow sets `FASTFLOW_ROUTE_FILE` as an env var with the path to a writable fi
     "API_KEY": "gAAAAABl...",
     "DB_PASSWORD": "gAAAAABl..."
   }
+}
+```
+
+**Example `secrets`:** only `SHARED_S3_TOKEN` (from the database Secrets store) is injected into this pipeline's env at runtime – secrets belonging to other pipelines stay out of reach:
+
+```json
+{
+  "secrets": ["SHARED_S3_TOKEN"]
 }
 ```
 

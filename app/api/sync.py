@@ -10,7 +10,7 @@ from typing import Optional, Dict, Any, List
 from urllib.parse import urlparse
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlmodel import Session
 import logging
 
@@ -27,7 +27,9 @@ from app.services.git_sync_repo_config import (
     save_sync_repo_config,
     delete_sync_repo_config,
     generate_and_save_deploy_key,
+    validate_pipelines_subdir,
 )
+from app.services.ssh_host_key import get_host_key_status, reset_pinned_host_key
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/sync", tags=["sync"])
@@ -263,6 +265,12 @@ class GenerateDeployKeyRequest(BaseModel):
     branch: Optional[str] = Field(default=None, description="Branch (z. B. main)")
     pipelines_subdir: Optional[str] = Field(default=None, description="Unterordner im Repo mit Pipeline-Ordnern")
 
+    @field_validator("pipelines_subdir")
+    @classmethod
+    def _no_path_traversal(cls, v: Optional[str]) -> Optional[str]:
+        validate_pipelines_subdir(v)
+        return v
+
 
 class RepoConfigRequest(BaseModel):
     """Request-Model für Repository-URL + Token oder Deploy Key."""
@@ -275,6 +283,12 @@ class RepoConfigRequest(BaseModel):
     deploy_key: Optional[str] = Field(default=None, description="Privater SSH-Deploy-Key (erforderlich bei SSH-URL)")
     branch: Optional[str] = Field(default=None, description="Branch (z. B. main)")
     pipelines_subdir: Optional[str] = Field(default=None, description="Unterordner im Repo mit Pipeline-Ordnern, z. B. pipelines")
+
+    @field_validator("pipelines_subdir")
+    @classmethod
+    def _no_path_traversal(cls, v: Optional[str]) -> Optional[str]:
+        validate_pipelines_subdir(v)
+        return v
 
 
 @router.get("/repo-config", response_model=Dict[str, Any])
@@ -473,3 +487,71 @@ async def clear_pipelines(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=get_500_detail(e),
         )
+
+
+@router.get("/host-key/status", response_model=Dict[str, Any])
+async def host_key_status(
+    current_user: User = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> Dict[str, Any]:
+    """
+    Vergleicht den gepinnten SSH-Host-Key (TOFU, siehe TE-23) mit dem, den der
+    Remote-Server aktuell präsentiert. Admin-only: dient als Vorschau vor einem
+    Host-Key-Reset (TE-73), zeigt alten vs. neuen Fingerprint nebeneinander.
+    """
+    try:
+        return get_host_key_status(session)
+    except Exception as e:
+        logger.exception("Fehler beim Abrufen des Host-Key-Status")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=get_500_detail(e),
+        )
+
+
+class HostKeyResetRequest(BaseModel):
+    """Request-Model für Host-Key-Reset. confirm_text muss exakt der konfigurierten Repository-URL entsprechen."""
+    confirm_text: str = Field(..., min_length=1, description="Zur Bestätigung: exakte Repository-URL eintippen")
+
+
+@router.post("/host-key/reset", response_model=Dict[str, Any])
+@limiter.limit("5/minute")
+async def host_key_reset(
+    request: Request,
+    body: HostKeyResetRequest,
+    current_user: User = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> Dict[str, Any]:
+    """
+    Setzt den gepinnten SSH-Host-Key zurück und pinnt den aktuell vom Server präsentierten
+    Key neu. Admin-only, erfordert getippte Bestätigung der Repository-URL (kein
+    Ein-Klick-Bypass) — pinning schützt nur vor MITM, wenn ein Mismatch explizites
+    menschliches Handeln erfordert statt eines einfachen Toggles.
+    """
+    try:
+        result = reset_pinned_host_key(session, body.confirm_text)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.exception("Fehler beim Host-Key-Reset")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=get_500_detail(e),
+        )
+    log_audit(
+        session,
+        "sync_host_key_reset",
+        "settings",
+        result.get("host"),
+        {
+            "repo_url": result.get("repo_url"),
+            "old_fingerprints": [e.get("fingerprint") for e in result.get("old_entries", [])],
+            "new_fingerprints": [e.get("fingerprint") for e in result.get("new_entries", [])],
+        },
+        current_user,
+    )
+    return {
+        "success": True,
+        "message": "Host-Key wurde zurückgesetzt und neu gepinnt.",
+        **result,
+    }

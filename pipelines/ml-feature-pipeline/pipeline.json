@@ -1,0 +1,10 @@
+{
+  "enabled": true,
+  "description": "Builds the daily feature set for the churn model, isolated Python 3.12 env",
+  "tags": ["ml", "features", "scheduled"],
+  "python_version": "3.12",
+  "timeout": 600,
+  "retry_attempts": 1,
+  "cpu_hard_limit": 4,
+  "mem_hard_limit": "4G"
+}

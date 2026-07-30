@@ -8,7 +8,7 @@ Dieses Modul verwaltet die Verschlüsselung und Speicherung von Secrets:
 """
 
 import logging
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 from cryptography.fernet import Fernet, InvalidToken
 
 from app.core.config import config
@@ -104,23 +104,57 @@ def decrypt(cipher_text: str) -> str:
 def get_all_secrets(session: Session) -> Dict[str, str]:
     """
     Ruft alle Secrets aus der Datenbank ab und entschlüsselt sie.
-    
+
+    ACHTUNG: Diese Funktion ist bewusst NICHT für die Pipeline-Execution gedacht -
+    sie liefert jedes jemals gespeicherte Secret, unabhängig davon, welcher Pipeline
+    es "gehört". Für die Env-Var-Injection beim Pipeline-Run muss stattdessen
+    get_secrets_by_keys() mit der von pipeline.json deklarierten Allow-List verwendet
+    werden (siehe app/executor/core.py), sonst erhält jede Pipeline Zugriff auf die
+    Secrets aller anderen Pipelines (Cross-Tenant-Leak).
+
     Parameter (is_parameter=True) werden nicht entschlüsselt, da sie unverschlüsselt gespeichert werden.
-    
+
     Args:
         session: SQLModel Session für Datenbankzugriffe
-        
+
     Returns:
         Dict[str, str]: Dictionary mit allen Secrets (Key -> entschlüsselter Value)
-        
+
     Raises:
         RuntimeError: Wenn ENCRYPTION_KEY nicht gesetzt ist oder ungültig ist
         ValueError: Wenn ein Secret nicht entschlüsselt werden kann
     """
     statement = select(Secret)
     secrets = session.exec(statement).all()
-    
-    result = {}
+    return _decrypt_secrets(secrets)
+
+
+def get_secrets_by_keys(session: Session, keys: List[str]) -> Dict[str, str]:
+    """
+    Ruft nur die namentlich angeforderten Secrets aus der Datenbank ab und entschlüsselt sie.
+
+    Wird von der Pipeline-Execution genutzt, um jeder Pipeline ausschliesslich die
+    Secrets bereitzustellen, die sie in pipeline.json (Feld "secrets") explizit als
+    benoetigt deklariert hat (Least-Privilege statt globalem Zugriff auf alle Secrets).
+
+    Args:
+        session: SQLModel Session für Datenbankzugriffe
+        keys: Liste der erlaubten Secret-Keys für die aufrufende Pipeline
+
+    Returns:
+        Dict[str, str]: Dictionary mit den angeforderten Secrets (Key -> entschlüsselter Value).
+            Keys ohne passendes Secret in der Datenbank werden stillschweigend übersprungen.
+    """
+    if not keys:
+        return {}
+    statement = select(Secret).where(Secret.key.in_(keys))
+    secrets = session.exec(statement).all()
+    return _decrypt_secrets(secrets)
+
+
+def _decrypt_secrets(secrets) -> Dict[str, str]:
+    """Entschlüsselt eine Liste von Secret-Rows zu einem Key->Value-Dict."""
+    result: Dict[str, str] = {}
     for secret in secrets:
         try:
             # Parameter werden nicht verschlüsselt, Secrets schon
@@ -134,5 +168,5 @@ def get_all_secrets(session: Session) -> Dict[str, str]:
             # Fehler beim Entschlüsseln eines Secrets sollte nicht alle Secrets blockieren
             # Aber wir loggen den Fehler und überspringen das Secret
             continue
-    
+
     return result

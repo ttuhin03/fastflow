@@ -1,0 +1,14 @@
+{
+  "dashboardHover": {
+    "x": 1210.5,
+    "y": 450.5
+  },
+  "pipelinesRowClick": {
+    "x": 421,
+    "y": 419
+  },
+  "dependenciesExpand": {
+    "x": 940,
+    "y": 403.046875
+  }
+}

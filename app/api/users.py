@@ -104,16 +104,19 @@ class InviteUserRequest(BaseModel):
 
 @router.get("", response_model=List[UserResponse])
 async def list_users(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
     session: Session = Depends(get_session)
 ) -> List[UserResponse]:
     """
-    Listet alle Benutzer auf. Lesen: alle eingeloggten Nutzer; Änderungen: nur Admins.
-    
+    Listet alle Benutzer auf (nur für Admins).
+
+    Vorher konnte jeder eingeloggte Nutzer (auch READONLY) UUID, E-Mail und
+    OAuth-Verknüpfungen aller Benutzer auslesen (User-Enumeration).
+
     Args:
         current_user: Aktueller Benutzer (muss Admin sein)
         session: Datenbank-Session
-        
+
     Returns:
         List[UserResponse]: Liste aller Benutzer
     """

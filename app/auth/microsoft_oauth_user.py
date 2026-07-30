@@ -128,6 +128,14 @@ async def get_microsoft_user_data(code: str) -> dict[str, Any]:
     # Normalisiertes Format (angleichen an GitHub/Google: id, email, name, login, avatar_url)
     sub = info.get("sub") or ""
     email = info.get("email")
+    # MS Graph oidc/userinfo liefert i.d.R. keinen email_verified-Claim (Entra-ID-
+    # E-Mails werden vom Tenant verwaltet, kein GitHub-artiges Self-Service-Secondary-
+    # Email-Risiko). Fehlt der Claim, gilt die Adresse als verifiziert; ist er explizit
+    # false, respektieren wir das (Security: kein stiller Fallback für Auto-Match).
+    raw_verified = info.get("email_verified")
+    email_verified = True if raw_verified is None else (
+        raw_verified is True or str(raw_verified).lower() == "true"
+    )
     name = (info.get("name") or "").strip()
     picture = info.get("picture")
     preferred_username = info.get("preferred_username") or ""
@@ -136,6 +144,7 @@ async def get_microsoft_user_data(code: str) -> dict[str, Any]:
     return {
         "id": sub,
         "email": email,
+        "email_verified": email_verified,
         "name": name,
         "login": login,
         "avatar_url": picture,

@@ -111,9 +111,9 @@ export default function CommandPalette() {
       { id: 'pipelines', label: t('nav.pipelines'), hint: 'G P', icon: <LuWorkflow size={15} />, iconColor: ICON_ACCENT, run: () => go('/pipelines') },
       { id: 'runs', label: t('nav.runs'), hint: 'G R', icon: <LuActivity size={15} />, iconColor: ICON_BLUE, run: () => go('/pipelines?section=runs') },
       { id: 'scheduler', label: t('nav.scheduler'), icon: <LuClock size={15} />, iconColor: ICON_BLUE, run: () => go('/pipelines?section=scheduler') },
-      { id: 'secrets', label: t('nav.secrets'), icon: <LuKeyRound size={15} />, iconColor: ICON_BLUE, run: () => go('/pipelines?section=secrets') },
       { id: 'dependencies', label: t('nav.dependencies'), icon: <LuPackage size={15} />, iconColor: ICON_BLUE, run: () => go('/pipelines?section=dependencies') },
       { id: 'sync', label: t('nav.sync'), icon: <LuRefreshCw size={15} />, iconColor: ICON_BLUE, run: () => go('/settings?section=git-sync') },
+      ...(isAdmin ? [{ id: 'secrets', label: t('nav.secrets'), icon: <LuKeyRound size={15} />, iconColor: ICON_BLUE, run: () => go('/pipelines?section=secrets') } as CmdItem] : []),
       ...(isAdmin ? [{ id: 'audit', label: t('nav.audit'), icon: <LuHistory size={15} />, iconColor: ICON_BLUE, run: () => go('/audit') } as CmdItem] : []),
       { id: 'settings', label: t('nav.settings'), icon: <LuSlidersHorizontal size={15} />, iconColor: ICON_BLUE, run: () => go('/settings') },
     ]

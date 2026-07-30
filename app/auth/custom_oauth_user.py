@@ -116,9 +116,17 @@ async def get_custom_oauth_user_data(code: str) -> dict[str, Any]:
     claim_id = config.CUSTOM_OAUTH_CLAIM_ID or "sub"
     claim_email = config.CUSTOM_OAUTH_CLAIM_EMAIL or "email"
     claim_name = config.CUSTOM_OAUTH_CLAIM_NAME or "name"
+    claim_email_verified = config.CUSTOM_OAUTH_CLAIM_EMAIL_VERIFIED or "email_verified"
 
     sub = str(info.get(claim_id) or info.get("sub") or "")
     email = info.get(claim_email) or info.get("email")
+    # Custom-IdPs sind per Definition beliebig (selbst gehostet, ggf. permissiv) und
+    # können nicht wie Google/Microsoft pauschal als vertrauenswürdig gelten. Ohne
+    # expliziten email_verified/verified=true-Claim gilt die Adresse als NICHT
+    # verifiziert (fail closed) - Auto-Match/Admin-Link wird dann übersprungen
+    # (siehe oauth_processing.py, Anklopfen-Flow greift stattdessen).
+    raw_verified = info.get(claim_email_verified, info.get("verified"))
+    email_verified = raw_verified is True or str(raw_verified).lower() == "true"
     name = (info.get(claim_name) or info.get("name") or info.get("preferred_username") or "").strip()
     picture = info.get("picture") or info.get("avatar_url")
     preferred_username = info.get("preferred_username") or ""
@@ -127,6 +135,7 @@ async def get_custom_oauth_user_data(code: str) -> dict[str, Any]:
     return {
         "id": sub,
         "email": email,
+        "email_verified": email_verified,
         "name": name,
         "login": login,
         "avatar_url": picture,

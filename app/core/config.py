@@ -451,6 +451,9 @@ class Config:
     CUSTOM_OAUTH_CLAIM_ID: str = os.getenv("CUSTOM_OAUTH_CLAIM_ID", "sub")
     CUSTOM_OAUTH_CLAIM_EMAIL: str = os.getenv("CUSTOM_OAUTH_CLAIM_EMAIL", "email")
     CUSTOM_OAUTH_CLAIM_NAME: str = os.getenv("CUSTOM_OAUTH_CLAIM_NAME", "name")
+    CUSTOM_OAUTH_CLAIM_EMAIL_VERIFIED: str = os.getenv("CUSTOM_OAUTH_CLAIM_EMAIL_VERIFIED", "email_verified")
+    """Claim, der die Verifizierung der E-Mail-Adresse anzeigt (Security: Auto-Match/Admin-Link
+    vertraut der E-Mail nur wenn dieser Claim true ist, siehe oauth_processing.py)."""
     CUSTOM_OAUTH_NAME: str = os.getenv("CUSTOM_OAUTH_NAME", "Custom")
     """Anzeigename für den Custom-OAuth-Button (Login / Settings)."""
     CUSTOM_OAUTH_ICON_URL: Optional[str] = os.getenv("CUSTOM_OAUTH_ICON_URL")

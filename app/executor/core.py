@@ -393,9 +393,12 @@ async def run_pipeline(
 
         # Pre-Heating-Lock abrufen (wenn Pre-Heating aktiv ist)
         pre_heating_lock = _get_pre_heating_lock(name)
-        # Secrets aus Datenbank abrufen
-        from app.services.secrets import get_all_secrets, decrypt
-        all_secrets = get_all_secrets(session)
+        # Secrets aus Datenbank abrufen - nur die Keys, die diese Pipeline in pipeline.json
+        # (Feld "secrets") explizit als benoetigt deklariert hat (Least-Privilege; verhindert,
+        # dass jede Pipeline standardmäßig Zugriff auf die Secrets aller anderen Pipelines erhält).
+        from app.services.secrets import get_secrets_by_keys, decrypt
+        allowed_secret_keys = list(getattr(pipeline.metadata, "secrets", None) or [])
+        all_secrets = get_secrets_by_keys(session, allowed_secret_keys)
         
         # Run-Konfiguration aus schedules (falls run_config_id gesetzt)
         schedule_config: Optional[Dict[str, Any]] = None

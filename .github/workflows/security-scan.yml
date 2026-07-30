@@ -12,8 +12,8 @@ name: Security Scan (IaC / Image / Secrets)
 #
 # Gating-Philosophie (bewusst gewählt, siehe Kommentare an den Steps):
 #   - Secrets  -> BLOCKIEREND (eindeutig, gehören nie ins Repo).
-#   - IaC/Image -> zunächst NICHT blockierend (Sichtbarkeit zuerst, kein rotes
-#     Board am ersten Tag). Zum Verschärfen jeweils exit-code auf '1' setzen.
+#   - IaC/Image -> BLOCKIEREND bei CRITICAL/HIGH (MEDIUM wird bei IaC nicht
+#     mehr gescannt, um Rauschen bei blockierendem exit-code zu vermeiden).
 
 on:
   push:
@@ -54,10 +54,11 @@ jobs:
           scan-ref: .
           format: sarif
           output: trivy-iac.sarif
-          severity: CRITICAL,HIGH,MEDIUM
-          # Nicht blockierend (Sichtbarkeit zuerst). Zum Erzwingen: '1' setzen und
-          # ggf. severity auf CRITICAL,HIGH reduzieren, um Rauschen zu vermeiden.
-          exit-code: '0'
+          # Auf CRITICAL,HIGH reduziert (statt zusätzlich MEDIUM), um Rauschen
+          # bei blockierendem exit-code zu vermeiden.
+          severity: CRITICAL,HIGH
+          # Blockierend bei CRITICAL/HIGH-Findings.
+          exit-code: '1'
           # Fremd-/Duplikat-Manifeste ausklammern: node_modules und die lokalen
           # Claude-Worktrees enthalten Kopien der k8s-Manifeste (sonst Doppel-Findings).
           skip-dirs: '.claude,node_modules,frontend/node_modules'
@@ -112,8 +113,8 @@ jobs:
           severity: CRITICAL,HIGH
           # Nur behebbare CVEs melden -> weniger Rauschen durch nicht-fixbare Base-CVEs.
           ignore-unfixed: true
-          # Nicht blockierend (Sichtbarkeit zuerst). Zum Erzwingen auf '1' setzen.
-          exit-code: '0'
+          # Blockierend bei CRITICAL/HIGH-Findings.
+          exit-code: '1'
 
       - name: SARIF ins Code-Scanning laden
         if: always()

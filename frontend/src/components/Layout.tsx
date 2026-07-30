@@ -90,7 +90,7 @@ export default function Layout() {
     {
       labelKey: 'nav.sectionSecurity',
       items: [
-        { path: '/secrets', labelKey: 'nav.secrets', icon: <LuKeyRound size={16} /> },
+        { path: '/secrets', labelKey: 'nav.secrets', icon: <LuKeyRound size={16} />, adminOnly: true },
         { path: '/dependencies', labelKey: 'nav.dependencies', icon: <LuPackage size={16} /> },
       ],
     },
@@ -152,6 +152,7 @@ export default function Layout() {
       const response = await apiClient.get('/users')
       return response.data
     },
+    enabled: isAdmin,
     retry: false,
     staleTime: 5 * 60 * 1000,
   })

@@ -1,19 +1,14 @@
 """
-Regression-Test: GET /api/secrets darf Klartext-Secrets nicht an READONLY-Nutzer ausliefern.
-
-Vorher war der Endpoint nur mit `get_current_user` geschützt (jeder eingeloggte
-Nutzer, auch READONLY), obwohl er entschlüsselte Secret-Werte (API-Keys,
-DB-Credentials etc.) zurückgibt. Das verletzte das App-eigene Rollenmodell,
-in dem READONLY explizit keine sensiblen/ändernden Aktionen ausführen darf
-(siehe require_write).
+Regression-Tests für /api/secrets Autorisierung.
 """
 
 from app.main import app
+from app.auth import get_current_user
 from app.models import Secret, User, UserRole, UserStatus
 from app.services.secrets import encrypt
 
 
-def _override_current_user(session, test_session, role: UserRole) -> User:
+def _make_user(test_session, role: UserRole) -> User:
     user = User(
         username=f"user-{role.value.lower()}",
         email=f"{role.value.lower()}@example.com",
@@ -32,32 +27,46 @@ def _seed_secret(test_session) -> None:
     test_session.commit()
 
 
-def test_readonly_user_cannot_read_decrypted_secrets(client, test_session):
-    from app.auth import get_current_user
+def _as_user(client, user: User):
+    app.dependency_overrides[get_current_user] = lambda: user
+    return lambda: app.dependency_overrides.pop(get_current_user, None)
 
+
+def test_readonly_user_cannot_read_secrets(client, test_session):
     _seed_secret(test_session)
-    readonly_user = _override_current_user(client, test_session, UserRole.READONLY)
+    readonly_user = _make_user(test_session, UserRole.READONLY)
 
-    app.dependency_overrides[get_current_user] = lambda: readonly_user
+    clear_override = _as_user(client, readonly_user)
     try:
         response = client.get("/api/secrets")
     finally:
-        app.dependency_overrides.pop(get_current_user, None)
+        clear_override()
 
     assert response.status_code == 403
 
 
-def test_write_user_can_read_decrypted_secrets(client, test_session):
-    from app.auth import get_current_user
-
+def test_write_user_cannot_read_secrets(client, test_session):
     _seed_secret(test_session)
-    write_user = _override_current_user(client, test_session, UserRole.WRITE)
+    write_user = _make_user(test_session, UserRole.WRITE)
 
-    app.dependency_overrides[get_current_user] = lambda: write_user
+    clear_override = _as_user(client, write_user)
     try:
         response = client.get("/api/secrets")
     finally:
-        app.dependency_overrides.pop(get_current_user, None)
+        clear_override()
+
+    assert response.status_code == 403
+
+
+def test_admin_user_can_read_secrets(client, test_session):
+    _seed_secret(test_session)
+    admin_user = _make_user(test_session, UserRole.ADMIN)
+
+    clear_override = _as_user(client, admin_user)
+    try:
+        response = client.get("/api/secrets")
+    finally:
+        clear_override()
 
     assert response.status_code == 200
     body = response.json()
@@ -65,29 +74,25 @@ def test_write_user_can_read_decrypted_secrets(client, test_session):
 
 
 def test_readonly_user_cannot_encrypt_for_pipeline(client, test_session):
-    from app.auth import get_current_user
+    readonly_user = _make_user(test_session, UserRole.READONLY)
 
-    readonly_user = _override_current_user(client, test_session, UserRole.READONLY)
-
-    app.dependency_overrides[get_current_user] = lambda: readonly_user
+    clear_override = _as_user(client, readonly_user)
     try:
         response = client.post("/api/secrets/encrypt-for-pipeline", json={"value": "some-plaintext"})
     finally:
-        app.dependency_overrides.pop(get_current_user, None)
+        clear_override()
 
     assert response.status_code == 403
 
 
 def test_write_user_can_encrypt_for_pipeline(client, test_session):
-    from app.auth import get_current_user
+    write_user = _make_user(test_session, UserRole.WRITE)
 
-    write_user = _override_current_user(client, test_session, UserRole.WRITE)
-
-    app.dependency_overrides[get_current_user] = lambda: write_user
+    clear_override = _as_user(client, write_user)
     try:
         response = client.post("/api/secrets/encrypt-for-pipeline", json={"value": "some-plaintext"})
     finally:
-        app.dependency_overrides.pop(get_current_user, None)
+        clear_override()
 
     assert response.status_code == 200
     assert "encrypted" in response.json()

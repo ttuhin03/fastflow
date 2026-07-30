@@ -52,6 +52,7 @@ class PipelineMetadata:
         downstream_triggers: Optional[List[Dict[str, Any]]] = None,
         encrypted_env: Optional[Dict[str, str]] = None,
         schedules: Optional[List[Dict[str, Any]]] = None,
+        secrets: Optional[List[str]] = None,
     ):
         """
         Initialisiert Pipeline-Metadaten.
@@ -87,6 +88,9 @@ class PipelineMetadata:
             downstream_triggers: Liste von Downstream-Triggern (pipeline, on_success, on_failure).
             encrypted_env: Verschluesselte Env-Vars (Key -> Ciphertext); Nutzer traegt Ciphertext manuell in pipeline.json ein.
             schedules: Optionale Liste von Run-Konfigurationen (id, schedule_cron/schedule_interval_seconds, default_env, encrypted_env pro Eintrag). Wenn gesetzt, nur diese Runs; Top-Level-Schedule wird ignoriert.
+            secrets: Liste von Secret-Keys aus dem globalen DB-Secrets-Store, auf die diese Pipeline zugreifen darf.
+                Nur diese namentlich freigegebenen Secrets werden zur Laufzeit in die Env-Vars injiziert (Least-Privilege;
+                verhindert, dass jede Pipeline standardmäßig alle jemals gespeicherten Secrets sieht).
         """
         self.cpu_hard_limit = cpu_hard_limit
         self.mem_hard_limit = mem_hard_limit
@@ -98,7 +102,11 @@ class PipelineMetadata:
         self.description = description
         self.tags = tags or []
         self.enabled = enabled
-        self.default_env = default_env or {}
+        self.default_env = (
+            {str(k): str(v) for k, v in default_env.items() if isinstance(k, str) and k.strip() and isinstance(v, str)}
+            if default_env
+            else {}
+        )
         # Normalize empty strings to None (webhooks disabled)
         self.webhook_key = webhook_key if webhook_key and webhook_key.strip() else None
         self.python_version = python_version if python_version and str(python_version).strip() else None
@@ -122,6 +130,7 @@ class PipelineMetadata:
         self.downstream_triggers = self._normalize_downstream_triggers(downstream_triggers or [])
         self.encrypted_env = self._normalize_encrypted_env(encrypted_env)
         self.schedules = self._normalize_schedules(schedules) if schedules else []
+        self.secrets = self._normalize_secrets(secrets)
         self._validate_webhook_keys_no_duplicates()
 
     @staticmethod
@@ -277,6 +286,17 @@ class PipelineMetadata:
                 result[k.strip()] = v
         return result
 
+    @staticmethod
+    def _normalize_secrets(raw: Optional[List[Any]]) -> List[str]:
+        """Normalisiert secrets-Array aus JSON: Liste von Secret-Keys (Strings), die diese Pipeline nutzen darf."""
+        if not raw or not isinstance(raw, list):
+            return []
+        result: List[str] = []
+        for key in raw:
+            if isinstance(key, str) and key.strip() and key.strip() not in result:
+                result.append(key.strip())
+        return result
+
     def to_dict(self) -> Dict[str, Any]:
         """
         Konvertiert Metadaten zu Dictionary.
@@ -338,6 +358,8 @@ class PipelineMetadata:
             result["encrypted_env"] = self.encrypted_env
         if self.schedules:
             result["schedules"] = self.schedules
+        if self.secrets:
+            result["secrets"] = self.secrets
         return result
 
 
@@ -461,18 +483,35 @@ def discover_pipelines(force_refresh: bool = False) -> List[DiscoveredPipeline]:
     pipelines_dir = config.PIPELINES_DIR
     subdir = (config.PIPELINES_SUBDIR or "").strip().strip("/")
     scan_dir = (pipelines_dir / subdir) if subdir else pipelines_dir
-    
+
     # Verzeichnis prüfen
     if not pipelines_dir.exists():
         raise FileNotFoundError(
             f"Pipelines-Verzeichnis existiert nicht: {pipelines_dir}"
         )
-    
+
     if not pipelines_dir.is_dir():
         raise ValueError(
             f"Pipelines-Pfad ist kein Verzeichnis: {pipelines_dir}"
         )
-    
+
+    # Defense in depth: PIPELINES_SUBDIR kann ".."-Segmente enthalten (z. B. wenn die
+    # API-Validierung umgangen wurde oder direkt per Env gesetzt ist). scan_dir muss
+    # innerhalb von pipelines_dir bleiben, sonst könnten beliebige Verzeichnisse
+    # außerhalb der Sandbox gescannt werden (Path Traversal).
+    if subdir:
+        resolved_pipelines_dir = pipelines_dir.resolve()
+        resolved_scan_dir = scan_dir.resolve()
+        if resolved_scan_dir != resolved_pipelines_dir and resolved_pipelines_dir not in resolved_scan_dir.parents:
+            import logging
+            logging.getLogger(__name__).error(
+                f"PIPELINES_SUBDIR '{subdir}' resolviert außerhalb von PIPELINES_DIR "
+                f"({resolved_scan_dir} ist kein Nachfahre von {resolved_pipelines_dir}). "
+                "Scan wird verweigert."
+            )
+            return []
+        scan_dir = resolved_scan_dir
+
     if not scan_dir.exists() or not scan_dir.is_dir():
         return []
     
@@ -652,6 +691,10 @@ def _load_pipeline_metadata(
         schedules = PipelineMetadata._normalize_schedules(
             schedules_raw if isinstance(schedules_raw, list) else None
         )
+        secrets_raw = data.get("secrets")
+        secrets = PipelineMetadata._normalize_secrets(
+            secrets_raw if isinstance(secrets_raw, list) else None
+        )
 
         metadata = PipelineMetadata(
             cpu_hard_limit=data.get("cpu_hard_limit"),
@@ -680,8 +723,9 @@ def _load_pipeline_metadata(
             downstream_triggers=downstream_triggers,
             encrypted_env=encrypted_env if encrypted_env else None,
             schedules=schedules if schedules else None,
+            secrets=secrets if secrets else None,
         )
-        
+
         return metadata
     
     except json.JSONDecodeError as e:
