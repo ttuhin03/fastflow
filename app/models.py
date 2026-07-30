@@ -55,6 +55,12 @@ class UserStatus(str, Enum):
     REJECTED = "rejected"
 
 
+class EphemeralTokenType(str, Enum):
+    """Typ eines DB-gebundenen Kurzzeit-Tokens (siehe EphemeralToken)."""
+    ACCOUNT_LINK = "account_link"
+    LOG_DOWNLOAD = "log_download"
+
+
 class Pipeline(SQLModel, table=True):
     """
     Pipeline-Metadaten-Model.
@@ -615,6 +621,54 @@ class Session(SQLModel, table=True):
     )
     expires_at: datetime = Field(
         description="Ablauf-Zeitpunkt (UTC)"
+    )
+    created_at: datetime = Field(
+        default_factory=_utc_now,
+        description="Erstellungs-Zeitpunkt (UTC)"
+    )
+
+
+class EphemeralToken(SQLModel, table=True):
+    """
+    DB-gebundene Kurzzeit-Tokens für Auth-Flows ohne Authorization-Header
+    (OAuth-Account-Linking per Browser-Navigation, Log-Download-Direktlinks).
+
+    Anders als ein reines JWT reicht eine gültige Signatur allein nicht aus:
+    das Token muss zusätzlich einer nicht abgelaufenen (und beim Account-Link
+    auch noch nicht eingelösten) Zeile hier entsprechen. Das schließt die
+    Fälschungslücke, falls JWT_SECRET_KEY jemals schwach/geleakt/wiederverwendet
+    ist (siehe TE-11 Finding 2): die Zeile wird serverseitig pro Request erzeugt
+    und lässt sich nicht allein aus dem Secret rekonstruieren.
+    """
+    __tablename__ = "ephemeral_tokens"
+
+    id: UUID = Field(
+        default_factory=uuid4,
+        primary_key=True,
+        description="Eindeutige Token-ID"
+    )
+    token: str = Field(
+        unique=True,
+        index=True,
+        description="Opaker, zufälliger Token-Wert"
+    )
+    token_type: EphemeralTokenType = Field(
+        sa_column=Column(
+            SAEnum(EphemeralTokenType, values_callable=lambda x: [e.value for e in x], native_enum=False),
+            nullable=False,
+        ),
+        description="account_link oder log_download"
+    )
+    subject: str = Field(
+        index=True,
+        description="Bezugsobjekt als String: user_id (account_link) oder run_id (log_download)"
+    )
+    expires_at: datetime = Field(
+        description="Ablauf-Zeitpunkt (UTC)"
+    )
+    consumed_at: Optional[datetime] = Field(
+        default=None,
+        description="Zeitpunkt des Einlösens (single-use); None solange ungenutzt"
     )
     created_at: datetime = Field(
         default_factory=_utc_now,
