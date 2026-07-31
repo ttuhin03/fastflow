@@ -61,8 +61,11 @@ RUN for i in 1 2 3; do \
     sleep 10; \
     done
 
-# Build-Tools patchen: wheel (CVE-2026-24049) und setuptools (vendored
-# jaraco.context CVE-2026-23949) auf sichere Versionen anheben.
+# Build-Tools patchen: wheel (CVE-2026-24049) und setuptools (Path Traversal in
+# PackageIndex CVE-2025-47273, fixed 78.1.1; vendored jaraco.context
+# CVE-2026-23949, fixed 80.9.0) auf sichere Versionen anheben. Das Base-Image
+# python:3.11-slim liefert ein älteres setuptools mit.
+# Der Floor ist zusätzlich in requirements.txt gepinnt.
 RUN pip install --no-cache-dir --upgrade "pip>=25.2" "setuptools>=80.9.0" "wheel>=0.46.2"
 
 # Python-Dependencies installieren (inkl. uv für Pre-Heating: uv pip compile)
