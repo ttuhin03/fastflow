@@ -6,6 +6,7 @@ import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import { useAuth } from '../contexts/AuthContext'
 import { useUiPreferences } from '../contexts/UiPreferencesContext'
 import apiClient from '../api/client'
+import { formatDateTime, formatRelativeTime } from '../utils/locale'
 import {
   LuLayoutGrid,
   LuWorkflow,
@@ -67,7 +68,7 @@ export default function Layout() {
     queryKey: ['auth/me-layout'],
     queryFn: async () => {
       const r = await apiClient.get('/auth/me')
-      return r.data as { email?: string; avatar_url?: string }
+      return r.data as { email?: string; avatar_url?: string; last_login_at?: string | null }
     },
     staleTime: 300_000,
   })
@@ -193,6 +194,16 @@ export default function Layout() {
     ? userEmail.split('@')[0].slice(0, 2).toUpperCase()
     : (userRole ? userRole.slice(0, 2).toUpperCase() : 'U')
 
+  // Letzte Anmeldung: kompakt relativ in der Sidebar, exakt im Tooltip
+  const lastLoginAbsolute = formatDateTime(userInfo?.last_login_at)
+  const lastLoginRelative = formatRelativeTime(userInfo?.last_login_at)
+  const lastLoginText = lastLoginRelative
+    ? t('nav.lastLoginRelative', { time: lastLoginRelative })
+    : t('nav.lastLoginNever')
+  const lastLoginTitle = lastLoginAbsolute
+    ? t('nav.lastLoginTitle', { datetime: lastLoginAbsolute })
+    : t('nav.lastLoginNever')
+
   const allSystemsOk = backendStatus === 'online'
 
   return (
@@ -284,6 +295,7 @@ export default function Layout() {
             <div className="sidebar__user-info">
               <div className="sidebar__user-name" title={userEmail}>{userEmail || t('nav.user')}</div>
               <div className="sidebar__user-role">{userRole || 'user'}</div>
+              <div className="sidebar__user-last-login" title={lastLoginTitle}>{lastLoginText}</div>
             </div>
             <button
               className="sidebar__logout-btn"

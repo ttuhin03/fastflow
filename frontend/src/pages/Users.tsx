@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getFormatLocale } from '../utils/locale'
+import { getFormatLocale, formatDateTime, formatDateTimeShort, formatRelativeTime } from '../utils/locale'
 import apiClient from '../api/client'
 import { showError, showSuccess, showConfirm } from '../utils/toast'
 import { LuPencil, LuTrash2, LuBan, LuShieldCheck, LuMail, LuX, LuExternalLink, LuCheck, LuCircleX } from 'react-icons/lu'
@@ -17,6 +17,8 @@ interface User {
   role: 'readonly' | 'write' | 'admin' | 'READONLY' | 'WRITE' | 'ADMIN'
   blocked: boolean
   created_at: string
+  /** Letzte erfolgreiche Anmeldung (ISO, UTC); null = noch nie angemeldet */
+  last_login_at?: string | null
   microsoft_id: string | null
   github_id?: string | null
   github_login?: string | null
@@ -54,6 +56,26 @@ function linkedProviderKeys(user: User): Array<'github' | 'google' | 'custom'> {
   if (user.google_id) a.push('google')
   if (user.custom_oauth_id) a.push('custom')
   return a
+}
+
+/** Zelle „Letzte Anmeldung“: Kurzformat in der Zelle, exakte und relative Zeit im Tooltip. */
+function LastLoginCell({ value }: { value?: string | null }) {
+  const { t } = useTranslation()
+  const short = formatDateTimeShort(value)
+  if (!short) {
+    return (
+      <Tooltip content={t('users.lastLoginNeverTooltip')}>
+        <span className="users-last-login users-last-login--never">{t('users.lastLoginNever')}</span>
+      </Tooltip>
+    )
+  }
+  const relative = formatRelativeTime(value)
+  const absolute = formatDateTime(value)
+  return (
+    <Tooltip content={relative ? `${absolute} (${relative})` : absolute || short}>
+      <span className="users-last-login">{short}</span>
+    </Tooltip>
+  )
 }
 
 function providerCellKey(user: User): 'users.providerGitHub' | 'users.providerGoogle' | 'users.providerNone' {
@@ -570,6 +592,9 @@ export default function Users({ editLocked = false }: UsersProps) {
                   <th>{t('users.role')}</th>
                   <th>{t('users.status')}</th>
                   <th>{t('users.createdAt')}</th>
+                  <th>
+                    {t('users.lastLogin')} <InfoIcon content={t('users.lastLoginInfo')} />
+                  </th>
                   {isAdmin && <th>{t('users.actions')}</th>}
                 </tr>
               </thead>
@@ -635,6 +660,7 @@ export default function Users({ editLocked = false }: UsersProps) {
                       </Tooltip>
                     </td>
                     <td>{new Date(user.created_at).toLocaleDateString(getFormatLocale())}</td>
+                    <td><LastLoginCell value={user.last_login_at} /></td>
                     {isAdmin && (
                       <td>
                         <div className="user-actions">

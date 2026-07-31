@@ -102,6 +102,7 @@
 .sidebar__user-info { flex: 1; min-width: 0; }
 .sidebar__user-name { font-size: 12.5px; font-weight: var(--font-weight-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-primary); }
 .sidebar__user-role { font-size: 10.5px; color: var(--color-text-disabled); text-transform: uppercase; letter-spacing: 0.04em; }
+.sidebar__user-last-login { font-size: 10.5px; color: var(--color-text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sidebar__logout-btn {
   display: inline-flex; align-items: center; justify-content: center;
   width: 28px; height: 28px; padding: 0; flex: none;

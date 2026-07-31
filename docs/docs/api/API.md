@@ -880,6 +880,8 @@ All endpoints require authentication. `GET /api/users`, invites, approve, reject
 
 Lists all users (incl. `status`, `github_id`, `google_id`, `microsoft_id`, `custom_oauth_id`). No filtering; frontend groups into "Active users" (`status=active`) and "Join requests" (`status=pending`).
 
+`last_login_at` is the last successful sign-in (UTC, `null` if the user has never signed in). It is written on OAuth login only — a token refresh renews an existing session and does not count. Other users' sign-in times are admin-only; every user can read their own via `GET /api/auth/me`.
+
 **Response:**
 ```json
 [
@@ -889,7 +891,8 @@ Lists all users (incl. `status`, `github_id`, `google_id`, `microsoft_id`, `cust
     "email": "max@example.com",
     "role": "READONLY",
     "blocked": false,
-    "created_at": "2024-01-15T10:00:00",
+    "created_at": "2024-01-15T10:00:00+00:00",
+    "last_login_at": "2024-01-18T12:00:00+00:00",
     "github_id": "123",
     "google_id": "456",
     "status": "active"
@@ -1036,10 +1039,13 @@ Returns information about the current user (incl. for linked-accounts UI).
   "has_github": true,
   "has_google": false,
   "avatar_url": "https://...",
-  "created_at": "2024-01-18T12:00:00",
+  "created_at": "2024-01-18T12:00:00+00:00",
+  "last_login_at": "2024-01-20T08:30:00+00:00",
   "role": "admin"
 }
 ```
+
+`last_login_at` is the current user's last successful sign-in (`null` before the first one). For the running session that is when the session started.
 
 ---
 

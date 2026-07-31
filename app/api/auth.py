@@ -26,6 +26,7 @@ from app.auth import (
     delete_session,
     get_current_user,
     get_session_by_token,
+    record_login,
     verify_link_token,
     verify_token,
     delete_oauth_state,
@@ -47,6 +48,8 @@ from app.auth import (
 )
 from app.core.config import config
 from app.core.database import get_session
+from app.core.timeutils import to_utc_iso
+from app.services.audit import log_audit
 from app.services.system_settings import get_system_settings
 from app.middleware.rate_limiting import limiter
 from app.models import User
@@ -148,6 +151,27 @@ def _redirect_with_token(token: str) -> RedirectResponse:
     }
     frontend = (config.FRONTEND_URL or config.BASE_URL or "http://localhost:8000").rstrip("/")
     return RedirectResponse(url=f"{frontend}/auth/callback?code={code}", status_code=302)
+
+
+def _finalize_login(session: Session, user: User, provider: str, provider_label: str) -> RedirectResponse:
+    """
+    Schließt eine erfolgreiche Anmeldung ab: Access-Token, Session, Login-Zeitpunkt,
+    Audit-Eintrag und Redirect ins Frontend.
+
+    Gemeinsam für alle OAuth-Provider, damit jeder Login-Pfad denselben Zeitstempel
+    (users.last_login_at) und dieselbe Audit-Spur schreibt.
+
+    username/user_id werden vor den Commits gelesen: jeder Commit expired die
+    Objekte der Session, ein späterer Attributzugriff würde die Zeile erneut laden.
+    """
+    username = user.username
+    user_id = user.id
+    token = create_access_token(username=username)
+    create_session(session, user, token)
+    record_login(session, user_id)
+    log_audit(session, "user_login", "user", str(user_id), {"provider": provider}, user)
+    logger.info("User '%s' per %s angemeldet", username, provider_label)
+    return _redirect_with_token(token)
 
 
 def _redirect_to_settings_linked(provider: str) -> RedirectResponse:
@@ -338,10 +362,7 @@ async def _github_callback_impl(
         return _redirect_to_settings_linked("github")
     if state:
         delete_oauth_state(state)
-    token = create_access_token(username=user.username)
-    create_session(session, user, token)
-    logger.info(f"User '{user.username}' per GitHub angemeldet")
-    return _redirect_with_token(token)
+    return _finalize_login(session, user, "github", "GitHub")
 
 
 @router.get("/google/authorize")
@@ -415,10 +436,7 @@ async def _google_callback_impl(
         return _redirect_to_settings_linked("google")
     if state:
         delete_oauth_state(state)
-    token = create_access_token(username=user.username)
-    create_session(session, user, token)
-    logger.info(f"User '{user.username}' per Google angemeldet")
-    return _redirect_with_token(token)
+    return _finalize_login(session, user, "google", "Google")
 
 
 @router.get("/microsoft/authorize")
@@ -486,10 +504,7 @@ async def _microsoft_callback_impl(
         return _redirect_to_settings_linked("microsoft")
     if state:
         delete_oauth_state(state)
-    token = create_access_token(username=user.username)
-    create_session(session, user, token)
-    logger.info("User '%s' per Microsoft angemeldet", user.username)
-    return _redirect_with_token(token)
+    return _finalize_login(session, user, "microsoft", "Microsoft")
 
 
 @router.post("/link-token", response_model=dict, status_code=status.HTTP_200_OK)
@@ -683,10 +698,7 @@ async def _custom_callback_impl(
         return _redirect_to_settings_linked("custom")
     if state:
         delete_oauth_state(state)
-    token = create_access_token(username=user.username)
-    create_session(session, user, token)
-    logger.info("User '%s' per Custom OAuth angemeldet", user.username)
-    return _redirect_with_token(token)
+    return _finalize_login(session, user, "custom", "Custom OAuth")
 
 
 @router.get("/link/custom")
@@ -734,7 +746,8 @@ async def get_current_user_info(
         "has_microsoft": bool(getattr(current_user, "microsoft_id", None)),
         "has_custom": bool(getattr(current_user, "custom_oauth_id", None)),
         "avatar_url": getattr(current_user, "avatar_url", None),
-        "created_at": current_user.created_at.isoformat(),
+        "created_at": to_utc_iso(current_user.created_at),
+        "last_login_at": to_utc_iso(getattr(current_user, "last_login_at", None)),
         "role": role_val,
         "is_setup_completed": is_setup_completed,
     }
