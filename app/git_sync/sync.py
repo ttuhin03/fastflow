@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import logging
 import tempfile
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, List, Set
@@ -296,6 +297,44 @@ def get_required_python_versions() -> Set[str]:
     return {p.get_python_version() for p in discovered}
 
 
+# Serialisiert `uv python install` innerhalb des Orchestrators. uv sperrt
+# UV_PYTHON_INSTALL_DIR über ein flock auf <dir>/.lock; parallele Installs
+# blockieren sich gegenseitig und laufen auf Netz-/FUSE-Dateisystemen in
+# "Could not acquire lock ... (os error 5)".
+_python_install_lock = threading.Lock()
+
+
+def is_python_version_installed(version: str) -> bool:
+    """
+    Prüft ohne uv-Subprozess, ob eine Python-Version bereits in
+    UV_PYTHON_INSTALL_DIR liegt.
+
+    uv legt managed Installs als `cpython-<version>-<platform>` ab. Geprüft wird
+    auf ein vorhandenes `bin/python3`, damit abgebrochene Downloads nicht als
+    fertige Installation zählen.
+    """
+    version = (version or "").strip()
+    if not version:
+        return False
+    install_dir = config.UV_PYTHON_INSTALL_DIR
+    try:
+        entries = list(install_dir.iterdir())
+    except OSError:
+        return False
+
+    # "3.11" darf nicht auf "cpython-3.1.x" matchen -> Trennzeichen mitprüfen
+    prefix = f"cpython-{version}"
+    for entry in entries:
+        name = entry.name
+        if not name.startswith(prefix):
+            continue
+        if len(name) > len(prefix) and name[len(prefix)] not in (".", "-", "+"):
+            continue
+        if (entry / "bin" / "python3").exists():
+            return True
+    return False
+
+
 def ensure_python_version(version: str) -> None:
     """
     Stellt sicher, dass die angegebene Python-Version in UV_PYTHON_INSTALL_DIR
@@ -308,28 +347,45 @@ def ensure_python_version(version: str) -> None:
 
 
 def _ensure_python_versions(versions: Set[str]) -> None:
-    """Installiert die angegebenen Python-Versionen via uv python install."""
+    """
+    Installiert die angegebenen Python-Versionen via uv python install.
+
+    Bereits installierte Versionen werden per Dateisystem-Check übersprungen,
+    damit der Hot-Path (ein Aufruf pro Run) keinen uv-Prozess startet und das
+    uv-Lock nicht anfasst. Verbleibende Installs laufen serialisiert.
+    """
     if not versions:
         return
+
+    pending = sorted(v for v in versions if not is_python_version_installed(v))
+    if not pending:
+        return
+
     env = {
         **os.environ.copy(),
         "UV_PYTHON_INSTALL_DIR": str(config.UV_PYTHON_INSTALL_DIR),
         "UV_CACHE_DIR": str(config.UV_CACHE_DIR),
     }
-    for v in sorted(versions):
-        try:
-            result = subprocess.run(
-                ["uv", "python", "install", v],
-                capture_output=True, text=True, timeout=300, env=env,
-            )
-            if result.returncode == 0:
-                logger.info("uv python install %s ok", v)
-            else:
-                logger.warning("uv python install %s fehlgeschlagen: %s", v, result.stderr or result.stdout or "")
-        except subprocess.TimeoutExpired:
-            logger.warning("uv python install %s Timeout", v)
-        except Exception as e:
-            logger.warning("uv python install %s Fehler: %s", v, e)
+    for v in pending:
+        with _python_install_lock:
+            # Erneut prüfen: ein paralleler Aufruf kann die Version inzwischen
+            # installiert haben, während wir auf das Lock gewartet haben.
+            if is_python_version_installed(v):
+                logger.debug("Python %s bereits installiert (während Wartezeit), überspringe", v)
+                continue
+            try:
+                result = subprocess.run(
+                    ["uv", "python", "install", v],
+                    capture_output=True, text=True, timeout=300, env=env,
+                )
+                if result.returncode == 0:
+                    logger.info("uv python install %s ok", v)
+                else:
+                    logger.warning("uv python install %s fehlgeschlagen: %s", v, result.stderr or result.stdout or "")
+            except subprocess.TimeoutExpired:
+                logger.warning("uv python install %s Timeout", v)
+            except Exception as e:
+                logger.warning("uv python install %s Fehler: %s", v, e)
 
 
 async def _run_python_preheat(session: Session) -> Dict[str, Dict[str, Any]]:

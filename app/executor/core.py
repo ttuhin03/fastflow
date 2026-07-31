@@ -185,6 +185,45 @@ def _get_docker_client() -> docker.DockerClient:
     return _docker_client
 
 
+def _resolve_mount_source(mounts: List[Dict[str, Any]], container_path: str) -> Optional[str]:
+    """
+    Sucht in einer Docker-Mount-Liste den Host-Pfad zu einem Container-Pfad.
+
+    WICHTIG: Mounts können sich überlappen (z. B. /app/data und /app/data/uv_python).
+    Daher wird der *längste* passende Mount gewählt (longest prefix match) und der
+    verbleibende Teilpfad an den Host-Pfad angehängt. Ohne beides liefert z. B.
+    /app/data/uv_python fälschlich den Host-Pfad von /app/data – die Worker sehen
+    dann ein anderes Verzeichnis als der Orchestrator.
+
+    Args:
+        mounts: Mount-Liste aus container.attrs["Mounts"]
+        container_path: Container-interner Pfad (z.B. /app/data/uv_python)
+
+    Returns:
+        Absoluter Host-Pfad oder None, wenn kein Mount passt
+    """
+    best_destination: Optional[str] = None
+    best_source: Optional[str] = None
+
+    for mount in mounts:
+        destination = mount.get("Destination")
+        source = mount.get("Source")
+        if not destination or not source or not os.path.isabs(source):
+            continue
+        # Trailing Slash normalisieren, damit "/" und "/app/data/" korrekt matchen
+        normalized = destination.rstrip("/")
+        if container_path == normalized or container_path.startswith(normalized + "/"):
+            if best_destination is None or len(normalized) > len(best_destination):
+                best_destination = normalized
+                best_source = source
+
+    if best_destination is None or best_source is None:
+        return None
+
+    remainder = container_path[len(best_destination):].lstrip("/")
+    return str(Path(best_source) / remainder) if remainder else best_source
+
+
 def _get_host_path_for_volume(
     client: docker.DockerClient,
     container_path: str,
@@ -192,15 +231,15 @@ def _get_host_path_for_volume(
 ) -> str:
     """
     Ermittelt den Host-Pfad für ein gemountetes Volume.
-    
+
     Versucht zuerst, den Host-Pfad aus den Container-Volumes zu extrahieren (zuverlässigste Methode).
     Falls das nicht möglich ist, wird der host_path_env verwendet oder container_path als Fallback.
-    
+
     Args:
         client: Docker-Client
         container_path: Container-interner Pfad (z.B. /app/pipelines)
         host_path_env: Host-Pfad aus Environment-Variable (optional)
-    
+
     Returns:
         Absoluter Host-Pfad für Volume-Mounts
     """
@@ -210,31 +249,23 @@ def _get_host_path_for_volume(
         container_name = os.getenv("HOSTNAME", "fastflow-orchestrator")
         try:
             container = client.containers.get(container_name)
-            mounts = container.attrs.get("Mounts", [])
-            for mount in mounts:
-                destination = mount.get("Destination")
-                if destination == container_path or container_path.startswith(destination + "/"):
-                    source = mount.get("Source")
-                    if source and os.path.isabs(source):
-                        logger.debug(f"Host-Pfad für {container_path} aus Volume extrahiert: {source}")
-                        return source
+            source = _resolve_mount_source(container.attrs.get("Mounts", []), container_path)
+            if source:
+                logger.debug(f"Host-Pfad für {container_path} aus Volume extrahiert: {source}")
+                return source
         except docker.errors.NotFound:
             pass
 
         # 2) Unter Kubernetes: Orchestrator-Container per Mount-Ziel finden (Docker-Name != Pod-Name)
         for container in client.containers.list(all=True):
             try:
-                mounts = container.attrs.get("Mounts", [])
-                for mount in mounts:
-                    destination = mount.get("Destination")
-                    if destination == container_path or container_path.startswith(destination + "/"):
-                        source = mount.get("Source")
-                        if source and os.path.isabs(source):
-                            logger.debug(
-                                "Host-Pfad für %s aus Container %s extrahiert: %s",
-                                container_path, container.name, source,
-                            )
-                            return source
+                source = _resolve_mount_source(container.attrs.get("Mounts", []), container_path)
+                if source:
+                    logger.debug(
+                        "Host-Pfad für %s aus Container %s extrahiert: %s",
+                        container_path, container.name, source,
+                    )
+                    return source
             except Exception:
                 continue
     except Exception as e:
