@@ -503,7 +503,10 @@ async def _pre_heat_pipeline(
 
 async def run_pre_heat_at_startup() -> None:
     """UV Pre-Heating beim API-Start (Hintergrund-Task)."""
-    if not config.UV_PRE_HEAT:
+    # Im Testbetrieb nie pre-heaten: `uv pip compile` würde die eingecheckten
+    # requirements.txt.lock der echten pipelines/ überschreiben (mit lokalen
+    # Host-Pfaden und plattformspezifischen Paketen).
+    if config.TESTING or not config.UV_PRE_HEAT:
         return
     try:
         from app.core.database import get_session

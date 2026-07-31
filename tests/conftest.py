@@ -7,9 +7,28 @@ Dieses Modul definiert gemeinsame Fixtures für alle Tests:
 - Test-Session
 """
 
+import atexit
 import os
+import shutil
+import tempfile
+from pathlib import Path
 
 from cryptography.fernet import Fernet
+
+# Hermetik: Tests dürfen niemals die Verzeichnisse des Repos beschreiben.
+# Ohne diese Umleitung landen z.B. `uv pip compile`-Ergebnisse des Pre-Heatings in
+# den eingecheckten pipelines/*/requirements.txt.lock (mit lokalen Host-Pfaden im
+# Header und Host-spezifischen Paketen wie appnope auf macOS), und die echte
+# SQLite-DB unter ./data wird angefasst.
+# Muss VOR dem Import von app.* passieren: config/database lesen die Pfade beim Import.
+_TEST_DIRS_ROOT = Path(tempfile.mkdtemp(prefix="fastflow-tests-"))
+os.environ["PIPELINES_DIR"] = str(_TEST_DIRS_ROOT / "pipelines")
+os.environ["DATA_DIR"] = str(_TEST_DIRS_ROOT / "data")
+os.environ["LOGS_DIR"] = str(_TEST_DIRS_ROOT / "logs")
+os.environ["UV_CACHE_DIR"] = str(_TEST_DIRS_ROOT / "data" / "uv_cache")
+for _d in ("pipelines", "data", "logs"):
+    (_TEST_DIRS_ROOT / _d).mkdir(parents=True, exist_ok=True)
+atexit.register(shutil.rmtree, _TEST_DIRS_ROOT, True)
 
 # OAuth für Tests: mind. ein Provider vollständig; HTTP-Verifizierung überspringen
 os.environ.setdefault("GITHUB_CLIENT_ID", "test-github-client-id")
@@ -22,7 +41,6 @@ os.environ.setdefault("ENCRYPTION_KEY", Fernet.generate_key().decode())
 os.environ["TESTING"] = "1"
 
 import pytest
-from pathlib import Path
 from sqlalchemy.pool import StaticPool
 from sqlmodel import SQLModel, create_engine, Session
 from fastapi.testclient import TestClient

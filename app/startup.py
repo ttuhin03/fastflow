@@ -455,8 +455,9 @@ async def run_startup_tasks() -> None:
         except Exception as e:
             logger.warning("Git-Sync beim Start fehlgeschlagen (nicht kritisch): %s", e)
 
-    asyncio.create_task(sync_pipelines_at_startup())
-    logger.info("Git-Sync beim Start geplant (Hintergrund, wenn Repo konfiguriert)")
+    if not config.TESTING:
+        asyncio.create_task(sync_pipelines_at_startup())
+        logger.info("Git-Sync beim Start geplant (Hintergrund, wenn Repo konfiguriert)")
 
     logger.info("Fast-Flow Orchestrator gestartet")
 
