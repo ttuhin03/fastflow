@@ -601,6 +601,33 @@ textarea.form-input {
   gap: var(--spacing-md);
 }
 
+.settings-account-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--spacing-md);
+  margin: 0;
+}
+
+.settings-account-fact dt {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  margin-bottom: 2px;
+}
+
+.settings-account-fact dd {
+  margin: 0;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.settings-account-fact__empty {
+  color: var(--color-text-tertiary);
+  font-style: italic;
+}
+
 .settings-account-row {
   display: flex;
   align-items: center;

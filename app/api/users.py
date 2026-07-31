@@ -24,6 +24,7 @@ from app.auth import get_current_user, require_admin, delete_all_user_sessions
 from app.services.audit import log_audit
 from app.core.config import config
 from app.core.database import get_session
+from app.core.timeutils import to_utc_iso
 from app.models import User, UserRole, UserStatus, Invitation
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,7 @@ class UserResponse(BaseModel):
     role: str
     blocked: bool
     created_at: str
+    last_login_at: Optional[str] = None
     microsoft_id: Optional[str] = None
     github_id: Optional[str] = None
     github_login: Optional[str] = None
@@ -64,11 +66,12 @@ class UserResponse(BaseModel):
             email=user.email,
             role=user.role.value,
             blocked=user.blocked,
-            created_at=user.created_at.isoformat(),
+            created_at=to_utc_iso(user.created_at),
+            last_login_at=to_utc_iso(getattr(user, "last_login_at", None)),
             microsoft_id=user.microsoft_id,
             github_id=user.github_id,
             github_login=getattr(user, "github_login", None),
-            google_id=user.google_id,
+            google_id=getattr(user, "google_id", None),
             custom_oauth_id=getattr(user, "custom_oauth_id", None),
             status=_user_status_value(user),
         )
@@ -124,20 +127,7 @@ async def list_users(
     users = session.exec(statement).all()
     
     return [
-        UserResponse(
-            id=str(user.id),
-            username=user.username,
-            email=user.email,
-            role=user.role.value,
-            blocked=user.blocked,
-            created_at=user.created_at.isoformat(),
-            microsoft_id=user.microsoft_id,
-            github_id=user.github_id,
-            github_login=getattr(user, "github_login", None),
-            google_id=getattr(user, "google_id", None),
-            custom_oauth_id=getattr(user, "custom_oauth_id", None),
-            status=_user_status_value(user),
-        )
+        UserResponse.from_user(user)
         for user in users
     ]
 
@@ -155,8 +145,10 @@ async def list_invites(
             id=str(i.id),
             recipient_email=i.recipient_email,
             is_used=i.is_used,
-            expires_at=i.expires_at.isoformat(),
-            created_at=i.created_at.isoformat(),
+            # Aus der DB gelesene Timestamps sind naiv (UTC); ohne Offset würde der
+            # Browser sie als Lokalzeit rendern und Ablaufzeiten falsch anzeigen.
+            expires_at=to_utc_iso(i.expires_at),
+            created_at=to_utc_iso(i.created_at),
             role=i.role.value,
         )
         for i in rows
@@ -242,20 +234,7 @@ async def get_user(
             detail="Benutzer nicht gefunden"
         )
     
-    return UserResponse(
-        id=str(user.id),
-        username=user.username,
-        email=user.email,
-        role=user.role.value,
-        blocked=user.blocked,
-        created_at=user.created_at.isoformat(),
-        microsoft_id=user.microsoft_id,
-        github_id=user.github_id,
-        github_login=getattr(user, "github_login", None),
-        google_id=getattr(user, "google_id", None),
-        custom_oauth_id=getattr(user, "custom_oauth_id", None),
-        status=_user_status_value(user),
-    )
+    return UserResponse.from_user(user)
 
 
 @router.post("/{user_id}/approve", response_model=UserResponse)
@@ -290,20 +269,7 @@ async def approve_user(
         await notify_user_approved(user)
     except Exception as e:
         logger.warning("E-Mail an Nutzer bei Freigabe fehlgeschlagen: %s", e)
-    return UserResponse(
-        id=str(user.id),
-        username=user.username,
-        email=user.email,
-        role=user.role.value,
-        blocked=user.blocked,
-        created_at=user.created_at.isoformat(),
-        microsoft_id=user.microsoft_id,
-        github_id=user.github_id,
-        github_login=getattr(user, "github_login", None),
-        google_id=getattr(user, "google_id", None),
-        custom_oauth_id=getattr(user, "custom_oauth_id", None),
-        status=_user_status_value(user),
-    )
+    return UserResponse.from_user(user)
 
 
 @router.post("/{user_id}/reject", response_model=UserResponse)
@@ -329,20 +295,7 @@ async def reject_user(
     log_audit(session, "user_reject", "user", str(user_id), None, current_user)
     session.refresh(user)
     logger.info("Admin %s hat Beitrittsanfrage von %s abgelehnt", current_user.username, user.username)
-    return UserResponse(
-        id=str(user.id),
-        username=user.username,
-        email=user.email,
-        role=user.role.value,
-        blocked=user.blocked,
-        created_at=user.created_at.isoformat(),
-        microsoft_id=user.microsoft_id,
-        github_id=user.github_id,
-        github_login=getattr(user, "github_login", None),
-        google_id=getattr(user, "google_id", None),
-        custom_oauth_id=getattr(user, "custom_oauth_id", None),
-        status=_user_status_value(user),
-    )
+    return UserResponse.from_user(user)
 
 
 @router.put("/{user_id}", response_model=UserResponse)
@@ -397,20 +350,7 @@ async def update_user(
 
     logger.info(f"Admin '{current_user.username}' hat Benutzer '{user.username}' aktualisiert")
 
-    return UserResponse(
-        id=str(user.id),
-        username=user.username,
-        email=user.email,
-        role=user.role.value,
-        blocked=user.blocked,
-        created_at=user.created_at.isoformat(),
-        microsoft_id=user.microsoft_id,
-        github_id=user.github_id,
-        github_login=getattr(user, "github_login", None),
-        google_id=getattr(user, "google_id", None),
-        custom_oauth_id=getattr(user, "custom_oauth_id", None),
-        status=_user_status_value(user),
-    )
+    return UserResponse.from_user(user)
 
 
 @router.post("/{user_id}/block", response_model=UserResponse)
@@ -470,20 +410,7 @@ async def block_user(
         f"{deleted_sessions} Sessions wurden invalidiert."
     )
 
-    return UserResponse(
-        id=str(user.id),
-        username=user.username,
-        email=user.email,
-        role=user.role.value,
-        blocked=user.blocked,
-        created_at=user.created_at.isoformat(),
-        microsoft_id=user.microsoft_id,
-        github_id=user.github_id,
-        github_login=getattr(user, "github_login", None),
-        google_id=getattr(user, "google_id", None),
-        custom_oauth_id=getattr(user, "custom_oauth_id", None),
-        status=_user_status_value(user),
-    )
+    return UserResponse.from_user(user)
 
 
 @router.post("/{user_id}/unblock", response_model=UserResponse)
@@ -524,20 +451,7 @@ async def unblock_user(
 
     logger.info(f"Admin '{current_user.username}' hat Benutzer '{user.username}' entblockiert")
 
-    return UserResponse(
-        id=str(user.id),
-        username=user.username,
-        email=user.email,
-        role=user.role.value,
-        blocked=user.blocked,
-        created_at=user.created_at.isoformat(),
-        microsoft_id=user.microsoft_id,
-        github_id=user.github_id,
-        github_login=getattr(user, "github_login", None),
-        google_id=getattr(user, "google_id", None),
-        custom_oauth_id=getattr(user, "custom_oauth_id", None),
-        status=_user_status_value(user),
-    )
+    return UserResponse.from_user(user)
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_200_OK)

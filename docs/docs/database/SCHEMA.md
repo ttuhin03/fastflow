@@ -88,6 +88,7 @@ Stores users. Login via OAuth (GitHub, Google, Microsoft, Custom) plus invitatio
 | `custom_oauth_id` | String | (Optional) Custom OAuth ID (unique). |
 | `status` | String | `active` (access), `pending` (join request), `rejected` (declined). Default: `active`. |
 | `created_at` | DateTime | Creation date. |
+| `last_login_at` | DateTime | (Optional) Last successful sign-in (UTC). `NULL` = never signed in. Set on OAuth login only, not on token refresh. |
 
 ### 6. `Invitation` (Invitations)
 

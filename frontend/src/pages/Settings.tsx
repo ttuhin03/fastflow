@@ -7,6 +7,7 @@ import { UI_DISPLAY_QUERY_KEY } from '../contexts/UiPreferencesContext'
 import apiClient from '../api/client'
 import { LuSave, LuRefreshCw, LuInfo, LuTriangleAlert, LuMail, LuUsers, LuLink, LuCheck, LuUser, LuDatabase, LuCirclePlay, LuBell, LuKey, LuCopy, LuTrash2, LuLock, LuLockOpen } from 'react-icons/lu'
 import { showError, showSuccess } from '../utils/toast'
+import { formatDateTime, formatRelativeTime } from '../utils/locale'
 import { getApiOrigin } from '../config'
 import Tooltip from '../components/Tooltip'
 import InfoIcon from '../components/InfoIcon'
@@ -163,6 +164,9 @@ export default function Settings() {
         has_custom?: boolean
         email?: string
         avatar_url?: string
+        username?: string
+        created_at?: string
+        last_login_at?: string | null
       }
     },
   })
@@ -667,6 +671,42 @@ export default function Settings() {
                 {t('settings.envOnly')}
                 {t('settings.accountRestartNote')}
               </p>
+            </div>
+
+            <div className="settings-section card">
+              <h3 className="section-title">{t('settings.accountOverview')}</h3>
+              <p className="setting-hint settings-linked-accounts-hint">
+                {t('settings.accountOverviewHint')}
+              </p>
+              <dl className="settings-account-facts">
+                <div className="settings-account-fact">
+                  <dt>{t('settings.accountUsername')}</dt>
+                  <dd>{me?.username || '–'}</dd>
+                </div>
+                <div className="settings-account-fact">
+                  <dt>{t('settings.accountEmail')}</dt>
+                  <dd>{me?.email || '–'}</dd>
+                </div>
+                <div className="settings-account-fact">
+                  <dt>{t('settings.accountMemberSince')}</dt>
+                  <dd>{formatDateTime(me?.created_at) || '–'}</dd>
+                </div>
+                <div className="settings-account-fact">
+                  <dt>
+                    {t('settings.accountLastLogin')}
+                    <InfoIcon content={t('settings.accountLastLoginHint')} />
+                  </dt>
+                  <dd>
+                    {formatDateTime(me?.last_login_at) ? (
+                      <Tooltip content={formatRelativeTime(me?.last_login_at) || ''}>
+                        <span>{formatDateTime(me?.last_login_at)}</span>
+                      </Tooltip>
+                    ) : (
+                      <span className="settings-account-fact__empty">{t('settings.accountLastLoginUnknown')}</span>
+                    )}
+                  </dd>
+                </div>
+              </dl>
             </div>
 
             <div className="settings-section card">

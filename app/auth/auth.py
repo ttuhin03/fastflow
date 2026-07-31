@@ -234,6 +234,44 @@ def create_session(session: Session, user: User, token: str) -> SessionModel:
     return db_session
 
 
+def record_login(session: Session, user_id: UUID) -> Optional[datetime]:
+    """
+    Vermerkt eine erfolgreiche Anmeldung am Benutzer (users.last_login_at).
+
+    Wird ausschließlich nach einem echten Login aufgerufen (OAuth-Callback), nicht
+    beim Token-Refresh: ein Refresh erneuert nur das Access-Token einer bestehenden
+    Sitzung und ist keine neue Anmeldung.
+
+    Das Update läuft als eigenständiges UPDATE auf die User-ID (kein Read-Modify-Write),
+    damit parallele Logins desselben Kontos sich nicht gegenseitig überschreiben und
+    keine anderen, ggf. veralteten Felder des User-Objekts mit zurückgeschrieben werden.
+    Deshalb genügt die ID – ein User-Objekt wird nicht benötigt.
+
+    Fehler werden geloggt, aber nicht propagiert: ein fehlgeschlagenes Statistik-Update
+    darf niemals eine ansonsten erfolgreiche Anmeldung abbrechen.
+
+    Args:
+        session: Datenbank-Session
+        user_id: ID des angemeldeten Benutzers
+
+    Returns:
+        Optional[datetime]: Gesetzter Zeitpunkt (UTC), None wenn das Update fehlschlug
+    """
+    now = datetime.now(timezone.utc)
+    try:
+        statement = update(User).where(User.id == user_id).values(last_login_at=now)
+        retry_on_sqlite_io(lambda: session.exec(statement), session=session)
+        session.commit()
+        return now
+    except Exception as e:
+        logger.warning("last_login_at für Benutzer %s konnte nicht gesetzt werden: %s", user_id, e)
+        try:
+            session.rollback()
+        except Exception:
+            pass
+        return None
+
+
 def get_session_by_token(session: Session, token: str) -> Optional[SessionModel]:
     """
     Holt eine Session aus der Datenbank anhand des Tokens.

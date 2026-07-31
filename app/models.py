@@ -428,6 +428,10 @@ class User(SQLModel, table=True):
         default_factory=_utc_now,
         description="Erstellungs-Zeitpunkt (UTC)"
     )
+    last_login_at: Optional[datetime] = Field(
+        default=None,
+        description="Zeitpunkt der letzten erfolgreichen Anmeldung (UTC); None = noch nie angemeldet"
+    )
 
 
 class Invitation(SQLModel, table=True):

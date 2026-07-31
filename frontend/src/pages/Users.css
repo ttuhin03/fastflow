@@ -134,10 +134,12 @@
 }
 
 .users-table-container {
-  overflow-x: auto;
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
-  overflow: hidden;
+  /* Nicht overflow: hidden – sonst sind die Aktions-Buttons auf schmalen
+     Viewports unerreichbar, sobald die Tabelle breiter wird als die Karte. */
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .users-table {
@@ -188,6 +190,16 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   vertical-align: bottom;
+}
+
+.users-last-login {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.users-last-login--never {
+  color: var(--color-text-tertiary);
+  font-style: italic;
 }
 
 .users-table tbody tr:last-child td:first-child {
