@@ -1,0 +1,19 @@
+apiVersion: v2
+name: fastflow
+description: A Helm chart for Fast-Flow, a container-native pipeline orchestrator
+type: application
+version: 0.1.0
+appVersion: "1.0.7"
+icon: https://raw.githubusercontent.com/ttuhin03/fastflow/main/frontend/public/favicon.svg
+keywords:
+  - orchestrator
+  - pipelines
+  - workflow
+  - automation
+  - ci
+home: https://github.com/ttuhin03/fastflow
+sources:
+  - https://github.com/ttuhin03/fastflow
+maintainers:
+  - name: ttuhin03
+    url: https://github.com/ttuhin03

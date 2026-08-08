@@ -1,0 +1,182 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "fastflow.fullname" . }}
+  labels:
+    {{- include "fastflow.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "fastflow.orchestratorSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "fastflow.orchestratorSelectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "fastflow.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if eq (include "fastflow.hasDatabase" .) "true" }}
+      initContainers:
+        - name: wait-for-postgres
+          image: "{{ .Values.postgresql.image.repository }}:{{ .Values.postgresql.image.tag }}"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 70
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            seccompProfile:
+              type: RuntimeDefault
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          command:
+            - sh
+            - -c
+            - |
+              if [ -n "${DATABASE_URL}" ] && echo "${DATABASE_URL}" | grep -q postgresql; then
+                echo "Waiting for PostgreSQL..."
+                until pg_isready -h {{ include "fastflow.fullname" . }}-postgres -p 5432; do sleep 2; done
+                echo "PostgreSQL ready"
+              else
+                echo "Using SQLite, skipping postgres wait"
+              fi
+          envFrom:
+            - secretRef:
+                name: {{ include "fastflow.postgresSecretName" . }}
+                optional: true
+      {{- end }}
+      containers:
+        - name: orchestrator
+          image: {{ include "fastflow.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          ports:
+            - containerPort: 8000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: {{ include "fastflow.fullname" . }}-config
+            - secretRef:
+                name: {{ include "fastflow.secretName" . }}
+                optional: true
+            - secretRef:
+                name: {{ include "fastflow.postgresSecretName" . }}
+                optional: true
+          env:
+            - name: PIPELINE_EXECUTOR
+              value: {{ .Values.executor.type | quote }}
+            {{- if eq .Values.executor.type "kubernetes" }}
+            - name: KUBERNETES_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            {{- if .Values.persistence.cache.enabled }}
+            - name: KUBERNETES_CACHE_PVC_NAME
+              value: {{ .Values.persistence.cache.existingClaim | default (printf "%s-cache" (include "fastflow.fullname" .)) | quote }}
+            - name: KUBERNETES_SHARED_CACHE_MOUNT_PATH
+              value: "/shared"
+            {{- end }}
+            {{- end }}
+            - name: PIPELINES_DIR
+              value: /app/pipelines
+            - name: LOGS_DIR
+              value: /app/logs
+            - name: DATA_DIR
+              value: /app/data
+            {{- if and (eq .Values.executor.type "kubernetes") .Values.persistence.cache.enabled }}
+            - name: UV_CACHE_DIR
+              value: /shared/uv_cache
+            - name: UV_PYTHON_INSTALL_DIR
+              value: /shared/uv_python
+            {{- else }}
+            - name: UV_CACHE_DIR
+              value: /app/data/uv_cache
+            - name: UV_PYTHON_INSTALL_DIR
+              value: /app/data/uv_python
+            {{- end }}
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+            - name: TMPDIR
+              value: /tmp
+          volumeMounts:
+            {{- if .Values.persistence.data.enabled }}
+            - name: fastflow-storage
+              mountPath: /app/data
+              subPath: data
+            - name: fastflow-storage
+              mountPath: /app/logs
+              subPath: logs
+            - name: fastflow-storage
+              mountPath: /app/pipelines
+              subPath: pipelines
+            {{- end }}
+            {{- if and (eq .Values.executor.type "kubernetes") .Values.persistence.cache.enabled }}
+            - name: cache-pvc
+              mountPath: /shared
+            {{- end }}
+            - name: tmp
+              mountPath: /tmp
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+      volumes:
+        {{- if .Values.persistence.data.enabled }}
+        - name: fastflow-storage
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.data.existingClaim | default (printf "%s-data" (include "fastflow.fullname" .)) }}
+        {{- end }}
+        {{- if and (eq .Values.executor.type "kubernetes") .Values.persistence.cache.enabled }}
+        - name: cache-pvc
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.cache.existingClaim | default (printf "%s-cache" (include "fastflow.fullname" .)) }}
+        {{- end }}
+        - name: tmp
+          emptyDir: {}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

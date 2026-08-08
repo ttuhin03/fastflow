@@ -2,6 +2,8 @@
 
 Manifests für den Betrieb des Fast-Flow Orchestrators in Kubernetes: Orchestrator + Docker-Socket-Proxy, optional PostgreSQL, PVC für Daten/Logs/Pipelines.
 
+**Helm-Alternative:** Für `helm install`/`helm upgrade` statt manuellem `kubectl apply -f k8s/` gibt es einen Helm-Chart unter [`../helm/fastflow`](../helm/fastflow/README.md), der dieselben Manifests templated (plus optionales Ingress/HPA).
+
 ---
 
 ## Deployment auf einem Kubernetes-Cluster

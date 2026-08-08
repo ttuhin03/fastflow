@@ -1,0 +1,235 @@
+# Default values for the fastflow chart.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  repository: ghcr.io/ttuhin03/fastflow-orchestrator
+  # -- Defaults to .Chart.AppVersion when empty
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+# -- Worker image used by the orchestrator to run pipeline containers.
+# Only relevant when executor.type is "kubernetes" (script/notebook pipeline Jobs)
+# or when running the orchestrator itself against Docker outside this chart.
+worker:
+  image:
+    repository: ghcr.io/ttuhin03/fastflow-worker
+    tag: ""
+
+serviceAccount:
+  # -- Create a ServiceAccount for the orchestrator
+  create: true
+  # -- Name of the ServiceAccount to use. If not set and create is true, a name is generated
+  name: ""
+  annotations: {}
+
+rbac:
+  # -- Create the Role/RoleBinding needed for the "kubernetes" pipeline executor
+  # (create/get/list/delete Jobs, get/list Pods + Pod logs). Only used when
+  # executor.type is "kubernetes".
+  create: true
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+  runAsGroup: 1001
+  fsGroup: 1001
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  seccompProfile:
+    type: RuntimeDefault
+  capabilities:
+    drop:
+      - ALL
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+  # -- Only used when service.type is NodePort or LoadBalancer
+  nodePort: ""
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  # -- Set to "" to disable /health & /ready path exclusions from annotations, or add
+  # your own annotations, e.g. for cert-manager: cert-manager.io/cluster-issuer: letsencrypt
+  hosts:
+    - host: fastflow.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  # - secretName: fastflow-tls
+  #   hosts:
+  #     - fastflow.example.com
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: ""
+
+# -- Extra volumes appended to the orchestrator Pod spec
+extraVolumes: []
+# -- Extra volume mounts appended to the orchestrator container
+extraVolumeMounts: []
+
+persistence:
+  # -- Stores the SQLite DB (if no external Postgres), logs and pipeline checkouts
+  data:
+    enabled: true
+    existingClaim: ""
+    storageClassName: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 20Gi
+  # -- Shared uv cache / python installs, mounted into pipeline Job pods when
+  # executor.type is "kubernetes"
+  cache:
+    enabled: true
+    existingClaim: ""
+    storageClassName: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 10Gi
+
+# -- How pipeline runs are executed.
+#   "kubernetes": runs pipelines as Kubernetes Jobs in this namespace (no Docker needed on nodes)
+#   "docker": runs pipelines as sibling Docker containers via a mounted/attached Docker
+#             socket - not recommended in this chart, use docker-compose for that instead.
+executor:
+  type: kubernetes
+  # -- Auto-delete finished pipeline Jobs after N seconds. 0 = never delete.
+  jobTtlSecondsAfterFinished: 300
+
+config:
+  # -- development | production. Controls example-pipeline seeding and security checks at startup.
+  environment: production
+  baseUrl: "http://localhost:8000"
+  frontendUrl: "http://localhost:8000"
+  logLevel: INFO
+  logJson: false
+  pipelineCacheTtlSeconds: 60
+  maxConcurrentRuns: 10
+  defaultPythonVersion: "3.11"
+  corsOrigins: ""
+  # -- Any additional non-secret environment variables for the orchestrator, e.g.
+  #   LOG_RETENTION_DAYS: "30"
+  extraEnv: {}
+
+secrets:
+  # -- Create the fastflow-secrets Secret from the values below. Set to false and
+  # provide secrets.existingSecret to manage secrets outside of this chart
+  # (recommended for production - see README).
+  create: true
+  # -- Name of a pre-existing Secret with the same keys as templates/secret.yaml.
+  # Overrides secrets.create.
+  existingSecret: ""
+  # -- REQUIRED. Generate with:
+  #   python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+  encryptionKey: ""
+  # -- REQUIRED. Minimum 32 characters.
+  jwtSecretKey: ""
+  # -- Skip verifying OAuth credentials with the provider at startup (useful for
+  # clusters without outgoing DNS/internet access from Pods).
+  skipOauthVerification: false
+  initialAdminEmail: ""
+  github:
+    clientId: ""
+    clientSecret: ""
+  google:
+    clientId: ""
+    clientSecret: ""
+  microsoft:
+    clientId: ""
+    clientSecret: ""
+    tenantId: "common"
+  custom:
+    clientId: ""
+    clientSecret: ""
+    authorizeUrl: ""
+    tokenUrl: ""
+    userinfoUrl: ""
+  gitSync:
+    token: ""
+    deployKey: ""
+  # -- Any additional secret environment variables for the orchestrator
+  extraSecretEnv: {}
+
+# -- Bundled PostgreSQL. Disable and set externalDatabaseUrl to use an external
+# database, or leave both disabled to fall back to SQLite on the data PVC.
+postgresql:
+  enabled: true
+  image:
+    repository: postgres
+    tag: 16-alpine
+  auth:
+    username: fastflow
+    password: fastflow
+    database: fastflow
+    # -- Use an existing Secret instead of auth.password (must contain keys
+    # POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, DATABASE_URL)
+    existingSecret: ""
+  persistence:
+    enabled: true
+    storageClassName: ""
+    size: 5Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+
+# -- Full DATABASE_URL for an externally managed database. Only used when
+# postgresql.enabled is false. Leave both this and postgresql.enabled unset/false
+# to use SQLite on the data PVC instead.
+externalDatabaseUrl: ""
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: http
+  initialDelaySeconds: 40
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
