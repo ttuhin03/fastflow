@@ -52,6 +52,12 @@ data:
   # sonst scheitert jeder Run mit infrastructure_error. Nur als Notausstieg auf "false" setzen (siehe
   # docs/docs/deployment/SECURITY-ROLLOUT.md, Abschnitt 2a).
   # KUBERNETES_ENV_VIA_SECRET: "true"
+  # ServiceAccount der Pipeline-Job-Pods. Leer = "default"-SA des Namespace.
+  # Ein Token bekommen die Pods so oder so nicht (automountServiceAccountToken: false in der
+  # Pod-Spec) – "fastflow-runner" löst sie zusätzlich von der Identität des default-SA.
+  # ERST rbac-kubernetes-executor.yaml anwenden, DANN setzen: Fehlt der SA im Namespace, legt
+  # das Admission-Plugin den Pod nie an und der Run hängt dauerhaft in RUNNING.
+  # KUBERNETES_JOB_SERVICE_ACCOUNT: "fastflow-runner"
 
   # Git-Sync: Repository-URL (nicht sensibel). PAT oder Deploy Key in secrets.yaml.
   # Entweder HTTPS + GIT_SYNC_TOKEN oder SSH + GIT_SYNC_DEPLOY_KEY. Sync-UI: Repository.

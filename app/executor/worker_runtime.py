@@ -25,6 +25,13 @@ K8S_ORCHESTRATOR_UV_PYTHON_DIR = f"{K8S_SHARED_CACHE_MOUNT}/uv_python"
 
 WORKER_SECCOMP_PROFILE_TYPE = "RuntimeDefault"
 
+# Pipeline pods run untrusted user code, so they never get a ServiceAccount token.
+# Without this, every job pod mounts the namespace's `default` SA token at
+# /var/run/secrets/kubernetes.io/serviceaccount - an ambient cluster credential for
+# pipeline code. Where roles are bound to `system:serviceaccounts`, that token reads
+# other runs' env Secrets and `fastflow-secrets` (master Fernet key, JWT secret).
+K8S_WORKER_AUTOMOUNT_SERVICE_ACCOUNT_TOKEN = False
+
 WORKER_BASE_ENV: Dict[str, str] = {
     "UV_CACHE_DIR": WORKER_UV_CACHE_DIR,
     "UV_PYTHON_INSTALL_DIR": WORKER_UV_PYTHON_DIR,

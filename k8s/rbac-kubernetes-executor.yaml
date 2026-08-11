@@ -1,6 +1,14 @@
 # RBAC für Pipeline-Executor im Kubernetes-Modus
 # Minimal: Jobs verwalten, Pods/Logs lesen, optionale Pod-Metriken (metrics-server),
 # Per-Run-Env-Secrets schreiben (create/patch/delete, KEIN Lesen)
+#
+# Enthält zwei ServiceAccounts mit gegenläufigen Aufgaben:
+#   fastflow-executor -> Orchestrator-Deployment, braucht API-Rechte (Role unten)
+#   fastflow-runner   -> Pipeline-Job-Pods, bewusst OHNE jedes Recht und ohne Token
+#
+# ACHTUNG bei einem anderen Namespace als `default`: Das RoleBinding-Subject unten
+# ist pflichtig namespaced und wird von `kubectl apply -n <ns>` NICHT umgeschrieben.
+# Details und das Rewrite-Kommando stehen direkt am Subject.
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -8,6 +16,31 @@ metadata:
   name: fastflow-executor
   labels:
     app: fastflow-orchestrator
+---
+# ServiceAccount der Pipeline-Job-Pods: KEIN RoleBinding, also keine API-Rechte.
+# Aktiviert wird er über KUBERNETES_JOB_SERVICE_ACCOUNT=fastflow-runner (Opt-in,
+# erst nach dem Apply dieses Manifests setzen – ein fehlender SA verhindert, dass
+# das Admission-Plugin den Pod anlegt, und der Run hängt für immer in RUNNING).
+#
+# Der Token-Mount wird ohnehin schon in der Pod-Spec abgeschaltet
+# (automountServiceAccountToken: false, siehe build_pipeline_job in
+# app/executor/kubernetes_backend.py); hier steht es als zweite Absicherung, damit
+# auch ein von Hand gebauter Pod mit diesem SA kein Token bekommt. Pipeline-Pods
+# führen fremden User-Code aus – ein Token wäre dort eine Cluster-Credential.
+#
+# Label bewusst `app: fastflow-orchestrator` und NICHT `app: fastflow-runner`:
+# Letzteres tragen die ephemeren Run-Ressourcen (Jobs, Pods, Per-Run-Secrets), auf die
+# sich Cleanup-Kommandos wie `kubectl delete secret -l app=fastflow-runner` beziehen.
+# Dieser SA ist dagegen Teil der Installation – ein versehentlich mitgelöschter SA
+# würde jeden neuen Run in RUNNING hängen lassen.
+apiVersion: v1
+kind: ServiceAccount
+automountServiceAccountToken: false
+metadata:
+  name: fastflow-runner
+  labels:
+    app: fastflow-orchestrator
+    component: pipeline-runner
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -55,4 +88,23 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: fastflow-executor
+    # ⚠️ MUSS der Namespace sein, in dem dieser ServiceAccount wirklich liegt.
+    #
+    # `kubectl apply -n <ns> -f k8s/rbac-kubernetes-executor.yaml` legt SA, Role und
+    # RoleBinding in <ns> an, schreibt dieses Feld aber NICHT um. Das Subject zeigt
+    # dann weiter auf `default:fastflow-executor` – ein Principal, der in <ns> nichts
+    # ist. Die Bindung greift für niemanden, und JEDER Job- bzw. Secret-Create
+    # scheitert mit 403; jeder Run endet als `infrastructure_error`. Für
+    # `kind: ServiceAccount` ist das Feld in RBAC pflichtig, es gibt keinen
+    # "aktueller Namespace"-Platzhalter – der Wert muss vor dem Apply gesetzt werden.
+    #
+    # Anderer Namespace, in einem Schritt:
+    #   NS=fastflow
+    #   sed "s/^\( *\)namespace: default$/\1namespace: $NS/" \
+    #     k8s/rbac-kubernetes-executor.yaml | kubectl apply -n "$NS" -f -
+    # Mit kustomize genügt `namespace: $NS` – der Namespace-Transformer zieht
+    # ServiceAccount-Subjects von RoleBindings automatisch mit.
+    #
+    # Danach verifizieren (MUSS "yes" sein, sonst ist der Rewrite nicht angekommen):
+    #   kubectl auth can-i create jobs --as=system:serviceaccount:$NS:fastflow-executor -n $NS
     namespace: default

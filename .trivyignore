@@ -45,8 +45,20 @@ KSV-01010
 KSV-0013
 
 # KSV-0110: "Workloads in the default namespace".
-# Manifeste laufen ohne Vorab-Setup (kubectl apply -f k8s/) im aktuellen Kontext.
-# Produktion setzt den Namespace via `kubectl apply -n` bzw. kustomize/helm.
+# Die Manifeste tragen bewusst kein `metadata.namespace`, damit `kubectl apply -f k8s/`
+# ohne Vorab-Setup im aktuellen Kontext läuft; den Ziel-Namespace bestimmt der
+# Betreiber (kubectl apply -n / kustomize / Helm).
+#
+# WICHTIG – eine Ausnahme, die `kubectl apply -n` NICHT abdeckt: Das
+# RoleBinding-Subject in k8s/rbac-kubernetes-executor.yaml ist für
+# `kind: ServiceAccount` pflichtig namespaced (`namespace: default`) und wird von
+# `-n <ns>` nicht umgeschrieben. Wer nur `-n` nutzt, bindet die Role an einen
+# Principal, der im Ziel-Namespace nicht existiert: Die Bindung greift für niemanden,
+# jeder Job-/Secret-Create scheitert mit 403 und jeder Run endet als
+# `infrastructure_error`. Für einen anderen Namespace muss das Subject mit
+# umgeschrieben werden (sed-Einzeiler bzw. kustomize-Namespace-Transformer, dokumentiert
+# direkt am Subject und in k8s/README.md → "Anderer Namespace als default").
+# Gegenprobe: test_worker_security.py prüft Subject ↔ ServiceAccount ↔ roleRef.
 KSV-0110
 
 # KSV-0020 / KSV-0021: "Runs with UID/GID <= 10000".

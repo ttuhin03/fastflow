@@ -61,6 +61,8 @@ kubectl apply -f k8s/deployment.yaml
 kubectl apply -f k8s/service.yaml
 ```
 
+**Anderer Namespace als `default`?** `kubectl apply -n <ns>` allein genügt **nicht** — das RoleBinding-Subject muss mit umgeschrieben werden, sonst greift die Bindung für niemanden und jeder Run scheitert mit 403. Kommando in [Anderer Namespace als `default`](#anderer-namespace-als-default).
+
 **Wichtig bei einem Update eines laufenden Clusters:** Die RBAC **vor** dem Deployment anwenden. Der Executor legt die Env-Vars eines Runs in einem Per-Run-Secret ab und braucht dafür `secrets: create, patch, delete`; rollt man das Image zuerst aus, scheitert jeder Run mit `infrastructure_error` (403). Siehe [RBAC des Executors](#rbac-des-executors) und [Security Rollout](../docs/docs/deployment/SECURITY-ROLLOUT.md).
 
 ### 4. Zugriff auf die App
@@ -187,7 +189,7 @@ Die App nutzt `BASE_URL` für den Redirect; mit ConfigMap-Default `localhost:800
 | Datei                         | Inhalt |
 |-------------------------------|--------|
 | `pvc.yaml`                    | Zwei PVCs: Daten/Logs/Pipelines (RWO) + UV-Cache/Pipeline-Kopien (RWM für Jobs) |
-| `rbac-kubernetes-executor.yaml` | ServiceAccount + Role + RoleBinding für K8s-Jobs (inkl. write-only Secrets, siehe unten) |
+| `rbac-kubernetes-executor.yaml` | ServiceAccount + Role + RoleBinding für K8s-Jobs (inkl. write-only Secrets, siehe unten) sowie der rechtelose `fastflow-runner`-SA für die Pipeline-Pods |
 | `postgres.yaml`               | Optional: PostgreSQL (Secret, PVC, Deployment, Service) |
 | `secrets.yaml`                | Fast-Flow Secrets (OAuth, JWT, Encryption, SKIP_OAUTH_VERIFICATION) |
 | `configmap.yaml`              | Nicht-sensible Umgebungsvariablen (BASE_URL, WORKER_BASE_IMAGE, …) |
@@ -225,6 +227,53 @@ kubectl auth can-i get    secrets --as=system:serviceaccount:default:fastflow-ex
 Aufgeräumt wird das Secret explizit am Run-Ende (Erfolg, Fehler, Cancel, Reconcile, Shutdown); zusätzlich hängt eine `ownerReference` auf den Job als Backstop daran, und beim App-Start räumt ein Sweep Reste nach einem unclean Shutdown ab.
 
 Notausstieg, falls die RBAC nicht ausgerollt werden kann: `KUBERNETES_ENV_VIA_SECRET=false` (Details und Aufräum-Kommando in [Security Rollout](../docs/docs/deployment/SECURITY-ROLLOUT.md), Abschnitt 2a).
+
+### Anderer Namespace als `default`
+
+Die Manifeste tragen bewusst kein `metadata.namespace`, damit `kubectl apply -f k8s/` im aktuellen Kontext läuft. **Eine Stelle deckt `kubectl apply -n <ns>` aber nicht ab:** Das RoleBinding-Subject in `rbac-kubernetes-executor.yaml` ist für `kind: ServiceAccount` in RBAC **pflichtig namespaced** (`namespace: default`) und wird von `-n` nicht umgeschrieben.
+
+Wer nur `-n` nutzt, legt SA, Role und RoleBinding in `<ns>` an, während das Subject weiter auf `default:fastflow-executor` zeigt — einen Principal, den es in `<ns>` nicht gibt. Die Bindung greift dann für niemanden, **jeder Job- und Secret-Create scheitert mit 403**, und jeder Run endet als `infrastructure_error`. Der Fehler ist beim Apply unsichtbar: `kubectl apply` meldet Erfolg.
+
+Deshalb das Subject vor dem Apply mit umschreiben:
+
+```bash
+NS=fastflow
+sed "s/^\( *\)namespace: default$/\1namespace: $NS/" k8s/rbac-kubernetes-executor.yaml \
+  | kubectl apply -n "$NS" -f -
+```
+
+Mit **kustomize** genügt `namespace: $NS` in der `kustomization.yaml` — der Namespace-Transformer zieht ServiceAccount-Subjects von RoleBindings automatisch mit. Gleiches gilt für Helm-Charts mit `.Release.Namespace` im Subject.
+
+Danach verifizieren (muss `yes` sein):
+
+```bash
+kubectl auth can-i create jobs --as=system:serviceaccount:$NS:fastflow-executor -n $NS
+```
+
+Der Namespace der Pipeline-Jobs selbst kommt aus `KUBERNETES_NAMESPACE` (Deployment/ConfigMap, Default `default`) — er muss derselbe sein.
+
+### Pipeline-Pods bekommen kein ServiceAccount-Token
+
+Pipeline-Pods führen fremden User-Code aus. Ihre Pod-Spec setzt daher **`automountServiceAccountToken: false`** (`build_pipeline_job` in `app/executor/kubernetes_backend.py`). Ohne das mountet das Kubelet den Token des `default`-ServiceAccounts unter `/var/run/secrets/kubernetes.io/serviceaccount` — eine Cluster-Credential, die jede Pipeline benutzen kann. Hat `default` irgendein Secret-Read-Recht (üblich, wo Rollen an `system:serviceaccounts` hängen), liest Pipeline-Code damit die Env-Secrets **anderer** Runs und `fastflow-secrets` mit dem Master-Fernet-Key (`ENCRYPTION_KEY`) und `JWT_SECRET_KEY`.
+
+Optional als zweite Stufe: Die Pods an einen eigenen, rechtelosen ServiceAccount hängen, statt an der Identität von `default` (relevant für Audit-Logs und NetworkPolicies). `rbac-kubernetes-executor.yaml` liefert dafür `fastflow-runner` — **ohne** RoleBinding, also ohne jedes Recht:
+
+```bash
+kubectl apply -f k8s/rbac-kubernetes-executor.yaml    # bringt fastflow-runner mit
+kubectl set env deployment/fastflow-orchestrator KUBERNETES_JOB_SERVICE_ACCOUNT=fastflow-runner
+```
+
+**Reihenfolge beachten:** Erst das Manifest, dann die Variable. Existiert der SA im Namespace nicht, legt das ServiceAccount-Admission-Plugin den Pod nie an; der Job bleibt ohne Pod, und bei nicht gesetztem `CONTAINER_TIMEOUT` pollt der Orchestrator ohne Deadline — der Run hängt dauerhaft in `RUNNING` und blockiert einen `MAX_CONCURRENT_RUNS`-Slot. Genau deshalb ist die Variable ein Opt-in und nicht der Default.
+
+Prüfen (funktioniert auch an einem bereits beendeten Job-Pod):
+
+```bash
+POD=$(kubectl get pods -l app=fastflow-runner --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1].metadata.name}')
+kubectl get pod "$POD" -o jsonpath='{.spec.automountServiceAccountToken}{"\n"}'   # erwartet: false
+kubectl get pod "$POD" -o jsonpath='{.spec.volumes[*].name}{"\n"}'                # erwartet: nur cache tmp, kein kube-api-access-*
+```
+
+**Bewusst in Kauf genommen:** Eine Pipeline, die aus ihrem Container heraus per In-Cluster-Token die Kubernetes-API anspricht (`load_incluster_config()`), bricht damit. Im Repo tut das nichts — der Job-Container startet nur ein statisches `uv run … python -u -c <wrapper>`. Wer API-Zugriff aus einer Pipeline braucht, hinterlegt einen eigenen, eng gefassten Token als Pipeline-Secret; siehe [Security Rollout](../docs/docs/deployment/SECURITY-ROLLOUT.md), Abschnitt 2b.
 
 ---
 

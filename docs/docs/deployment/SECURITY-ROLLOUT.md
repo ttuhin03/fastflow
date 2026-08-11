@@ -31,6 +31,7 @@ Siehe auch: [Kubernetes Deployment](K8S.md), [Configuration](CONFIGURATION.md), 
 | Worker-Env | — | **`HOME=/tmp`**, **`PYTHONDONTWRITEBYTECODE=1`** |
 | Pipeline-Job Env (K8s) | Literale in der Job-Spec | **Per-Run-Secret + `valueFrom.secretKeyRef`** |
 | Executor-RBAC | Jobs/Pods | **zusätzlich `secrets: create, patch, delete`** (kein Lesen) |
+| Pipeline-Pod SA-Token | Token des `default`-SA automatisch gemountet | **`automountServiceAccountToken: false`** (+ optionaler rechteloser SA `fastflow-runner`) |
 
 Technische Konstanten und Security-Builder: `app/executor/worker_runtime.py`  
 Automatisierte Checks: `tests/test_worker_security.py`, `tests/test_kubernetes_env_secret.py`
@@ -43,6 +44,8 @@ Automatisierte Checks: `tests/test_worker_security.py`, `tests/test_kubernetes_e
 - [ ] Neues **Worker-Image** bauen (`Dockerfile.worker`) — **Pflicht** für Notebook-Pipelines (`/runner`) und Non-Root
 - [ ] In **ConfigMap** / `.env`: `WORKER_BASE_IMAGE` auf euer Registry-Image setzen (nicht das alte Astral-`uv`-Image)
 - [ ] K8s: **RBAC zuerst** anwenden (`rbac-kubernetes-executor.yaml`) — **vor** dem Image-Rollout, siehe Abschnitt 2a
+- [ ] K8s: Bei einem **Namespace ≠ `default`** das RoleBinding-Subject mit umschreiben (`kubectl apply -n` allein genügt nicht), siehe Abschnitt 2a
+- [ ] K8s: Optional `KUBERNETES_JOB_SERVICE_ACCOUNT=fastflow-runner` — **erst nach** dem RBAC-Apply, siehe Abschnitt 2b
 - [ ] K8s: **`kubectl apply`** für geänderte Manifests (`deployment.yaml`, ggf. `postgres.yaml`)
 - [ ] K8s: **UV-Cache migrieren** (falls bisher unter `/app/data/uv_cache` auf `fastflow-pvc`)
 - [ ] **`ENVIRONMENT=production`** in ConfigMap (wenn Prod-Betrieb)
@@ -189,6 +192,20 @@ kubectl rollout status deployment/fastflow-orchestrator
 
 `skaffold.yaml` listet `rbac-kubernetes-executor.yaml` bereits **vor** `deployment.yaml`, für Skaffold-Deploys stimmt die Reihenfolge also automatisch.
 
+### Namespace ≠ `default`: RoleBinding-Subject mitziehen
+
+Die Manifeste tragen bewusst kein `metadata.namespace`. **Eine Stelle deckt `kubectl apply -n <ns>` aber nicht ab:** Das RoleBinding-Subject ist für `kind: ServiceAccount` in RBAC pflichtig namespaced (`namespace: default`) und wird von `-n` **nicht** umgeschrieben.
+
+SA, Role und RoleBinding landen dann in `<ns>`, das Subject zeigt weiter auf `default:fastflow-executor` — einen Principal, den es in `<ns>` nicht gibt. Die Bindung greift für niemanden, **jeder Job- und Secret-Create endet mit 403**, jeder Run als `infrastructure_error`. `kubectl apply` meldet dabei Erfolg; sichtbar wird der Fehler erst am ersten Run.
+
+```bash
+NS=fastflow
+sed "s/^\( *\)namespace: default$/\1namespace: $NS/" k8s/rbac-kubernetes-executor.yaml \
+  | kubectl apply -n "$NS" -f -
+```
+
+Mit **kustomize** genügt `namespace: $NS` (der Namespace-Transformer zieht ServiceAccount-Subjects von RoleBindings mit), mit **Helm** `.Release.Namespace` im Subject. `KUBERNETES_NAMESPACE` im Deployment muss derselbe Namespace sein.
+
 ### Rechte verifizieren
 
 Namespace anpassen (`-n <ns>`), Default ist `default`:
@@ -237,6 +254,82 @@ Secret-Data-Keys erlauben nur Buchstaben, Ziffern, `-`, `_` und `.`. Der Orchest
 Bewusst hartes Scheitern statt `envFrom`: Dort würde das Kubelet ungültige Keys **still fallen lassen** und die Pipeline lief ohne die Variable.
 
 Bewusst **nicht** strenger geprüft wird gegen das engere Env-Var-Regelwerk (`C_IDENTIFIER`): Ob ein Key wie `MY-VAR` als Env-Var-Name durchgeht, entscheidet die Cluster-Version — genau wie vor der Umstellung beim Job-Create. Eine strengere Prüfung würde Pipelines brechen, die heute laufen. Weil das Secret **vor** dem Job entsteht, scheitert so ein Key sauber am Job-Create (das Secret wird dabei wieder abgeräumt) und hinterlässt keinen Pod in `CreateContainerConfigError`.
+
+---
+
+## 2b. Pipeline-Pods ohne ServiceAccount-Token
+
+### Was sich ändert
+
+Die Pod-Spec der Pipeline-Jobs setzt jetzt **`automountServiceAccountToken: false`** (`build_pipeline_job` in `app/executor/kubernetes_backend.py`):
+
+```yaml
+# vorher – Token des default-SA gemountet unter
+#          /var/run/secrets/kubernetes.io/serviceaccount
+spec:
+  restartPolicy: Never
+  containers: [...]
+
+# nachher
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  containers: [...]
+```
+
+**Warum:** Diese Pods führen beliebigen User-Pipeline-Code aus. Ohne das Flag mountet das Kubelet den Token des `default`-ServiceAccounts des Namespace — eine ambiente Cluster-Credential, die jede Pipeline mit einem einzigen `curl` gegen `$KUBERNETES_SERVICE_HOST` verwenden kann. Hat `default` irgendein Secret-Read-Recht — üblich in Clustern, in denen Rollen an `system:serviceaccounts` gebunden sind —, liest Pipeline-Code damit die Per-Run-Env-Secrets **anderer** Runs und `fastflow-secrets` mit dem Master-Fernet-Key (`ENCRYPTION_KEY`, entschlüsselt **alle** hinterlegten Pipeline-Secrets) und `JWT_SECRET_KEY` (beliebige Sessions signierbar). Die Abschottung aus Abschnitt 2a wäre damit wieder offen: Der Orchestrator darf Secrets bewusst nicht lesen — der Pod, den er startet, konnte es.
+
+Der Rollout ist **nicht** reihenfolgeabhängig und braucht keine Cluster-Änderung: Es ist ein Feld in der Job-Spec, gültig für alle Jobs, die das neue Image erzeugt. Laufende Jobs behalten ihre alte Spec.
+
+### Optional: eigener rechtloser ServiceAccount
+
+Zweite Stufe, damit die Pods nicht mehr an der Identität von `default` hängen (relevant für Audit-Logs, NetworkPolicies und Cluster, in denen `default` Rechte hat). `rbac-kubernetes-executor.yaml` bringt dafür `fastflow-runner` mit — **ohne** RoleBinding, also ohne jedes Recht, plus `automountServiceAccountToken: false` am SA selbst:
+
+```bash
+# 1. Manifest zuerst (bringt fastflow-runner mit)
+kubectl apply -f k8s/rbac-kubernetes-executor.yaml
+
+# 2. SA existiert? MUSS gefunden werden, bevor Schritt 3 kommt
+kubectl get serviceaccount fastflow-runner
+
+# 3. Erst dann die Variable setzen
+kubectl set env deployment/fastflow-orchestrator KUBERNETES_JOB_SERVICE_ACCOUNT=fastflow-runner
+```
+
+> **Reihenfolge einhalten.** Fehlt der SA im Namespace, lehnt das ServiceAccount-Admission-Plugin den Pod ab: Der Job bleibt **ohne Pod**, und bei nicht gesetztem `CONTAINER_TIMEOUT` pollt `_wait_for_job_completion` ohne Deadline — der Run hängt dauerhaft in `RUNNING` und blockiert einen `MAX_CONCURRENT_RUNS`-Slot. Genau deshalb ist die Variable ein Opt-in und leer per Default; Bestandsinstallationen, die das Manifest nie neu angewendet haben, bleiben unverändert lauffähig.
+
+Zurückschalten jederzeit ohne Image-Rollback: `kubectl set env deployment/fastflow-orchestrator KUBERNETES_JOB_SERVICE_ACCOUNT-`. Der Token-Mount bleibt in beiden Fällen aus.
+
+### Verifizieren
+
+```bash
+POD=$(kubectl get pods -l app=fastflow-runner --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1].metadata.name}')
+
+kubectl get pod "$POD" -o jsonpath='{.spec.automountServiceAccountToken}{"\n"}'
+# erwartet: false
+
+kubectl get pod "$POD" -o jsonpath='{.spec.volumes[*].name}{"\n"}'
+# erwartet: nur cache + tmp, kein kube-api-access-* Volume
+
+# Nur solange ein Run läuft (danach ist der Pod beendet und exec schlägt fehl):
+kubectl exec "$POD" -- ls /var/run/secrets/kubernetes.io/serviceaccount
+# erwartet: No such file or directory
+```
+
+Beide `get pod`-Checks funktionieren auch an einem bereits beendeten Job-Pod — solange die Job-TTL (`KUBERNETES_JOB_TTL_SECONDS_AFTER_FINISHED`) ihn nicht schon aufgeräumt hat.
+
+### Bewusst in Kauf genommenes Verhalten
+
+Eine Pipeline, die **aus ihrem Container heraus** per In-Cluster-Token die Kubernetes-API anspricht, bricht mit dieser Änderung — typisch `kubernetes.config.load_incluster_config()`, das ohne den Token-Mount mit `ConfigException` scheitert, oder ein `curl` gegen `$KUBERNETES_SERVICE_HOST` ohne `Authorization`-Header (401).
+
+Das ist **beabsichtigt und im Repo folgenlos**: Der Job-Container startet nur ein statisches `uv run … python -u -c <wrapper>` (`_build_container_command` in `app/executor/core.py`), keine Pipeline hier spricht die API an. Falls eine eigene Pipeline das doch braucht, ist der Weg **nicht**, den Automount wieder einzuschalten (das gäbe das Recht *allen* Pipelines), sondern:
+
+1. Im Cluster einen eigenen ServiceAccount mit genau den benötigten Rechten anlegen.
+2. Ein Token dafür ausstellen (`kubectl create token <sa> --duration=…`) bzw. ein kubeconfig bauen.
+3. Es als **Pipeline-Secret** hinterlegen (UI → Secrets) — der Wert landet über das Per-Run-Secret aus Abschnitt 2a als Env-Var im Pod.
+4. In der Pipeline explizit damit konfigurieren (`load_kube_config_from_dict()` / `Configuration(host=…, api_key=…)`).
+
+Das ist ohnehin die saubere Variante: pro Pipeline sichtbar, eng gefasst und widerrufbar, statt eines ambienten Tokens für alles, was im Namespace läuft.
 
 ---
 

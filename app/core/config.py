@@ -244,6 +244,29 @@ class Config:
     )
     """Sekunden, nach denen abgeschlossene Jobs (und Pods) automatisch gelöscht werden. 0 = nicht löschen."""
 
+    KUBERNETES_JOB_SERVICE_ACCOUNT: str = os.getenv("KUBERNETES_JOB_SERVICE_ACCOUNT", "")
+    """
+    ServiceAccount der Pipeline-Job-Pods. Leer (Standard) = ``default``-SA des Namespace.
+
+    Unabhängig von diesem Wert bekommen Pipeline-Pods **kein** ServiceAccount-Token
+    (``automountServiceAccountToken: false``, siehe
+    ``K8S_WORKER_AUTOMOUNT_SERVICE_ACCOUNT_TOKEN`` in ``app/executor/worker_runtime.py``):
+    Ein gemountetes Token wäre eine Cluster-Credential in der Hand von beliebigem
+    User-Pipeline-Code. Diese Option ist die zusätzliche Defense-in-Depth-Stufe, damit
+    die Pods auch nicht mehr an der Identität des ``default``-SA hängen (relevant für
+    Audit-Logs, NetworkPolicies und Cluster, in denen Rollen an
+    ``system:serviceaccounts`` gebunden sind).
+
+    Empfohlener Wert: ``fastflow-runner`` – der rechtelose SA aus
+    ``k8s/rbac-kubernetes-executor.yaml`` (kein RoleBinding).
+
+    Bewusst **Opt-in** und nicht per Default gesetzt: Existiert der SA im Namespace
+    nicht, legt das ServiceAccount-Admission-Plugin den Pod nie an. Der Job bliebe
+    ohne Pod, und ``_wait_for_job_completion`` pollt bei ``CONTAINER_TIMEOUT=None``
+    ohne Deadline – der Run hinge für immer in ``RUNNING`` und würde einen
+    ``MAX_CONCURRENT_RUNS``-Slot blockieren. Erst Manifest ausrollen, dann setzen.
+    """
+
     KUBERNETES_ENV_VIA_SECRET: bool = (
         os.getenv("KUBERNETES_ENV_VIA_SECRET", "true").lower() not in ("0", "false", "no")
     )

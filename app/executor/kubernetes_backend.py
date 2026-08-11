@@ -39,6 +39,7 @@ from app.executor.core import (
     _parse_and_persist_cell_line,
 )
 from app.executor.worker_runtime import (
+    K8S_WORKER_AUTOMOUNT_SERVICE_ACCOUNT_TOKEN,
     build_k8s_container_security_context,
     build_k8s_pod_security_context,
     k8s_worker_volume_mount_specs,
@@ -347,8 +348,19 @@ def build_pipeline_job(
     resources: Dict[str, Any],
     ttl_seconds_after_finished: Optional[int],
     active_deadline_seconds: Optional[int],
+    service_account_name: Optional[str] = None,
 ) -> Any:
-    """Baut die V1Job-Spec eines Pipeline-Runs (rein, damit Tests sie serialisieren können)."""
+    """
+    Baut die V1Job-Spec eines Pipeline-Runs (rein, damit Tests sie serialisieren können).
+
+    Der Pod bekommt bewusst KEIN ServiceAccount-Token (siehe unten). In Kauf genommen
+    ist damit, dass eine Pipeline, die aus ihrem Container heraus per In-Cluster-Token
+    die K8s-API anspricht, bricht. Nichts in diesem Repo tut das –
+    ``_build_container_command`` emittiert nur ein statisches
+    ``uv run … python -u -c <wrapper>``. Wer API-Zugriff aus einer Pipeline braucht,
+    hinterlegt einen eigenen, eng gefassten Token als Pipeline-Secret (siehe
+    ``docs/docs/deployment/SECURITY-ROLLOUT.md``, Abschnitt 2b).
+    """
     labels = {
         "app": "fastflow-runner",
         JOB_LABEL_RUN_ID: str(run_id),
@@ -386,6 +398,17 @@ def build_pipeline_job(
         containers=[container],
         volumes=[volume, tmp_volume],
         security_context=build_k8s_pod_security_context(client),
+        # Ohne dieses Flag mountet das Kubelet den Token des `default`-SA unter
+        # /var/run/secrets/kubernetes.io/serviceaccount – eine Cluster-Credential in
+        # der Hand von beliebigem User-Pipeline-Code. Hat `default` irgendein
+        # Secret-Read-Recht (üblich, wo Rollen an `system:serviceaccounts` hängen),
+        # liest Pipeline-Code damit die Env-Secrets anderer Runs und `fastflow-secrets`
+        # (Master-Fernet-Key, JWT_SECRET_KEY).
+        automount_service_account_token=K8S_WORKER_AUTOMOUNT_SERVICE_ACCOUNT_TOKEN,
+        # Leer = `default`-SA des Namespace (ohne Token, s. o.). Ein gesetzter Name muss
+        # im Namespace existieren, sonst legt das SA-Admission-Plugin den Pod nie an und
+        # der Run hängt für immer in RUNNING – daher ist die Config ein Opt-in.
+        service_account_name=(service_account_name or "").strip() or None,
     )
     template = client.V1PodTemplateSpec(
         metadata=client.V1ObjectMeta(labels=labels),
@@ -697,6 +720,7 @@ async def run_container_task(
             resources=resources,
             ttl_seconds_after_finished=app_config.KUBERNETES_JOB_TTL_SECONDS_AFTER_FINISHED or None,
             active_deadline_seconds=int(effective_timeout) if effective_timeout else None,
+            service_account_name=app_config.KUBERNETES_JOB_SERVICE_ACCOUNT,
         )
         batch_api, core_api = _get_apis()
         created_job = batch_api.create_namespaced_job(namespace=namespace, body=job)
