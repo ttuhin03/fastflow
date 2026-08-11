@@ -34,7 +34,8 @@ Stores each individual pipeline execution attempt.
 | `exit_code` | Integer | Container exit code (0 = success). |
 | `log_file` | String | Path to log file on the filesystem. |
 | `metrics_file` | String | Path to metrics file on the filesystem. |
-| `env_vars` | JSON | Set environment variables (masked in API responses). |
+| `env_vars` | JSON | Internal `_fastflow_*` run metadata (error type, retry counter) plus the *names* of the injected secrets and ad-hoc env vars. Deliberately holds no secret values — see `app/services/run_env.py`. |
+| `encrypted_env_vars` | Text | Fernet-encrypted ad-hoc env vars supplied by the caller. Only these cannot be re-resolved on retry; declared secrets are resolved again through the pipeline's allow-list. |
 | `parameters` | JSON | Passed parameters. |
 | `uv_version` | String | Version of `uv` used. |
 | `setup_duration` | Float | Environment setup duration in seconds. |

@@ -7,6 +7,7 @@ Dieses Modul enthält alle REST-API-Endpoints für Run-Management:
 - Run abbrechen
 """
 
+import logging
 from typing import List, Optional, Dict, Any
 from uuid import UUID
 from datetime import datetime
@@ -14,24 +15,14 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlmodel import Session, select, func
 
 from app.core.database import get_session
+from app.core.errors import get_500_detail
 from app.models import PipelineRun, RunStatus, User, RunCellLog
-from app.executor import cancel_run, check_container_health, run_pipeline
+from app.executor import ConcurrencyLimitError, cancel_run, check_container_health, run_pipeline
 from app.auth import get_current_user, require_write
 from app.schemas.runs import RunsResponse
 from app.services.audit import log_audit
+from app.services.run_env import decrypt_run_env_vars, env_vars_for_display
 from app.middleware.rate_limiting import limiter
-
-_SAFE_ENV_PREFIX = "_fastflow_"
-
-
-def _mask_env_vars(env_vars: Optional[Dict[str, str]]) -> Optional[Dict[str, str]]:
-    """Maskiert alle env_vars-Werte außer internen _fastflow_*-Metadaten."""
-    if not env_vars:
-        return env_vars
-    return {
-        k: v if k.startswith(_SAFE_ENV_PREFIX) else "***"
-        for k, v in env_vars.items()
-    }
 
 
 # Terminal-Statuses: Run kann nur in diesen Zuständen erneut gestartet werden (Retry)
@@ -42,6 +33,7 @@ _RETRY_ALLOWED_STATUSES = {
     RunStatus.WARNING,
 }
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/runs", tags=["runs"])
 
 
@@ -263,7 +255,7 @@ async def get_run_details(
         "exit_code": run.exit_code,
         "log_file": run.log_file,
         "metrics_file": run.metrics_file,
-        "env_vars": _mask_env_vars(run.env_vars),
+        "env_vars": env_vars_for_display(run.env_vars),
         "parameters": run.parameters,
         "uv_version": run.uv_version,
         "error_type": error_type,  # "pipeline_error" oder "infrastructure_error"
@@ -375,6 +367,15 @@ async def retry_run(
 
     Returns:
         Run-Informationen des neuen Runs (id, pipeline_name, status, started_at, log_file).
+
+    Raises:
+        HTTPException:
+            - 404 wenn der Run oder die Pipeline nicht existiert
+            - 400 wenn der Run noch nicht beendet ist
+            - 429 wenn ein Concurrency-Limit erreicht ist
+            - 500 bei Konfigurations-/Infrastrukturfehlern (z.B. fehlender
+              ENCRYPTION_KEY) - bewusst kein 429, sonst sucht der Operator
+              nach einem Rate-Limit, das nie erreicht war
     """
     run = session.get(PipelineRun, run_id)
     if run is None:
@@ -387,9 +388,15 @@ async def retry_run(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Retry nur für beendete Runs möglich (aktueller Status: {run.status.value})",
         )
-    env_vars = run.env_vars or {}
     parameters = run.parameters or {}
     try:
+        # Nur die ad-hoc Env-Vars des Original-Runs werden übernommen. Secrets löst
+        # run_pipeline() über die in pipeline.json deklarierte Allow-List neu auf -
+        # ein Replay des gespeicherten Env-Satzes würde in Precedence-Stufe 6 landen
+        # und die Allow-List umgehen (und rotierte Werte wieder einspielen).
+        # Innerhalb des try: ohne gültigen ENCRYPTION_KEY wirft das Entschlüsseln
+        # einen RuntimeError, der sonst ungemappt aus dem Endpoint fällt.
+        env_vars = decrypt_run_env_vars(run.encrypted_env_vars)
         new_run = await run_pipeline(
             name=run.pipeline_name,
             env_vars=env_vars,
@@ -415,10 +422,21 @@ async def retry_run(
         }
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except RuntimeError as e:
+    except ConcurrencyLimitError as e:
+        # Echtes Rate-Limit: globales Concurrency- bzw. max_instances-Limit erreicht
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=str(e),
+        )
+    except RuntimeError as e:
+        # Konfigurations-/Infrastrukturfehler (z.B. fehlender oder ungültiger
+        # ENCRYPTION_KEY, siehe app/services/secrets.py). Kein Rate-Limit -
+        # deshalb 500 und nicht 429. Muss geloggt werden, weil das Detail in
+        # Produktion generisch ist.
+        logger.exception("Retry fehlgeschlagen (Konfiguration/Infrastruktur): run_id=%s", run_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=get_500_detail(e),
         )
     except Exception as e:
         raise HTTPException(

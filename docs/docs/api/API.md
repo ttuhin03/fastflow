@@ -103,7 +103,11 @@ Starts a pipeline manually.
 
 **Errors:**
 - `404`: Pipeline not found or disabled
-- `429`: Concurrency limit reached
+- `429`: Concurrency limit reached (global `MAX_CONCURRENT_RUNS` or the pipeline's `max_instances`)
+- `500`: Error starting the pipeline, including server misconfiguration such as a
+  missing or invalid `ENCRYPTION_KEY`. Configuration errors are deliberately *not*
+  reported as `429` - the status code would send you looking for a rate limit that
+  was never reached.
 
 ### `GET /api/pipelines/{name}/runs`
 
@@ -284,8 +288,9 @@ Starts a new run with the same parameters and env variables as the specified run
 **Errors:**
 - `400`: Run is not finished (PENDING/RUNNING only)
 - `404`: Run not found or pipeline does not exist
-- `429`: Concurrency limit reached
-- `500`: Error starting run
+- `429`: Concurrency limit reached (global `MAX_CONCURRENT_RUNS` or the pipeline's `max_instances`)
+- `500`: Error starting run, including server misconfiguration such as a missing or
+  invalid `ENCRYPTION_KEY` (deliberately not `429`)
 
 ### `GET /api/runs/{run_id}/health`
 
@@ -821,7 +826,9 @@ Triggers a pipeline via webhook. **Rate limit: 30 requests/minute** per IP (brut
 - `400`: Invalid request body (e.g. invalid JSON or violation of env_vars/parameters limits)
 - `404`: Pipeline not found, disabled, or webhooks disabled
 - `401`: Invalid webhook key
-- `429`: Concurrency limit reached
+- `429`: Concurrency limit reached (global `MAX_CONCURRENT_RUNS` or the pipeline's `max_instances`)
+- `500`: Error starting the pipeline, including server misconfiguration such as a
+  missing or invalid `ENCRYPTION_KEY` (deliberately not `429`)
 
 **Example (without body):**
 ```bash

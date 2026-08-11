@@ -8,6 +8,7 @@ Dieses Modul enthält alle REST-API-Endpoints für Pipeline-Management:
 """
 
 import asyncio
+import logging
 from collections import defaultdict
 from typing import List, Optional, Dict, Any, Tuple, Sequence
 from uuid import UUID
@@ -20,7 +21,8 @@ from sqlalchemy import delete
 
 from app.core.database import get_session
 from app.models import DownstreamTrigger, Pipeline, PipelineDailyStat, PipelineRun, RunStatus, User
-from app.executor import run_pipeline
+from app.core.errors import get_500_detail
+from app.executor import ConcurrencyLimitError, run_pipeline
 from app.services.pipeline_discovery import discover_pipelines, get_pipeline as get_discovered_pipeline
 from app.auth import require_write, get_current_user
 from app.services.audit import log_audit
@@ -39,6 +41,7 @@ from app.schemas.pipelines import (
     PipelineGraphResponse,
 )
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/pipelines", tags=["pipelines"])
 
 
@@ -463,7 +466,12 @@ async def start_pipeline(
         Dictionary mit Run-Informationen (id, status, pipeline_name, etc.)
         
     Raises:
-        HTTPException: Wenn Pipeline nicht existiert, deaktiviert ist oder Concurrency-Limit erreicht ist
+        HTTPException:
+            - 404 wenn Pipeline nicht existiert oder deaktiviert ist
+            - 429 wenn ein Concurrency-Limit erreicht ist
+            - 500 bei Konfigurations-/Infrastrukturfehlern (z.B. fehlender
+              ENCRYPTION_KEY) - bewusst kein 429, sonst sucht der Operator
+              nach einem Rate-Limit, das nie erreicht war
     """
     try:
         # Pipeline-Start (manuell getriggert), optional mit gewählter Run-Konfiguration
@@ -497,11 +505,21 @@ async def start_pipeline(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
-    except RuntimeError as e:
-        # Concurrency-Limit erreicht
+    except ConcurrencyLimitError as e:
+        # Echtes Rate-Limit: globales Concurrency- bzw. max_instances-Limit erreicht
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=str(e)
+        )
+    except RuntimeError as e:
+        # Konfigurations-/Infrastrukturfehler (z.B. fehlender oder ungültiger
+        # ENCRYPTION_KEY, siehe app/services/secrets.py). Kein Rate-Limit -
+        # deshalb 500 und nicht 429. Muss geloggt werden, weil das Detail in
+        # Produktion generisch ist.
+        logger.exception("Pipeline-Start fehlgeschlagen (Konfiguration/Infrastruktur): %s", name)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=get_500_detail(e),
         )
     except Exception as e:
         raise HTTPException(

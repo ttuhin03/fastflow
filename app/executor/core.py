@@ -30,7 +30,7 @@ import os
 import time
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Dict, Optional, List, Any, AsyncGenerator
+from typing import Dict, Optional, List, Any, AsyncGenerator, Set
 from uuid import UUID, uuid4
 from concurrent.futures import ThreadPoolExecutor
 
@@ -95,6 +95,27 @@ _SETUP_READY_WRAPPER = (
     "sys.argv = ['main.py']; "
     "runpy.run_path('/app/main.py', run_name='__main__')"
 )
+
+
+class ConcurrencyLimitError(RuntimeError):
+    """
+    Ein Run wurde abgelehnt, weil ein Nebenläufigkeits-Limit erreicht ist.
+
+    Trennt den legitimen Rate-Limit-Fall (globales MAX_CONCURRENT_RUNS bzw. das
+    pipeline-spezifische max_instances) von allen anderen RuntimeErrors, die aus
+    run_pipeline() herauskommen können - insbesondere von Konfigurationsfehlern
+    wie einem fehlenden oder ungültigen ENCRYPTION_KEY, den
+    app/services/secrets.py ebenfalls als RuntimeError meldet.
+
+    Die API-Layer haben früher jeden RuntimeError auf 429 TOO_MANY_REQUESTS
+    abgebildet. Ein Konfigurationsfehler kam damit als "Too Many Requests"
+    beim Aufrufer an und schickte Operatoren auf die Suche nach einem
+    Rate-Limit, das nie erreicht war.
+
+    Erbt bewusst von RuntimeError: Aufrufer ausserhalb der API (Scheduler,
+    daemon_watcher, Retry- und Downstream-Pfade) fangen breit und behalten
+    damit ihr bisheriges Verhalten.
+    """
 
 
 def init_docker_client() -> None:
@@ -354,7 +375,11 @@ async def run_pipeline(
     
     Raises:
         ValueError: Wenn Pipeline nicht existiert oder deaktiviert ist
-        RuntimeError: Wenn Concurrency-Limit erreicht ist oder Docker nicht verfügbar
+        ConcurrencyLimitError: Wenn das globale Concurrency-Limit oder das
+            pipeline-spezifische max_instances-Limit erreicht ist (das ist der
+            einzige Fall, den die API auf 429 abbildet)
+        RuntimeError: Bei Konfigurations- oder Infrastrukturfehlern, z.B. wenn
+            ENCRYPTION_KEY fehlt/ungültig ist oder Docker nicht verfügbar ist
     """
     if env_vars is None:
         env_vars = {}
@@ -390,7 +415,7 @@ async def run_pipeline(
             if config.MAX_CONCURRENT_RUNS and running_count >= config.MAX_CONCURRENT_RUNS:
                 if close_session:
                     session.close()
-                raise RuntimeError(
+                raise ConcurrencyLimitError(
                     f"Concurrency-Limit erreicht ({running_count}/{config.MAX_CONCURRENT_RUNS}). "
                     "Bitte warte bis ein Run abgeschlossen ist."
                 )
@@ -398,7 +423,7 @@ async def run_pipeline(
             if len(_running_containers) >= config.MAX_CONCURRENT_RUNS:
                 if close_session:
                     session.close()
-                raise RuntimeError(
+                raise ConcurrencyLimitError(
                     f"Concurrency-Limit erreicht ({config.MAX_CONCURRENT_RUNS}). "
                     "Bitte warte bis ein Run abgeschlossen ist."
                 )
@@ -417,7 +442,7 @@ async def run_pipeline(
             )
             running_count = session.exec(count_stmt).one()
             if running_count >= max_instances:
-                raise RuntimeError(
+                raise ConcurrencyLimitError(
                     f"Max-Instanzen-Limit für Pipeline '{name}' erreicht ({running_count}/{max_instances}). "
                     "Bitte warte bis ein Run abgeschlossen ist."
                 )
@@ -428,9 +453,15 @@ async def run_pipeline(
         # (Feld "secrets") explizit als benoetigt deklariert hat (Least-Privilege; verhindert,
         # dass jede Pipeline standardmäßig Zugriff auf die Secrets aller anderen Pipelines erhält).
         from app.services.secrets import get_secrets_by_keys, decrypt
+        from app.services.run_env import build_run_env_metadata, encrypt_run_env_vars
         allowed_secret_keys = list(getattr(pipeline.metadata, "secrets", None) or [])
         all_secrets = get_secrets_by_keys(session, allowed_secret_keys)
-        
+
+        # Keys, deren Werte aus einer Secret-Quelle stammen. Am Run werden nur
+        # diese Namen persistiert, die Werte nie (siehe app/services/run_env.py).
+        # Die Provenienz ist hier bekannt - es braucht keine Namens-Heuristik.
+        secret_keys: Set[str] = set()
+
         # Run-Konfiguration aus schedules (falls run_config_id gesetzt)
         schedule_config: Optional[Dict[str, Any]] = None
         if run_config_id and getattr(pipeline.metadata, "schedules", None):
@@ -450,6 +481,7 @@ async def run_pipeline(
             for env_key, ciphertext in pipeline.metadata.encrypted_env.items():
                 try:
                     merged_env_vars[env_key] = decrypt(ciphertext)
+                    secret_keys.add(env_key)
                 except ValueError as e:
                     logger.warning(
                         "encrypted_env: Eintrag '%s' fuer Pipeline '%s' konnte nicht entschluesselt werden: %s",
@@ -460,13 +492,18 @@ async def run_pipeline(
             for env_key, ciphertext in schedule_config["encrypted_env"].items():
                 try:
                     merged_env_vars[env_key] = decrypt(ciphertext)
+                    secret_keys.add(env_key)
                 except ValueError as e:
                     logger.warning(
                         "schedules[].encrypted_env: Eintrag '%s' fuer Pipeline '%s' (run_config_id=%s) konnte nicht entschluesselt werden: %s",
                         env_key, name, run_config_id, e,
                     )
+        # Keys aus nicht-geheimen Quellen (default_env). Nur die Namen werden am
+        # Run vermerkt, damit das UI dieselben Zeilen zeigt wie vor der Umstellung.
+        plain_env_keys: Set[str] = set(merged_env_vars.keys()) - secret_keys
         # 5. Secrets aus Datenbank (haben Vorrang)
         merged_env_vars.update(all_secrets)
+        secret_keys.update(all_secrets.keys())
         # 6. UI-spezifische Env-Vars und Parameter (haben Vorrang bei Duplikaten)
         merged_env_vars.update(env_vars)
         merged_env_vars.update(parameters)
@@ -477,12 +514,17 @@ async def run_pipeline(
         )
         
         # PipelineRun-Datensatz erstellen (run_id wurde vor dem Lock generiert)
+        # WICHTIG: merged_env_vars enthält entschlüsselte Secret-Werte und wird
+        # deshalb NICHT persistiert - nur an den Executor in-memory übergeben.
+        # env_vars trägt Metadaten + Key-Namen, die ad-hoc Werte des Aufrufers
+        # liegen verschlüsselt in encrypted_env_vars.
         run = PipelineRun(
             id=run_id,
             pipeline_name=name,
             status=RunStatus.PENDING,
             log_file=str(config.LOGS_DIR / f"{name}_{datetime.now(timezone.utc).isoformat()}.log"),
-            env_vars=merged_env_vars,
+            env_vars=build_run_env_metadata(env_vars, secret_keys, plain_env_keys),
+            encrypted_env_vars=encrypt_run_env_vars(env_vars),
             parameters=parameters,
             triggered_by=triggered_by,
             run_config_id=run_config_id,
@@ -999,8 +1041,12 @@ async def _run_container_task(
                         # Warte basierend auf Retry-Strategie
                         await wait_for_retry(current_retry_count + 1, retry_strategy)
                         
-                        # Starte neuen Run mit erhöhtem retry_count (run_config_id beibehalten)
-                        new_env_vars = env_vars.copy()
+                        # Starte neuen Run mit erhöhtem retry_count (run_config_id beibehalten).
+                        # Nur die ad-hoc Env-Vars des Aufrufers werden mitgenommen;
+                        # Secrets löst run_pipeline() über die Allow-List neu auf
+                        # (statt einen Snapshot inkl. evtl. rotierter Werte zu replayen).
+                        from app.services.run_env import decrypt_run_env_vars
+                        new_env_vars = decrypt_run_env_vars(run.encrypted_env_vars)
                         new_env_vars["_fastflow_retry_count"] = str(current_retry_count + 1)
                         new_env_vars["_fastflow_previous_run_id"] = str(run_id)
                         
@@ -1011,7 +1057,11 @@ async def _run_container_task(
                         await run_pipeline(
                             pipeline.name,
                             env_vars=new_env_vars,
-                            parameters=None,  # Parameter werden nicht retry'd
+                            # Parameter des Original-Runs mitgeben (wie beim manuellen
+                            # Retry in app/api/runs.py). Sie landeten bisher nur
+                            # zufällig im Retry, weil der replayte Env-Snapshot sie
+                            # via merged_env_vars.update(parameters) enthielt.
+                            parameters=run.parameters or {},
                             session=session,
                             triggered_by=f"{run.triggered_by}_retry",
                             run_config_id=run.run_config_id
@@ -1123,7 +1173,9 @@ async def _run_container_task(
                     if retry_attempts > 0 and current_retry_count < retry_attempts:
                         await wait_for_retry(current_retry_count + 1, retry_strategy)
                         
-                        new_env_vars = run.env_vars.copy()
+                        # Secrets werden beim Retry neu aufgelöst, nicht replayt.
+                        from app.services.run_env import decrypt_run_env_vars
+                        new_env_vars = decrypt_run_env_vars(run.encrypted_env_vars)
                         new_env_vars["_fastflow_retry_count"] = str(current_retry_count + 1)
                         new_env_vars["_fastflow_previous_run_id"] = str(run.id)
                         
@@ -1133,7 +1185,7 @@ async def _run_container_task(
                         await run_pipeline(
                             run.pipeline_name,
                             env_vars=new_env_vars,
-                            parameters=None,
+                            parameters=run.parameters or {},
                             session=session,
                             triggered_by=f"{run.triggered_by}_retry",
                             run_config_id=run.run_config_id

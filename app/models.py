@@ -16,6 +16,7 @@ from typing import Optional, Dict, Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import Enum as SAEnum, Text
+from sqlalchemy.ext.mutable import MutableDict
 from sqlmodel import SQLModel, Field, JSON, Column
 
 
@@ -143,8 +144,25 @@ class PipelineRun(SQLModel, table=True):
     )
     env_vars: Dict[str, str] = Field(
         default_factory=dict,
-        sa_column=Column(JSON),
-        description="Environment-Variablen (Secrets + Parameter)"
+        # MutableDict: der Executor schreibt _fastflow_error_type/-message per
+        # In-Place-Zuweisung (run.env_vars[...] = ...). Ohne Mutation-Tracking
+        # erkennt SQLAlchemy das nicht und der Wert wird still verworfen -
+        # error_type/error_message waren dadurch in der API immer None.
+        sa_column=Column(MutableDict.as_mutable(JSON)),
+        description=(
+            "Interne _fastflow_*-Metadaten (Fehlertyp, Retry-Zähler) sowie die "
+            "Namen der injizierten Secrets bzw. ad-hoc Env-Vars. Enthält bewusst "
+            "keine Secret-Werte (siehe app/services/run_env.py)."
+        )
+    )
+    encrypted_env_vars: Optional[str] = Field(
+        default=None,
+        sa_column=Column(Text),
+        description=(
+            "Fernet-verschlüsselte ad-hoc Env-Vars des Aufrufers. Nur diese sind "
+            "beim Retry nicht aus der Quelle rekonstruierbar; Secrets löst "
+            "run_pipeline() über die Allow-List neu auf."
+        )
     )
     parameters: Dict[str, str] = Field(
         default_factory=dict,

@@ -22,7 +22,7 @@ from sqlmodel import Session
 
 from app.core.database import get_session
 from app.core.errors import get_500_detail
-from app.executor import run_pipeline
+from app.executor import ConcurrencyLimitError, run_pipeline
 from app.middleware.rate_limiting import limiter
 from app.schemas.pipelines import RunPipelineRequest
 from app.services.pipeline_discovery import get_pipeline as get_discovered_pipeline
@@ -87,7 +87,10 @@ async def trigger_pipeline_via_webhook(
         HTTPException: 
             - 404 wenn Pipeline nicht existiert oder Webhooks deaktiviert sind
             - 401 wenn webhook_key nicht übereinstimmt
-            - 429 wenn Concurrency-Limit erreicht ist
+            - 429 wenn ein Concurrency-Limit erreicht ist
+            - 500 bei Konfigurations-/Infrastrukturfehlern (z.B. fehlender
+              ENCRYPTION_KEY) - bewusst kein 429, sonst sucht der Operator
+              nach einem Rate-Limit, das nie erreicht war
     """
     # Pipeline-Metadaten laden
     pipeline = get_discovered_pipeline(pipeline_name)
@@ -174,11 +177,20 @@ async def trigger_pipeline_via_webhook(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
-    except RuntimeError as e:
-        # Concurrency-Limit erreicht
+    except ConcurrencyLimitError as e:
+        # Echtes Rate-Limit: globales Concurrency- bzw. max_instances-Limit erreicht
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=str(e)
+        )
+    except RuntimeError as e:
+        # Konfigurations-/Infrastrukturfehler (z.B. fehlender oder ungültiger
+        # ENCRYPTION_KEY, siehe app/services/secrets.py). Kein Rate-Limit -
+        # deshalb 500 und nicht 429.
+        logger.exception("Fehler beim Starten der Pipeline via Webhook (Konfiguration/Infrastruktur)")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=get_500_detail(e),
         )
     except Exception as e:
         logger.exception("Fehler beim Starten der Pipeline via Webhook")

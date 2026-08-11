@@ -470,14 +470,18 @@ async def run_container_task(
                     current_retry_count = 0
                 if current_retry_count < retry_attempts:
                     await wait_for_retry(current_retry_count + 1, effective_retry_strategy)
-                    new_env = run.env_vars.copy()
+                    # Secrets werden beim Retry über die Allow-List neu aufgelöst;
+                    # nur die ad-hoc Env-Vars des Aufrufers werden mitgenommen.
+                    from app.services.run_env import decrypt_run_env_vars
+                    new_env = decrypt_run_env_vars(run.encrypted_env_vars)
                     new_env["_fastflow_retry_count"] = str(current_retry_count + 1)
                     new_env["_fastflow_previous_run_id"] = str(run.id)
                     from app.executor.core import run_pipeline
                     await run_pipeline(
                         run.pipeline_name,
                         env_vars=new_env,
-                        parameters=None,
+                        # Wie in core.py: Parameter des Original-Runs mitgeben.
+                        parameters=run.parameters or {},
                         session=session,
                         triggered_by=f"{run.triggered_by}_retry",
                         run_config_id=run.run_config_id,
