@@ -177,9 +177,10 @@ flowchart LR
   J --- P2
 ```
 
-- **Orchestrator deployment**: FastAPI + React frontend + Docusaurus docs; `PIPELINE_EXECUTOR=kubernetes`; **ServiceAccount** with RBAC for Jobs/Pods/Logs.
+- **Orchestrator deployment**: FastAPI + React frontend + Docusaurus docs; `PIPELINE_EXECUTOR=kubernetes`; **ServiceAccount** with RBAC for Jobs/Pods/Logs plus **write-only** access to Secrets (`create`, `patch`, `delete` — no `get`/`list`).
 - **PostgreSQL** (optional): Database service on port 5432.
 - **Pipeline runs**: One **Kubernetes Job** per execution (no Docker socket on nodes); after the run, cleanup of the copy under `pipeline_runs/` on the cache volume.
+- **Run env vars**: injected via a **per-run Secret** (`valueFrom.secretKeyRef`), never as literals in the Job spec — those would be readable in etcd, `kubectl describe job` and the API audit log by anyone holding the built-in `view` role. Apply `k8s/rbac-kubernetes-executor.yaml` **before** rolling a new image; see [Security Rollout](./SECURITY-ROLLOUT.md), section 2a.
 - **Volumes** (typical):
   - **fastflow-pvc**: on **orchestrator**: `data`, `logs`, `pipelines` (subPath)
   - **fastflow-cache-pvc**: on **orchestrator** (mount e.g. `/shared`) and on **job pod** (one PVC, multiple subPaths): **uv_cache**, **uv_python**, **pipeline_runs/&lt;Run-ID&gt;**

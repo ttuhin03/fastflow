@@ -43,6 +43,8 @@ Fast-Flow is configured primarily via environment variables in a `.env` file. Th
 | `MAX_CONCURRENT_RUNS` | `10` | Maximum number of pipelines running concurrently. |
 | `CONTAINER_TIMEOUT` | *Empty* (no timeout) | Global timeout for pipeline runs in seconds. |
 | `RETRY_ATTEMPTS` | `0` | Default number of retry attempts on failure. |
+| `KUBERNETES_JOB_TTL_SECONDS_AFTER_FINISHED` | `300` | Seconds after which finished pipeline Jobs (and their Pods) are deleted. `0` disables the TTL controller entirely. |
+| `KUBERNETES_ENV_VIA_SECRET` | `true` | Inject a run's env vars via a per-run Kubernetes Secret (`valueFrom.secretKeyRef`) instead of literal values in the Job spec. Literals end up in etcd, in `kubectl describe job` and in the API audit log — and the built-in `view` ClusterRole can read Jobs and Pods but **not** Secrets. Requires `secrets: create, patch, delete` in the executor Role: **apply `k8s/rbac-kubernetes-executor.yaml` before rolling the image**, otherwise every run fails with `infrastructure_error`. Set to `false` only as an escape hatch (see [Security Rollout](SECURITY-ROLLOUT.md), section 2a); this flag will be removed once the Secret path is confirmed in production. |
 
 ## Git Sync
 

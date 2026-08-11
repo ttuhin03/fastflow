@@ -698,6 +698,13 @@ async def _run_container_task(
         route_host_path.touch()  # Muss vor dem Docker-Mount existieren
 
         # Basis-Env für uv (Cache + Python-Install); env_vars/Secrets können überschreiben
+        #
+        # Anders als der Kubernetes-Pfad (dort liegen die Werte in einem Per-Run-Secret,
+        # siehe KUBERNETES_ENV_VIA_SECRET) werden die entschlüsselten Werte hier direkt
+        # in die Container-Config geschrieben. Das ist bewusst so: Wer `docker inspect`
+        # darf, darf auch `docker exec` und damit `cat /proc/1/environ` – es gibt hier
+        # keine Rechtegrenze, die eine Umstellung wiederherstellen könnte. In Kubernetes
+        # existiert genau diese Grenze (`view` sieht Jobs/Pods, aber keine Secrets).
         container_env = worker_base_env(env_vars)
         
         # Bei Notebook-Pipelines: Runner-Verzeichnis (app/runners) nach /runner mounten

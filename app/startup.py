@@ -342,6 +342,19 @@ async def run_startup_tasks() -> None:
     if not config.TESTING and config.PIPELINE_EXECUTOR == "kubernetes":
         await _run_step("Kubernetes pipeline_runs Startup-Cleanup", False, k8s_cleanup_orphaned_pipeline_runs, None)
 
+    def k8s_cleanup_orphaned_env_secrets():
+        from app.core.database import get_session
+        from app.executor.kubernetes_backend import cleanup_orphaned_run_env_secrets
+        session_gen = get_session()
+        session = next(session_gen)
+        try:
+            n = cleanup_orphaned_run_env_secrets(session)
+            return f"Kubernetes Env-Secret Startup-Cleanup: {n} verwaiste Secrets gelöscht" if n else None
+        finally:
+            session.close()
+    if not config.TESTING and config.PIPELINE_EXECUTOR == "kubernetes":
+        await _run_step("Kubernetes Env-Secret Startup-Cleanup", False, k8s_cleanup_orphaned_env_secrets, None)
+
     def start_sched():
         from app.services.scheduler import set_main_loop, start_scheduler
         set_main_loop(asyncio.get_running_loop())

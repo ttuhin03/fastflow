@@ -4,8 +4,35 @@
 
 # KSV-0048: RBAC "Manage Kubernetes workloads and pods".
 # Funktional erforderlich – der Executor erzeugt/löscht Pipeline-Jobs und liest
-# Pod-Logs. Role ist bereits minimal (namespaced, keine wildcards, kein exec/secrets).
+# Pod-Logs. Role ist bereits minimal (namespaced, keine wildcards, kein exec/attach).
 KSV-0048
+
+# KSV-0113: "Role shouldn't have access to manage secrets in namespace" (MEDIUM).
+# Bewusst akzeptiert, nicht "stummgeschaltet": Das Finding ist die direkte Folge
+# der Behebung eines schwereren Problems. Vorher standen die entschlüsselten
+# Env-Vars eines Runs als Literale in der Job-Spec – also im etcd, in
+# `kubectl describe job` und im API-Audit-Log. Die eingebaute `view`-ClusterRole
+# erlaubt get/list auf Jobs und Pods, aber NICHT auf Secrets, und
+# Encryption-at-Rest deckt typischerweise nur `secrets` ab: Klartext in der
+# Job-Spec hebelt damit Kontrollen aus, die der Cluster-Betreiber für aktiv hält.
+# Jetzt liegen die Werte in einem Per-Run-Secret (KUBERNETES_ENV_VIA_SECRET).
+#
+# Die Role ist dafür so eng wie möglich gefasst und WRITE-ONLY:
+#   secrets: create, patch, delete  –  KEIN get/list/watch.
+# Der Orchestrator kann also kein Secret lesen, insbesondere nicht
+# `fastflow-secrets` (Master-Fernet-Key) oder das Postgres-Secret. `create` lässt
+# sich in RBAC nicht per resourceNames einschränken – deshalb bleibt das Finding
+# bestehen, obwohl das Recht nicht weiter reduzierbar ist.
+# Gegenprobe (Tripwire gegen späteres Aufweiten): test_kubernetes_env_secret.py
+# prüft die Verb-Menge der Role positiv UND negativ.
+#
+# Hinweis zur Abgrenzung: Der CRITICAL-Check KSV-0041 ("ClusterRole shouldn't have
+# access to manage resource 'secrets'") greift nur bei einer ClusterRole und ist
+# hier ABSICHTLICH NICHT eingetragen. Unsere Rechte sind namespaced – würde die
+# Role je in eine ClusterRole umgebaut, soll die CI genau deshalb hart failen
+# (severity CRITICAL,HIGH, exit-code 1). test_kubernetes_env_secret.py hält beides
+# fest: kind == Role, und KSV-0041 bleibt ungefiltert.
+KSV-0113
 
 # KSV-01010: "ConfigMap with sensitive content" – False Positive.
 # k8s/configmap.yaml enthält nur nicht-sensible Werte + auskommentierte Vorlagen;

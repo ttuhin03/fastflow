@@ -244,6 +244,29 @@ class Config:
     )
     """Sekunden, nach denen abgeschlossene Jobs (und Pods) automatisch gelöscht werden. 0 = nicht löschen."""
 
+    KUBERNETES_ENV_VIA_SECRET: bool = (
+        os.getenv("KUBERNETES_ENV_VIA_SECRET", "true").lower() not in ("0", "false", "no")
+    )
+    """
+    Env-Vars eines Pipeline-Jobs über ein Per-Run-Secret injizieren (Standard) statt
+    als Literale in der Job-Spec.
+
+    Hintergrund: Literale in der Job-Spec liegen im etcd, in ``kubectl describe job``
+    und im API-Audit-Log. Die eingebaute ``view``-ClusterRole erlaubt get/list auf
+    Jobs und Pods, aber NICHT auf Secrets, und Encryption-at-Rest
+    (EncryptionConfiguration) deckt typischerweise nur ``secrets`` ab - Klartext in
+    der Job-Spec hebelt also Kontrollen aus, die der Cluster-Betreiber für aktiv hält.
+
+    ``false`` ist ausschließlich ein Notausstieg für Cluster, in denen die RBAC-Rechte
+    (``secrets: create, patch, delete``, siehe ``k8s/rbac-kubernetes-executor.yaml``)
+    noch nicht ausgerollt sind - sonst schlägt jeder Run mit ``infrastructure_error``
+    fehl. Danach zurück auf ``true`` stellen und bereits angelegte Secrets aufräumen
+    (``kubectl delete secret -l app=fastflow-runner``).
+
+    Entfernungsziel: Das Flag entfällt mit der zweiten Minor-Release nach der
+    Einführung, sobald der Secret-Pfad im Betrieb bestätigt ist.
+    """
+
     # Git-Konfiguration
     GIT_BRANCH: str = os.getenv("GIT_BRANCH", "main")
     """Git-Branch für Sync-Operationen (Standard: main)."""

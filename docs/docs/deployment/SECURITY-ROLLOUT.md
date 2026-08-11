@@ -29,9 +29,11 @@ Siehe auch: [Kubernetes Deployment](K8S.md), [Configuration](CONFIGURATION.md), 
 | Docker-Worker | root, rw root-fs | **UID 1001**, **`read_only: true`**, `tmpfs` `/tmp` |
 | Seccomp | nicht gesetzt | **`RuntimeDefault`** (Pod/Container) |
 | Worker-Env | — | **`HOME=/tmp`**, **`PYTHONDONTWRITEBYTECODE=1`** |
+| Pipeline-Job Env (K8s) | Literale in der Job-Spec | **Per-Run-Secret + `valueFrom.secretKeyRef`** |
+| Executor-RBAC | Jobs/Pods | **zusätzlich `secrets: create, patch, delete`** (kein Lesen) |
 
 Technische Konstanten und Security-Builder: `app/executor/worker_runtime.py`  
-Automatisierte Checks: `tests/test_worker_security.py`
+Automatisierte Checks: `tests/test_worker_security.py`, `tests/test_kubernetes_env_secret.py`
 
 ---
 
@@ -40,11 +42,12 @@ Automatisierte Checks: `tests/test_worker_security.py`
 - [ ] Neues **Orchestrator-Image** bauen (`Dockerfile`)
 - [ ] Neues **Worker-Image** bauen (`Dockerfile.worker`) — **Pflicht** für Notebook-Pipelines (`/runner`) und Non-Root
 - [ ] In **ConfigMap** / `.env`: `WORKER_BASE_IMAGE` auf euer Registry-Image setzen (nicht das alte Astral-`uv`-Image)
+- [ ] K8s: **RBAC zuerst** anwenden (`rbac-kubernetes-executor.yaml`) — **vor** dem Image-Rollout, siehe Abschnitt 2a
 - [ ] K8s: **`kubectl apply`** für geänderte Manifests (`deployment.yaml`, ggf. `postgres.yaml`)
 - [ ] K8s: **UV-Cache migrieren** (falls bisher unter `/app/data/uv_cache` auf `fastflow-pvc`)
 - [ ] **`ENVIRONMENT=production`** in ConfigMap (wenn Prod-Betrieb)
 - [ ] Smoke-Test: Orchestrator startet, eine Pipeline läuft durch
-- [ ] Optional: `pytest tests/test_worker_security.py` in CI
+- [ ] Optional: `pytest tests/test_worker_security.py tests/test_kubernetes_env_secret.py` in CI
 
 ---
 
@@ -109,6 +112,7 @@ kubectl apply -f k8s/service.yaml
 Bei **Update** eines laufenden Clusters reicht meist:
 
 ```bash
+kubectl apply -f k8s/rbac-kubernetes-executor.yaml   # MUSS vor dem Deployment, siehe 2a
 kubectl apply -f k8s/configmap.yaml
 kubectl apply -f k8s/deployment.yaml
 kubectl apply -f k8s/postgres.yaml          # falls Postgres genutzt
@@ -135,6 +139,104 @@ Worker-Jobs mounten dieselben PVC-Subpaths:
 | `/shared/uv_cache` | `/cache/uv` | `uv_cache` |
 | `/shared/uv_python` | `/cache/uv_python` | `uv_python` |
 | `pipeline_runs/<run-id>` | `/app` | `pipeline_runs/<run-id>` |
+
+---
+
+## 2a. Env-Vars über Per-Run-Secret (RBAC zuerst!)
+
+### Was sich ändert
+
+Die Env-Vars eines Pipeline-Runs (inklusive entschlüsselter Secrets) standen bisher als **Literale in der Job-Spec**:
+
+```yaml
+# vorher – Klartext im etcd, in `kubectl describe job` und im API-Audit-Log
+env:
+  - name: API_KEY
+    value: sk-live-…
+```
+
+Jetzt legt der Orchestrator pro Run ein **Secret** an und referenziert es pro Key:
+
+```yaml
+# nachher
+env:
+  - name: API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: ff-run-env-<run-id>
+        key: API_KEY
+```
+
+**Warum das eine echte Grenze ist:** Die eingebaute `view`-ClusterRole erlaubt get/list auf **Jobs und Pods**, aber **nicht** auf Secrets. Und `EncryptionConfiguration` (Encryption-at-Rest) deckt in typischen Clustern nur die Ressource `secrets` ab. Klartext in der Job-Spec hebelt damit genau die Kontrollen aus, die der Cluster-Betreiber für aktiv hält.
+
+Aufräumen: explizites `delete` am Run-Ende (Erfolg, Fehler, Cancel, Reconcile, Shutdown), zusätzlich eine `ownerReference` auf den Job als Backstop und ein Startup-Sweep für Reste nach einem unclean Shutdown.
+
+### Reihenfolge — RBAC VOR dem Image
+
+> **Reihenfolge einhalten.** Der neue Code braucht `secrets: create, patch, delete`. Rollt ihr **das Image zuerst** aus, scheitert **jeder Run** mit `infrastructure_error` (403 beim Secret-Create), bis die Role da ist.
+
+```bash
+# 1. RBAC zuerst
+kubectl apply -f k8s/rbac-kubernetes-executor.yaml
+
+# 2. Rechte verifizieren (siehe unten) – erst dann weiter
+
+# 3. Danach das Image
+kubectl apply -f k8s/deployment.yaml
+kubectl rollout restart deployment/fastflow-orchestrator
+kubectl rollout status deployment/fastflow-orchestrator
+```
+
+`skaffold.yaml` listet `rbac-kubernetes-executor.yaml` bereits **vor** `deployment.yaml`, für Skaffold-Deploys stimmt die Reihenfolge also automatisch.
+
+### Rechte verifizieren
+
+Namespace anpassen (`-n <ns>`), Default ist `default`:
+
+```bash
+kubectl auth can-i create secrets --as=system:serviceaccount:default:fastflow-executor -n default
+# erwartet: yes
+
+kubectl auth can-i get secrets --as=system:serviceaccount:default:fastflow-executor -n default
+# erwartet: no   <-- MUSS "no" sein
+```
+
+Die Role ist bewusst **write-only** auf Secrets: kein `get`/`list`/`watch`. Der Orchestrator kann sein Run-Secret also anlegen und löschen, aber **kein** Secret lesen — insbesondere nicht `fastflow-secrets` (Master-Fernet-Key) und nicht das Postgres-Secret. `create` lässt sich in RBAC nicht per `resourceNames` einschränken; die Secret-Namen werden deshalb deterministisch aus der Run-ID abgeleitet, sodass Löschen und Startup-Sweep ohne `list` auskommen.
+
+Nach einem Run prüfen, dass kein Klartext mehr in der Job-Spec steht:
+
+```bash
+JOB=$(kubectl get jobs -l app=fastflow-runner --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1].metadata.name}')
+kubectl get job "$JOB" -o jsonpath='{.spec.template.spec.containers[0].env}' | jq .
+# erwartet: nur name + valueFrom.secretKeyRef, keine "value"-Felder
+
+# Und dass die Run-Secrets nach dem Run wieder weg sind:
+kubectl get secrets -l app=fastflow-runner
+```
+
+### Notausstieg: `KUBERNETES_ENV_VIA_SECRET=false`
+
+Falls die RBAC im Cluster nicht rechtzeitig ausgerollt werden kann (oder etwas Unerwartetes passiert), schaltet das Flag auf das alte Verhalten zurück — **ohne** Image-Rollback:
+
+```bash
+kubectl set env deployment/fastflow-orchestrator KUBERNETES_ENV_VIA_SECRET=false
+```
+
+Das ist ausdrücklich ein Notausstieg, kein Dauerzustand: Danach stehen die Env-Werte wieder im Klartext in der Job-Spec. Nach dem Zurückschalten **einmal aufräumen**, weil das Flag auch das Löschen abschaltet:
+
+```bash
+kubectl delete secret -l app=fastflow-runner
+```
+
+**Entfernungsziel:** Das Flag entfällt mit der zweiten Minor-Release nach seiner Einführung, sobald der Secret-Pfad im Betrieb bestätigt ist.
+
+### Ungültige Env-Var-Namen
+
+Secret-Data-Keys erlauben nur Buchstaben, Ziffern, `-`, `_` und `.`. Der Orchestrator validiert die Namen **vorab** dagegen und bricht den Run mit `infrastructure_error` ab, **bevor** irgendetwas im Cluster angelegt wird. Die Fehlermeldung nennt nur die betroffenen **Namen** (nie Werte). Betrifft z. B. Keys mit Leerzeichen, `=`, `/` oder Umlauten in `default_env`/`encrypted_env` — solche Keys umbenennen.
+
+Bewusst hartes Scheitern statt `envFrom`: Dort würde das Kubelet ungültige Keys **still fallen lassen** und die Pipeline lief ohne die Variable.
+
+Bewusst **nicht** strenger geprüft wird gegen das engere Env-Var-Regelwerk (`C_IDENTIFIER`): Ob ein Key wie `MY-VAR` als Env-Var-Name durchgeht, entscheidet die Cluster-Version — genau wie vor der Umstellung beim Job-Create. Eine strengere Prüfung würde Pipelines brechen, die heute laufen. Weil das Secret **vor** dem Job entsteht, scheitert so ein Key sauber am Job-Create (das Secret wird dabei wieder abgeräumt) und hinterlässt keinen Pod in `CreateContainerConfigError`.
 
 ---
 
@@ -221,9 +323,12 @@ kubectl get pods -l app=fastflow-runner
 JOB_POD=$(kubectl get pods -l app=fastflow-runner --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1].metadata.name}')
 kubectl get pod "$JOB_POD" -o jsonpath='{.spec.containers[0].securityContext}' | jq .
 kubectl logs "$JOB_POD" -c pipeline
+
+# Env kommt aus dem Run-Secret, nicht als Literal in der Spec (siehe 2a)
+kubectl get pod "$JOB_POD" -o jsonpath='{.spec.containers[0].env}' | jq .
 ```
 
-Erwartet: Job **Completed**, Logs ohne Permission-Denied auf `/tmp` oder `/cache`.
+Erwartet: Job **Completed**, Logs ohne Permission-Denied auf `/tmp` oder `/cache`, und in `env` ausschließlich `valueFrom.secretKeyRef` (keine `value`-Felder).
 
 ### 5.4 Pre-Heating / UV-Cache
 
@@ -278,6 +383,9 @@ Langfristig: frische PVCs oder einmalige Migration mit Backup.
 | Notebook-Pipeline schlägt fehl | Standard-`uv`-Image ohne `/runner` | `Dockerfile.worker` bauen und deployen |
 | Pre-Heating hilft Jobs nicht | Alter Cache noch auf `fastflow-pvc` | Abschnitt **UV-Cache migrieren** |
 | Docker-Worker startet nicht | Altes Image, root-only Pfade | `fastflow-worker:latest` bauen, `WORKER_BASE_IMAGE` setzen |
+| **Alle** Runs `infrastructure_error`, Log zeigt 403 auf `secrets` | RBAC nicht (oder im falschen Namespace) ausgerollt | `kubectl apply -f k8s/rbac-kubernetes-executor.yaml`, dann `kubectl auth can-i create secrets --as=…` — Notausstieg: `KUBERNETES_ENV_VIA_SECRET=false` |
+| Run `infrastructure_error`: „Env-Var-Namen sind als Kubernetes-Secret-Keys nicht gültig“ | Key in `default_env`/`encrypted_env` mit Leerzeichen, `=`, `/` o. Ä. | Key umbenennen (Abschnitt 2a) |
+| Job-Pod `CreateContainerConfigError`, Event nennt `ff-run-env-…` | Run-Secret fehlt (manuell gelöscht oder ownerReference-Owner weg) | Run neu starten; nicht per Hand in `fastflow-runner`-Secrets eingreifen |
 
 ---
 
@@ -289,6 +397,7 @@ Falls das Upgrade Probleme macht:
 2. **Alte Manifests** aus Git auschecken und `kubectl apply`
 3. **`kubectl rollout undo deployment/fastflow-orchestrator`**
 4. Bei Cache-Migration: Daten auf `/shared` bleiben erhalten; alte Pfade unter `/app/data/uv_*` sind unverändert
+5. Für die Env-Injektion braucht es **keinen** Image-Rollback: `KUBERNETES_ENV_VIA_SECRET=false` reicht (Abschnitt 2a). Danach einmal `kubectl delete secret -l app=fastflow-runner` — das Flag schaltet auch das Löschen ab.
 
 Rollback setzt die Security-Härtung zurück — nur als Notfall nutzen.
 
@@ -317,11 +426,13 @@ Falls der Cluster **Pod Security Standards** (z. B. `restricted`) erzwingt, soll
 | `k8s/deployment.yaml` | Orchestrator Security + UV-Pfade + `/tmp` emptyDir |
 | `k8s/postgres.yaml` | Postgres Pod-Security (Basis) |
 | `k8s/configmap.yaml` | `WORKER_BASE_IMAGE`, `ENVIRONMENT`, … |
+| `k8s/rbac-kubernetes-executor.yaml` | ServiceAccount + Role (Jobs/Pods + write-only Secrets) |
 | `app/executor/worker_runtime.py` | Gemeinsame Pfade, Security-Builder |
-| `app/executor/kubernetes_backend.py` | Job-Specs mit readOnlyRootFS |
+| `app/executor/kubernetes_backend.py` | Job-Specs mit readOnlyRootFS, Per-Run-Env-Secret |
 | `app/executor/core.py` | Docker-Worker Security |
 | `docker-compose.yaml` | Orchestrator `read_only` + Worker-Image |
 | `tests/test_worker_security.py` | Regressionstests |
+| `tests/test_kubernetes_env_secret.py` | Regressionstests Env-Secret + RBAC-Tripwire |
 
 ---
 
@@ -336,13 +447,18 @@ docker push $REGISTRY/fastflow-worker:$TAG
 
 # 2. Config anpassen (Image-Tags, WORKER_BASE_IMAGE, ENVIRONMENT=production)
 
-# 3. Deploy
+# 3. RBAC ZUERST + verifizieren (sonst scheitert jeder Run mit 403, siehe 2a)
+kubectl apply -f k8s/rbac-kubernetes-executor.yaml
+kubectl auth can-i create secrets --as=system:serviceaccount:default:fastflow-executor   # yes
+kubectl auth can-i get    secrets --as=system:serviceaccount:default:fastflow-executor   # no
+
+# 4. Deploy
 kubectl apply -f k8s/
 kubectl rollout restart deployment/fastflow-orchestrator
 
-# 4. Cache migrieren (falls Upgrade von alter Version)
+# 5. Cache migrieren (falls Upgrade von alter Version)
 
-# 5. Smoke-Test: /health, /ready, eine Pipeline starten
+# 6. Smoke-Test: /health, /ready, eine Pipeline starten
 
-# 6. CI: pytest tests/test_worker_security.py
+# 7. CI: pytest tests/test_worker_security.py tests/test_kubernetes_env_secret.py
 ```

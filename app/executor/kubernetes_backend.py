@@ -11,6 +11,7 @@ Führt Pipeline-Runs als Kubernetes Jobs aus (für containerd-only/Talos-Cluster
 import asyncio
 import json
 import logging
+import re
 import shutil
 import time
 from datetime import datetime, timezone
@@ -54,6 +55,26 @@ _initialized = False
 # Label für Run-Zuordnung
 JOB_LABEL_RUN_ID = "fastflow-run-id"
 JOB_LABEL_PIPELINE = "fastflow-pipeline"
+
+# Präfix des Per-Run-Secrets mit den Env-Vars des Pipeline-Jobs.
+RUN_ENV_SECRET_PREFIX = "ff-run-env-"
+
+# Gültiger Secret-Data-Key: [-._a-zA-Z0-9]+ (zusätzlich sind "." und ".." verboten).
+# Env-Var-Namen validiert Kubernetes nach einem anderen Regelwerk und je nach
+# Version unterschiedlich streng (C_IDENTIFIER vs. RelaxedEnvironmentVariableValidation).
+# Bewusst wird hier NUR gegen die Secret-Seite geprüft, nicht gegen das strengere
+# C_IDENTIFIER: Ein Key wie "MY-VAR" ist ein gültiger Secret-Key, und ob er als
+# Env-Var-Name durchgeht, entscheidet der Cluster – genau wie vor der Umstellung
+# beim Job-Create. Ein strengerer Filter hier würde Pipelines brechen, die heute
+# laufen. Weil das Secret VOR dem Job angelegt wird, scheitert so ein Key sauber
+# am Job-Create (Secret wird im finally abgeräumt) und hinterlässt keinen Pod in
+# CreateContainerConfigError.
+_ENV_KEY_FOR_SECRET_RE = re.compile(r"^[-._a-zA-Z0-9]+$")
+_SECRET_RESERVED_KEYS = frozenset({".", ".."})
+
+# Kubernetes-Limits für Secrets: Data-Key max. 253 Zeichen, Gesamtgröße 1 MiB.
+_SECRET_MAX_KEY_LENGTH = 253
+_SECRET_MAX_TOTAL_BYTES = 1024 * 1024
 
 def init_kubernetes_client() -> None:
     """Lädt Kubeconfig (in-cluster oder KUBECONFIG) und initialisiert API-Clients."""
@@ -186,6 +207,365 @@ def _classify_exit_code(exit_code: int, oom_killed: bool = False) -> Optional[st
     return None
 
 
+# ---------------------------------------------------------------------------
+# Job-/Secret-Spec-Bau (reine Funktionen, ohne API-Zugriff – Test-Seam)
+# ---------------------------------------------------------------------------
+
+def run_env_secret_name(run_id: UUID) -> str:
+    """
+    Name des Env-Secrets eines Runs – deterministisch aus der run_id.
+
+    Deterministisch, damit Löschen und Startup-Sweep ohne ``list``-Recht auf
+    Secrets auskommen (die Role ist bewusst write-only, siehe
+    ``k8s/rbac-kubernetes-executor.yaml``).
+
+    Bewusst NICHT aus ``job_name`` abgeleitet: dort kürzt
+    ``f"ff-{slug}-{run_id_short}"[:63]`` bei langen Pipeline-Slugs die run_id weg.
+    Für einen Job ist das nur ein hässlicher Name, für ein Secret würde ein Run
+    die Credentials eines anderen überschreiben.
+
+    ``UUID()`` kanonisiert die Eingabe: das Ergebnis besteht nur aus [0-9a-f-]
+    und ist damit ein gültiger DNS-Subdomain-Name (11 + 36 = 47 Zeichen).
+    """
+    return f"{RUN_ENV_SECRET_PREFIX}{UUID(str(run_id))}"
+
+
+def validate_env_keys_for_secret(env: Dict[str, Any]) -> None:
+    """
+    Prüft die Env-Var-Namen, BEVOR irgendetwas im Cluster angelegt wird.
+
+    Geprüft wird gegen die Secret-Key-Regeln (siehe ``_ENV_KEY_FOR_SECRET_RE``) –
+    bewusst nicht gegen das strengere Env-Var-Regelwerk, das je nach
+    Cluster-Version abweicht. Ohne diese Prüfung würde der Secret-Create mit einem
+    422 aus der API scheitern, dessen Meldung den Key nicht sauber benennt.
+
+    Fail loudly statt still zu verwerfen: ``envFrom`` würde Keys mit ungültigem
+    Namen im Kubelet einfach fallen lassen, der Job liefe dann ohne die Variable.
+
+    Fehlermeldungen enthalten ausschließlich NAMEN und BYTE-Längen, niemals
+    Werte: Der Text landet über ``_fastflow_error_message`` in
+    ``PipelineRun.env_vars`` und wird von der API unmaskiert ausgeliefert (siehe
+    ``_mask_env_vars`` in ``app/api/runs.py``).
+
+    Raises:
+        ValueError: bei ungültigem Namen, zu langem Key oder zu großem Secret.
+    """
+    invalid = sorted(
+        str(k)
+        for k in env
+        if not _ENV_KEY_FOR_SECRET_RE.match(str(k)) or str(k) in _SECRET_RESERVED_KEYS
+    )
+    if invalid:
+        raise ValueError(
+            "Env-Var-Namen sind als Kubernetes-Secret-Keys nicht gültig "
+            f"(erlaubt sind nur Buchstaben, Ziffern, '-', '_' und '.'): {', '.join(invalid)}"
+        )
+
+    too_long = sorted(str(k) for k in env if len(str(k)) > _SECRET_MAX_KEY_LENGTH)
+    if too_long:
+        raise ValueError(
+            f"Env-Var-Namen überschreiten die maximale Secret-Key-Länge ({_SECRET_MAX_KEY_LENGTH} Zeichen): "
+            + ", ".join(f"{k} ({len(k)} Zeichen)" for k in too_long)
+        )
+
+    total_bytes = sum(
+        len(str(k).encode("utf-8")) + len(str(v).encode("utf-8")) for k, v in env.items()
+    )
+    if total_bytes > _SECRET_MAX_TOTAL_BYTES:
+        raise ValueError(
+            f"Env-Vars überschreiten die maximale Secret-Größe: {total_bytes} von "
+            f"{_SECRET_MAX_TOTAL_BYTES} Bytes bei {len(env)} Variablen"
+        )
+
+
+def build_run_env_secret(run_id: UUID, pipeline_name: str, env: Dict[str, Any]) -> Any:
+    """
+    Baut das Per-Run-Secret mit dem gemergten Env-Satz des Pipeline-Jobs.
+
+    Validiert die Keys vorab (siehe :func:`validate_env_keys_for_secret`).
+
+    ``str(v)``: ``default_env``/``encrypted_env`` sind unschema'tes JSON, Werte
+    können also int oder None sein – ``stringData`` verlangt Strings (genau wie
+    vorher ``V1EnvVar.value``).
+    """
+    validate_env_keys_for_secret(env)
+    return client.V1Secret(
+        api_version="v1",
+        kind="Secret",
+        metadata=client.V1ObjectMeta(
+            name=run_env_secret_name(run_id),
+            labels={
+                "app": "fastflow-runner",
+                JOB_LABEL_RUN_ID: str(run_id),
+                JOB_LABEL_PIPELINE: pipeline_name,
+            },
+        ),
+        type="Opaque",
+        string_data={str(k): str(v) for k, v in env.items()},
+    )
+
+
+def build_container_env(env: Dict[str, Any], secret_name: Optional[str]) -> list:
+    """
+    Baut die Env-Liste des Pipeline-Containers.
+
+    ``secret_name`` gesetzt: pro Key ein eigener ``valueFrom.secretKeyRef``.
+    Bewusst NICHT ``envFrom``:
+
+    - ``envFrom`` invertiert die Präzedenz. ``worker_base_env()`` macht
+      ``env.update(extra)``, der Aufrufer überschreibt also die statische Basis
+      (HOME, TMPDIR, UV_*). In Kubernetes gewinnt aber ``env`` über ``envFrom`` –
+      eine Pipeline, die HOME setzt, bekäme still wieder ``/tmp``.
+    - ``envFrom`` lässt das Kubelet Keys, die keine gültigen Env-Var-Namen sind,
+      still FALLEN. Explizite ``env``-Einträge scheitern hart beim Create.
+
+    ``secret_name is None`` (Flag ``KUBERNETES_ENV_VIA_SECRET=false``): Literale
+    in der Job-Spec, also das alte Verhalten.
+    """
+    if secret_name is None:
+        return [client.V1EnvVar(name=str(k), value=str(v)) for k, v in env.items()]
+    return [
+        client.V1EnvVar(
+            name=str(k),
+            value_from=client.V1EnvVarSource(
+                secret_key_ref=client.V1SecretKeySelector(name=secret_name, key=str(k))
+            ),
+        )
+        for k in env
+    ]
+
+
+def build_pipeline_job(
+    *,
+    job_name: str,
+    run_id: UUID,
+    pipeline_name: str,
+    command: list,
+    container_env: list,
+    sub_path_run: str,
+    pvc_name: str,
+    resources: Dict[str, Any],
+    ttl_seconds_after_finished: Optional[int],
+    active_deadline_seconds: Optional[int],
+) -> Any:
+    """Baut die V1Job-Spec eines Pipeline-Runs (rein, damit Tests sie serialisieren können)."""
+    labels = {
+        "app": "fastflow-runner",
+        JOB_LABEL_RUN_ID: str(run_id),
+        JOB_LABEL_PIPELINE: pipeline_name,
+    }
+    volume = client.V1Volume(
+        name="cache",
+        persistent_volume_claim=client.V1PersistentVolumeClaimVolumeSource(claim_name=pvc_name),
+    )
+    tmp_volume = client.V1Volume(
+        name="tmp",
+        empty_dir=client.V1EmptyDirVolumeSource(),
+    )
+    mounts = [
+        client.V1VolumeMount(
+            name=spec["name"],
+            mount_path=spec["mount_path"],
+            sub_path=spec["sub_path"],
+            read_only=spec["read_only"],
+        )
+        for spec in k8s_worker_volume_mount_specs(sub_path_run)
+    ]
+    container = client.V1Container(
+        name="pipeline",
+        image=app_config.WORKER_BASE_IMAGE,
+        image_pull_policy="IfNotPresent",
+        command=command,
+        env=container_env,
+        volume_mounts=mounts,
+        resources=client.V1ResourceRequirements(**resources) if resources else None,
+        security_context=build_k8s_container_security_context(client),
+    )
+    pod_spec = client.V1PodSpec(
+        restart_policy="Never",
+        containers=[container],
+        volumes=[volume, tmp_volume],
+        security_context=build_k8s_pod_security_context(client),
+    )
+    template = client.V1PodTemplateSpec(
+        metadata=client.V1ObjectMeta(labels=labels),
+        spec=pod_spec,
+    )
+    return client.V1Job(
+        api_version="batch/v1",
+        kind="Job",
+        metadata=client.V1ObjectMeta(name=job_name, labels=labels),
+        spec=client.V1JobSpec(
+            ttl_seconds_after_finished=ttl_seconds_after_finished,
+            backoff_limit=0,
+            template=template,
+            active_deadline_seconds=active_deadline_seconds,
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Env-Secret-Lebenszyklus (Create vor Job, explizites Delete, ownerRef-Backstop)
+# ---------------------------------------------------------------------------
+
+def _create_run_env_secret(namespace: str, secret: Any) -> None:
+    """
+    Legt das Env-Secret an. Muss VOR dem Job passieren (siehe run_container_task).
+
+    Bei 409 liegt ein Rest eines abgebrochenen Vorgängers derselben run_id vor
+    (Prozess zwischen Secret- und Job-Create gekillt). Die Role hat bewusst kein
+    ``get``/``update``, deshalb: löschen und neu anlegen – ein ``patch`` würde
+    veraltete Keys stehen lassen.
+    """
+    _, core_api = _get_apis()
+    name = secret.metadata.name
+    try:
+        core_api.create_namespaced_secret(namespace=namespace, body=secret)
+    except ApiException as e:
+        if e.status != 409:
+            raise
+        logger.warning("Env-Secret %s existierte bereits – wird ersetzt", name)
+        core_api.delete_namespaced_secret(name=name, namespace=namespace)
+        core_api.create_namespaced_secret(namespace=namespace, body=secret)
+
+
+def _patch_run_env_secret_owner(
+    namespace: str, secret_name: str, job_name: str, job_uid: Optional[str]
+) -> None:
+    """
+    Setzt nachträglich eine ownerReference auf den Job – Best-Effort-Backstop.
+
+    Primärer GC-Mechanismus ist das explizite Delete in
+    :func:`_cleanup_run_artifacts`; die ownerReference fängt nur den Fall ab, dass
+    der Orchestrator-Prozess vorher stirbt. Fehler werden deshalb geloggt und
+    ignoriert – ein fehlender Backstop darf keinen Run scheitern lassen.
+
+    Ohne belastbare UID wird NICHT gepatcht: Der Garbage Collector behandelt eine
+    nicht auflösbare UID als gelöschten Owner und löscht das Secret sofort – der
+    Pod hinge dann in CreateContainerConfigError.
+
+    ``blockOwnerDeletion`` bleibt aus (bräuchte ``update`` auf
+    ``jobs/finalizers``), ``controller`` ebenfalls (der Job kontrolliert das
+    Secret nicht).
+    """
+    if not job_uid:
+        logger.warning(
+            "Env-Secret %s: keine Job-UID erhalten – ownerReference wird nicht gesetzt "
+            "(Cleanup läuft über das explizite Delete)",
+            secret_name,
+        )
+        return
+    try:
+        _, core_api = _get_apis()
+        core_api.patch_namespaced_secret(
+            name=secret_name,
+            namespace=namespace,
+            body={
+                "metadata": {
+                    "ownerReferences": [
+                        {
+                            "apiVersion": "batch/v1",
+                            "kind": "Job",
+                            "name": job_name,
+                            "uid": job_uid,
+                            "controller": False,
+                            "blockOwnerDeletion": False,
+                        }
+                    ]
+                }
+            },
+        )
+    except Exception as e:
+        logger.warning(
+            "Env-Secret %s: ownerReference auf Job %s konnte nicht gesetzt werden: %s",
+            secret_name, job_name, e,
+        )
+
+
+def _delete_run_env_secret(run_id: UUID) -> bool:
+    """
+    Löscht das Env-Secret eines Runs. Primärer GC-Mechanismus.
+
+    Auf ownerReferences allein ist kein Verlass: Auf dem Erfolgspfad wird der Job
+    gar nicht gelöscht (die vier ``delete_namespaced_job``-Aufrufe sind
+    Timeout/Cancel/Reconcile/Shutdown), und
+    ``KUBERNETES_JOB_TTL_SECONDS_AFTER_FINISHED=0`` schaltet die TTL komplett ab –
+    ein "owned" Secret könnte also beliebig lange leben.
+
+    Returns: True, wenn ein Secret gelöscht wurde.
+    """
+    if not app_config.KUBERNETES_ENV_VIA_SECRET:
+        return False
+    try:
+        _, core_api = _get_apis()
+    except RuntimeError:
+        return False
+    name = run_env_secret_name(run_id)
+    try:
+        core_api.delete_namespaced_secret(name=name, namespace=app_config.KUBERNETES_NAMESPACE)
+        logger.debug("Env-Secret %s gelöscht", name)
+        return True
+    except ApiException as e:
+        if e.status == 404:
+            return False
+        logger.warning("Env-Secret %s konnte nicht gelöscht werden: %s", name, e)
+        return False
+    except Exception as e:
+        logger.warning("Env-Secret %s konnte nicht gelöscht werden: %s", name, e)
+        return False
+
+
+def _cleanup_run_artifacts(run_id: UUID) -> None:
+    """Räumt die run-gebundenen Artefakte ab: Pipeline-Kopie im Volume + Env-Secret."""
+    _cleanup_shared_pipeline_run(run_id)
+    _delete_run_env_secret(run_id)
+
+
+def cleanup_orphaned_run_env_secrets(session: Session) -> int:
+    """
+    Startup-Sweep für Env-Secrets von Runs, die ein unclean Shutdown hinterlassen hat.
+
+    Kandidaten sind ausschließlich Runs, die die DB noch als PENDING/RUNNING führt:
+    Regulär beendete Runs verlieren ihr Secret im ``finally`` von
+    ``run_container_task`` (bzw. in Cancel/Reconcile/Shutdown), nur ein SIGKILL
+    zwischen Secret-Create und Run-Ende hinterlässt einen Rest.
+
+    Das Gate auf Job-Existenz ist zwingend: Läuft der Job noch, wartet
+    möglicherweise ein Pod, dessen Container noch nicht gestartet ist – ohne sein
+    Secret landet der in CreateContainerConfigError, und weil ``CONTAINER_TIMEOUT``
+    per Default None ist, pollt ``_wait_for_job_completion`` ohne Deadline endlos.
+
+    Returns: Anzahl gelöschter Secrets.
+    """
+    if not app_config.KUBERNETES_ENV_VIA_SECRET:
+        return 0
+    batch_api, _ = _get_apis()
+    namespace = app_config.KUBERNETES_NAMESPACE
+
+    live_run_ids = set()
+    jobs = batch_api.list_namespaced_job(namespace=namespace, label_selector=JOB_LABEL_RUN_ID)
+    for job in jobs.items or []:
+        labels = (job.metadata.labels or {}) if job.metadata else {}
+        run_id_str = labels.get(JOB_LABEL_RUN_ID)
+        if run_id_str:
+            live_run_ids.add(run_id_str)
+
+    runs = session.exec(
+        select(PipelineRun).where(
+            PipelineRun.status.in_([RunStatus.PENDING, RunStatus.RUNNING])
+        )
+    ).all()
+    deleted = 0
+    for run in runs:
+        if str(run.id) in live_run_ids:
+            continue
+        if _delete_run_env_secret(run.id):
+            deleted += 1
+    if deleted:
+        logger.info("Startup-Cleanup: %d verwaiste Env-Secrets gelöscht", deleted)
+    return deleted
+
+
 async def run_container_task(
     run_id: UUID,
     pipeline: DiscoveredPipeline,
@@ -277,8 +657,26 @@ async def run_container_task(
             pipeline_slug = "run"
         job_name = f"ff-{pipeline_slug}-{run_id_short}"[:63]
 
+        # env_vars ist der vollständig gemergte, ENTSCHLÜSSELTE Env-Satz. Diese Werte
+        # dürfen nicht als Literale in die Job-Spec: die liegt im etcd, in
+        # `kubectl describe job` und im API-Audit-Log. Die eingebaute
+        # `view`-ClusterRole erlaubt get/list auf Jobs und Pods, aber NICHT auf
+        # Secrets, und Encryption-at-Rest (EncryptionConfiguration) deckt
+        # typischerweise nur `secrets` ab – Klartext in der Job-Spec hebelt also
+        # Kontrollen aus, die der Cluster-Betreiber für aktiv hält.
         base_env = worker_base_env(env_vars)
-        container_env = [client.V1EnvVar(name=k, value=str(v)) for k, v in base_env.items()]
+        env_secret_name: Optional[str] = None
+        if app_config.KUBERNETES_ENV_VIA_SECRET:
+            env_secret = build_run_env_secret(run_id, pipeline.name, base_env)
+            env_secret_name = env_secret.metadata.name
+            # Secret VOR dem Job anlegen. Diese Reihenfolge ist entscheidend: Ein 403
+            # (RBAC noch nicht ausgerollt) oder Crash scheitert dann sauber, bevor es
+            # einen Job gibt. Umgekehrt hinge der Pod in CreateContainerConfigError,
+            # und weil CONTAINER_TIMEOUT per Default None ist, pollt
+            # _wait_for_job_completion ohne Deadline endlos – der Run bliebe für immer
+            # RUNNING und hielte einen MAX_CONCURRENT_RUNS-Slot.
+            _create_run_env_secret(namespace, env_secret)
+        container_env = build_container_env(base_env, env_secret_name)
 
         resources: Dict[str, Any] = {}
         if effective_mem:
@@ -288,70 +686,31 @@ async def run_container_task(
             # Request wenig CPU, damit der Pod auch auf kleinen Nodes (z. B. Minikube) geplant werden kann
             resources.setdefault("requests", {})["cpu"] = "100m"
 
-        volume = client.V1Volume(
-            name="cache",
-            persistent_volume_claim=client.V1PersistentVolumeClaimVolumeSource(claim_name=pvc_name),
-        )
-        tmp_volume = client.V1Volume(
-            name="tmp",
-            empty_dir=client.V1EmptyDirVolumeSource(),
-        )
-        mounts = [
-            client.V1VolumeMount(
-                name=spec["name"],
-                mount_path=spec["mount_path"],
-                sub_path=spec["sub_path"],
-                read_only=spec["read_only"],
-            )
-            for spec in k8s_worker_volume_mount_specs(sub_path_run)
-        ]
-        container = client.V1Container(
-            name="pipeline",
-            image=app_config.WORKER_BASE_IMAGE,
-            image_pull_policy="IfNotPresent",
+        job = build_pipeline_job(
+            job_name=job_name,
+            run_id=run_id,
+            pipeline_name=pipeline.name,
             command=executor_core._build_container_command(pipeline),
-            env=container_env,
-            volume_mounts=mounts,
-            resources=client.V1ResourceRequirements(**resources) if resources else None,
-            security_context=build_k8s_container_security_context(client),
-        )
-        pod_spec = client.V1PodSpec(
-            restart_policy="Never",
-            containers=[container],
-            volumes=[volume, tmp_volume],
-            security_context=build_k8s_pod_security_context(client),
-        )
-        template = client.V1PodTemplateSpec(
-            metadata=client.V1ObjectMeta(
-                labels={
-                    "app": "fastflow-runner",
-                    JOB_LABEL_RUN_ID: str(run_id),
-                    JOB_LABEL_PIPELINE: pipeline.name,
-                }
-            ),
-            spec=pod_spec,
-        )
-        job = client.V1Job(
-            api_version="batch/v1",
-            kind="Job",
-            metadata=client.V1ObjectMeta(
-                name=job_name,
-                labels={
-                    "app": "fastflow-runner",
-                    JOB_LABEL_RUN_ID: str(run_id),
-                    JOB_LABEL_PIPELINE: pipeline.name,
-                },
-            ),
-            spec=client.V1JobSpec(
-                ttl_seconds_after_finished=app_config.KUBERNETES_JOB_TTL_SECONDS_AFTER_FINISHED or None,
-                backoff_limit=0,
-                template=template,
-                active_deadline_seconds=int(effective_timeout) if effective_timeout else None,
-            ),
+            container_env=container_env,
+            sub_path_run=sub_path_run,
+            pvc_name=pvc_name,
+            resources=resources,
+            ttl_seconds_after_finished=app_config.KUBERNETES_JOB_TTL_SECONDS_AFTER_FINISHED or None,
+            active_deadline_seconds=int(effective_timeout) if effective_timeout else None,
         )
         batch_api, core_api = _get_apis()
-        batch_api.create_namespaced_job(namespace=namespace, body=job)
+        created_job = batch_api.create_namespaced_job(namespace=namespace, body=job)
         logger.info("Job %s für Run %s erstellt", job_name, run_id)
+        if env_secret_name:
+            # Best-Effort-Backstop, nachträglich: Die UID gibt es erst nach dem
+            # Create, und eine erfundene UID würde der GC als gelöschten Owner
+            # lesen und das Secret sofort wegräumen.
+            _patch_run_env_secret_owner(
+                namespace,
+                env_secret_name,
+                job_name,
+                getattr(getattr(created_job, "metadata", None), "uid", None),
+            )
         job_creation_time = datetime.now(timezone.utc)
 
         run.status = RunStatus.RUNNING
@@ -510,7 +869,9 @@ async def run_container_task(
     finally:
         executor_core._log_queues.pop(run_id, None)
         executor_core._metrics_queues.pop(run_id, None)
-        _cleanup_shared_pipeline_run(run_id)
+        # Deckt auch den Fehlerpfad ab: Scheitert der Job-Create nach dem
+        # Secret-Create (z. B. 403), wird das Secret hier wieder abgeräumt.
+        _cleanup_run_artifacts(run_id)
         try:
             next(session_gen)
         except StopIteration:
@@ -976,7 +1337,7 @@ async def cancel_run(run_id: UUID, session: Session) -> bool:
             run.finished_at = datetime.now(timezone.utc)
             session.add(run)
             session.commit()
-        _cleanup_shared_pipeline_run(run_id)
+        _cleanup_run_artifacts(run_id)
 
     try:
         jobs = batch_api.list_namespaced_job(
@@ -1073,7 +1434,7 @@ async def reconcile_zombie_jobs(session: Session) -> None:
                     logger.info("Orphaned Job %s (Run %s) gelöscht", job.metadata.name, run_id)
                 except ApiException:
                     pass
-                _cleanup_shared_pipeline_run(run_id)
+                _cleanup_run_artifacts(run_id)
                 continue
             if job.status.succeeded and job.status.succeeded > 0 and run.status == RunStatus.RUNNING:
                 run.status = RunStatus.SUCCESS
@@ -1081,14 +1442,14 @@ async def reconcile_zombie_jobs(session: Session) -> None:
                 run.exit_code = 0
                 session.add(run)
                 session.commit()
-                _cleanup_shared_pipeline_run(run_id)
+                _cleanup_run_artifacts(run_id)
             elif job.status.failed and job.status.failed > 0 and run.status == RunStatus.RUNNING:
                 run.status = RunStatus.FAILED
                 run.finished_at = datetime.now(timezone.utc)
                 run.exit_code = -1
                 session.add(run)
                 session.commit()
-                _cleanup_shared_pipeline_run(run_id)
+                _cleanup_run_artifacts(run_id)
         logger.info("Kubernetes Zombie-Reconciliation abgeschlossen")
     except Exception as e:
         logger.error("Zombie-Reconciliation Fehler: %s", e, exc_info=True)
@@ -1121,7 +1482,7 @@ async def graceful_shutdown(session: Session) -> None:
             run.finished_at = datetime.now(timezone.utc)
             session.add(run)
             session.commit()
-            _cleanup_shared_pipeline_run(run.id)
+            _cleanup_run_artifacts(run.id)
         except Exception as e:
             logger.warning("Graceful Shutdown Run %s: %s", run.id, e)
     logger.info("Graceful Shutdown (Kubernetes) abgeschlossen: %s Runs", len(runs))

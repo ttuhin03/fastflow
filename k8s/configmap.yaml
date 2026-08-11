@@ -47,6 +47,11 @@ data:
   # Kubernetes (PIPELINE_EXECUTOR=kubernetes): KUBERNETES_NAMESPACE etc. werden im Deployment gesetzt
   # Abgeschlossene Pipeline-Jobs (succeeded/failed) nach N Sekunden automatisch löschen. 0 = nicht löschen.
   KUBERNETES_JOB_TTL_SECONDS_AFTER_FINISHED: "300"
+  # Env-Vars eines Runs über ein Per-Run-Secret injizieren statt als Literale in der Job-Spec (Default: true).
+  # Braucht "secrets: create, patch, delete" aus rbac-kubernetes-executor.yaml – RBAC VOR dem Image ausrollen,
+  # sonst scheitert jeder Run mit infrastructure_error. Nur als Notausstieg auf "false" setzen (siehe
+  # docs/docs/deployment/SECURITY-ROLLOUT.md, Abschnitt 2a).
+  # KUBERNETES_ENV_VIA_SECRET: "true"
 
   # Git-Sync: Repository-URL (nicht sensibel). PAT oder Deploy Key in secrets.yaml.
   # Entweder HTTPS + GIT_SYNC_TOKEN oder SSH + GIT_SYNC_DEPLOY_KEY. Sync-UI: Repository.

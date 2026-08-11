@@ -1,5 +1,6 @@
 # RBAC für Pipeline-Executor im Kubernetes-Modus
-# Minimal: Jobs verwalten, Pods/Logs lesen, optionale Pod-Metriken (metrics-server)
+# Minimal: Jobs verwalten, Pods/Logs lesen, optionale Pod-Metriken (metrics-server),
+# Per-Run-Env-Secrets schreiben (create/patch/delete, KEIN Lesen)
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -14,8 +15,19 @@ metadata:
   name: fastflow-executor-role
   labels:
     app: fastflow-orchestrator
-# Rechte bewusst minimal (namespaced Role, keine wildcards, kein exec/attach/secrets).
+# Rechte bewusst minimal (namespaced Role, keine wildcards, kein exec/attach).
 # Job-/Pod-Verwaltung ist funktional erforderlich – Trivy KSV-0048 in .trivyignore.
+#
+# Secrets: bewusst WRITE-ONLY (create/patch/delete, kein get/list/watch). Der
+# Orchestrator legt pro Run ein Env-Secret an, kann es aber nicht zurücklesen –
+# damit kommt er über diese Role weder an `fastflow-secrets` (Master-Fernet-Key)
+# noch an das Postgres-Secret. `create` lässt sich nicht per resourceNames
+# einschränken; die Secret-Namen werden deshalb deterministisch aus der run_id
+# abgeleitet (siehe run_env_secret_name in app/executor/kubernetes_backend.py),
+# sodass Löschen und Startup-Sweep ohne `list` auskommen.
+# Trivy KSV-0113 in .trivyignore. Bewusst eine namespaced Role und KEINE
+# ClusterRole: als ClusterRole wäre dasselbe Recht CRITICAL (KSV-0041) und die
+# CI würde – zu Recht – hart failen.
 rules:
   - apiGroups: ["batch"]
     resources: ["jobs"]
@@ -23,6 +35,9 @@ rules:
   - apiGroups: [""]
     resources: ["pods", "pods/log"]
     verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create", "patch", "delete"]
   - apiGroups: ["metrics.k8s.io"]
     resources: ["pods"]
     verbs: ["get"]

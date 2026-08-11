@@ -61,6 +61,8 @@ kubectl apply -f k8s/deployment.yaml
 kubectl apply -f k8s/service.yaml
 ```
 
+**Wichtig bei einem Update eines laufenden Clusters:** Die RBAC **vor** dem Deployment anwenden. Der Executor legt die Env-Vars eines Runs in einem Per-Run-Secret ab und braucht dafür `secrets: create, patch, delete`; rollt man das Image zuerst aus, scheitert jeder Run mit `infrastructure_error` (403). Siehe [RBAC des Executors](#rbac-des-executors) und [Security Rollout](../docs/docs/deployment/SECURITY-ROLLOUT.md).
+
 ### 4. Zugriff auf die App
 
 - **NodePort (Standard in service.yaml):** Service nutzt NodePort 30080. App erreichbar unter `http://<eine-Node-IP>:30080`. Für feste URL und TLS einen **Ingress** anlegen (z. B. mit cert-manager).
@@ -185,7 +187,7 @@ Die App nutzt `BASE_URL` für den Redirect; mit ConfigMap-Default `localhost:800
 | Datei                         | Inhalt |
 |-------------------------------|--------|
 | `pvc.yaml`                    | Zwei PVCs: Daten/Logs/Pipelines (RWO) + UV-Cache/Pipeline-Kopien (RWM für Jobs) |
-| `rbac-kubernetes-executor.yaml` | ServiceAccount + Role + RoleBinding für K8s-Jobs |
+| `rbac-kubernetes-executor.yaml` | ServiceAccount + Role + RoleBinding für K8s-Jobs (inkl. write-only Secrets, siehe unten) |
 | `postgres.yaml`               | Optional: PostgreSQL (Secret, PVC, Deployment, Service) |
 | `secrets.yaml`                | Fast-Flow Secrets (OAuth, JWT, Encryption, SKIP_OAUTH_VERIFICATION) |
 | `configmap.yaml`              | Nicht-sensible Umgebungsvariablen (BASE_URL, WORKER_BASE_IMAGE, …) |
@@ -195,6 +197,34 @@ Die App nutzt `BASE_URL` für den Redirect; mit ConfigMap-Default `localhost:800
 **Reihenfolge** beim manuellen Anwenden:  
 `pvc.yaml` → `postgres.yaml` → `secrets.yaml` → `configmap.yaml` → `rbac-kubernetes-executor.yaml` → `deployment.yaml` → `service.yaml`.  
 Danach ggf. `kubectl rollout restart deployment/fastflow-orchestrator`, damit neue Secrets/ConfigMap geladen werden.
+
+---
+
+## RBAC des Executors
+
+Die Role in `rbac-kubernetes-executor.yaml` ist namespaced und ohne Wildcards:
+
+| API-Group | Resource | Verbs | Wofür |
+|-----------|----------|-------|-------|
+| `batch` | `jobs` | `create`, `get`, `list`, `delete` | Pipeline-Runs als Jobs starten, überwachen, abbrechen |
+| *(core)* | `pods`, `pods/log` | `get`, `list` | Pod zum Job finden, Logs streamen |
+| *(core)* | `secrets` | `create`, `patch`, `delete` | Per-Run-Env-Secret — **kein Lesen** |
+| `metrics.k8s.io` | `pods` | `get` | CPU/RAM-Anzeige (metrics-server, optional) |
+
+**Env-Vars liegen in einem Per-Run-Secret**, nicht als Literale in der Job-Spec. Literale würden im etcd, in `kubectl describe job` und im API-Audit-Log landen — und die eingebaute `view`-ClusterRole erlaubt get/list auf Jobs und Pods, aber **nicht** auf Secrets. Auch `EncryptionConfiguration` (Encryption-at-Rest) deckt in typischen Clustern nur `secrets` ab.
+
+Die Secret-Rechte sind bewusst **write-only** (kein `get`/`list`/`watch`): Der Orchestrator kann sein Run-Secret anlegen und löschen, aber kein Secret lesen — insbesondere nicht `fastflow-secrets` (Master-Fernet-Key) und nicht das Postgres-Secret. `create` lässt sich in RBAC nicht per `resourceNames` einschränken; die Secret-Namen werden deshalb deterministisch aus der Run-ID abgeleitet (`ff-run-env-<run-id>`), sodass Löschen und Startup-Sweep ohne `list` auskommen.
+
+Rechte prüfen (Namespace anpassen):
+
+```bash
+kubectl auth can-i create secrets --as=system:serviceaccount:default:fastflow-executor -n default   # yes
+kubectl auth can-i get    secrets --as=system:serviceaccount:default:fastflow-executor -n default   # no
+```
+
+Aufgeräumt wird das Secret explizit am Run-Ende (Erfolg, Fehler, Cancel, Reconcile, Shutdown); zusätzlich hängt eine `ownerReference` auf den Job als Backstop daran, und beim App-Start räumt ein Sweep Reste nach einem unclean Shutdown ab.
+
+Notausstieg, falls die RBAC nicht ausgerollt werden kann: `KUBERNETES_ENV_VIA_SECRET=false` (Details und Aufräum-Kommando in [Security Rollout](../docs/docs/deployment/SECURITY-ROLLOUT.md), Abschnitt 2a).
 
 ---
 
