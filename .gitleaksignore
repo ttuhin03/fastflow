@@ -10,9 +10,18 @@
 #  - tests/conftest.py: fest verdrahteter Fernet-Testkey (nur für lokale
 #    Testläufe, nie deployt). In 4cdcef8 bereits durch Fernet.generate_key()
 #    zur Laufzeit ersetzt, bleibt aber für immer im Commit d6a73ce sichtbar.
+#  - tests/test_run_env_persistence.py: Fixture-Literal "sk-live-ROTATED-0815",
+#    ein bewusst erfundener Wert (siehe Kommentar im Test). Der Stripe-artige
+#    sk-live-Prefix triggert generic-api-key.
 #
 # WICHTIG: Neue Secret-Funde werden weiterhin geflaggt – hier NUR die bekannten
 # historischen Fingerprints eintragen.
+#
+# Zum Scope: gitleaks scannt ALLE Refs, nicht nur HEAD (der Job checkt mit
+# fetch-depth: 0 aus). Ein Fund auf einem ungemergten Feature-Branch failt
+# deshalb auch den Scan auf main. Wird so ein Branch spaeter squash-gemergt,
+# bekommt der Commit eine neue SHA und der Fingerprint hier wird stale –
+# dann den Eintrag ersetzen, nicht nur ergaenzen.
 
 # ENCRYPTION_KEY (rotiert) – k8s/secrets.yaml
 d333f2a00a7b48909d03b7dc8cd952c266177e2d:k8s/secrets.yaml:generic-api-key:17
@@ -26,3 +35,7 @@ d333f2a00a7b48909d03b7dc8cd952c266177e2d:k8s/secrets.yaml:generic-api-key:23
 
 # ENCRYPTION_KEY (Test-Fixture, nie deployt) – tests/conftest.py
 d6a73ce400337d4af10ffe4eaf0c7850ba77511c:tests/conftest.py:generic-api-key:17
+
+# Fake sk-live-Literal in Test-Fixture (False Positive) – tests/test_run_env_persistence.py
+# Commit liegt auf Branch security/run-env-vars-no-plaintext, nicht auf main.
+8eb43d4301d7638b1d174218881d94fb164e03f2:tests/test_run_env_persistence.py:generic-api-key:43
