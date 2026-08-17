@@ -12,8 +12,9 @@ name: Security Scan (IaC / Image / Secrets)
 #
 # Gating-Philosophie (bewusst gewählt, siehe Kommentare an den Steps):
 #   - Secrets  -> BLOCKIEREND (eindeutig, gehören nie ins Repo).
-#   - IaC/Image -> BLOCKIEREND bei CRITICAL/HIGH (MEDIUM wird bei IaC nicht
-#     mehr gescannt, um Rauschen bei blockierendem exit-code zu vermeiden).
+#   - IaC/Image -> SARIF-Report über alle Severities (Security-Tab), aber
+#     BLOCKIEREND nur bei CRITICAL/HIGH. Dafür braucht es pro Scan zwei Steps,
+#     weil die trivy-action bei `format: sarif` den severity-Filter verwirft.
 
 on:
   push:
@@ -47,21 +48,39 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Trivy Config Scan
+      # Report und Gating sind ABSICHTLICH zwei Steps: die trivy-action macht bei
+      # `format: sarif` ein `unset TRIVY_SEVERITY` ("Building SARIF report with all
+      # severities"), verwirft also den severity-Filter, behält aber exit-code.
+      # Ein einziger SARIF-Step mit exit-code 1 würde daher bei JEDEM Fund
+      # blockieren (auch LOW/MEDIUM/UNKNOWN) – und weil der Report in die Datei
+      # geht, ohne sichtbares Finding im Log.
+      - name: Trivy Config Scan (SARIF-Report, nicht blockierend)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: config
           scan-ref: .
           format: sarif
           output: trivy-iac.sarif
-          # Auf CRITICAL,HIGH reduziert (statt zusätzlich MEDIUM), um Rauschen
-          # bei blockierendem exit-code zu vermeiden.
-          severity: CRITICAL,HIGH
-          # Blockierend bei CRITICAL/HIGH-Findings.
-          exit-code: '1'
+          # Kein severity-Filter: die Action ignoriert ihn bei SARIF ohnehin,
+          # der Security-Tab bekommt damit bewusst alle Severities.
+          exit-code: '0'
           # Fremd-/Duplikat-Manifeste ausklammern: node_modules und die lokalen
           # Claude-Worktrees enthalten Kopien der k8s-Manifeste (sonst Doppel-Findings).
           skip-dirs: '.claude,node_modules,frontend/node_modules'
+
+      - name: Trivy Config Gate (CRITICAL/HIGH, blockierend)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: .
+          # `table` statt sarif -> severity bleibt wirksam und das Finding ist
+          # bei einem Fehlschlag direkt im Job-Log lesbar.
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+          skip-dirs: '.claude,node_modules,frontend/node_modules'
+          # Binary + Check-/DB-Cache aus dem Step oben weiterverwenden.
+          skip-setup-trivy: true
 
       - name: SARIF ins Code-Scanning laden
         if: always()
@@ -102,7 +121,9 @@ jobs:
       - name: ${{ matrix.name }}-Image bauen
         run: docker build -f "${{ matrix.dockerfile }}" -t "fastflow-${{ matrix.name }}:scan" .
 
-      - name: Trivy Image Scan
+      # Zwei Steps, gleicher Grund wie beim iac-scan-Job oben: bei `format: sarif`
+      # verwirft die trivy-action den severity-Filter, behält aber den exit-code.
+      - name: Trivy Image Scan (SARIF-Report, nicht blockierend)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
@@ -110,11 +131,23 @@ jobs:
           format: sarif
           output: "trivy-image-${{ matrix.name }}.sarif"
           vuln-type: 'os,library'
-          severity: CRITICAL,HIGH
           # Nur behebbare CVEs melden -> weniger Rauschen durch nicht-fixbare Base-CVEs.
           ignore-unfixed: true
-          # Blockierend bei CRITICAL/HIGH-Findings.
+          exit-code: '0'
+
+      - name: Trivy Image Gate (CRITICAL/HIGH, blockierend)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: "fastflow-${{ matrix.name }}:scan"
+          format: table
+          vuln-type: 'os,library'
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
           exit-code: '1'
+          # Binary + Vulnerability-DB aus dem Step oben weiterverwenden
+          # (kein zweiter 104-MiB-Download).
+          skip-setup-trivy: true
 
       - name: SARIF ins Code-Scanning laden
         if: always()
