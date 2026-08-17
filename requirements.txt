@@ -3,7 +3,7 @@
 
 fastapi>=0.141.1,<1
 prometheus-fastapi-instrumentator>=8.1.0,<9
-uvicorn[standard]>=0.52.1,<1
+uvicorn[standard]>=0.52.3,<1
 sqlmodel>=0.0.39,<0.1
 docker>=7.2.0,<8
 kubernetes>=36.0.3,<37
@@ -12,8 +12,8 @@ pydantic>=2.13.4,<3
 email-validator>=2.3.0,<3
 python-multipart>=0.0.32,<1
 aiofiles>=25.1.0,<26
-alembic>=1.19.0,<2
-boto3>=1.43.66,<2
+alembic>=1.19.1,<2
+boto3>=1.43.71,<2
 python-dotenv>=1.2.2,<2
 python-jose[cryptography]>=3.5.0,<4
 cryptography>=50.0.0
@@ -42,7 +42,7 @@ tenacity>=9.1.4,<10
 # NICHT die Quelle der 70.3.0-Meldung von Trivy: die kam aus pip/_vendor/bom.cdx.json
 # (pips SBOM seiner vendored Dependencies) und ist von hier aus nicht steuerbar
 # -> in .github/workflows/security-scan.yml per skip-files ausgeklammert.
-setuptools>=83.0.0
+setuptools>=84.0.0
 
 # msgpack: GHSA-6v7p-g79w-8964 (Out-of-bounds Read / Crash bei Unpacker-Reuse
 # nach abgefangenem Fehler, fixed 1.2.1). Transitiv via pip-audit -> CacheControl.
