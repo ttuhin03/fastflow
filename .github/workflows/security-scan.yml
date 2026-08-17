@@ -123,6 +123,20 @@ jobs:
 
       # Zwei Steps, gleicher Grund wie beim iac-scan-Job oben: bei `format: sarif`
       # verwirft die trivy-action den severity-Filter, behält aber den exit-code.
+      #
+      # skip-files: pip >= 26 legt unter pip/_vendor/bom.cdx.json einen eigenen
+      # CycloneDX-SBOM seiner *vendored* Dependencies ab. Trivy liest den als
+      # Fremd-SBOM ein (Log: "Third-party SBOM may lead to inaccurate
+      # vulnerability detection") und meldet dessen Versionen als wären sie
+      # installiert – u. a. msgpack 1.1.2 und setuptools 70.3.0, obwohl im Image
+      # msgpack 1.2.1 und setuptools 84.0.0 liegen. Die Floors in
+      # requirements.txt können daran nichts ändern, die Versionen stecken im
+      # pip-Release. Bei setuptools ist es zudem ein echter False Positive:
+      # pip vendort nur pkg_resources, nicht das von CVE-2025-47273 betroffene
+      # setuptools/package_index.py (im Image nicht vorhanden).
+      # Der python-pkg-Analyzer erfasst die tatsächlich installierten Pakete
+      # unabhängig davon weiter (lokal verifiziert: 110 METADATA-Targets
+      # unverändert gescannt).
       - name: Trivy Image Scan (SARIF-Report, nicht blockierend)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -134,6 +148,7 @@ jobs:
           # Nur behebbare CVEs melden -> weniger Rauschen durch nicht-fixbare Base-CVEs.
           ignore-unfixed: true
           exit-code: '0'
+          skip-files: '**/pip/_vendor/bom.cdx.json'
 
       - name: Trivy Image Gate (CRITICAL/HIGH, blockierend)
         uses: aquasecurity/trivy-action@v0.36.0
@@ -145,6 +160,7 @@ jobs:
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: '1'
+          skip-files: '**/pip/_vendor/bom.cdx.json'
           # Binary + Vulnerability-DB aus dem Step oben weiterverwenden
           # (kein zweiter 104-MiB-Download).
           skip-setup-trivy: true

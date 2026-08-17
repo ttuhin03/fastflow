@@ -38,7 +38,10 @@ tenacity>=9.1.4,<10
 
 # setuptools: CVE-2025-47273 (Path Traversal in PackageIndex, fixed 78.1.1).
 # Floor bleibt bei 80.9.0 wegen vendored jaraco.context CVE-2026-23949.
-# Quelle ist das python:3.11-slim Base-Image (Trivy meldete dort 70.3.0).
+# Quelle ist das python:3.11-slim Base-Image, das setuptools 79.0.1 mitbringt.
+# NICHT die Quelle der 70.3.0-Meldung von Trivy: die kam aus pip/_vendor/bom.cdx.json
+# (pips SBOM seiner vendored Dependencies) und ist von hier aus nicht steuerbar
+# -> in .github/workflows/security-scan.yml per skip-files ausgeklammert.
 setuptools>=83.0.0
 
 # msgpack: GHSA-6v7p-g79w-8964 (Out-of-bounds Read / Crash bei Unpacker-Reuse
