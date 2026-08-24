@@ -15,33 +15,33 @@
     "@tanstack/react-query": "^5.101.4",
     "@testing-library/jest-dom": "^7.0.1",
     "axios": ">=1.19.0",
-    "i18next": "^26.3.6",
+    "i18next": "^26.4.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-hot-toast": "^2.6.0",
-    "react-i18next": "^17.0.11",
+    "react-i18next": "^17.0.12",
     "react-icons": "^5.7.0",
     "react-router-dom": "^7.18.2",
     "recharts": "^3.10.1"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.2",
-    "@testing-library/user-event": "^14.6.4",
+    "@testing-library/user-event": "^14.6.5",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@typescript-eslint/eslint-plugin": "^8.67.0",
     "@typescript-eslint/parser": "^8.62.1",
-    "@vitejs/plugin-react": "^6.0.5",
+    "@vitejs/plugin-react": "^6.1.0",
     "eslint": "^10.8.1",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.4",
     "jsdom": "^30.0.0",
     "typescript": "^7.0.2",
-    "vite": "^8.1.5",
-    "vitest": "^4.1.10"
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
   },
   "optionalDependencies": {
-    "@rollup/rollup-linux-arm64-gnu": "^4.62.4",
-    "@rollup/rollup-linux-x64-gnu": "^4.62.4"
+    "@rollup/rollup-linux-arm64-gnu": "^4.62.5",
+    "@rollup/rollup-linux-x64-gnu": "^4.62.5"
   }
 }
