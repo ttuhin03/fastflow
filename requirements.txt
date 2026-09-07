@@ -4,19 +4,19 @@
 fastapi>=0.141.1,<1
 prometheus-fastapi-instrumentator>=8.1.0,<9
 uvicorn[standard]>=0.52.4,<1
-sqlmodel>=0.0.39,<0.1
+sqlmodel>=0.0.42,<0.1
 docker>=7.2.0,<8
 kubernetes>=36.0.3,<37
 apscheduler>=3.11.3,<4
-pydantic>=2.13.4,<3
+pydantic>=2.13.5,<3
 email-validator>=2.3.0,<3
 python-multipart>=0.0.32,<1
 aiofiles>=25.1.0,<26
 alembic>=1.19.1,<2
-boto3>=1.43.77,<2
+boto3>=1.43.88,<2
 python-dotenv>=1.2.3,<2
 python-jose[cryptography]>=3.5.0,<4
-cryptography>=50.0.0
+cryptography>=50.0.1
 PyJWT>=2.13.0,<3
 requests>=2.34.2,<3
 httpx>=0.28.1,<0.29
@@ -46,4 +46,4 @@ setuptools>=84.0.0
 
 # msgpack: GHSA-6v7p-g79w-8964 (Out-of-bounds Read / Crash bei Unpacker-Reuse
 # nach abgefangenem Fehler, fixed 1.2.1). Transitiv via pip-audit -> CacheControl.
-msgpack>=1.2.1
+msgpack>=1.2.2
