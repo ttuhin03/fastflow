@@ -51,7 +51,7 @@ export default function Runs() {
   const queryClient = useQueryClient()
   const runsInterval = useRefetchInterval(5000)
   const { data: runsData, isLoading } = useQuery<RunsResponse>({
-    queryKey: ['runs', pipelineFilter, statusFilter, startDate, endDate, page, pageSize],
+    queryKey: ['runs', pipelineFilter, statusFilter, startDate, endDate, page, pageSize, sortOrder],
     queryFn: async () => {
       const params = new URLSearchParams()
       if (pipelineFilter) params.append('pipeline_name', pipelineFilter)
@@ -61,6 +61,7 @@ export default function Runs() {
       const offset = (page - 1) * pageSize
       params.append('offset', offset.toString())
       params.append('limit', pageSize.toString())
+      params.append('sort_order', sortOrder)
       const response = await apiClient.get(`/runs?${params.toString()}`)
       return response.data
     },
@@ -69,10 +70,10 @@ export default function Runs() {
 
   const runs = runsData?.runs || []
 
-  // Reset to page 1 when filters change
+  // Reset to page 1 when filters or sort order change
   useEffect(() => {
     setPage(1)
-  }, [pipelineFilter, statusFilter, startDate, endDate])
+  }, [pipelineFilter, statusFilter, startDate, endDate, sortOrder])
 
   // Invalidate daily-stats when runs complete
   const prevRunsRef = useRef<Run[]>([])
@@ -111,13 +112,6 @@ export default function Runs() {
       </div>
     )
   }
-
-  // Backend already sorts by started_at desc, so we only need to reverse if sortOrder is 'asc'
-  const filteredAndSortedRuns = runs
-    ? sortOrder === 'asc'
-      ? [...runs].reverse()
-      : runs
-    : []
 
   const totalPages = runsData ? Math.ceil(runsData.total / pageSize) : 0
   const totalRuns = runsData?.total || 0
@@ -198,7 +192,7 @@ export default function Runs() {
     }
   }
 
-  const runningCount = filteredAndSortedRuns.filter(
+  const runningCount = runs.filter(
     (r) => r.status === 'RUNNING' || r.status === 'PENDING'
   ).length
 
@@ -294,7 +288,7 @@ export default function Runs() {
         </span>
       </div>
 
-      {filteredAndSortedRuns.length > 0 ? (
+      {runs.length > 0 ? (
         <>
           {/* Desktop Table View */}
           <div className="table runs-table-grid desktop-only">
@@ -307,7 +301,7 @@ export default function Runs() {
               <span>{t('runs.thCommit')}</span>
               <span aria-hidden />
             </div>
-            {filteredAndSortedRuns.map((run, index) => (
+            {runs.map((run, index) => (
               <Link
                 key={run.id}
                 to={`/runs/${run.id}`}
@@ -354,7 +348,7 @@ export default function Runs() {
 
           {/* Mobile Card View */}
           <div className="runs-cards-container mobile-only">
-            {filteredAndSortedRuns.map((run, index) => (
+            {runs.map((run, index) => (
               <div key={run.id} className="run-card card" style={{ animationDelay: `${index * 0.04}s` }}>
                 <div className="run-card-header">
                   <div className="run-card-id">

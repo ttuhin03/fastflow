@@ -71,7 +71,16 @@
   --color-secondary:        #E4E4E7;
   --color-secondary-dark:   #D4D4D8;
   --color-secondary-light:  #F4F4F5;
-  --focus-ring-color:       var(--color-accent-subtle);
+
+  /* ---- Fokus · WCAG 2.4.11 (3:1 zur Umgebung) ------------------------
+     #ADA6FB liegt bei ~9:1 auf --color-background. Der Indikator wird als
+     outline mit positivem offset gezeichnet: die 2px Abstand zeigen den
+     dunklen Untergrund, damit der Ring auch auf einer gefüllten
+     Primary-Fläche (#6E62F5, allein nur ~2:1) sicher stehen bleibt.        */
+  --color-focus-ring:       #ADA6FB;
+  --focus-outline:          2px solid var(--color-focus-ring);
+  --focus-outline-offset:   2px;
+  --focus-ring-color:       var(--color-focus-ring);
 
   /* ---- Data viz (Recharts) · harmonized for dark --------------------- */
   --chart-1: #6E62F5;   /* accent  */
@@ -131,6 +140,9 @@
   --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55);
   --shadow-xl: 0 24px 64px rgba(0, 0, 0, 0.60);
   --shadow-cta: 0 6px 18px var(--color-accent-glow);  /* primary button hover */
+  /* Weicher Glow für Felder, die beim Fokus zusätzlich ihre Border auf
+     --color-primary umstellen (das ist dort der tragende Indikator).
+     NICHT als alleiniger Fokusindikator verwenden — dafür --focus-outline. */
   --focus-ring: 0 0 0 3px var(--color-accent-subtle);
 
   /* ---- Motion --------------------------------------------------------- */

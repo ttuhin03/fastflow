@@ -6,6 +6,7 @@ import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
 import { showError, showSuccess, showConfirm } from '../utils/toast'
 import { getFormatLocale } from '../utils/locale'
+import { computeTrend, type Trend } from '../utils/trend'
 import { LuRefreshCw } from 'react-icons/lu'
 import RunStatusCircles from '../components/RunStatusCircles'
 import StorageStats from '../components/StorageStats'
@@ -53,6 +54,16 @@ interface DailyStat {
   successful_runs: number
   failed_runs: number
   success_rate: number
+}
+
+function TrendChip({ trend, title }: { trend: Trend | null; title?: string }) {
+  if (!trend || trend.dir === 'flat') return null
+  return (
+    <span className={`stat-trend ${trend.dir}`} title={title}>
+      {trend.dir === 'up' ? '↑' : '↓'}
+      {trend.label ? ` ${trend.label}` : ''}
+    </span>
+  )
 }
 
 export default function Dashboard() {
@@ -155,17 +166,14 @@ export default function Dashboard() {
   const sparkSuccess = recentDays.map(d => d.successful_runs)
   const sparkRate    = recentDays.map(d => d.success_rate)
 
-  // Trend: compare last day vs 7-day average
-  const lastDay = recentDays[recentDays.length - 1]
-  const prev7   = recentDays.slice(0, -1)
-  const avgRunsPrev = prev7.length ? prev7.reduce((s, d) => s + d.total_runs, 0) / prev7.length : null
-
-  const runsTrend = avgRunsPrev != null && lastDay
-    ? lastDay.total_runs > avgRunsPrev ? 'up' : 'down'
-    : null
-  const runsDelta = avgRunsPrev != null && lastDay
-    ? Math.abs(Math.round(((lastDay.total_runs - avgRunsPrev) / Math.max(avgRunsPrev, 1)) * 100))
-    : null
+  // Trend: letzter Tag gegen den Durchschnitt der vorangegangenen Tage im Fenster.
+  const trendTitle = t('dashboard.trendTooltip', {
+    days: Math.max(recentDays.length - 1, 0),
+    defaultValue: 'Last day vs. average of the previous {{days}} days',
+  })
+  const runsTrend    = computeTrend(sparkRuns)
+  const successTrend = computeTrend(sparkSuccess)
+  const rateTrend    = computeTrend(sparkRate, 'points')
 
   return (
     <div className="dashboard">
@@ -187,24 +195,22 @@ export default function Dashboard() {
 
       {/* KPI cards — minimal: label + trend chip / big mono number + sparkline */}
       <div className="stats-grid">
+        {/* Pipelines: kein Zeitverlauf vorhanden — daher bewusst ohne Trend
+            und ohne Sparkline (eine Run-Sparkline hier würde eine andere
+            Kennzahl zeigen, als das Label verspricht). */}
         <div className="stat-card">
           <div className="stat-card__top">
             <p className="stat-label">{t('nav.pipelines')}</p>
           </div>
           <div className="stat-card__bottom">
             <p className="stat-value">{pipelines?.length || 0}</p>
-            {sparkRuns.length > 1 && <Sparkline data={sparkRuns} color="var(--chart-1)" />}
           </div>
         </div>
 
         <div className="stat-card">
           <div className="stat-card__top">
             <p className="stat-label">{t('dashboard.totalRuns')}</p>
-            {runsTrend && runsDelta != null && (
-              <span className={`stat-trend ${runsTrend}`}>
-                {runsTrend === 'up' ? '↑' : '↓'} {runsTrend === 'up' ? '+' : '-'}{runsDelta}%
-              </span>
-            )}
+            <TrendChip trend={runsTrend} title={trendTitle} />
           </div>
           <div className="stat-card__bottom">
             <p className="stat-value">{totalRuns.toLocaleString()}</p>
@@ -215,9 +221,7 @@ export default function Dashboard() {
         <div className="stat-card">
           <div className="stat-card__top">
             <p className="stat-label">{t('dashboard.successful')}</p>
-            {sparkSuccess.length > 1 && (
-              <span className="stat-trend up">↑</span>
-            )}
+            <TrendChip trend={successTrend} title={trendTitle} />
           </div>
           <div className="stat-card__bottom">
             <p className="stat-value success">{totalSuccessful.toLocaleString()}</p>
@@ -228,9 +232,7 @@ export default function Dashboard() {
         <div className="stat-card">
           <div className="stat-card__top">
             <p className="stat-label">{t('dashboard.successRate') || 'Success rate'}</p>
-            {sparkRate.length > 1 && (
-              <span className="stat-trend up">↑</span>
-            )}
+            <TrendChip trend={rateTrend} title={trendTitle} />
           </div>
           <div className="stat-card__bottom">
             <p className="stat-value">{successRate}{typeof successRate === 'string' && successRate !== '—' ? '%' : ''}</p>

@@ -26,7 +26,7 @@
   transition: background-color var(--transition-base), border-color var(--transition-base),
               color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-fast);
 }
-.btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+/* Fokus: siehe zentralen Block "FOCUS" weiter unten. */
 .btn:active:not(:disabled) { transform: translateY(0.5px) scale(0.985); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .btn-sm { height: 30px; padding: 0 11px; font-size: var(--font-size-xs); border-radius: var(--radius-sm); }
@@ -102,7 +102,6 @@
   transition: background-color var(--transition-base), border-color var(--transition-base), color var(--transition-base);
 }
 .btn-icon:hover:not(:disabled) { background: var(--color-surface-3); color: var(--color-text-primary); }
-.btn-icon:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .btn-icon:active:not(:disabled) { transform: scale(0.96); }
 .btn-icon:disabled { opacity: 0.45; cursor: not-allowed; }
 .btn-icon.btn-danger { color: var(--color-error-text); border-color: var(--color-error-border); background: var(--color-error-subtle); }
@@ -394,6 +393,33 @@ kbd {
 
 .fade-in       { animation: ff-rise var(--transition-slow); }
 .page-transition-wrap { animation: ff-rise 0.25s var(--ease-out); }
+
+/* ---- FOCUS ---------------------------------------------------------------
+   Ein sichtbarer Indikator für alles, was per Tastatur erreichbar ist.
+
+   outline statt box-shadow: es überschreibt keine vorhandenen Schatten (etwa
+   das inset-Highlight von .btn-primary), und der positive offset legt den
+   dunklen Untergrund zwischen Control und Ring. Dadurch grenzt der Ring
+   beidseitig an eine dunkle Fläche und hält die 3:1 aus WCAG 2.4.11 auch auf
+   einem gefüllten Primary-Button — dort läge ein direkt anliegender heller
+   Ring nur bei ~2:1.                                                        */
+.btn:focus-visible,
+.btn-icon:focus-visible,
+a:focus-visible,
+[role='button']:focus-visible,
+[tabindex]:not([tabindex='-1']):focus-visible,
+summary:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
+}
+
+/* .table hat overflow:hidden und die Zeilen reichen bis an die Containerkante —
+   ein außenliegender Ring würde links und rechts abgeschnitten. Daher nach
+   innen zeichnen. */
+.table__row:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: -2px;
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

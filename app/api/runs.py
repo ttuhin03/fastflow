@@ -7,7 +7,7 @@ Dieses Modul enthält alle REST-API-Endpoints für Run-Management:
 - Run abbrechen
 """
 
-from typing import List, Optional, Dict, Any
+from typing import List, Literal, Optional, Dict, Any
 from uuid import UUID
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
@@ -126,6 +126,7 @@ async def get_runs(
     end_date: Optional[str] = Query(None, description="Enddatum für Filterung (ISO-Format: YYYY-MM-DD oder YYYY-MM-DDTHH:MM:SS)"),
     limit: int = Query(50, ge=1, le=1000, description="Anzahl Runs pro Seite"),
     offset: int = Query(0, ge=0, description="Offset für Pagination"),
+    sort_order: Literal["asc", "desc"] = Query("desc", description="Sortierung nach Startzeit: desc (neueste zuerst) oder asc (älteste zuerst)"),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ) -> RunsResponse:
@@ -139,6 +140,7 @@ async def get_runs(
         end_date: Optionales Enddatum für Filterung (ISO-Format)
         limit: Anzahl Runs pro Seite (Standard: 50, Max: 1000)
         offset: Offset für Pagination (Standard: 0)
+        sort_order: Sortierrichtung nach started_at ("desc" oder "asc")
         session: SQLModel Session
         
     Returns:
@@ -160,8 +162,14 @@ async def get_runs(
     base_stmt = select(PipelineRun).where(*filters) if filters else select(PipelineRun)
     total = session.exec(select(func.count(PipelineRun.id)).where(*filters) if filters else select(func.count(PipelineRun.id))).one()
     
-    # Query für Runs mit Pagination
-    stmt = base_stmt.order_by(PipelineRun.started_at.desc()).limit(limit).offset(offset)
+    # Query für Runs mit Pagination.
+    # id als Tiebreaker: ohne ihn können Runs mit identischem started_at
+    # zwischen zwei Seiten hin- und herspringen (oder doppelt erscheinen).
+    if sort_order == "asc":
+        order_by = (PipelineRun.started_at.asc(), PipelineRun.id.asc())
+    else:
+        order_by = (PipelineRun.started_at.desc(), PipelineRun.id.desc())
+    stmt = base_stmt.order_by(*order_by).limit(limit).offset(offset)
     
     # Runs aus DB abrufen
     runs = session.exec(stmt).all()
