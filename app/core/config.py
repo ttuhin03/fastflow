@@ -57,14 +57,30 @@ class Config:
     VERSION: str = Path("VERSION").read_text().strip().lstrip("v") if Path("VERSION").exists() else "0.0.0"
 
     # Datenbank-Konfiguration
-    DATABASE_URL: Optional[str] = os.getenv("DATABASE_URL", None)
+    DATABASE_URL: Optional[str] = (os.getenv("DATABASE_URL") or "").strip() or None
     """
     Datenbank-URL für SQLModel.
-    
+
+    Ein leerer oder nur aus Leerzeichen bestehender Wert wird wie "nicht gesetzt"
+    behandelt. Das ist kein Schönheitsfix: Schreibt ein Secret-Injector die
+    Variable an, bevor der Wert da ist, ergäbe "" sonst einen unverständlichen
+    SQLAlchemy-Parse-Fehler statt der klaren Meldung aus app.core.database.
+
     - None: SQLite wird verwendet (./data/fastflow.db)
     - PostgreSQL: postgresql://user:password@host:5432/dbname
+
+    Achtung: In Produktion ist None ein Startup-Fehler (siehe app.core.database),
+    damit die App nicht still auf einer leeren lokalen SQLite-DB hochkommt.
     """
-    
+
+    LOG_VIEWER_URL: Optional[str] = os.getenv("LOG_VIEWER_URL", None) or None
+    """
+    Optionale URL zum Log-Viewer (z. B. eine vorbereitete Grafana/Loki-Query).
+
+    Ist sie gesetzt, verlinkt das Degraded-Banner in der UI direkt dorthin;
+    andernfalls wird nur der Hinweis-Text ohne Link angezeigt.
+    """
+
     # Verzeichnis-Konfiguration
     PIPELINES_DIR: Path = Path(os.getenv("PIPELINES_DIR", "./pipelines")).resolve()
     """Verzeichnis für das Pipeline-Repository (wird als Volume gemountet)."""

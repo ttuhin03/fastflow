@@ -4,6 +4,7 @@ import { LuCode } from 'react-icons/lu'
 import Tooltip from '../components/Tooltip'
 import LoginAttributionFooter from '../components/LoginAttributionFooter'
 import LoginGameOfLifeBackground from '../components/LoginGameOfLifeBackground'
+import BackendStatusBanner from '../components/BackendStatusBanner'
 import { useUiPreferences } from '../contexts/UiPreferencesContext'
 import { getApiOrigin } from '../config'
 import { useAuthProviders, type ProviderId } from '../hooks/useAuthProviders'
@@ -207,6 +208,10 @@ export default function Login() {
       {/* RIGHT: Auth Panel */}
       <div className="login-content">
         <div className="login-card">
+          {/* Faellt die DB aus, schlaegt auch der Login fehl und der Benutzer
+              landet wieder hier – ohne Banner ohne jeden Hinweis, warum. */}
+          <BackendStatusBanner />
+
           {providers.login_branding_logo_url ? (
             <div className="login-branding-logo-wrap">
               <img

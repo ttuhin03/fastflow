@@ -113,6 +113,42 @@ async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSON
 
 app.add_exception_handler(Exception, _unhandled_exception_handler)
 
+
+async def _database_unavailable_handler(request: Request, exc: Exception) -> JSONResponse:
+    """
+    Antwortet auf Datenbank-Verbindungsfehler mit 503 statt 500.
+
+    Fällt die DB aus (abgelaufenes Credential, Netzwerkproblem), scheitert bereits
+    die Auth-Dependency jedes geschützten Endpoints — die Anfrage käme sonst als
+    nichtssagender 500 im Frontend an. Mit eigenem Status und error_code kann die
+    UI den Zustand als "Backend gestört" erkennen und benennen, statt den Fehler
+    zu verschlucken oder den Benutzer auszuloggen.
+    """
+    from app.core.readiness import redact_error
+
+    logger.error("Datenbank nicht erreichbar: %s", exc)
+    content: dict = {
+        "detail": {
+            "message": (
+                "Die Datenbank ist derzeit nicht erreichbar. "
+                "Bitte die Logs des Orchestrators prüfen."
+            ),
+            "error_code": "DATABASE_UNAVAILABLE",
+        }
+    }
+    if config.ENVIRONMENT != "production":
+        content["detail"]["cause"] = redact_error(str(exc))
+    request_id = getattr(request.state, "request_id", None)
+    if request_id:
+        content["request_id"] = request_id
+    return JSONResponse(status_code=503, content=content, headers={"Retry-After": "15"})
+
+
+from sqlalchemy.exc import InterfaceError as _SAInterfaceError, OperationalError as _SAOperationalError
+
+app.add_exception_handler(_SAOperationalError, _database_unavailable_handler)
+app.add_exception_handler(_SAInterfaceError, _database_unavailable_handler)
+
 # Security Headers Middleware (muss vor CORS sein)
 from app.middleware.security_headers import SecurityHeadersMiddleware
 app.add_middleware(SecurityHeadersMiddleware)
@@ -185,7 +221,7 @@ async def readiness_check() -> JSONResponse:
     Gibt 503 zurück, wenn die App nicht verkehrsfähig ist.
     Für Kubernetes readinessProbe.
     """
-    from app.core.readiness import run_readiness_checks
+    from app.core.readiness import redact_checks, run_readiness_checks
     checks, ok = await asyncio.to_thread(run_readiness_checks)
     status = "not_ready" if not ok else "ready"
     status_code = 503 if not ok else 200
@@ -193,10 +229,33 @@ async def readiness_check() -> JSONResponse:
         status_code=status_code,
         content={
             "status": status,
-            "checks": checks,
+            # Der Endpoint ist unauthentifiziert. Die Roh-Meldungen enthalten
+            # Hostnamen, Cluster-IPs und den (bei Vault-Rotation dynamischen)
+            # DB-Benutzernamen; ungekürzt stehen sie im Log und im
+            # authentifizierten /api/settings/system-status.
+            "checks": redact_checks(checks),
             "version": config.VERSION,
         },
     )
+
+
+@app.get("/api/system/status")
+@limiter.exempt
+async def system_status() -> JSONResponse:
+    """
+    Knapper Systemstatus ohne Authentifizierung, immer HTTP 200.
+
+    Gegenstück zu /api/settings/system-status: Jener hängt an get_current_user und
+    damit an der Datenbank — genau der Abhängigkeit, die bei einem DB-Ausfall weg
+    ist. Dieser Endpoint prüft nur DB-Erreichbarkeit und SQLite-Fallback und bleibt
+    deshalb antwortfähig, wenn sonst nichts mehr geht. Die UI pollt ihn für das
+    Degraded-Banner.
+
+    Immer 200, damit das Frontend zwischen "Backend meldet degraded" und
+    "Backend gar nicht erreichbar" unterscheiden kann.
+    """
+    from app.core.readiness import get_public_status
+    return JSONResponse(content=await asyncio.to_thread(get_public_status))
 
 
 # API-Router registrieren (Phase 6)

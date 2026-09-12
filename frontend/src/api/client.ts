@@ -2,6 +2,7 @@ import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios'
 import { showError } from '../utils/toast'
 import { getApiBaseUrl } from '../config'
 import i18n from '../i18n'
+import { reportDegraded } from './degradedState'
 
 const LOGIN_PATH = import.meta.env.VITE_LOGIN_PATH || '/login'
 
@@ -55,6 +56,28 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config
+
+    // Backend meldet sich als gestört (z.B. Datenbank nicht erreichbar). Das
+    // betrifft jeden geschützten Endpoint, weil bereits die Auth-Dependency an
+    // der DB hängt – ohne diesen Zweig käme der Ausfall nirgends in der UI an.
+    const errorDetail = error.response?.data?.detail
+    const backendErrorCode =
+      errorDetail && typeof errorDetail === 'object' ? errorDetail.error_code : undefined
+    if (error.response?.status === 503 && backendErrorCode === 'DATABASE_UNAVAILABLE') {
+      reportDegraded({
+        reason: 'database',
+        requestId: error.response?.data?.request_id,
+        cause: typeof errorDetail === 'object' ? errorDetail.cause : undefined,
+      })
+      return Promise.reject(error)
+    }
+
+    // Kein Response-Objekt und kein Abbruch durch uns selbst = Backend war nicht
+    // erreichbar (Pod NotReady, Ingress-Fehler, Netzwerk weg).
+    if (!error.response && error.code !== 'ERR_CANCELED') {
+      reportDegraded({ reason: 'unreachable' })
+      return Promise.reject(error)
+    }
 
     const isRefreshEndpoint = originalRequest?.url?.includes('/auth/refresh')
 

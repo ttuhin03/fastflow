@@ -38,10 +38,35 @@ from app.models import (
 
 logger = logging.getLogger(__name__)
 
+SQLITE_FALLBACK_ACTIVE: bool = False
+"""
+True, wenn keine DATABASE_URL gesetzt war und die App auf lokales SQLite
+zurückgefallen ist. Wird vom Degraded-Banner in der UI ausgewertet, damit ein
+solcher Start nicht unbemerkt bleibt (siehe app.core.readiness.get_public_status).
+"""
+
 # SQLite Standard-URL wenn keine DATABASE_URL gesetzt
 if config.DATABASE_URL is None:
+    # In Produktion ist der stille Fallback gefährlich: Fehlt DATABASE_URL (z. B.
+    # weil ein Secret-Injector den Wert noch nicht geschrieben hat), käme die App
+    # auf einer frisch gestempelten, leeren SQLite-DB hoch, meldete sich über
+    # /ready als gesund und verarbeitete Runs gegen den falschen Datenbestand.
+    # Lieber hart abbrechen und den Pod crashen lassen.
+    if config.ENVIRONMENT == "production" and not config.TESTING:
+        raise RuntimeError(
+            "DATABASE_URL ist nicht gesetzt, ENVIRONMENT=production. "
+            "Start abgebrochen, um einen stillen Fallback auf lokales SQLite zu "
+            "verhindern. Bitte DATABASE_URL setzen (oder ENVIRONMENT umstellen, "
+            "falls SQLite hier wirklich gewollt ist)."
+        )
     # SQLite mit WAL-Mode für bessere Concurrency
     database_url = f"sqlite:///{config.DATA_DIR}/fastflow.db"
+    SQLITE_FALLBACK_ACTIVE = True
+    logger.warning(
+        "DATABASE_URL nicht gesetzt – Fallback auf lokales SQLite (%s). "
+        "Das ist nur für Entwicklung und Tests vorgesehen.",
+        database_url,
+    )
 else:
     database_url = config.DATABASE_URL
 
