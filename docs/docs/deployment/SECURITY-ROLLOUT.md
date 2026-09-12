@@ -43,6 +43,7 @@ Automatisierte Checks: `tests/test_worker_security.py`
 - [ ] K8s: **`kubectl apply`** für geänderte Manifests (`deployment.yaml`, ggf. `postgres.yaml`)
 - [ ] K8s: **UV-Cache migrieren** (falls bisher unter `/app/data/uv_cache` auf `fastflow-pvc`)
 - [ ] **`ENVIRONMENT=production`** in ConfigMap (wenn Prod-Betrieb)
+- [ ] Dann zwingend **`DATABASE_URL`** gesetzt (aus `postgres-secret` oder explizit SQLite in der ConfigMap) — fehlt der Wert, bricht der Start ab
 - [ ] Smoke-Test: Orchestrator startet, eine Pipeline läuft durch
 - [ ] Optional: `pytest tests/test_worker_security.py` in CI
 

@@ -16,7 +16,7 @@ A short checklist before go-live and for ongoing operation.
 - [ ] OAuth: At least one provider (GitHub/Google/Microsoft/Custom) with **CLIENT_ID** and **CLIENT_SECRET** configured
 - [ ] Set **INITIAL_ADMIN_EMAIL** for the first admin
 - [ ] HTTPS via reverse proxy (Nginx/Traefik) with a valid certificate
-- [ ] Database: For production, **DATABASE_URL=postgresql://...** recommended (SQLite only for small setups)
+- [ ] Database: Set **DATABASE_URL** — mandatory under `ENVIRONMENT=production`, a missing value aborts startup. **postgresql://...** recommended; for small setups choose SQLite explicitly (`sqlite:////app/data/fastflow.db`)
 
 ## Optional, Recommended
 
