@@ -63,8 +63,8 @@
 }
 
 .header-time-toggle:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
 }
 
 /* Alternative: Dual (beide Zeitzonen) */
@@ -113,8 +113,9 @@ button.header-lang-dual-btn:hover {
 }
 
 button.header-lang-dual-btn:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
+  /* Basis-Regel hat keinen Radius — der Ring soll trotzdem gerundet laufen. */
   border-radius: var(--radius-sm);
 }
 

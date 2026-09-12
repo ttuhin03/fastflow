@@ -238,7 +238,13 @@ export default function Runs() {
         <select
           id="sort-order"
           value={sortOrder}
-          onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
+          onChange={(e) => {
+            // Seite im selben Event zurücksetzen, nicht erst im Effect darunter:
+            // sonst rendert React einmal mit neuer Sortierung und altem Offset
+            // und feuert dafür einen überflüssigen Request gegen /runs.
+            setSortOrder(e.target.value as 'asc' | 'desc')
+            setPage(1)
+          }}
           className="runs-filter-select"
           aria-label={t('runs.sortLabel')}
         >

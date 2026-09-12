@@ -413,10 +413,17 @@ summary:focus-visible {
   outline-offset: var(--focus-outline-offset);
 }
 
-/* .table hat overflow:hidden und die Zeilen reichen bis an die Containerkante —
-   ein außenliegender Ring würde links und rechts abgeschnitten. Daher nach
-   innen zeichnen. */
-.table__row:focus-visible {
+/* Zeilen, die bündig an einer clippenden Kante enden, brauchen den Ring nach
+   innen — außen würde er links und rechts abgeschnitten:
+   .table hat overflow:hidden, .notification-list scrollt (overflow-y:auto
+   macht auch overflow-x zu auto) und beide Zeilentypen reichen ohne Margin
+   bis an den Container.
+
+   .notification-item trägt tabindex="0" und role="button" und träfe sonst die
+   Regel oben; deren [tabindex]-Selektor wiegt 0-3-0, daher hier bewusst ein
+   Selektor gleichen Gewichts, der später in derselben Datei steht. */
+.table__row:focus-visible,
+.notification-list .notification-item:focus-visible {
   outline: var(--focus-outline);
   outline-offset: -2px;
 }
