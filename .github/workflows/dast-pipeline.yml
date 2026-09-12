@@ -72,12 +72,19 @@ jobs:
         # scannt. Production erzwingt beim Boot einen JWT-Secret >= 32 Zeichen und
         # einen gültigen Fernet-ENCRYPTION_KEY -> beide werden als Wegwerf-Werte
         # pro Lauf frisch generiert (keine echten Secrets).
+        # DATABASE_URL muss dabei explizit gesetzt werden: unter production ist ein
+        # fehlender Wert seit dem Degraded-State-Feature ein harter Startup-Abbruch
+        # (app/core/database.py), damit niemand unbemerkt auf einer leeren SQLite-DB
+        # landet. Für den Scan ist SQLite gewollt, also wird genau der Pfad im
+        # gemounteten /app/data-Volume angegeben - derselbe, auf den der frühere
+        # implizite Fallback gezeigt hat (DATA_DIR=./data bei WORKDIR /app).
         run: |
           ENCRYPTION_KEY=$(openssl rand -base64 32 | tr '+/' '-_')
           JWT_SECRET_KEY=$(openssl rand -hex 32)
           docker run -d --name fastflow-dast --network "$DAST_NETWORK" \
             -p ${APP_PORT}:8000 \
             -e ENVIRONMENT=production \
+            -e DATABASE_URL=sqlite:////app/data/fastflow.db \
             -e JWT_SECRET_KEY="$JWT_SECRET_KEY" \
             -e ENCRYPTION_KEY="$ENCRYPTION_KEY" \
             -e SKIP_OAUTH_VERIFICATION=true \

@@ -120,6 +120,16 @@ For production, set in the ConfigMap:
 ENVIRONMENT: "production"
 ```
 
+**`DATABASE_URL` becomes mandatory with this.** Under `production`, a missing value
+aborts startup instead of silently falling back to an empty SQLite database in the
+PVC. If you apply `postgres.yaml`, the value comes from `postgres-secret` (listed
+after the ConfigMap in the deployment's `envFrom`, so it wins). Without PostgreSQL,
+choose SQLite explicitly in the ConfigMap:
+
+```yaml
+DATABASE_URL: "sqlite:////app/data/fastflow.db"
+```
+
 ## Skaffold (dev workflow)
 
 With [Skaffold](https://skaffold.dev/), code changes automatically trigger build, deploy, and port-forward.

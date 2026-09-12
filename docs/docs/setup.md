@@ -220,7 +220,9 @@ The email must match the address your OAuth provider returns for your account.
 ENVIRONMENT=development
 ```
 
-For production: `ENVIRONMENT=production`.
+For production: `ENVIRONMENT=production`. Note that this makes
+[`DATABASE_URL`](#33-database_url) mandatory — under `production`, a missing value
+aborts startup instead of silently falling back to local SQLite.
 
 ---
 
@@ -250,6 +252,17 @@ PIPELINES_DIR=./pipelines
 
 # PostgreSQL
 DATABASE_URL=postgresql://user:password@host:5432/fastflow
+```
+
+**Under `ENVIRONMENT=production` the value is mandatory** — leaving it empty aborts
+startup with an error rather than falling back to SQLite. The silent fallback is the
+problem being prevented: with the value missing, the app would come up on a freshly
+created, empty database, report itself healthy, and process runs against the wrong
+data. If you want SQLite in production anyway, say so explicitly — the check is aimed
+at the silent fallback, not at a deliberate choice:
+
+```
+DATABASE_URL=sqlite:////app/data/fastflow.db
 ```
 
 ---
@@ -364,7 +377,7 @@ Then: Frontend usually at **http://localhost:3000**, backend at **http://localho
 - [ ] OAuth (GitHub/Google/Microsoft/Custom, at least one provider) with **production** callback URLs
 - [ ] `BASE_URL` and optionally `FRONTEND_URL` with **https** and the real domain
 - [ ] HTTPS (e.g. reverse proxy like Nginx) – [Deployment Guide](/docs/deployment/PRODUCTION)
-- [ ] `DATABASE_URL` set for PostgreSQL (recommended)
+- [ ] `DATABASE_URL` set — mandatory under `ENVIRONMENT=production`; PostgreSQL recommended, SQLite only if chosen explicitly
 - [ ] Backups planned for database and `.env`
 
 ---
