@@ -72,7 +72,8 @@ def _save_audit_to_file(last_at: datetime, results: List[Dict[str, Any]]) -> Non
 async def run_dependency_audit_async() -> List[Dict[str, Any]]:
     """
     Führt pip-audit für alle Pipelines mit requirements.txt aus.
-    Gibt Liste von {pipeline, packages, vulnerabilities?, audit_error?} zurück.
+    Gibt Liste von {pipeline, packages, vulnerabilities?, audit_error?,
+    unaudited_packages?} zurück.
     """
     pipelines = discover_pipelines()
     results: List[Dict[str, Any]] = []
@@ -80,14 +81,25 @@ async def run_dependency_audit_async() -> List[Dict[str, Any]]:
         if not p.has_requirements:
             continue
         req_path = p.path / "requirements.txt"
-        vulns, err = await run_pip_audit(req_path)
+        audit = await run_pip_audit(req_path)
         entry: Dict[str, Any] = {
             "pipeline": p.name,
             "packages": get_pipeline_packages(p.name),
-            "vulnerabilities": vulns,
+            "vulnerabilities": audit.vulnerabilities,
         }
-        if err:
-            entry["audit_error"] = err
+        if audit.error:
+            entry["audit_error"] = audit.error
+        if audit.unaudited:
+            # Ohne exakte Version geprüft = nicht geprüft. Sichtbar machen, damit
+            # "keine Funde" nicht mit "nichts angeschaut" verwechselt wird.
+            entry["unaudited_packages"] = audit.unaudited
+            logger.info(
+                "Dependency-Audit %s: %d Paket(e) ohne exakte Version übersprungen "
+                "(Lock-File erzeugt vollständige Abdeckung): %s",
+                p.name,
+                len(audit.unaudited),
+                ", ".join(audit.unaudited[:10]),
+            )
         results.append(entry)
     return results
 

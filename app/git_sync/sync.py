@@ -18,6 +18,7 @@ from concurrent.futures import ThreadPoolExecutor
 from sqlmodel import Session
 
 from app.core.config import config
+from app.core.python_version import UnsafePythonVersionError, ensure_safe_python_version
 from app.models import Pipeline
 from app.services.pipeline_discovery import discover_pipelines, invalidate_cache
 
@@ -25,6 +26,75 @@ from app.git_sync.sync_log import _write_sync_log
 from app.services.git_sync_repo_config import get_sync_repo_config
 
 logger = logging.getLogger(__name__)
+
+
+# --------------------------------------------------------------------------- #
+# Gehärtete uv-Aufrufe im Orchestrator
+#
+# Pre-Heating verarbeitet die requirements.txt aus dem Pipeline-Repository. Diese
+# Datei ist nicht vertrauenswürdig – wer ins Repo committen darf, bestimmt ihren
+# Inhalt. Sie wird aber im Orchestrator-Prozess verarbeitet, nicht im isolierten
+# Worker-Container. Ohne die folgenden Schranken wäre das eine Codeausführung:
+#
+#   * sdist-Build     -> setup.py / PEP-517-Backend des Pakets läuft als
+#                        Orchestrator-Prozess. Verhindert durch --no-build.
+#   * Projekt-Modus   -> `uv run` würde ein pyproject.toml im Pipeline-Verzeichnis
+#                        als Projekt bauen und installieren. Verhindert durch
+#                        --no-project.
+#   * uv-Konfiguration -> uv.toml / [tool.uv] im Pipeline-Verzeichnis (und in
+#                        dessen Eltern) kann z. B. index-url umbiegen.
+#                        Verhindert durch UV_NO_CONFIG=1 plus neutralem cwd.
+#
+# Das Entpacken eines Wheels führt im Gegensatz zum sdist-Build keinen Paket-Code
+# aus – deshalb ist "nur Wheels" die Grenze, an der das Pre-Heating sicher ist.
+# --------------------------------------------------------------------------- #
+
+#: Hinweis, der an uv-Fehlermeldungen angehängt wird, solange --no-build aktiv ist.
+_NO_BUILD_HINT = (
+    "Hinweis: Pre-Heating baut aus Sicherheitsgründen keine Source-Distributions "
+    "(sdists). Fehlt für ein Paket ein Wheel, wird diese Pipeline nicht vorgewärmt – "
+    "sie läuft weiterhin, der Build passiert dann im isolierten Worker-Container. "
+    "Siehe UV_ALLOW_SOURCE_BUILDS in .env.example."
+)
+
+
+def _uv_env() -> Dict[str, str]:
+    """
+    Environment für uv-Subprozesse des Orchestrators.
+
+    UV_NO_CONFIG=1 lässt uv jede uv.toml / [tool.uv]-Sektion ignorieren. Ohne das
+    würde uv beim Auflösen die Konfiguration im (vom Repository kontrollierten)
+    Arbeitsverzeichnis und dessen Eltern einlesen und z. B. einen fremden
+    index-url akzeptieren.
+    """
+    return {
+        **os.environ.copy(),
+        "UV_CACHE_DIR": str(config.UV_CACHE_DIR),
+        "UV_PYTHON_INSTALL_DIR": str(config.UV_PYTHON_INSTALL_DIR),
+        "UV_LINK_MODE": "copy",
+        "UV_NO_CONFIG": "1",
+    }
+
+
+def _uv_build_args() -> List[str]:
+    """
+    Argumente, die uv sdist-Builds im Orchestrator verbieten.
+
+    Leer, wenn UV_ALLOW_SOURCE_BUILDS ausdrücklich gesetzt ist – dann vertraut der
+    Betreiber dem Pipeline-Repository bewusst wie dem eigenen Code.
+    """
+    if config.UV_ALLOW_SOURCE_BUILDS:
+        return []
+    return ["--no-build"]
+
+
+def _uv_failure_message(prefix: str, result: subprocess.CompletedProcess) -> str:
+    """Baut eine Fehlermeldung aus uv-Output und ergänzt den --no-build-Hinweis."""
+    detail = (result.stderr or result.stdout or "").strip()
+    message = f"{prefix}: {detail}" if detail else prefix
+    if not config.UV_ALLOW_SOURCE_BUILDS:
+        message = f"{message}\n{_NO_BUILD_HINT}"
+    return message
 
 
 def _is_ssh_url(url: str) -> bool:
@@ -353,19 +423,28 @@ def _ensure_python_versions(versions: Set[str]) -> None:
     Bereits installierte Versionen werden per Dateisystem-Check übersprungen,
     damit der Hot-Path (ein Aufruf pro Run) keinen uv-Prozess startet und das
     uv-Lock nicht anfasst. Verbleibende Installs laufen serialisiert.
+
+    Unzulässige Versionsangaben werden verworfen, bevor sie die Kommandozeile
+    erreichen: `uv python install <pfad>` würde die angegebene Datei ausführen
+    (siehe app.core.python_version).
     """
     if not versions:
         return
 
-    pending = sorted(v for v in versions if not is_python_version_installed(v))
+    safe_versions: Set[str] = set()
+    for raw in versions:
+        try:
+            safe_versions.add(ensure_safe_python_version(raw))
+        except UnsafePythonVersionError as e:
+            logger.error("Python-Installation übersprungen: %s", e)
+    if not safe_versions:
+        return
+
+    pending = sorted(v for v in safe_versions if not is_python_version_installed(v))
     if not pending:
         return
 
-    env = {
-        **os.environ.copy(),
-        "UV_PYTHON_INSTALL_DIR": str(config.UV_PYTHON_INSTALL_DIR),
-        "UV_CACHE_DIR": str(config.UV_CACHE_DIR),
-    }
+    env = _uv_env()
     for v in pending:
         with _python_install_lock:
             # Erneut prüfen: ein paralleler Aufruf kann die Version inzwischen
@@ -413,73 +492,81 @@ async def _run_python_preheat(session: Session) -> Dict[str, Dict[str, Any]]:
 async def _pre_heat_pipeline(
     pipeline_name: str, requirements_path: Path, python_version: str, session: Session
 ) -> Tuple[bool, str]:
-    """Pre-Heating für eine Pipeline (Lock-File + Managed Environment)."""
+    """
+    Pre-Heating für eine Pipeline: Lock-File erzeugen und Wheels in den UV-Cache legen.
+
+    Beide uv-Aufrufe laufen im Orchestrator-Prozess und verarbeiten eine
+    requirements.txt aus dem Pipeline-Repository, also nicht vertrauenswürdige
+    Eingaben. Sie sind deshalb eingeschnürt: keine sdist-Builds, kein
+    Projekt-Modus, keine repo-eigene uv-Konfiguration, neutrales
+    Arbeitsverzeichnis und eine validierte Python-Version.
+    """
     try:
-        env = {
-            **os.environ.copy(),
-            "UV_CACHE_DIR": str(config.UV_CACHE_DIR),
-            "UV_PYTHON_INSTALL_DIR": str(config.UV_PYTHON_INSTALL_DIR),
-            "UV_LINK_MODE": "copy",
-        }
-        lock_file_path = requirements_path.parent / "requirements.txt.lock"
-        compile_cmd = [
-            "uv", "pip", "compile", "--python", python_version,
-            str(requirements_path), "-o", str(lock_file_path),
-        ]
-        compile_result = await asyncio.get_running_loop().run_in_executor(
-            _executor,
-            lambda: subprocess.run(
-                compile_cmd, cwd=requirements_path.parent,
-                capture_output=True, text=True, timeout=600, env=env,
-            ),
+        safe_python_version = ensure_safe_python_version(python_version)
+    except UnsafePythonVersionError as e:
+        error_msg = f"Pre-Heating für {pipeline_name} abgebrochen: {e}"
+        logger.error(error_msg)
+        return (False, error_msg)
+
+    env = _uv_env()
+    build_args = _uv_build_args()
+    lock_file_path = (requirements_path.parent / "requirements.txt.lock").resolve()
+    loop = asyncio.get_running_loop()
+
+    def _run_uv(cmd: List[str], cwd: Path) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            cmd, cwd=str(cwd), capture_output=True, text=True, timeout=600, env=env
         )
-        if compile_result.returncode != 0:
-            error_msg = f"Pre-Heating Lock-File-Erstellung fehlgeschlagen für {pipeline_name}: {compile_result.stderr or compile_result.stdout or ''}"
-            logger.warning(error_msg)
-            return (False, error_msg)
-        pipeline_dir = requirements_path.parent
-        app_path = Path("/app")
-        temp_app_created = False
-        try:
-            if not app_path.exists():
-                app_path.symlink_to(pipeline_dir)
-                temp_app_created = True
-                logger.debug("Temporärer symlink /app -> %s erstellt für Pre-Heating", pipeline_dir)
-            elif app_path.is_symlink():
-                if app_path.resolve() != pipeline_dir.resolve():
-                    lock_file_absolute = str(lock_file_path.resolve())
-                else:
-                    lock_file_absolute = "/app/requirements.txt.lock"
-            else:
-                lock_file_absolute = str(lock_file_path.resolve())
-            if not temp_app_created and (not app_path.exists() or (app_path.is_symlink() and app_path.resolve() == pipeline_dir.resolve())):
-                lock_file_absolute = "/app/requirements.txt.lock"
-            elif not temp_app_created:
-                lock_file_absolute = str(lock_file_path.resolve())
-            run_cmd = [
-                "uv", "run", "--python", python_version,
-                "--with-requirements", lock_file_absolute,
+
+    try:
+        # Neutrales Arbeitsverzeichnis: uv sucht uv.toml / pyproject.toml ab dem cwd
+        # aufwärts. Im Pipeline-Verzeichnis wäre das eine vom Repository kontrollierte
+        # Datei. Relative Verweise *innerhalb* der requirements.txt (z. B. "-r base.txt")
+        # löst uv relativ zur Requirements-Datei auf, nicht zum cwd — der Wechsel
+        # ändert daran also nichts.
+        with tempfile.TemporaryDirectory(prefix="fastflow_preheat_") as work_dir:
+            work_path = Path(work_dir)
+
+            compile_cmd = [
+                "uv", "pip", "compile",
+                "--python", safe_python_version,
+                *build_args,
+                str(requirements_path.resolve()),
+                "-o", str(lock_file_path),
+            ]
+            compile_result = await loop.run_in_executor(
+                _executor, lambda: _run_uv(compile_cmd, work_path)
+            )
+            if compile_result.returncode != 0:
+                error_msg = _uv_failure_message(
+                    f"Pre-Heating Lock-File-Erstellung fehlgeschlagen für {pipeline_name}",
+                    compile_result,
+                )
+                logger.warning(error_msg)
+                return (False, error_msg)
+
+            # --no-project: ohne das würde uv ein pyproject.toml im Arbeitsverzeichnis
+            # als Projekt behandeln, bauen und installieren. Das cwd ist hier zwar
+            # bereits neutral, aber diese Absicht gehört explizit in die Kommandozeile
+            # und nicht in eine Annahme über das Arbeitsverzeichnis.
+            install_cmd = [
+                "uv", "run", "--no-project", "--no-config",
+                "--python", safe_python_version,
+                *build_args,
+                "--with-requirements", str(lock_file_path),
                 "python", "-c", "pass",
             ]
-            cwd_for_run = app_path if app_path.exists() or temp_app_created else pipeline_dir
-            install_result = await asyncio.get_running_loop().run_in_executor(
-                _executor,
-                lambda: subprocess.run(
-                    run_cmd, cwd=str(cwd_for_run),
-                    capture_output=True, text=True, timeout=600, env=env,
-                ),
+            install_result = await loop.run_in_executor(
+                _executor, lambda: _run_uv(install_cmd, work_path)
             )
-        finally:
-            if temp_app_created and app_path.is_symlink():
-                try:
-                    app_path.unlink()
-                    logger.debug("Temporärer symlink /app entfernt")
-                except Exception as e:
-                    logger.warning("Fehler beim Entfernen des temporären symlinks /app: %s", e)
-        if install_result.returncode != 0:
-            error_msg = f"Pre-Heating Installation fehlgeschlagen für {pipeline_name}: {install_result.stderr or install_result.stdout or ''}"
-            logger.warning(error_msg)
-            return (False, error_msg)
+            if install_result.returncode != 0:
+                error_msg = _uv_failure_message(
+                    f"Pre-Heating Installation fehlgeschlagen für {pipeline_name}",
+                    install_result,
+                )
+                logger.warning(error_msg)
+                return (False, error_msg)
+
         pipeline = session.get(Pipeline, pipeline_name)
         if pipeline:
             pipeline.last_cache_warmup = datetime.now(timezone.utc)

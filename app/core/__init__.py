@@ -12,6 +12,8 @@ from app.core.database import (
     wal_checkpoint,
 )
 from app.core.dependencies import (
+    PipAuditResult,
+    collect_pinned_requirements,
     get_all_pipelines_dependencies,
     get_pipeline_packages,
     parse_lock_file,
@@ -20,6 +22,12 @@ from app.core.dependencies import (
 )
 from app.core.errors import get_500_detail
 from app.core.logging_config import setup_logging, JsonFormatter
+from app.core.python_version import (
+    UnsafePythonVersionError,
+    ensure_safe_python_version,
+    is_valid_python_version,
+    sanitize_python_version,
+)
 
 __all__ = [
     "config",
@@ -30,6 +38,8 @@ __all__ = [
     "init_db",
     "retry_on_sqlite_io",
     "wal_checkpoint",
+    "PipAuditResult",
+    "collect_pinned_requirements",
     "get_all_pipelines_dependencies",
     "get_pipeline_packages",
     "parse_lock_file",
@@ -38,4 +48,8 @@ __all__ = [
     "get_500_detail",
     "setup_logging",
     "JsonFormatter",
+    "UnsafePythonVersionError",
+    "ensure_safe_python_version",
+    "is_valid_python_version",
+    "sanitize_python_version",
 ]

@@ -559,6 +559,7 @@
     "packagesCount": "{{count}} Paket",
     "packagesCountPlural": "{{count}} Pakete",
     "vulnNone": "Keine",
+    "unauditedHint": "{{count}} Paket(e) ohne exakte Version wurden nicht geprüft: {{packages}}. Der Scan löst bewusst keine Abhängigkeiten auf — pinne mit == oder lass ein Lock-File erzeugen (UV_PRE_HEAT).",
     "foundVulns": "Gefundene Schwachstellen:",
     "installed": "Installiert",
     "latest": "Aktuell",

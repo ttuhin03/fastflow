@@ -59,6 +59,15 @@ Repository URL and authentication (PAT or deploy key) can be set **either** via 
 | `AUTO_SYNC_ENABLED` | `false` | Whether pipelines should be synchronized automatically. |
 | `AUTO_SYNC_INTERVAL` | *Empty* | Interval in seconds for automatic sync. |
 | `UV_PRE_HEAT` | `true` | Whether dependencies should be preinstalled ("preheated") automatically during sync. |
+| `UV_ALLOW_SOURCE_BUILDS` | `false` | Whether preheating may build source distributions (sdists) inside the orchestrator. **Keep this off.** See the warning below. |
+
+:::danger UV_ALLOW_SOURCE_BUILDS
+Preheating runs in the **orchestrator process**, not in the isolated worker container, and it processes the `requirements.txt` of your pipeline repository. Building an sdist executes that package's `setup.py` / PEP 517 build backend — so with `UV_ALLOW_SOURCE_BUILDS=true`, a single commit to the pipeline repository is enough to run arbitrary code with access to `ENCRYPTION_KEY`, `JWT_SECRET_KEY`, every stored secret and the Docker socket proxy.
+
+With the default (`false`), preheating only uses prebuilt wheels; unpacking a wheel never executes package code. Pipelines whose dependencies are only published as sdists still **run** — they are simply not preheated, so the build happens later inside the sandboxed worker container and the first start takes longer. Such a pipeline is reported as a preheat failure in the sync log with an explicit hint.
+
+Only enable this if commits to the pipeline repository are as trusted as commits to the orchestrator itself (protected branch, mandatory review).
+:::
 
 **Deploy Key (SSH):** For an SSH URL (e.g. `git@github.com:org/repo.git`), a private SSH key must be configured. Create the deploy key in the repository under *Settings → Deploy keys*; enter the **private** key here or in the Sync UI. **Semi-automatic:** In the Sync UI, a deploy key can be generated on the server for SSH—only add the displayed public key on GitHub (Deploy keys). Only one method (PAT or deploy key) is ever used—depending on the chosen URL. When switching methods (e.g. from HTTPS to SSH), clear the pipelines directory in the UI and run sync again.
 

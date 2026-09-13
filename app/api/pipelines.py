@@ -366,11 +366,13 @@ async def get_pipelines_dependencies(
         async def audit_one(p: Any, packages: List[Dict]) -> Dict[str, Any]:
             async with sem:
                 req_path = p.path / "requirements.txt"
-                vulns, err = await deps_module.run_pip_audit(req_path)
+                audit_result = await deps_module.run_pip_audit(req_path)
             entry: Dict[str, Any] = {"pipeline": p.name, "packages": packages}
-            entry["vulnerabilities"] = vulns
-            if err:
-                entry["audit_error"] = err
+            entry["vulnerabilities"] = audit_result.vulnerabilities
+            if audit_result.error:
+                entry["audit_error"] = audit_result.error
+            if audit_result.unaudited:
+                entry["unaudited_packages"] = audit_result.unaudited
             return entry
 
         tasks = [audit_one(p, pkgs) for p, pkgs in zip(pipelines, packages_list)]
@@ -437,10 +439,12 @@ async def get_pipeline_dependencies(
     result: Dict[str, Any] = {"pipeline": name, "packages": packages}
     if discovered.has_requirements and audit:
         req_path = discovered.path / "requirements.txt"
-        vulns, err = await deps_module.run_pip_audit(req_path)
-        result["vulnerabilities"] = vulns
-        if err:
-            result["audit_error"] = err
+        audit_result = await deps_module.run_pip_audit(req_path)
+        result["vulnerabilities"] = audit_result.vulnerabilities
+        if audit_result.error:
+            result["audit_error"] = audit_result.error
+        if audit_result.unaudited:
+            result["unaudited_packages"] = audit_result.unaudited
     return result
 
 

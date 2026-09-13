@@ -93,6 +93,19 @@ def _validate_security_config() -> None:
                     )
                 break
 
+    if config.UV_ALLOW_SOURCE_BUILDS and config.UV_PRE_HEAT:
+        # Kein Startup-Fehler in Produktion: es gibt legitime Single-Tenant-Setups,
+        # in denen das Pipeline-Repo dasselbe Vertrauensniveau hat wie der
+        # Orchestrator. Die Konsequenz muss aber in jedem Log stehen.
+        warnings.append(
+            "UV_ALLOW_SOURCE_BUILDS=true: Das Pre-Heating baut Source-Distributions "
+            "aus dem Pipeline-Repository im Orchestrator-Prozess. Ein sdist-Build "
+            "führt fremden Code ausserhalb der Container-Isolation aus — mit Zugriff "
+            "auf ENCRYPTION_KEY, JWT_SECRET_KEY, alle Secrets und den Docker-Socket-Proxy. "
+            "Nur vertretbar, wenn Commits ins Pipeline-Repo wie Commits in den "
+            "Orchestrator-Code behandelt werden (geschützter Branch, Review-Pflicht)."
+        )
+
     for warning in warnings:
         logger.warning("⚠️  Sicherheitswarnung: %s", warning)
     if errors:
