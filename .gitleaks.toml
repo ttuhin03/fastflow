@@ -1,8 +1,9 @@
 # gitleaks-Konfiguration.
 #
 # Wird von .github/workflows/security-scan.yml automatisch geladen (gitleaks
-# sucht .gitleaks.toml im Scan-Root). Allowlisting einzelner Fundstellen erfolgt
-# weiterhin über .gitleaksignore.
+# sucht .gitleaks.toml im Scan-Root). Einzelne Fundstellen, die dauerhaft in der
+# History liegen, werden weiterhin über .gitleaksignore per Fingerprint
+# allowlistet — diese Datei regelt, was gar nicht erst als Fund gilt.
 
 title = "Fast-Flow gitleaks config"
 
@@ -22,11 +23,42 @@ keywords = ["ffp_"]
 entropy = 3.5
 
 [rules.allowlist]
-# Beispiele in Doku und Tests sind keine echten Tokens. Die Pfade sind bewusst
-# eng gefasst, damit ein versehentlich committetes Produktiv-Token an keiner
-# anderen Stelle durchrutscht.
+# Gilt nur für die Regel oben. Die Tests setzen ihre Beispiel-Tokens aus
+# Teilstücken zusammen ("ffp_abcd1234_" + "x" * 43), sodass im Quelltext kein
+# vollständiges Muster steht — die Pfade hier sind reine Vorsorge für den Fall,
+# dass jemand ein Beispiel ausschreibt. Eng gefasst, damit ein versehentlich
+# committetes Produktiv-Token an keiner anderen Stelle durchrutscht.
 paths = [
   '''docs/docs/mcp-integration\.md''',
   '''tests/test_api_tokens\.py''',
+  '''mcp-server/tests/test_redaction\.py''',
   '''app/core/api_token_hash\.py''',
+]
+
+# ---------------------------------------------------------------------------
+# Testfixtures: zwei Dateien, deren Zweck erfundene Geheimnisse sind
+# ---------------------------------------------------------------------------
+#
+# mcp-server/tests/test_redaction.py prüft, ob der Redactor Zugangsdaten
+# erkennt, und test_hardening.py misst seine Laufzeit gegen bösartige Eingaben.
+# Beide müssen dafür Werte enthalten, die wie Zugangsdaten aussehen — ein JWT,
+# einen privaten Schlüssel, API-Key-Zuweisungen. Genau dafür schlagen die
+# eingebauten Regeln an.
+#
+# ACHTUNG, getestete Eigenheit: `targetRules` (Eingrenzung auf einzelne Regeln)
+# wird von gitleaks 8.28 in einer globalen Allowlist **stillschweigend
+# ignoriert** — schlimmer noch, seine bloße Anwesenheit setzt die ganze
+# Allowlist außer Kraft, ohne Fehlermeldung. Empirisch verifiziert mit der
+# CI-Version. Deshalb steht hier eine reine Pfad-Allowlist.
+#
+# Der Preis: diese beiden Dateien sind von *allen* Regeln ausgenommen, nicht nur
+# von den dreien, die hier stören. Sie sind bewusst einzeln aufgeführt statt per
+# Glob über tests/ — ein echtes Credential, das in einer anderen Testdatei
+# landet, fällt weiterhin auf. Beim Review dieser beiden Dateien ist Aufmerksamkeit
+# für echte Werte gefragt, weil der Scanner sie hier nicht leistet.
+[[allowlists]]
+description = "Erfundene Geheimnisse in den Redaction- und Hardening-Tests"
+paths = [
+  '''mcp-server/tests/test_redaction\.py''',
+  '''mcp-server/tests/test_hardening\.py''',
 ]
