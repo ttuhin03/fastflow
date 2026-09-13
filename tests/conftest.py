@@ -145,9 +145,18 @@ def test_user(test_session):
 def authenticated_client(client, test_session, test_user):
     """
     Test-Client mit Auth-Override für geschützte Endpoints.
-    get_current_user und require_write liefern den Test-User.
+    get_current_user, require_write und get_principal liefern den Test-User.
+
+    get_principal muss mit überschrieben werden, weil lesende Endpoints über
+    require_scope_user laufen: get_principal ruft get_current_user direkt als
+    Funktion auf (nicht über Depends, sonst würde FastAPI den Session-Pfad schon
+    vor der Präfix-Verzweigung auflösen und jeden Token-Request mit 401
+    abweisen). Ein Override auf get_current_user allein greift dort deshalb
+    nicht. Der erzeugte Principal entspricht dem, was eine echte Browser-Session
+    liefert: alle Scopes, die die Rolle zulässt.
     """
     from app.auth import get_current_user, require_write
+    from app.auth.principal import Principal, get_principal, scopes_for_role
 
     def override_get_current_user():
         return test_user
@@ -155,13 +164,22 @@ def authenticated_client(client, test_session, test_user):
     def override_require_write():
         return test_user
 
+    def override_get_principal():
+        return Principal(
+            user=test_user,
+            scopes=scopes_for_role(test_user.role),
+            auth_kind="session",
+        )
+
     app.dependency_overrides[get_current_user] = override_get_current_user
     app.dependency_overrides[require_write] = override_require_write
+    app.dependency_overrides[get_principal] = override_get_principal
 
     yield client
 
     app.dependency_overrides.pop(get_current_user, None)
     app.dependency_overrides.pop(require_write, None)
+    app.dependency_overrides.pop(get_principal, None)
 
 
 @pytest.fixture(scope="function")

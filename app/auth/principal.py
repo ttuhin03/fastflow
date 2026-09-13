@@ -171,8 +171,13 @@ def _invalid_token() -> HTTPException:
     )
 
 
-def _principal_from_api_token(db_session: Session, raw_token: str) -> Principal:
+def principal_from_api_token(db_session: Session, raw_token: str) -> Principal:
     """Löst ein API-Token zu einem Principal auf.
+
+    Öffentlich, weil Endpoints mit eigener Auth-Logik sie direkt brauchen –
+    ``require_log_access`` in app/api/logs.py muss neben dem API-Token auch
+    Session-JWTs und kurzlebige Download-Tokens akzeptieren und kann deshalb
+    nicht require_scope_user verwenden.
 
     Der Nachschlag erfolgt über den indizierten SHA-256-Digest; Ablauf und
     Widerruf werden in derselben Query gefiltert, damit keine ungültige Zeile
@@ -246,7 +251,7 @@ async def get_principal(
     raw = credentials.credentials
 
     if looks_like_api_token(raw):
-        return _principal_from_api_token(db_session, raw)
+        return principal_from_api_token(db_session, raw)
 
     user = await get_current_user(credentials=credentials, db_session=db_session)
     return Principal(
@@ -254,6 +259,23 @@ async def get_principal(
         scopes=scopes_for_role(user.role),
         auth_kind="session",
     )
+
+
+def require_scope_user(*needed: ApiTokenScope) -> Callable[..., User]:
+    """Wie :func:`require_scope`, liefert aber den ``User`` statt des Principals.
+
+    Damit lassen sich bestehende Endpoints umstellen, ohne ihren Rumpf
+    anzufassen: Typ und Variablenname (``current_user: User``) bleiben gleich,
+    nur die Dependency wechselt. Für Endpoints, die die Herkunft des Requests
+    im Audit vermerken müssen, ist :func:`require_scope` die richtige Wahl –
+    dort wird der Principal selbst gebraucht.
+    """
+    inner = require_scope(*needed)
+
+    async def _require(principal: Principal = Depends(inner)) -> User:
+        return principal.user
+
+    return _require
 
 
 def require_scope(*needed: ApiTokenScope) -> Callable[..., Principal]:

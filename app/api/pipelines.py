@@ -18,11 +18,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
 from sqlmodel import Session, select, func
 from sqlalchemy import delete
 
+from app.auth.principal import require_scope_user
 from app.core.database import get_session
-from app.models import DownstreamTrigger, Pipeline, PipelineDailyStat, PipelineRun, RunStatus, User
+from app.models import ApiTokenScope, DownstreamTrigger, Pipeline, PipelineDailyStat, PipelineRun, RunStatus, User
 from app.executor import run_pipeline
 from app.services.pipeline_discovery import discover_pipelines, get_pipeline as get_discovered_pipeline
-from app.auth import require_write, get_current_user
+from app.auth import require_write
 from app.services.audit import log_audit
 from app.middleware.rate_limiting import limiter
 from app.core.config import config
@@ -261,7 +262,7 @@ async def get_pipelines(
         description="Komma-getrennte Suchbegriffe; Pipelines mit Tag, das einen Begriff als Teilstring enthält (Groß/Klein egal), z.B. tags=prod,ml",
     ),
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_scope_user(ApiTokenScope.READ)),
 ) -> List[PipelineResponse]:
     """
     Gibt eine Liste aller verfügbaren Pipelines zurück (via Discovery, inkl. Statistiken).
@@ -343,7 +344,7 @@ async def get_pipelines(
 async def get_pipelines_dependencies(
     request: Request,
     audit: bool = Query(False, description="Run pip-audit for vulnerabilities (can be slow)"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_scope_user(ApiTokenScope.READ)),
 ) -> List[Dict[str, Any]]:
     """
     Returns dependencies (packages + versions) for all pipelines that have requirements.txt.
@@ -388,7 +389,7 @@ async def get_pipelines_dependencies(
 @router.get("/graph", response_model=PipelineGraphResponse)
 async def get_pipelines_graph(
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_scope_user(ApiTokenScope.READ)),
 ) -> PipelineGraphResponse:
     """
     Gibt den gerichteten Pipeline-Abhängigkeitsgraphen zurück.
@@ -423,7 +424,7 @@ async def get_pipelines_graph(
 async def get_pipeline_dependencies(
     name: str,
     audit: bool = Query(False, description="Run pip-audit for vulnerabilities"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_scope_user(ApiTokenScope.READ)),
 ) -> Dict[str, Any]:
     """
     Returns dependencies (packages + versions) for one pipeline.
@@ -519,7 +520,7 @@ async def get_pipeline_runs(
     name: str,
     limit: int = Query(100, ge=1, le=1000, description="Maximale Anzahl Runs (Standard: 100)"),
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_scope_user(ApiTokenScope.READ))
 ) -> List[Dict[str, Any]]:
     """
     Gibt die Historie eines Pipeline-Runs zurück.
@@ -575,7 +576,7 @@ async def get_pipeline_runs(
 async def get_pipeline_stats(
     name: str,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_scope_user(ApiTokenScope.READ))
 ) -> PipelineStatsResponse:
     """
     Gibt Pipeline-Statistiken abrufen (total_runs, successful_runs, failed_runs).
@@ -703,7 +704,7 @@ async def get_pipeline_daily_stats(
     start_date: Optional[str] = Query(None, description="Startdatum für Filterung (ISO-Format: YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="Enddatum für Filterung (ISO-Format: YYYY-MM-DD)"),
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_scope_user(ApiTokenScope.READ))
 ) -> DailyStatsResponse:
     """
     Gibt tägliche Pipeline-Statistiken zurück, gruppiert nach Datum.
@@ -741,7 +742,7 @@ async def get_pipeline_daily_stats(
 @router.get("/{name}/source", response_model=PipelineSourceFilesResponse)
 async def get_pipeline_source_files(
     name: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_scope_user(ApiTokenScope.SOURCE))
 ) -> PipelineSourceFilesResponse:
     """
     Gibt die Quelldateien einer Pipeline zurück (main.py, requirements.txt, pipeline.json).
@@ -804,7 +805,7 @@ async def get_pipeline_source_files(
 @router.get("/{name}/encrypted-env", response_model=Dict[str, List[str]])
 async def get_pipeline_encrypted_env_keys(
     name: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_scope_user(ApiTokenScope.READ)),
 ) -> Dict[str, List[str]]:
     """
     Gibt die Keys der in pipeline.json unter encrypted_env eingetragenen Variablen zurück (ohne Werte).
@@ -824,7 +825,7 @@ async def get_pipeline_encrypted_env_keys(
 async def get_downstream_triggers(
     name: str,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_scope_user(ApiTokenScope.READ)),
 ) -> List[DownstreamTriggerResponse]:
     """
     Gibt alle Downstream-Triggert für eine Pipeline zurück (JSON + DB gemergt).
@@ -1008,7 +1009,7 @@ async def get_all_pipelines_daily_stats(
     start_date: Optional[str] = Query(None, description="Startdatum für Filterung (ISO-Format: YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="Enddatum für Filterung (ISO-Format: YYYY-MM-DD)"),
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_scope_user(ApiTokenScope.READ))
 ) -> DailyStatsResponse:
     """
     Gibt tägliche Statistiken für alle Pipelines kombiniert zurück.
@@ -1034,7 +1035,7 @@ async def get_all_pipelines_daily_stats(
 @router.get("/summary-stats", response_model=Dict[str, Any])
 async def get_summary_stats(
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_scope_user(ApiTokenScope.READ)),
 ) -> Dict[str, Any]:
     """
     Aggregierte Run-Statistiken für die letzten 24 Stunden und 7 Tage.

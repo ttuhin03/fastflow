@@ -4,12 +4,14 @@ sidebar_position: 13
 
 # MCP Integration (Design Proposal)
 
-:::caution[Partly implemented – read the phase plan]
-**Phase 1 (API tokens) is implemented**: the `ApiToken` model, migration `041`,
-`get_principal` / `require_scope`, the `/api/tokens` endpoints and the Settings UI all exist.
-**Everything MCP-specific is still a proposal** – the `fastflow-mcp` package, the tool
-surface and the resources below describe planned work, not shipped API. See
-[Phased plan](#part-5-phased-plan) for what is done and what is not.
+:::caution[Phases 1 and 2 are implemented – phases 3 and 4 are not]
+**Implemented**: API tokens (`ApiToken`, migration `041`, `get_principal` / `require_scope`,
+the `/api/tokens` endpoints, the Settings UI) and the read-only MCP server under
+`mcp-server/` with its eight tools, three resources and two prompts. Read endpoints now
+accept API tokens and enforce scopes.
+
+**Not implemented**: the write tools (`trigger_pipeline`, `cancel_run`, `retry_run`) and
+the HTTP sidecar. See [Phased plan](#part-5-phased-plan).
 :::
 
 An MCP server would let an agent answer questions like *"why did the nightly ETL fail?"*
@@ -275,6 +277,23 @@ SDKs, not the architecture.
 }
 ```
 
+### What wiring the endpoints actually required
+
+Phase 1 deliberately changed no endpoint, so nothing accepted API tokens yet. Phase 2 swapped
+`Depends(get_current_user)` for `Depends(require_scope_user(...))` on the nineteen read
+endpoints in `app/api/pipelines.py`, `runs.py` and `logs.py`. Two details were not obvious
+from the design:
+
+- **`require_log_access` needed its own branch.** `GET /runs/{id}/logs` already accepted
+  either a session JWT or a short-lived download token, so it could not simply use
+  `require_scope_user`. It now recognises an API token by its prefix and checks the `logs`
+  scope itself.
+- **Run detail leaked cell output.** `GET /runs/{id}` returns `cell_logs` with full
+  stdout/stderr. Leaving that under `read` would have made the `logs` scope decorative — the
+  same payload was reachable one endpoint over. Cell output is now withheld unless the
+  principal holds `logs`, and the response says so via `cell_logs_withheld`. A browser
+  session holds every scope its role allows and is unaffected.
+
 ## Part 4: Security
 
 ### Prompt injection from pipeline output
@@ -323,7 +342,7 @@ The order is binding: each phase is usable on its own and sensible without the n
 | Phase | Scope | Estimate |
 |---|---|---|
 | **1. API tokens** ✅ *done* | Model, migration 041, `get_principal` / `require_scope`, the three `/api/tokens` endpoints, Settings UI, Gitleaks rule, tests. No MCP yet — the value stands alone for CI and scripts. | 2–3 days |
-| **2. MCP, read-only** | `fastflow-mcp` package over stdio, the eight read tools, three resources, two prompts, log redactor. Documentation page with client configuration. | 1–2 days |
+| **2. MCP, read-only** ✅ *done* | `fastflow-mcp` package over stdio, the eight read tools, three resources, two prompts, log redactor. Lives in `mcp-server/` with its own dependencies — the orchestrator image is untouched. | 1–2 days |
 | **3. MCP, write** | The three `run` tools behind their own scope, off by default. Injection note in the docs, audit attribution verified. | 0.5 days |
 | **4. Sidecar** | HTTP transport, Compose and K8s manifests. Only once someone actually needs hosted access — not on suspicion. | open |
 
@@ -334,7 +353,7 @@ the MCP server itself is small.
 
 | Question | Options | Leaning |
 |---|---|---|
-| Own repository or subdirectory? | A `mcp/` subdirectory keeps tool definitions and API changes in sync. A separate repository matches the `fastflow-pipeline-template` pattern and allows independent releases. | Subdirectory — for a client this thin, drift weighs more than separate release cycles. |
-| Log redaction: build or document? | The regex redactor costs a few hours and catches common token shapes, but creates false confidence if mistaken for complete. | Build it, and mark it explicitly incomplete in the docs. |
+| Own repository or subdirectory? | ~~A `mcp/` subdirectory keeps tool definitions and API changes in sync.~~ | **Decided**: subdirectory `mcp-server/`. Not `mcp/` — a directory of that name at the repository root shadows the `mcp` SDK as an implicit namespace package. |
+| Log redaction: build or document? | ~~The regex redactor costs a few hours.~~ | **Decided**: built, in `mcp-server/src/fastflow_mcp/redaction.py`, with a test that pins a known blind spot so nobody mistakes it for complete. |
 | Four scopes or just read/write? | Four map the risk classes cleanly but cost UI and explanation. Two would be faster but force a token for run statistics to also read logs. | Four — the effort sits almost entirely in the table and the dependency, not in their number. |
 | Who may create tokens? | Self-service for all active users is convenient and fits the existing role logic. Admin approval would be stricter, but `UserRole` already bounds a token's reach. | Self-service, with full visibility for admins in `GET /api/tokens`. |

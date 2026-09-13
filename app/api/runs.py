@@ -13,10 +13,11 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlmodel import Session, select, func
 
+from app.auth.principal import Principal, require_scope, require_scope_user
 from app.core.database import get_session
-from app.models import PipelineRun, RunStatus, User, RunCellLog
+from app.models import ApiTokenScope, PipelineRun, RunStatus, User, RunCellLog
 from app.executor import cancel_run, check_container_health, run_pipeline
-from app.auth import get_current_user, require_write
+from app.auth import require_write
 from app.schemas.runs import RunsResponse
 from app.services.audit import log_audit
 from app.middleware.rate_limiting import limiter
@@ -65,7 +66,7 @@ async def get_recent_runs_per_pipeline(
     request: Request,
     limit_per_pipeline: int = Query(5, ge=1, le=10, description="Anzahl Runs pro Pipeline"),
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_scope_user(ApiTokenScope.READ)),
 ) -> Dict[str, Any]:
     """
     Gibt die letzten N Runs pro Pipeline zurück (Batch-Endpoint).
@@ -128,7 +129,7 @@ async def get_runs(
     offset: int = Query(0, ge=0, description="Offset für Pagination"),
     sort_order: Literal["asc", "desc"] = Query("desc", description="Sortierung nach Startzeit: desc (neueste zuerst) oder asc (älteste zuerst)"),
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_scope_user(ApiTokenScope.READ))
 ) -> RunsResponse:
     """
     Gibt alle Runs anzeigen (mit Filterung und Pagination).
@@ -218,7 +219,7 @@ async def get_run_details(
     request: Request,
     run_id: UUID,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    principal: Principal = Depends(require_scope(ApiTokenScope.READ))
 ) -> Dict[str, Any]:
     """
     Gibt Details eines Runs zurück.
@@ -277,7 +278,12 @@ async def get_run_details(
         "error_type": error_type,  # "pipeline_error" oder "infrastructure_error"
         "error_message": error_message,
         "setup_duration": run.setup_duration,
-        "cell_logs": cell_logs_data,
+        # Zell-Ausgaben sind Nutzdaten, keine Metadaten: sie brauchen den
+        # logs-Scope. Ohne ihn bleibt der Rest der Antwort nutzbar – der
+        # Aufrufer sieht Status und Fehlertyp, nur nicht die Ausgaben selbst.
+        # Eine Browser-Session hat alle Scopes ihrer Rolle und ist nicht betroffen.
+        "cell_logs": cell_logs_data if principal.has_scope(ApiTokenScope.LOGS) else [],
+        "cell_logs_withheld": not principal.has_scope(ApiTokenScope.LOGS),
         "git_sha": run.git_sha,
         "git_branch": run.git_branch,
         "git_commit_message": run.git_commit_message,
@@ -288,7 +294,7 @@ async def get_run_details(
 async def get_run_cells(
     run_id: UUID,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_scope_user(ApiTokenScope.LOGS))
 ) -> List[Dict[str, Any]]:
     """
     Gibt die Zellen-Logs eines Runs zurück (Notebook-Pipelines).
@@ -439,7 +445,7 @@ async def retry_run(
 async def get_run_health(
     run_id: UUID,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_scope_user(ApiTokenScope.READ))
 ) -> Dict[str, Any]:
     """
     Gibt Container-Health-Status für einen Run zurück.

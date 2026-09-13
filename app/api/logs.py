@@ -20,12 +20,13 @@ from fastapi.responses import StreamingResponse, PlainTextResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlmodel import Session, select
 
+from app.auth.principal import principal_from_api_token, require_scope_user
+from app.core.api_token_hash import looks_like_api_token
 from app.core.database import get_session, retry_on_sqlite_io
-from app.models import PipelineRun, User
+from app.models import ApiTokenScope, PipelineRun, User
 from app.executor import get_log_queue
 from app.core.config import config
 from app.auth import (
-    get_current_user,
     create_log_download_token,
     verify_log_download_token,
     verify_token,
@@ -47,11 +48,26 @@ async def require_log_access(
     session: Session = Depends(get_session),
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(_security),
 ) -> None:
-    """Prüft Bearer-Auth ODER gültigen download_token."""
+    """Prüft Session-JWT, API-Token mit logs-Scope ODER gültigen download_token.
+
+    Der Endpoint kennt drei Aufrufer: das Frontend mit Session-JWT, ein
+    nicht-interaktiver Client (CI, MCP) mit API-Token, und der Browser beim
+    Direkt-Download über einen kurzlebigen Token in der Query. Deshalb hier eine
+    eigene Prüfung statt require_scope_user.
+    """
     download_token = request.query_params.get("download_token")
 
     if credentials is not None:
         token = credentials.credentials
+        # API-Token: am Präfix erkannt, bevor irgendetwas als JWT gelesen wird.
+        if looks_like_api_token(token):
+            principal = principal_from_api_token(session, token)
+            if ApiTokenScope.LOGS not in principal.scopes:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Fehlende Berechtigung: logs",
+                )
+            return
         if verify_token(token) and get_session_by_token(session, token):
             return
 
@@ -67,7 +83,7 @@ async def get_logs_download_url(
     request: Request,
     run_id: UUID,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_scope_user(ApiTokenScope.LOGS)),
 ) -> dict:
     """
     Liefert einen kurzlebigen Download-Token für die Log-Datei.
@@ -200,7 +216,7 @@ async def get_run_logs(
 async def stream_run_logs(
     run_id: UUID,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_scope_user(ApiTokenScope.LOGS))
 ) -> StreamingResponse:
     """
     Server-Sent Events für Live-Logs (für laufende Runs).
