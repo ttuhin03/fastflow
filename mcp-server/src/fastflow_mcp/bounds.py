@@ -16,6 +16,27 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final
 
+
+def split_lines(text: str) -> list[str]:
+    """Zerlegt Text an ``\n`` – und nur daran.
+
+    Nicht ``str.splitlines()``: das trennt zusätzlich bei ``\v``, ``\f``,
+    ``\u2028``, ``\x85`` und ``\r``. Zählt man damit, meldet der Server eine
+    Kürzung, wo keine war, und schneidet anschließend genau die Zeilen weg, in
+    denen der Traceback stand – gemessen an einem Beispiel: 5 Einheiten statt 1.
+
+    ``\r`` allein ist dabei entschärft, weil die API die Datei im
+    Text-Modus liest und Universal-Newlines ``\r`` schon dort zu ``\n``
+    machen. Die übrigen Trenner erreichen den Server unverändert – und sich auf
+    den Lesemodus der Gegenseite zu verlassen ist genau die Kopplung, die dieses
+    Modul vermeiden soll. Die API bildet ihren Tail ebenfalls über
+    ``split("\n")``; hier muss dieselbe Definition gelten.
+    """
+    lines = text.split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
+    return lines
+
 # Logs
 LOG_DEFAULT_TAIL: Final = 200
 LOG_MAX_TAIL: Final = 2_000
@@ -23,6 +44,7 @@ LOG_MAX_BYTES: Final = 64 * 1024
 
 # Zell-Ausgaben in der Run-Detailansicht
 CELL_MAX_LINES: Final = 40
+CELL_MAX_BYTES: Final = 8 * 1024
 
 # Listen
 RUNS_DEFAULT_LIMIT: Final = 20
@@ -82,7 +104,7 @@ def tail_lines(
     if not text:
         return Bounded("", False, 0, 0, 0)
 
-    lines = text.splitlines()
+    lines = split_lines(text)
     total = len(lines)
     kept = lines[-max_lines:] if total > max_lines else lines
     truncated = total > len(kept)
@@ -95,7 +117,7 @@ def tail_lines(
         clipped = encoded[-max_bytes:].decode("utf-8", errors="ignore")
         newline = clipped.find("\n")
         joined = clipped[newline + 1 :] if newline != -1 else clipped
-        kept = joined.splitlines()
+        kept = split_lines(joined)
         truncated = True
         encoded = joined.encode("utf-8")
 
@@ -108,23 +130,38 @@ def tail_lines(
     )
 
 
-def head_lines(text: str, max_lines: int) -> Bounded:
-    """Behält die ersten ``max_lines`` Zeilen.
+def head_lines(text: str, max_lines: int, max_bytes: int = CELL_MAX_BYTES) -> Bounded:
+    """Behält die ersten ``max_lines`` Zeilen, höchstens aber ``max_bytes``.
 
     Für Zell-Ausgaben: dort steht am Anfang, was die Zelle tun wollte.
+
+    Der Byte-Deckel ist kein Beiwerk. Vierzig *Zeilen* sind keine vierzig
+    begrenzten Dinge: ein einzelnes ``print(json.dumps(df.to_dict()))`` erzeugt
+    eine Zeile von mehreren Megabyte. Ohne Deckel landete die vollständig im
+    Kontext des Agenten – genau das, was dieses Modul verhindern soll – und
+    liefe zusätzlich durch sämtliche Redaktions-Regexes.
     """
     if not text:
         return Bounded("", False, 0, 0, 0)
-    lines = text.splitlines()
+    lines = split_lines(text)
     total = len(lines)
     kept = lines[:max_lines]
+    truncated = total > len(kept)
+
     joined = "\n".join(kept)
+    encoded = joined.encode("utf-8")
+    if len(encoded) > max_bytes:
+        joined = encoded[:max_bytes].decode("utf-8", errors="ignore")
+        kept = split_lines(joined)
+        truncated = True
+        encoded = joined.encode("utf-8")
+
     return Bounded(
         text=joined,
-        truncated=total > len(kept),
+        truncated=truncated,
         total_lines=total,
         returned_lines=len(kept),
-        returned_bytes=len(joined.encode("utf-8")),
+        returned_bytes=len(encoded),
     )
 
 
@@ -133,7 +170,7 @@ def clip_bytes(text: str, max_bytes: int) -> Bounded:
     if not text:
         return Bounded("", False, 0, 0, 0)
     encoded = text.encode("utf-8")
-    total_lines = len(text.splitlines())
+    total_lines = len(split_lines(text))
     if len(encoded) <= max_bytes:
         return Bounded(text, False, total_lines, total_lines, len(encoded))
     clipped = encoded[:max_bytes].decode("utf-8", errors="ignore")
@@ -141,6 +178,6 @@ def clip_bytes(text: str, max_bytes: int) -> Bounded:
         text=clipped,
         truncated=True,
         total_lines=total_lines,
-        returned_lines=len(clipped.splitlines()),
+        returned_lines=len(split_lines(clipped)),
         returned_bytes=len(clipped.encode("utf-8")),
     )

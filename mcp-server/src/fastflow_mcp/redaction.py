@@ -23,10 +23,15 @@ PLACEHOLDER: Final = "[redacted]"
 # zeilenweisen Mustern greifen, sonst bleibt der Rumpf des Schlüssels stehen.
 _PATTERNS: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
     (
+        # Der Rumpf ist als Zeichenklasse statt als `.*?` formuliert: ein lazy
+        # `.` unter DOTALL scannt bei jedem BEGIN ohne passendes END bis zum
+        # Eingabeende, und jedes weitere BEGIN ist eine neue Startposition.
+        # 64 KB aus lauter BEGIN-Markern ohne END brauchten so 624 ms. Die
+        # Klasse schließt `-` aus, sodass der Scan am nächsten Marker endet.
         "private-key-block",
         re.compile(
-            r"-----BEGIN[ A-Z]*PRIVATE KEY-----.*?-----END[ A-Z]*PRIVATE KEY-----",
-            re.DOTALL,
+            r"-----BEGIN[ A-Z]*PRIVATE KEY-----[^-]*(?:-(?!----)[^-]*)*"
+            r"-----END[ A-Z]*PRIVATE KEY-----",
         ),
     ),
     # Fast-Flow-eigene API-Tokens (app/core/api_token_hash.py).
@@ -40,11 +45,33 @@ _PATTERNS: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
     # Slack-Tokens.
     ("slack-token", re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b")),
     # JSON Web Tokens (inkl. der Session-JWTs von Fast-Flow selbst).
-    ("jwt", re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b")),
+    #
+    # Die Obergrenzen sind kein Schönheitsfehler: `-` steht in der Klasse, ist
+    # aber kein Wortzeichen, also matcht `\beyJ` in einer Folge wie `-eyJ-eyJ…`
+    # an jeder Stelle, und ein offenes `{8,}` frisst dabei jedes Mal den Rest
+    # der Eingabe. Gemessen: 64 KB in 1,14 s, 256 KB in 17,8 s. Mit einer
+    # Obergrenze bleibt die Arbeit je Startposition konstant.
+    (
+        "jwt",
+        re.compile(
+            r"\beyJ[A-Za-z0-9_-]{8,4096}\.eyJ[A-Za-z0-9_-]{8,4096}"
+            r"\.[A-Za-z0-9_-]{8,4096}\b"
+        ),
+    ),
     # Zugangsdaten in URLs: https://user:secret@host -> nur das Passwort ersetzen.
+    #
+    # Das Schema wird als feste Alternative statt als `[a-zA-Z][a-zA-Z0-9+.-]*`
+    # geschrieben. In der alten Form standen `.` und `-` in der Klasse, aber
+    # nicht in `\b`: jeder Buchstabe nach einem Punkt war eine Startposition,
+    # von der aus bis zum Eingabeende nach einem `://` gesucht wurde. Text wie
+    # `a.a.a.…` – Hostnamen, Modulpfade, Versionsnummern – kostete dadurch
+    # quadratisch: 0,55 s bei 32 KB, hochgerechnet 2,2 s beim 64-KB-Deckel.
     (
         "url-credentials",
-        re.compile(r"(?P<prefix>\b[a-zA-Z][a-zA-Z0-9+.-]*://[^\s:/@]+:)[^\s@/]+(?=@)"),
+        re.compile(
+            r"(?P<prefix>\b(?:https?|ftps?|ssh|git|postgres(?:ql)?|mysql|mongodb|redis|amqps?)"
+            r"://[^\s:/@]{1,256}:)[^\s@/]{1,256}(?=@)"
+        ),
     ),
     # Zuweisungen an verräterische Schlüssel, in Form von key=value, key: value
     # und "key": "value". Fängt u.a. AWS Secret Keys und DB-Passwörter.

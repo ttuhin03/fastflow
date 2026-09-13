@@ -20,7 +20,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp.types import ToolAnnotations
 
 from . import __version__, bounds
-from .client import FastFlowClient, FastFlowError
+from .client import FastFlowClient, FastFlowError, path_segment
 from .config import Config
 from .redaction import redact_if
 
@@ -51,6 +51,55 @@ def _writing(destructive: bool) -> ToolAnnotations:
 # Aufschlag beim Log-Abruf, um serverseitige Kürzung sicher zu erkennen.
 # Begründung an der Verwendungsstelle in get_run_logs.
 TAIL_PROBE_EXTRA = 2
+
+def find_catastrophic_construct(pattern: str) -> str | None:
+    """Sucht den klassischen Auslöser exponentieller Laufzeit.
+
+    ``re`` kennt keinen Timeout, und ``re.error`` erkennt nur syntaktisch
+    kaputte Muster – nicht solche, die ewig laufen. ``(a+)+b`` gegen 41 ``a``
+    kehrt nicht innerhalb von zehn Sekunden zurück; da der Server synchron in
+    seiner Coroutine arbeitet, hängt damit die gesamte Sitzung ohne Fehlermeldung.
+
+    Ein Abbruch per Thread wäre kein Ausweg: der Thread liefe weiter, verbrauchte
+    weiter CPU und verhinderte am Ende sogar das saubere Beenden des Prozesses.
+    Das Muster wird deshalb *vorher* abgelehnt statt nachher überlebt.
+
+    Erkannt wird ein Quantor auf einer Gruppe, deren Rumpf selbst einen Quantor
+    oder eine Alternative enthält – die Form hinter praktisch jedem realen
+    ReDoS. Bewusst konservativ: ``(Error|Warn)+`` wird mit abgelehnt, ist für
+    zeilenweises Filtern aber ohnehin gleichwertig zu ``Error|Warn``.
+
+    Returns:
+        Den beanstandeten Teilausdruck, oder None wenn nichts auffällt.
+    """
+    stack: list[int] = []
+    index = 0
+    length = len(pattern)
+    in_class = False
+
+    while index < length:
+        char = pattern[index]
+        if char == "\\":
+            index += 2
+            continue
+        if in_class:
+            if char == "]":
+                in_class = False
+            index += 1
+            continue
+        if char == "[":
+            in_class = True
+        elif char == "(":
+            stack.append(index)
+        elif char == ")" and stack:
+            start = stack.pop()
+            following = pattern[index + 1] if index + 1 < length else ""
+            if following in ("*", "+", "{"):
+                body = pattern[start + 1 : index]
+                if any(q in body for q in ("*", "+", "{", "|")):
+                    return pattern[start : index + 2]
+        index += 1
+    return None
 
 # Hinweistext, der jeder Rückgabe mit fremdem Inhalt (Logs, Quelltext) beiliegt.
 UNTRUSTED_NOTE = (
@@ -99,7 +148,7 @@ def _first_error_line(log_text: str) -> str | None:
     Bevorzugt die letzte Traceback-Zeile (dort steht Exception-Typ und
     Meldung); fällt sonst auf die letzte nicht-leere Zeile zurück.
     """
-    lines = [line.strip() for line in log_text.splitlines() if line.strip()]
+    lines = [line.strip() for line in bounds.split_lines(log_text) if line.strip()]
     if not lines:
         return None
     for line in reversed(lines):
@@ -172,10 +221,10 @@ def build_server(config: Config, client: FastFlowClient) -> MCPServer:
         # Beide Zusatzabfragen sind optional: fehlt die Berechtigung oder ist ein
         # Endpoint nicht verfügbar, bleibt die Hauptantwort trotzdem nützlich.
         for key, path, what in (
-            ("dependencies", f"/pipelines/{name}/dependencies", "die Abhängigkeiten"),
+            ("dependencies", f"/pipelines/{path_segment(name)}/dependencies", "die Abhängigkeiten"),
             (
                 "downstream_triggers",
-                f"/pipelines/{name}/downstream-triggers",
+                f"/pipelines/{path_segment(name)}/downstream-triggers",
                 "die Downstream-Trigger",
             ),
         ):
@@ -234,7 +283,7 @@ def build_server(config: Config, client: FastFlowClient) -> MCPServer:
         Args:
             run_id: UUID des Runs.
         """
-        raw = await client.get_json(f"/runs/{run_id}", what=f"den Run {run_id}")
+        raw = await client.get_json(f"/runs/{path_segment(run_id)}", what=f"den Run {run_id}")
         result = _run_summary(raw)
         result["parameters"] = raw.get("parameters")
         result["uv_version"] = raw.get("uv_version")
@@ -256,10 +305,21 @@ def build_server(config: Config, client: FastFlowClient) -> MCPServer:
                 }
             )
         result["cells"] = cells
+        # Die API antwortet mit 200 und leeren cell_logs, wenn der logs-Scope
+        # fehlt. Ohne diese Auswertung sähe "zurückgehalten" exakt aus wie
+        # "keine Ausgabe vorhanden", und das Modell diagnostizierte an den
+        # eigentlichen Daten vorbei. Die Fehlerübersetzung in client.py greift
+        # hier nicht, weil kein 403 zurückkommt.
+        if raw.get("cell_logs_withheld"):
+            result["cells_withheld"] = True
+            result["cells_note"] = (
+                "Zell-Ausgaben wurden zurückgehalten: dem Token fehlt der Scope "
+                "'logs'. Das heißt NICHT, dass der Run keine Ausgaben hat."
+            )
 
         try:
             result["health"] = await client.get_json(
-                f"/runs/{run_id}/health", what="den Container-Health"
+                f"/runs/{path_segment(run_id)}/health", what="den Container-Health"
             )
         except FastFlowError as exc:
             result["health"] = {"unavailable": str(exc)}
@@ -297,11 +357,12 @@ def build_server(config: Config, client: FastFlowClient) -> MCPServer:
         # dann real N-1 Zeilen. Ein Aufschlag von 1 würde exakt aufgezehrt und
         # die Kürzung bliebe unbemerkt.
         text = await client.get_text(
-            f"/runs/{run_id}/logs",
+            f"/runs/{path_segment(run_id)}/logs",
             what=f"das Log von Run {run_id}",
             params={"tail": effective_tail + TAIL_PROBE_EXTRA},
         )
-        fetched = text.splitlines()
+        # bounds.split_lines trennt nur an \n – begründet dort.
+        fetched = bounds.split_lines(text)
         server_truncated = len(fetched) > effective_tail
         if server_truncated:
             text = "\n".join(fetched[-effective_tail:])
@@ -315,11 +376,20 @@ def build_server(config: Config, client: FastFlowClient) -> MCPServer:
 
         filtered_note = ""
         if grep:
+            offending = find_catastrophic_construct(grep)
+            if offending is not None:
+                raise FastFlowError(
+                    f"Der Filter {grep!r} enthält mit {offending!r} einen Quantor auf "
+                    "einer Gruppe, die selbst einen Quantor oder eine Alternative "
+                    "enthält. Solche Muster laufen exponentiell und würden den Server "
+                    "blockieren. Bitte einen einfacheren Ausdruck verwenden, "
+                    "z.B. 'Error|Traceback'."
+                )
             try:
                 pattern = re.compile(grep)
             except re.error as exc:
                 raise FastFlowError(f"Ungültiger regulärer Ausdruck {grep!r}: {exc}") from exc
-            matching = [line for line in text.splitlines() if pattern.search(line)]
+            matching = [line for line in bounds.split_lines(text) if pattern.search(line)]
             filtered_note = f"[Filter {grep!r}: {len(matching)} passende Zeilen]"
             text = "\n".join(matching)
 
@@ -349,10 +419,10 @@ def build_server(config: Config, client: FastFlowClient) -> MCPServer:
         """
         window = bounds.clamp(days, 30, 90)
         stats = await client.get_json(
-            f"/pipelines/{name}/stats", what=f"die Statistik von {name!r}"
+            f"/pipelines/{path_segment(name)}/stats", what=f"die Statistik von {name!r}"
         )
         daily = await client.get_json(
-            f"/pipelines/{name}/daily-stats",
+            f"/pipelines/{path_segment(name)}/daily-stats",
             what=f"den Tagesverlauf von {name!r}",
             params={"start_date": _iso_days_ago(window)},
         )
@@ -369,7 +439,7 @@ def build_server(config: Config, client: FastFlowClient) -> MCPServer:
         """
         if pipeline:
             return await client.get_json(
-                f"/pipelines/{pipeline}/dependencies",
+                f"/pipelines/{path_segment(pipeline)}/dependencies",
                 what=f"die Abhängigkeiten von {pipeline!r}",
             )
         return {
@@ -432,7 +502,7 @@ def build_server(config: Config, client: FastFlowClient) -> MCPServer:
             if not error_line:
                 try:
                     log_text = await client.get_text(
-                        f"/runs/{example.get('id')}/logs",
+                        f"/runs/{path_segment(example.get('id'))}/logs",
                         what="ein Beispiel-Log",
                         params={"tail": 50},
                     )
@@ -487,7 +557,7 @@ def build_server(config: Config, client: FastFlowClient) -> MCPServer:
                 f"{', '.join(sorted(field_by_name))}"
             )
         payload = await client.get_json(
-            f"/pipelines/{name}/source", what=f"den Quelltext von {name!r}"
+            f"/pipelines/{path_segment(name)}/source", what=f"den Quelltext von {name!r}"
         )
         content = (payload or {}).get(field)
         if not content:
@@ -506,7 +576,7 @@ def build_server(config: Config, client: FastFlowClient) -> MCPServer:
     async def run_log(run_id: str) -> str:
         """Liefert das Log eines Runs mit demselben Byte-Deckel wie get_run_logs."""
         text = await client.get_text(
-            f"/runs/{run_id}/logs",
+            f"/runs/{path_segment(run_id)}/logs",
             what=f"das Log von Run {run_id}",
             params={"tail": bounds.LOG_MAX_TAIL},
         )
@@ -618,7 +688,7 @@ def _register_write_tools(server: MCPServer, client: FastFlowClient) -> None:
         if run_config_id:
             payload["run_config_id"] = run_config_id
         result = await client.post_json(
-            f"/pipelines/{name}/run",
+            f"/pipelines/{path_segment(name)}/run",
             what=f"den Start von {name!r}",
             payload=payload,
         )
@@ -642,7 +712,7 @@ def _register_write_tools(server: MCPServer, client: FastFlowClient) -> None:
             run_id: UUID des Runs.
         """
         result = await client.post_json(
-            f"/runs/{run_id}/cancel", what=f"den Abbruch von Run {run_id}"
+            f"/runs/{path_segment(run_id)}/cancel", what=f"den Abbruch von Run {run_id}"
         )
         return {"cancelled": True, "run_id": run_id, "message": result.get("message")}
 
@@ -657,7 +727,7 @@ def _register_write_tools(server: MCPServer, client: FastFlowClient) -> None:
             run_id: UUID des zu wiederholenden Runs.
         """
         result = await client.post_json(
-            f"/runs/{run_id}/retry", what=f"die Wiederholung von Run {run_id}"
+            f"/runs/{path_segment(run_id)}/retry", what=f"die Wiederholung von Run {run_id}"
         )
         return {
             "retried": True,

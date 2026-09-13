@@ -110,7 +110,7 @@ token carrying `run`, and revoking a role immediately devalues existing tokens.
 |---|---|---|---|
 | `read` | low | Pipelines, runs, stats, dependencies, graph. Metadata without payload. Default for every new token. | `READONLY` |
 | `logs` | medium | Log contents and cell stdout/stderr. Separate scope because real payload — and potentially credentials — flows through here. | `READONLY` |
-| `source` | medium | Pipeline source files and `pipeline.json`. Split from `read` because source code may follow its own disclosure rules. | `READONLY` |
+| `source` | medium | Pipeline source files, `pipeline.json` and the dependency report. Split from `read` because source code may follow its own disclosure rules. | `READONLY` |
 | `run` | high | Start, cancel, retry. Not preselected in the UI. | `WRITE` |
 
 There is deliberately **no `admin` scope**. Settings, user management, secrets and deploy keys
@@ -347,6 +347,36 @@ dangerous combined with write access in the same token.
 - Triggering is not a new capability class — the webhook keys in `app/api/webhooks.py` have
   been able to do it without a session for a long time. What is new is that it can happen
   autonomously in a loop.
+
+### Metadata is filtered for tokens
+
+A code review caught the scope model leaking around its own edges, and the fix is worth
+recording because the shape recurs.
+
+`GET /pipelines` returns each pipeline's `metadata` straight from `pipeline.json`, which
+carries `webhook_key`. That key is not data — it is a *credential*:
+`POST /webhooks/{pipeline}/{key}` deliberately has no auth dependency, so anyone holding the
+key starts runs with no token at all. A `read`-scope token, the deliberately minimal
+credential this design hands to an autonomous agent, could read the key and bypass the `run`
+scope, the `WRITE` role requirement and `FASTFLOW_ENABLE_WRITE_TOOLS` in one step.
+
+The same response also carried `encrypted_env`, `secrets` and `default_env` — the contents of
+the very file `/source` protects behind the `SOURCE` scope — and `/pipelines/dependencies`
+returned parsed `requirements.txt`, another of those three files.
+
+Both are now closed:
+
+- `webhook_key` (including `schedules[].webhook_key`) is stripped for **every** token
+  principal, whatever its scopes. There is no scope that should hand out an auth bypass, and
+  a token with `run` does not need it.
+- `encrypted_env`, `secrets` and `default_env` require `SOURCE`; the dependency endpoints
+  moved from `READ` to `SOURCE`.
+- A browser session keeps the full view — it holds every scope its role allows, and the UI
+  renders webhook URLs and env chips in `PipelineDetail`. Tests pin all three behaviours.
+
+The general lesson: a scope is only a boundary if every route to the same bytes respects it.
+Gating `/source` while `/pipelines` returned the same file parsed made the separation
+documentation rather than enforcement.
 
 ### Credentials in logs
 

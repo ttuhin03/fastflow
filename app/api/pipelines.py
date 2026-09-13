@@ -255,6 +255,47 @@ def _metadata_matches_tag_terms(
     return False
 
 
+# Felder aus pipeline.json, die nicht in jede Antwort gehören.
+#
+# webhook_key ist ein *Credential*: POST /webhooks/{pipeline}/{key} hat bewusst
+# keine Auth-Dependency, der Schlüssel allein startet also einen Run. Wer ihn
+# lesen kann, umgeht damit den run-Scope vollständig. Er wird deshalb für jedes
+# API-Token entfernt – auch für eines mit run-Scope, das ihn nicht braucht.
+#
+# encrypted_env, secrets und default_env stammen aus derselben Datei, die
+# /pipelines/{name}/source hinter dem source-Scope schützt. Ohne diesen Filter
+# wäre der source-Scope Dokumentation statt Grenze.
+_WEBHOOK_FIELDS = ("webhook_key",)
+_SOURCE_DERIVED_FIELDS = ("encrypted_env", "secrets", "default_env")
+
+
+def _filtered_metadata(metadata: Dict[str, Any], principal: Principal) -> Dict[str, Any]:
+    """Entfernt Felder, die der Principal nicht sehen darf.
+
+    Eine Browser-Session besitzt alle Scopes ihrer Rolle und behält die
+    vollständige Ansicht – die UI zeigt Webhook-URLs und Env-Chips in
+    PipelineDetail und wäre sonst still kaputt.
+    """
+    if principal.auth_kind != "token":
+        return metadata
+
+    cleaned = {k: v for k, v in metadata.items() if k not in _WEBHOOK_FIELDS}
+    if not principal.has_scope(ApiTokenScope.SOURCE):
+        cleaned = {k: v for k, v in cleaned.items() if k not in _SOURCE_DERIVED_FIELDS}
+
+    # schedules[] tragen eigene webhook_keys und eigene Env-Overrides.
+    schedules = cleaned.get("schedules")
+    if isinstance(schedules, list):
+        drop = set(_WEBHOOK_FIELDS)
+        if not principal.has_scope(ApiTokenScope.SOURCE):
+            drop |= set(_SOURCE_DERIVED_FIELDS)
+        cleaned["schedules"] = [
+            {k: v for k, v in entry.items() if k not in drop} if isinstance(entry, dict) else entry
+            for entry in schedules
+        ]
+    return cleaned
+
+
 @router.get("", response_model=List[PipelineResponse])
 async def get_pipelines(
     tags: Optional[str] = Query(
@@ -262,7 +303,7 @@ async def get_pipelines(
         description="Komma-getrennte Suchbegriffe; Pipelines mit Tag, das einen Begriff als Teilstring enthält (Groß/Klein egal), z.B. tags=prod,ml",
     ),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_scope_user(ApiTokenScope.READ)),
+    principal: Principal = Depends(require_scope(ApiTokenScope.READ)),
 ) -> List[PipelineResponse]:
     """
     Gibt eine Liste aller verfügbaren Pipelines zurück (via Discovery, inkl. Statistiken).
@@ -326,7 +367,7 @@ async def get_pipelines(
                 successful_runs=pipeline.successful_runs,
                 failed_runs=pipeline.failed_runs,
                 enabled=discovered.is_enabled(),
-                metadata=discovered.metadata.to_dict()
+                metadata=_filtered_metadata(discovered.metadata.to_dict(), principal)
             )
             pipelines_response.append(response)
 
@@ -344,7 +385,7 @@ async def get_pipelines(
 async def get_pipelines_dependencies(
     request: Request,
     audit: bool = Query(False, description="Run pip-audit for vulnerabilities (can be slow)"),
-    current_user: User = Depends(require_scope_user(ApiTokenScope.READ)),
+    current_user: User = Depends(require_scope_user(ApiTokenScope.SOURCE)),
 ) -> List[Dict[str, Any]]:
     """
     Returns dependencies (packages + versions) for all pipelines that have requirements.txt.
@@ -424,7 +465,7 @@ async def get_pipelines_graph(
 async def get_pipeline_dependencies(
     name: str,
     audit: bool = Query(False, description="Run pip-audit for vulnerabilities"),
-    current_user: User = Depends(require_scope_user(ApiTokenScope.READ)),
+    current_user: User = Depends(require_scope_user(ApiTokenScope.SOURCE)),
 ) -> Dict[str, Any]:
     """
     Returns dependencies (packages + versions) for one pipeline.

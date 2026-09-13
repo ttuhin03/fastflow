@@ -9,6 +9,7 @@ dass es aufhört und den Nutzer informiert.
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 from mcp.server.mcpserver.exceptions import ResourceError, ToolError
@@ -62,15 +63,33 @@ def _describe_http_error(response: httpx.Response, what: str) -> FastFlowError:
     if status == 429:
         # Der Pipeline-Start meldet mit 429 auch das Erreichen der
         # MAX_CONCURRENT_RUNS-Grenze – für den Aufrufer derselbe nächste Schritt.
+        #
+        # Der Grund steht bewusst in einer eigenen Variablen: ein Ausdruck, der
+        # sich über mehrere Zeilen in ein f-string-Feld erstreckt, ist erst ab
+        # Python 3.12 (PEP 701) gültig, und pyproject.toml erlaubt 3.11.
+        reason = detail or "Rate-Limit oder Nebenläufigkeitsgrenze."
         return FastFlowError(
-            f"Grenze erreicht (429) bei {what}. {detail or 'Rate-Limit oder '
-            'Nebenläufigkeitsgrenze.'} Bitte kurz warten und erst dann erneut versuchen."
+            f"Grenze erreicht (429) bei {what}. {reason} "
+            "Bitte kurz warten und erst dann erneut versuchen."
         )
     if status >= 500:
         return FastFlowError(
             f"Die Fast-Flow-Instanz meldet einen Serverfehler ({status}) bei {what}."
         )
     return FastFlowError(f"Unerwartete Antwort {status} bei {what}." + (f" {detail}" if detail else ""))
+
+
+def path_segment(value: str) -> str:
+    """Kodiert einen Wert für die Verwendung als *ein* Pfadsegment.
+
+    Run-IDs und Pipeline-Namen kommen vom Modell und damit mittelbar aus
+    Inhalten, die dieser Server selbst als unvertrauenswürdig kennzeichnet
+    (Logs, Quelltext). Ohne Kodierung löst httpx ein ``..`` gegen die base_url
+    auf und normalisiert dabei das ``/api``-Präfix weg – der Request landete mit
+    angehängtem Authorization-Header auf einem Endpoint, der bewusst nicht als
+    Tool angeboten wird. ``safe=""`` kodiert auch Schrägstriche.
+    """
+    return quote(str(value), safe="")
 
 
 class FastFlowClient:

@@ -57,23 +57,39 @@ async def require_log_access(
     """
     download_token = request.query_params.get("download_token")
 
+    # Jeder Mechanismus wird versucht; ein fehlgeschlagener bricht nicht ab,
+    # sondern lässt den nächsten zum Zug kommen. Sonst verlöre ein Client, der
+    # pauschal einen Authorization-Header setzt (die dokumentierte MCP/CI-
+    # Konfiguration), den Direkt-Download in dem Moment, in dem sein Token
+    # abläuft – während derselbe Aufruf mit einem *unbrauchbaren* Header
+    # weiterhin funktionierte.
+    token_scope_denied = False
     if credentials is not None:
         token = credentials.credentials
         # API-Token: am Präfix erkannt, bevor irgendetwas als JWT gelesen wird.
         if looks_like_api_token(token):
-            principal = principal_from_api_token(session, token)
-            if ApiTokenScope.LOGS not in principal.scopes:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Fehlende Berechtigung: logs",
-                )
-            return
-        if verify_token(token) and get_session_by_token(session, token):
+            try:
+                principal = principal_from_api_token(session, token)
+            except HTTPException:
+                principal = None
+            if principal is not None:
+                if ApiTokenScope.LOGS in principal.scopes:
+                    return
+                token_scope_denied = True
+        elif verify_token(token) and get_session_by_token(session, token):
             return
 
     if download_token and verify_log_download_token(session, download_token, run_id):
         return
 
+    # Ein gültiges Token ohne logs-Scope ist ein Berechtigungs- und kein
+    # Authentifizierungsproblem – 403 sagt dem Aufrufer, dass ein erneuter
+    # Versuch mit demselben Token zwecklos ist.
+    if token_scope_denied:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Fehlende Berechtigung: logs",
+        )
     raise HTTPException(status_code=401, detail="Authentifizierung erforderlich")
 
 

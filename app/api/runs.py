@@ -249,8 +249,15 @@ async def get_run_details(
         error_message = run.env_vars.get("_fastflow_error_message")
     
     # Zellen-Logs (Notebook-Pipelines) laden
-    cell_logs_stmt = select(RunCellLog).where(RunCellLog.run_id == run_id).order_by(RunCellLog.cell_index)
-    cell_logs = list(session.exec(cell_logs_stmt).all())
+    # Erst die Berechtigung, dann die Abfrage: ohne logs-Scope werden die Zeilen
+    # ohnehin verworfen, und eine Notebook-Pipeline kann hunderte Megabyte
+    # stdout tragen. Ein read-Token wäre sonst ein unbegrenzter Verstärker für
+    # Speicher und IO, obwohl es die Daten nie zu sehen bekommt.
+    may_see_cell_logs = principal.has_scope(ApiTokenScope.LOGS)
+    cell_logs = []
+    if may_see_cell_logs:
+        cell_logs_stmt = select(RunCellLog).where(RunCellLog.run_id == run_id).order_by(RunCellLog.cell_index)
+        cell_logs = list(session.exec(cell_logs_stmt).all())
     cell_logs_data = [
         {
             "cell_index": c.cell_index,
@@ -281,8 +288,8 @@ async def get_run_details(
         # logs-Scope. Ohne ihn bleibt der Rest der Antwort nutzbar – der
         # Aufrufer sieht Status und Fehlertyp, nur nicht die Ausgaben selbst.
         # Eine Browser-Session hat alle Scopes ihrer Rolle und ist nicht betroffen.
-        "cell_logs": cell_logs_data if principal.has_scope(ApiTokenScope.LOGS) else [],
-        "cell_logs_withheld": not principal.has_scope(ApiTokenScope.LOGS),
+        "cell_logs": cell_logs_data,
+        "cell_logs_withheld": not may_see_cell_logs,
         "git_sha": run.git_sha,
         "git_branch": run.git_branch,
         "git_commit_message": run.git_commit_message,

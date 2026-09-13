@@ -118,14 +118,21 @@ class CreateApiTokenResponse(BaseModel):
     expires_at: str
 
 
-def _iso(value: Optional[datetime]) -> Optional[str]:
-    """ISO-8601-Darstellung eines optionalen Zeitstempels."""
-    return value.isoformat() if value else None
-
-
 def _as_utc(value: datetime) -> datetime:
     """Normalisiert einen DB-Zeitstempel auf UTC (SQLite liefert naiv zurück)."""
     return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+
+
+def _iso(value: Optional[datetime]) -> Optional[str]:
+    """ISO-8601-Darstellung mit Zeitzonen-Offset.
+
+    Der Offset ist nicht kosmetisch: nach ECMA-262 interpretiert ``new Date()``
+    eine Datums-Zeit-Angabe *ohne* Offset als **lokale** Zeit. Ohne ihn zeigte
+    die UI jeden Zeitstempel um den Zonenversatz verschoben an – in Berlin zwei
+    Stunden, in Auckland dreizehn – und ein Token in seiner letzten Stunde
+    erschiene als bereits abgelaufen, während die API expired=false meldet.
+    """
+    return _as_utc(value).isoformat() if value else None
 
 
 def _to_item(token: ApiToken, now: datetime, owner_username: Optional[str] = None) -> ApiTokenItem:
@@ -171,24 +178,32 @@ async def create_api_token(
         )
 
     now = datetime.now(timezone.utc)
-    active_count = retry_on_sqlite_io(
-        lambda: session.exec(
-            select(ApiToken).where(
-                ApiToken.user_id == current_user.id,
-                ApiToken.revoked_at.is_(None),
-                ApiToken.expires_at > now,
+
+    def _count_active() -> int:
+        return len(
+            retry_on_sqlite_io(
+                lambda: session.exec(
+                    select(ApiToken).where(
+                        ApiToken.user_id == current_user.id,
+                        ApiToken.revoked_at.is_(None),
+                        ApiToken.expires_at > now,
+                    )
+                ).all(),
+                session=session,
             )
-        ).all(),
-        session=session,
-    )
-    if len(active_count) >= MAX_ACTIVE_TOKENS_PER_USER:
-        raise HTTPException(
+        )
+
+    def _too_many() -> HTTPException:
+        return HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
                 f"Maximal {MAX_ACTIVE_TOKENS_PER_USER} aktive Tokens je Nutzer. "
                 "Bitte zuerst ein bestehendes Token widerrufen."
             ),
         )
+
+    if _count_active() >= MAX_ACTIVE_TOKENS_PER_USER:
+        raise _too_many()
 
     generated = generate_api_token()
     token_row = ApiToken(
@@ -205,6 +220,16 @@ async def create_api_token(
         session.add(token_row)
         session.commit()
         session.refresh(token_row)
+        # Erneut zählen, nachdem die Zeile steht: zwischen Prüfung und Insert
+        # können parallele Requests dieselbe Zahl gelesen haben. Ein reines
+        # check-then-act ließe beide durch und das Limit hielte genau dann
+        # nicht, wenn es zählt – bei einem kompromittierten Konto.
+        if _count_active() > MAX_ACTIVE_TOKENS_PER_USER:
+            session.delete(token_row)
+            session.commit()
+            raise _too_many()
+    except HTTPException:
+        raise
     except Exception as exc:
         session.rollback()
         logger.exception("API-Token konnte nicht angelegt werden")

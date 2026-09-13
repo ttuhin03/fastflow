@@ -5,6 +5,7 @@ um die Wirkung: welcher Scope öffnet welchen Endpoint, und was passiert mit
 Nutzdaten, wenn der passende Scope fehlt.
 """
 
+import json
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
@@ -47,7 +48,9 @@ def _user(test_session, role: UserRole = UserRole.WRITE) -> User:
     return user
 
 
-def _token(test_session, user: User, *scopes: ApiTokenScope) -> str:
+def _token(
+    test_session, user: User, *scopes: ApiTokenScope, expires_in_days: int = 1
+) -> str:
     generated = generate_api_token()
     now = datetime.now(timezone.utc)
     test_session.add(
@@ -57,7 +60,7 @@ def _token(test_session, user: User, *scopes: ApiTokenScope) -> str:
             label="scope test",
             user_id=user.id,
             scopes=[s.value for s in scopes],
-            expires_at=now + timedelta(days=1),
+            expires_at=now + timedelta(days=expires_in_days),
             created_at=now,
         )
     )
@@ -89,6 +92,15 @@ def _run(test_session, *, with_cells: bool = False) -> PipelineRun:
         test_session.commit()
     test_session.refresh(run)
     return run
+
+
+def _as_session_user(user: User):
+    """Überschreibt die Session-Authentifizierung für die /api/tokens-Endpoints."""
+    from app.main import app
+    from app.auth import get_current_user
+
+    app.dependency_overrides[get_current_user] = lambda: user
+    return lambda: app.dependency_overrides.pop(get_current_user, None)
 
 
 def _auth(token: str) -> dict:
@@ -346,3 +358,147 @@ def test_browser_session_is_attributed_as_session(
     ).first()
     assert entry.details["auth_kind"] == "session"
     assert "token_id" not in entry.details
+
+
+# --------------------------------------------------------------------------- #
+# Metadaten-Filter: der webhook_key ist ein Credential
+# --------------------------------------------------------------------------- #
+
+
+def _pipeline_with_metadata(temp_pipelines_dir) -> None:
+    """Legt eine Pipeline mit Webhook-Key und Env-Overrides an.
+
+    Nutzt die temp_pipelines_dir-Fixture und force_refresh wie die übrigen
+    Pipeline-Tests – die Discovery cached sonst über Testgrenzen hinweg.
+    """
+    from app.services.pipeline_discovery import discover_pipelines
+
+    pdir = temp_pipelines_dir / "leaky"
+    pdir.mkdir()
+    (pdir / "main.py").write_text("print('hi')\n")
+    (pdir / "pipeline.json").write_text(json.dumps({
+        "name": "leaky",
+        "webhook_key": "SUPER-SECRET-WEBHOOK-KEY",
+        "default_env": {"PLAIN": "wert"},
+        "encrypted_env": {"DB_PASS": "gAAAAAB..."},
+        "secrets": ["API_TOKEN"],
+        "schedules": [{"id": "s1", "cron": "0 3 * * *", "webhook_key": "ZWEITER-KEY"}],
+    }))
+    discover_pipelines(force_refresh=True)
+
+
+def test_webhook_key_is_never_handed_to_a_token(client, test_session, temp_pipelines_dir):
+    """Der webhook_key umgeht die Authentifizierung vollständig.
+
+    POST /webhooks/{pipeline}/{key} hat keine Auth-Dependency – wer den Key
+    lesen kann, startet Runs ohne jeden Scope. Ein read-Token darf ihn deshalb
+    unter keinen Umständen sehen.
+    """
+    _pipeline_with_metadata(temp_pipelines_dir)
+    user = _user(test_session, UserRole.WRITE)
+    token = _token(test_session, user, ApiTokenScope.READ, ApiTokenScope.SOURCE,
+                   ApiTokenScope.RUN)
+
+    body = client.get("/api/pipelines", headers=_auth(token)).json()
+
+    raw = json.dumps(body)
+    assert "SUPER-SECRET-WEBHOOK-KEY" not in raw
+    assert "ZWEITER-KEY" not in raw, "schedules[] tragen eigene Keys"
+
+
+def test_source_derived_metadata_needs_the_source_scope(client, test_session, temp_pipelines_dir):
+    """encrypted_env, secrets und default_env stammen aus pipeline.json.
+
+    Ohne diesen Filter käme der Inhalt der Datei, die /source hinter dem
+    source-Scope schützt, einfach über /pipelines heraus.
+    """
+    _pipeline_with_metadata(temp_pipelines_dir)
+    user = _user(test_session, UserRole.WRITE)
+
+    read_only = _token(test_session, user, ApiTokenScope.READ)
+    without = json.dumps(client.get("/api/pipelines", headers=_auth(read_only)).json())
+    assert "DB_PASS" not in without
+    assert "API_TOKEN" not in without
+    assert "PLAIN" not in without
+
+    with_source = _token(test_session, user, ApiTokenScope.READ, ApiTokenScope.SOURCE)
+    got = json.dumps(client.get("/api/pipelines", headers=_auth(with_source)).json())
+    assert "DB_PASS" in got and "PLAIN" in got
+
+
+def test_browser_session_keeps_the_full_metadata(authenticated_client, temp_pipelines_dir):
+    """Die UI zeigt Webhook-URLs und Env-Chips – sie darf nicht still verarmen."""
+    _pipeline_with_metadata(temp_pipelines_dir)
+
+    raw = json.dumps(authenticated_client.get("/api/pipelines").json())
+
+    assert "SUPER-SECRET-WEBHOOK-KEY" in raw
+    assert "DB_PASS" in raw
+
+
+def test_dependencies_expose_requirements_and_need_source(client, test_session):
+    """/dependencies liefert den Inhalt von requirements.txt – also source."""
+    user = _user(test_session, UserRole.WRITE)
+    token = _token(test_session, user, ApiTokenScope.READ)
+
+    response = client.get("/api/pipelines/etl/dependencies", headers=_auth(token))
+
+    assert response.status_code == 403
+    assert "source" in response.json()["detail"]
+
+
+# --------------------------------------------------------------------------- #
+# Zeitstempel und Download-Fallback
+# --------------------------------------------------------------------------- #
+
+
+def test_token_timestamps_carry_a_utc_offset(client, test_session):
+    """Ohne Offset liest new Date() den Wert als Lokalzeit (ECMA-262)."""
+    user = _user(test_session, UserRole.WRITE)
+    clear = _as_session_user(user)
+    try:
+        created = client.post(
+            "/api/tokens", json={"label": "zeit", "scopes": ["read"]}
+        ).json()
+        listed = client.get("/api/tokens").json()["tokens"][0]
+    finally:
+        clear()
+
+    for value in (created["expires_at"], listed["expires_at"], listed["created_at"]):
+        assert value.endswith("+00:00"), f"kein UTC-Offset: {value}"
+
+
+def test_download_token_still_works_alongside_a_useless_bearer(
+    client, test_session, tmp_path, monkeypatch
+):
+    """Ein abgelaufenes Token im Header darf den Direkt-Download nicht sperren.
+
+    Vorher brach der Token-Zweig die Kette ab: derselbe Aufruf gelang mit einem
+    *unbrauchbaren* Header und scheiterte mit einem abgelaufenen – ein Client
+    mit pauschalem Authorization-Header verlor den Download beim Ablauf.
+    """
+    from app.auth.auth import create_log_download_token
+    from app.core.config import config
+
+    logdir = tmp_path / "logs"
+    logdir.mkdir()
+    monkeypatch.setattr(config, "LOGS_DIR", logdir)
+
+    user = _user(test_session, UserRole.WRITE)
+    expired = _token(test_session, user, ApiTokenScope.LOGS, expires_in_days=-1)
+
+    run = PipelineRun(
+        id=uuid4(), pipeline_name="etl", status=RunStatus.SUCCESS,
+        log_file=str(logdir / "run.log"), started_at=datetime.now(timezone.utc),
+    )
+    (logdir / "run.log").write_text("Zeile eins\nZeile zwei\n")
+    test_session.add(run)
+    test_session.commit()
+
+    dl = create_log_download_token(test_session, run.id)
+    url = f"/api/runs/{run.id}/logs?download_token={dl}"
+
+    assert client.get(url).status_code == 200
+    assert client.get(url, headers=_auth("Bearer-Muell")).status_code == 200
+    # Der entscheidende Fall: gültiger Download-Token, abgelaufenes API-Token.
+    assert client.get(url, headers=_auth(expired)).status_code == 200
