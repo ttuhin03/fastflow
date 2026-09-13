@@ -26,6 +26,37 @@ interface ResourceComparisonChartProps {
   maxRuns?: number
 }
 
+// Auf Modulebene, nicht im Rumpf der Chart-Komponente: dort neu erzeugt,
+// behandelt React das Tooltip bei jedem Render als anderen Komponententyp und
+// verwirft dessen Zustand.
+function ResourceTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: Record<string, unknown>; dataKey: string }> }) {
+  const { t } = useTranslation()
+  if (active && payload && payload.length) {
+    const data = payload[0].payload as { timePoint: number }
+    return (
+      <div className="resource-comparison-tooltip">
+        <p className="tooltip-header">{t('charts.resourceComparison.tooltipRuntime', { pct: data.timePoint })}</p>
+        {payload.map((entry, index: number) => {
+          const key = entry.dataKey as string
+          const isCpu = key.startsWith('cpu_')
+          const value = entry.payload[key] as number
+          const label = (entry.payload[`${key}_label`] as string) || key
+
+          return (
+            <p key={index} className="tooltip-stat">
+              <span className="tooltip-label">{label}:</span>
+              <span className="tooltip-value">
+                {isCpu ? `${value.toFixed(1)}%` : `${value.toFixed(0)} MB`}
+              </span>
+            </p>
+          )
+        })}
+      </div>
+    )
+  }
+  return null
+}
+
 export default function ResourceComparisonChart({ runs, maxRuns = 5 }: ResourceComparisonChartProps) {
   const { t } = useTranslation()
 
@@ -72,32 +103,6 @@ export default function ResourceComparisonChart({ runs, maxRuns = 5 }: ResourceC
 
   const recentSliceCount = chartData.length > 0 ? runs.slice(-maxRuns).length : 0
 
-  const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload: Record<string, unknown>; dataKey: string }> }) => {
-    if (active && payload && payload.length) {
-      const data = payload[0].payload as { timePoint: number }
-      return (
-        <div className="resource-comparison-tooltip">
-          <p className="tooltip-header">{t('charts.resourceComparison.tooltipRuntime', { pct: data.timePoint })}</p>
-          {payload.map((entry, index: number) => {
-            const key = entry.dataKey as string
-            const isCpu = key.startsWith('cpu_')
-            const value = entry.payload[key] as number
-            const label = (entry.payload[`${key}_label`] as string) || key
-
-            return (
-              <p key={index} className="tooltip-stat">
-                <span className="tooltip-label">{label}:</span>
-                <span className="tooltip-value">
-                  {isCpu ? `${value.toFixed(1)}%` : `${value.toFixed(0)} MB`}
-                </span>
-              </p>
-            )
-          })}
-        </div>
-      )
-    }
-    return null
-  }
 
   if (chartData.length === 0) {
     return (
@@ -128,7 +133,7 @@ export default function ResourceComparisonChart({ runs, maxRuns = 5 }: ResourceC
                 {...axisProps}
                 label={{ value: t('charts.resourceComparison.yAxisCpu'), angle: -90, position: 'insideLeft', style: { fill: chart.axis } }}
               />
-              <Tooltip content={<CustomTooltip />} />
+              <Tooltip content={<ResourceTooltip />} />
               <Legend />
               {runs.slice(-maxRuns).map((_, index) => {
                 const color = colors[index % colors.length]
@@ -164,7 +169,7 @@ export default function ResourceComparisonChart({ runs, maxRuns = 5 }: ResourceC
                 {...axisProps}
                 label={{ value: t('charts.resourceComparison.yAxisRam'), angle: -90, position: 'insideLeft', style: { fill: chart.axis } }}
               />
-              <Tooltip content={<CustomTooltip />} />
+              <Tooltip content={<ResourceTooltip />} />
               <Legend />
               {runs.slice(-maxRuns).map((_, index) => {
                 const color = colors[index % colors.length]

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import { showError, showSuccess } from '../utils/toast'
+import { getErrorDetail } from '../utils/apiError'
 import './SetupWizard.css'
 
 export default function SetupWizard() {
@@ -21,8 +22,8 @@ export default function SetupWizard() {
       await apiClient.put('/settings/system', { is_setup_completed: true })
       showSuccess(t('setupWizard.success'))
       await refetchUserInfo()
-    } catch (err: any) {
-      showError(err?.response?.data?.detail || err?.message || t('setupWizard.saveFailed'))
+    } catch (err) {
+      showError(getErrorDetail(err) || t('setupWizard.saveFailed'))
     } finally {
       setSubmitting(false)
     }

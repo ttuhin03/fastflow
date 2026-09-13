@@ -2,6 +2,7 @@ import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios'
 import { showError } from '../utils/toast'
 import { getApiBaseUrl } from '../config'
 import i18n from '../i18n'
+import { getErrorCode, getErrorStatus } from '../utils/apiError'
 import { reportDegraded } from './degradedState'
 
 const LOGIN_PATH = import.meta.env.VITE_LOGIN_PATH || '/login'
@@ -36,11 +37,11 @@ apiClient.interceptors.request.use(
 // Response Interceptor: Handle 401 Unauthorized und Token-Refresh
 let isRefreshing = false
 let failedQueue: Array<{
-  resolve: (value?: any) => void
-  reject: (reason?: any) => void
+  resolve: (token: string | null) => void
+  reject: (reason?: unknown) => void
 }> = []
 
-const processQueue = (error: any, token: string | null = null) => {
+const processQueue = (error: unknown, token: string | null = null) => {
   failedQueue.forEach(prom => {
     if (error) {
       prom.reject(error)
@@ -85,7 +86,7 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       if (isRefreshing) {
         // Wenn bereits Refresh läuft, warte auf Ergebnis
-        return new Promise((resolve, reject) => {
+        return new Promise<string | null>((resolve, reject) => {
           failedQueue.push({ resolve, reject })
         })
           .then(token => {
@@ -123,10 +124,9 @@ apiClient.interceptors.response.use(
 
           // Wiederhole ursprüngliche Request mit neuem Token
           return apiClient(originalRequest)
-        } catch (refreshError: any) {
-          const detail = refreshError?.response?.data?.detail
-          const errorCode = typeof detail === 'object' ? detail?.error_code : undefined
-          const isSessionExpired = errorCode === 'SESSION_EXPIRED' || refreshError?.response?.status === 401
+        } catch (refreshError) {
+          const isSessionExpired =
+            getErrorCode(refreshError) === 'SESSION_EXPIRED' || getErrorStatus(refreshError) === 401
 
           // Refresh fehlgeschlagen - logge User aus
           processQueue(refreshError, null)

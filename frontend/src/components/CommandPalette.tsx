@@ -62,28 +62,35 @@ export default function CommandPalette() {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
         e.preventDefault()
+        // Zurücksetzen in beide Richtungen: beim Öffnen soll das Feld leer sein,
+        // beim Schließen macht close() ohnehin dasselbe.
+        setQuery('')
+        setActive(0)
         setOpen((v) => !v)
       } else if (e.key === 'Escape') {
-        setOpen(false)
+        close()
       }
     }
-    const onOpen = () => setOpen(true)
+    const onOpen = () => {
+      setQuery('')
+      setActive(0)
+      setOpen(true)
+    }
     window.addEventListener('keydown', onKey)
     window.addEventListener('open-command-palette', onOpen)
     return () => {
       window.removeEventListener('keydown', onKey)
       window.removeEventListener('open-command-palette', onOpen)
     }
-  }, [])
+    // close ist ein useCallback ohne Dependencies und damit stabil — die
+    // Listener werden dadurch nicht bei jedem Render neu registriert.
+  }, [close])
 
   // Focus input when opening
   useEffect(() => {
-    if (open) {
-      setQuery('')
-      setActive(0)
-      const id = window.setTimeout(() => inputRef.current?.focus(), 20)
-      return () => window.clearTimeout(id)
-    }
+    if (!open) return
+    const id = window.setTimeout(() => inputRef.current?.focus(), 20)
+    return () => window.clearTimeout(id)
   }, [open])
 
   // Pipelines for the "Pipelines" group (only load while open)
@@ -143,20 +150,18 @@ export default function CommandPalette() {
   // Flat list for keyboard navigation
   const flat = useMemo(() => groups.flatMap((g) => g.items), [groups])
 
-  useEffect(() => {
-    if (active >= flat.length) setActive(0)
-  }, [flat.length, active])
+  const activeIndex = active < flat.length ? active : 0
 
   const onListKey = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      setActive((a) => Math.min(a + 1, flat.length - 1))
+      setActive(Math.min(activeIndex + 1, flat.length - 1))
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
-      setActive((a) => Math.max(a - 1, 0))
+      setActive(Math.max(activeIndex - 1, 0))
     } else if (e.key === 'Enter') {
       e.preventDefault()
-      flat[active]?.run()
+      flat[activeIndex]?.run()
     }
   }
 
@@ -197,7 +202,7 @@ export default function CommandPalette() {
                 return (
                   <div
                     key={it.id}
-                    className={`cmdk-item ${idx === active ? 'active' : ''}`}
+                    className={`cmdk-item ${idx === activeIndex ? 'active' : ''}`}
                     onClick={it.run}
                     onMouseEnter={() => setActive(idx)}
                     role="button"

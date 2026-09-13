@@ -16,6 +16,7 @@ import StorageStats from '../components/StorageStats'
 import SystemMetrics from '../components/SystemMetrics'
 import Sync from './Sync'
 import Users from './Users'
+import { getErrorDetail } from '../utils/apiError'
 import './Settings.css'
 
 type AccountLinkPath = '/link/github' | '/link/google' | '/link/microsoft' | '/link/custom'
@@ -102,11 +103,19 @@ export default function Settings() {
   const [newKeyLabel, setNewKeyLabel] = useState('')
   const [unlinkingProvider, setUnlinkingProvider] = useState<'github' | 'google' | 'microsoft' | 'custom' | null>(null)
   const [linkingProvider, setLinkingProvider] = useState<AccountLinkPath | null>(null)
-  /** Geschützte Tabs: Eingaben erst nach Klick auf Schloss (verhindert versehentliche Änderungen). */
-  const [sensitiveSettingsLocked, setSensitiveSettingsLocked] = useState(true)
+  /**
+   * Geschützte Tabs: Eingaben erst nach Klick auf Schloss (verhindert
+   * versehentliche Änderungen). Gespeichert wird der aufgeschlossene Tab, nicht
+   * ein Boolean — dadurch fällt das Schloss beim Tabwechsel von selbst wieder
+   * zu, ohne Effect. Das greift auch, wenn section über die URL wechselt
+   * (Zurück-Button, direkter Link) und nicht über setSection.
+   */
+  const [unlockedSection, setUnlockedSection] = useState<SettingsSection | null>(null)
 
   const [searchParams, setSearchParams] = useSearchParams()
   const section = (searchParams.get('section') as SettingsSection) || 'account'
+  const sensitiveSettingsLocked = unlockedSection !== section
+
   const setSection = (s: SettingsSection) => {
     const np = new URLSearchParams(searchParams)
     np.set('section', s)
@@ -134,10 +143,6 @@ export default function Settings() {
     const pr = pill.getBoundingClientRect()
     setIndicator({ left: pr.left - tr.left, width: pr.width })
   }, [section, sectionItems.length])
-
-  useEffect(() => {
-    setSensitiveSettingsLocked(true)
-  }, [section])
 
   const { data: settings, isLoading } = useQuery<Settings>({
     queryKey: ['settings'],
@@ -292,8 +297,8 @@ export default function Settings() {
       showSuccess(data.message || t('settings.s3TestSuccess'))
       queryClient.invalidateQueries({ queryKey: ['settings'] })
     },
-    onError: (error: any) => {
-      showError(error.response?.data?.detail || error.message || t('settings.s3TestErrorGeneric'))
+    onError: (error) => {
+      showError(getErrorDetail(error) || t('settings.s3TestErrorGeneric'))
       queryClient.invalidateQueries({ queryKey: ['settings'] })
     },
   })
@@ -310,8 +315,8 @@ export default function Settings() {
         testS3Mutation.mutate()
       }
     },
-    onError: (error: any) => {
-      showError(t('settings.updateError', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('settings.updateError', { detail: getErrorDetail(error) }))
     },
   })
 
@@ -333,9 +338,9 @@ export default function Settings() {
       setUnlinkingProvider(null)
       refetchMe()
     },
-    onError: (error: any) => {
+    onError: (error) => {
       setUnlinkingProvider(null)
-      showError(error.response?.data?.detail || error.message || t('settings.unlinkError'))
+      showError(getErrorDetail(error) || t('settings.unlinkError'))
     },
   })
 
@@ -397,8 +402,8 @@ export default function Settings() {
       showSuccess(message.replace(/\n/g, ' ')) // Replace newlines for toast
       queryClient.invalidateQueries({ queryKey: ['settings', 'backup-failures'] })
     },
-    onError: (error: any) => {
-      showError(t('settings.cleanupError', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('settings.cleanupError', { detail: getErrorDetail(error) }))
     },
   })
 
@@ -410,8 +415,8 @@ export default function Settings() {
     onSuccess: (data) => {
       showSuccess(data.message || t('settings.testEmailSuccess'))
     },
-    onError: (error: any) => {
-      showError(t('settings.testEmailError', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('settings.testEmailError', { detail: getErrorDetail(error) }))
     },
   })
 
@@ -423,8 +428,8 @@ export default function Settings() {
     onSuccess: (data) => {
       showSuccess(data.message || t('settings.testTeamsSuccess'))
     },
-    onError: (error: any) => {
-      showError(t('settings.testTeamsError', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('settings.testTeamsError', { detail: getErrorDetail(error) }))
     },
   })
 
@@ -443,8 +448,8 @@ export default function Settings() {
       queryClient.invalidateQueries({ queryKey: ['settings'] })
       showSuccess(t('settings.notificationApiKeyCreated'))
     },
-    onError: (error: any) => {
-      showError(error.response?.data?.detail || error.message || t('settings.notificationApiKeyCreateError'))
+    onError: (error) => {
+      showError(getErrorDetail(error) || t('settings.notificationApiKeyCreateError'))
     },
   })
 
@@ -456,8 +461,8 @@ export default function Settings() {
       queryClient.invalidateQueries({ queryKey: ['settings'] })
       showSuccess(t('settings.notificationApiKeyDeleted'))
     },
-    onError: (error: any) => {
-      showError(error.response?.data?.detail || error.message || t('settings.notificationApiKeyDeleteError'))
+    onError: (error) => {
+      showError(getErrorDetail(error) || t('settings.notificationApiKeyDeleteError'))
     },
   })
 
@@ -651,7 +656,7 @@ export default function Settings() {
               <button
                 type="button"
                 className={`settings-edit-lock-btn ${sensitiveSettingsLocked ? 'is-locked' : 'is-unlocked'}`}
-                onClick={() => setSensitiveSettingsLocked((v) => !v)}
+                onClick={() => setUnlockedSection((cur) => (cur === section ? null : section))}
                 aria-pressed={!sensitiveSettingsLocked}
                 aria-label={
                   sensitiveSettingsLocked ? t('settings.editLockUnlockAria') : t('settings.editLockLockAria')

@@ -1,21 +1,8 @@
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
+import { useState, useEffect, useCallback, type ReactNode } from 'react'
 import apiClient from '../api/client'
 import { showError } from '../utils/toast'
-
-interface AuthContextType {
-  isAuthenticated: boolean
-  loading: boolean
-  logout: () => Promise<void>
-  token: string | null
-  userRole: 'readonly' | 'write' | 'admin' | null
-  isReadonly: boolean
-  isWrite: boolean
-  isAdmin: boolean
-  is_setup_completed: boolean
-  refetchUserInfo: () => Promise<void>
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+import { getErrorStatus } from '../utils/apiError'
+import { AuthContext } from './AuthContext'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -30,12 +17,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const role = response.data.role?.toLowerCase() as 'readonly' | 'write' | 'admin'
       setUserRole(role || 'readonly')
       setIsSetupCompleted(response.data.is_setup_completed !== false)
-    } catch (error: any) {
+    } catch (error) {
       setUserRole(null)
       setIsAuthenticated(false)
       setToken(null)
       setIsSetupCompleted(true)
-      if (error?.response?.status !== 401) {
+      if (getErrorStatus(error) !== 401) {
         showError('Sitzung konnte nicht geladen werden. Bitte erneut anmelden.')
       }
     }
@@ -57,7 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     try {
       await apiClient.post('/auth/logout')
-    } catch (error) {
+    } catch {
       // Ignoriere Fehler beim Logout
     } finally {
       sessionStorage.removeItem('auth_token')
@@ -90,10 +77,3 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 }
 
-export function useAuth() {
-  const context = useContext(AuthContext)
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider')
-  }
-  return context
-}

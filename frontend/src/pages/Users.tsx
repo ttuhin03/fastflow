@@ -8,6 +8,7 @@ import { LuPencil, LuTrash2, LuBan, LuShieldCheck, LuMail, LuX, LuExternalLink, 
 import Tooltip from '../components/Tooltip'
 import InfoIcon from '../components/InfoIcon'
 import { useAuth } from '../contexts/AuthContext'
+import { getErrorDetail, getErrorStatus } from '../utils/apiError'
 import './Users.css'
 
 interface User {
@@ -141,30 +142,6 @@ export default function Users({ editLocked = false }: UsersProps) {
     staleTime: 2 * 60 * 1000,
   })
 
-  // Show message if not admin (403 Forbidden) or if error detail contains "Admin"
-  const errorResponse = (error as any)?.response
-  const is403Error = errorResponse?.status === 403
-  const isAdminError = errorResponse?.data?.detail?.includes?.('Admin') || 
-                       errorResponse?.data?.detail === 'Admin-Rechte erforderlich'
-  
-  if (isError && (is403Error || isAdminError)) {
-    return (
-      <div className="users-page">
-        <div className="users-list-card">
-          <div className="empty-state">
-            <h3>{t('users.accessDeniedTitle')}</h3>
-            <p>{t('users.accessDeniedBody')}</p>
-            {errorResponse?.data?.detail && (
-              <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', opacity: 0.8 }}>
-                {errorResponse.data.detail}
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   const inviteUserMutation = useMutation({
     mutationFn: async (data: {
       email: string
@@ -183,8 +160,8 @@ export default function Users({ editLocked = false }: UsersProps) {
       const until = new Date(data.expires_at).toLocaleString(getFormatLocale())
       showSuccess(t('users.toastInviteCopied', { until }))
     },
-    onError: (error: any) => {
-      showError(t('users.errorWithDetail', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('users.errorWithDetail', { detail: getErrorDetail(error) }))
     },
   })
 
@@ -202,8 +179,8 @@ export default function Users({ editLocked = false }: UsersProps) {
       resetForm()
       showSuccess(t('users.toastUserUpdated'))
     },
-    onError: (error: any) => {
-      showError(t('users.errorWithDetail', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('users.errorWithDetail', { detail: getErrorDetail(error) }))
     },
   })
 
@@ -216,8 +193,8 @@ export default function Users({ editLocked = false }: UsersProps) {
       queryClient.invalidateQueries({ queryKey: ['users'] })
       showSuccess(t('users.toastUserBlocked'))
     },
-    onError: (error: any) => {
-      showError(t('users.errorWithDetail', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('users.errorWithDetail', { detail: getErrorDetail(error) }))
     },
   })
 
@@ -230,8 +207,8 @@ export default function Users({ editLocked = false }: UsersProps) {
       queryClient.invalidateQueries({ queryKey: ['users'] })
       showSuccess(t('users.toastUserUnblocked'))
     },
-    onError: (error: any) => {
-      showError(t('users.errorWithDetail', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('users.errorWithDetail', { detail: getErrorDetail(error) }))
     },
   })
 
@@ -244,8 +221,8 @@ export default function Users({ editLocked = false }: UsersProps) {
       queryClient.invalidateQueries({ queryKey: ['users'] })
       showSuccess(t('users.toastUserDeleted'))
     },
-    onError: (error: any) => {
-      showError(t('users.errorWithDetail', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('users.errorWithDetail', { detail: getErrorDetail(error) }))
     },
   })
 
@@ -257,8 +234,8 @@ export default function Users({ editLocked = false }: UsersProps) {
       queryClient.invalidateQueries({ queryKey: ['invites'] })
       showSuccess(t('users.toastInviteRevoked'))
     },
-    onError: (error: any) => {
-      showError(t('users.errorWithDetail', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('users.errorWithDetail', { detail: getErrorDetail(error) }))
     },
   })
 
@@ -274,8 +251,8 @@ export default function Users({ editLocked = false }: UsersProps) {
       setApproveRole('readonly')
       showSuccess(t('users.toastJoinApproved'))
     },
-    onError: (error: any) => {
-      showError(t('users.errorWithDetail', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('users.errorWithDetail', { detail: getErrorDetail(error) }))
     },
   })
 
@@ -289,10 +266,36 @@ export default function Users({ editLocked = false }: UsersProps) {
       queryClient.invalidateQueries({ queryKey: ['invites'] })
       showSuccess(t('users.toastJoinRejected'))
     },
-    onError: (error: any) => {
-      showError(t('users.errorWithDetail', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('users.errorWithDetail', { detail: getErrorDetail(error) }))
     },
   })
+
+  // Kein Adminzugriff (403 bzw. Admin-Hinweis im Fehlerdetail): Hinweisbox statt
+  // Nutzerverwaltung. Dieser return muss unterhalb *aller* Hooks stehen — die
+  // Bedingung wechselt zur Laufzeit (erst lädt die Query, dann kommt das 403),
+  // und ein früher return würde die Hook-Zahl zwischen zwei Renders verändern.
+  const errorDetail = getErrorDetail(error)
+  const is403Error = getErrorStatus(error) === 403
+  const isAdminError = errorDetail.includes('Admin')
+
+  if (isError && (is403Error || isAdminError)) {
+    return (
+      <div className="users-page">
+        <div className="users-list-card">
+          <div className="empty-state">
+            <h3>{t('users.accessDeniedTitle')}</h3>
+            <p>{t('users.accessDeniedBody')}</p>
+            {errorDetail && (
+              <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', opacity: 0.8 }}>
+                {errorDetail}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const resetForm = () => {
     setFormRole('readonly')

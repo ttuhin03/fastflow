@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
@@ -37,10 +37,15 @@ export default function Runs() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [startDate, setStartDate] = useState<string>('')
   const [endDate, setEndDate] = useState<string>('')
+  // Jeder Filter- oder Sortierwechsel springt auf Seite 1 zurück. Das passiert
+  // bewusst im jeweiligen Event-Handler und nicht in einem Effect: sonst rendert
+  // React einmal mit neuem Filter und altem Offset und feuert dafür einen
+  // überflüssigen Request gegen /runs, dessen Ergebnis sofort verworfen wird.
   const [page, setPage] = useState<number>(1)
   const [pageSize, setPageSize] = useState<number>(50)
 
-  const { data: pipelines } = useQuery({
+  // Nur der Name wird hier gebraucht — der Endpoint liefert mehr.
+  const { data: pipelines } = useQuery<{ name: string }[]>({
     queryKey: ['pipelines'],
     queryFn: async () => {
       const response = await apiClient.get('/pipelines')
@@ -51,7 +56,7 @@ export default function Runs() {
   const queryClient = useQueryClient()
   const runsInterval = useRefetchInterval(5000)
   const { data: runsData, isLoading } = useQuery<RunsResponse>({
-    queryKey: ['runs', pipelineFilter, statusFilter, startDate, endDate, page, pageSize],
+    queryKey: ['runs', pipelineFilter, statusFilter, startDate, endDate, page, pageSize, sortOrder],
     queryFn: async () => {
       const params = new URLSearchParams()
       if (pipelineFilter) params.append('pipeline_name', pipelineFilter)
@@ -61,18 +66,16 @@ export default function Runs() {
       const offset = (page - 1) * pageSize
       params.append('offset', offset.toString())
       params.append('limit', pageSize.toString())
+      params.append('sort_order', sortOrder)
       const response = await apiClient.get(`/runs?${params.toString()}`)
       return response.data
     },
     refetchInterval: runsInterval,
   })
 
-  const runs = runsData?.runs || []
-
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    setPage(1)
-  }, [pipelineFilter, statusFilter, startDate, endDate])
+  // Stabile Referenz: als frisches Array pro Render lief der Effect unten (der
+  // runs in den Dependencies hat) bei jedem Render erneut.
+  const runs = useMemo(() => runsData?.runs ?? [], [runsData])
 
   // Invalidate daily-stats when runs complete
   const prevRunsRef = useRef<Run[]>([])
@@ -111,13 +114,6 @@ export default function Runs() {
       </div>
     )
   }
-
-  // Backend already sorts by started_at desc, so we only need to reverse if sortOrder is 'asc'
-  const filteredAndSortedRuns = runs
-    ? sortOrder === 'asc'
-      ? [...runs].reverse()
-      : runs
-    : []
 
   const totalPages = runsData ? Math.ceil(runsData.total / pageSize) : 0
   const totalRuns = runsData?.total || 0
@@ -198,7 +194,7 @@ export default function Runs() {
     }
   }
 
-  const runningCount = filteredAndSortedRuns.filter(
+  const runningCount = runs.filter(
     (r) => r.status === 'RUNNING' || r.status === 'PENDING'
   ).length
 
@@ -211,12 +207,15 @@ export default function Runs() {
           <select
             id="pipeline-filter"
             value={pipelineFilter}
-            onChange={(e) => setPipelineFilter(e.target.value)}
+            onChange={(e) => {
+              setPipelineFilter(e.target.value)
+              setPage(1)
+            }}
             className="runs-search__select"
             aria-label={t('runs.filterPipeline')}
           >
             <option value="">{t('runs.filterPipeline')} {t('runs.listAll')}</option>
-            {pipelines?.map((p: any) => (
+            {pipelines?.map((p) => (
               <option key={p.name} value={p.name}>
                 {p.name}
               </option>
@@ -228,7 +227,10 @@ export default function Runs() {
           <select
             id="status-filter"
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              setStatusFilter(e.target.value)
+              setPage(1)
+            }}
             className="runs-filter-select"
             aria-label={t('runs.filterStatus')}
           >
@@ -244,7 +246,10 @@ export default function Runs() {
         <select
           id="sort-order"
           value={sortOrder}
-          onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
+          onChange={(e) => {
+            setSortOrder(e.target.value as 'asc' | 'desc')
+            setPage(1)
+          }}
           className="runs-filter-select"
           aria-label={t('runs.sortLabel')}
         >
@@ -272,7 +277,10 @@ export default function Runs() {
           id="start-date"
           type="datetime-local"
           value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
+          onChange={(e) => {
+            setStartDate(e.target.value)
+            setPage(1)
+          }}
           className="runs-filter-select runs-filter-date"
           aria-label={t('runs.dateFrom')}
         />
@@ -280,7 +288,10 @@ export default function Runs() {
           id="end-date"
           type="datetime-local"
           value={endDate}
-          onChange={(e) => setEndDate(e.target.value)}
+          onChange={(e) => {
+            setEndDate(e.target.value)
+            setPage(1)
+          }}
           className="runs-filter-select runs-filter-date"
           aria-label={t('runs.dateTo')}
         />
@@ -294,7 +305,7 @@ export default function Runs() {
         </span>
       </div>
 
-      {filteredAndSortedRuns.length > 0 ? (
+      {runs.length > 0 ? (
         <>
           {/* Desktop Table View */}
           <div className="table runs-table-grid desktop-only">
@@ -307,7 +318,7 @@ export default function Runs() {
               <span>{t('runs.thCommit')}</span>
               <span aria-hidden />
             </div>
-            {filteredAndSortedRuns.map((run, index) => (
+            {runs.map((run, index) => (
               <Link
                 key={run.id}
                 to={`/runs/${run.id}`}
@@ -354,7 +365,7 @@ export default function Runs() {
 
           {/* Mobile Card View */}
           <div className="runs-cards-container mobile-only">
-            {filteredAndSortedRuns.map((run, index) => (
+            {runs.map((run, index) => (
               <div key={run.id} className="run-card card" style={{ animationDelay: `${index * 0.04}s` }}>
                 <div className="run-card-header">
                   <div className="run-card-id">

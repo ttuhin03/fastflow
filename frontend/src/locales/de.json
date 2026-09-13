@@ -80,6 +80,7 @@
     "pipelineActiveTooltip": "Aktiv: Pipeline kann ausgeführt werden | Inaktiv: Pipeline ist deaktiviert",
     "systemStatus": "System-Status",
     "successRate": "Erfolgsrate",
+    "trendTooltip": "Letzter Tag im Vergleich zum Durchschnitt der {{days}} Tage davor",
     "noSchedule": "kein Zeitplan",
     "nextRunAt": "nächster {{time}}"
   },

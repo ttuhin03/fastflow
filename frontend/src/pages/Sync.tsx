@@ -9,6 +9,7 @@ import { showError, showSuccess, showConfirm } from '../utils/toast'
 import { getFormatLocale } from '../utils/locale'
 import Tooltip from '../components/Tooltip'
 import InfoIcon from '../components/InfoIcon'
+import { getErrorDetail } from '../utils/apiError'
 import './Sync.css'
 
 interface SyncStatus {
@@ -88,11 +89,33 @@ function shortCommitHash(lc: SyncStatus['last_commit']): string {
 type Translate = (key: string, options?: Record<string, unknown>) => string
 
 /**
+ * Eintrag aus GET /sync/logs. Welche Felder gefüllt sind, hängt am Event —
+ * daher durchgehend optional.
+ */
+interface SyncLogEntry {
+  timestamp?: string
+  event?: string
+  status?: string
+  branch?: string
+  message?: string
+  error?: string
+  pipelines_cached?: unknown[]
+  duration_seconds?: number
+}
+
+/** Antwort von POST /sync. */
+interface SyncTriggerResult {
+  already_running?: boolean
+  success?: boolean
+  message?: string
+}
+
+/**
  * Backend sync-log entries never carry a "message" field (only event/status/branch and,
  * on failure, "error") — derive a human-readable sentence instead of falling back to
  * a generic "unknown" for every started/completed entry.
  */
-function describeSyncLogEvent(log: any, t: Translate): string {
+function describeSyncLogEvent(log: SyncLogEntry, t: Translate): string {
   const event = String(log?.event || log?.status || '')
   const branch = typeof log?.branch === 'string' ? log.branch : undefined
   if (event === 'sync_started' || event === 'started') {
@@ -113,7 +136,7 @@ function describeSyncLogEvent(log: any, t: Translate): string {
 }
 
 /** Full text for a sync-log entry: explicit message/error win, otherwise derive one. */
-function formatSyncLogText(log: any, t: Translate): string {
+function formatSyncLogText(log: SyncLogEntry, t: Translate): string {
   if (log?.message) return log.message
   if (log?.error) return log.error
   return describeSyncLogEvent(log, t)
@@ -137,6 +160,8 @@ function isSshUrl(url: string): boolean {
   return u.startsWith('git@') || u.startsWith('ssh://')
 }
 
+type SyncTab = 'status' | 'settings' | 'logs' | 'repository'
+
 interface SyncProps {
   /** Gesperrt aus den Einstellungen (Schloss): keine Änderungen bis Entsperren */
   editLocked?: boolean
@@ -151,7 +176,7 @@ export default function Sync({ editLocked = false }: SyncProps) {
   const [hostKeyConfirmText, setHostKeyConfirmText] = useState('')
   const formatLocale = getFormatLocale()
   const [syncBranch, setSyncBranch] = useState('')
-  const [activeTab, setActiveTab] = useState<'status' | 'settings' | 'logs' | 'repository'>('status')
+  const [activeTab, setActiveTab] = useState<SyncTab>('status')
   const [settingsForm, setSettingsForm] = useState<SyncSettings>({
     auto_sync_enabled: false,
     auto_sync_interval: null,
@@ -189,15 +214,20 @@ export default function Sync({ editLocked = false }: SyncProps) {
     },
   })
 
-  useEffect(() => {
-    if (settings) {
-      setSettingsForm(settings)
-    }
-  }, [settings])
+  // Formular an die Serverdaten angleichen, sobald die Query ein neues Objekt
+  // liefert. Das passiert beim Rendern statt in einem Effect: der Effect hätte
+  // erst ein Render mit den alten Werten durchgelassen und dann ein zweites
+  // ausgelöst. React unterstützt dieses Muster ausdrücklich, solange der
+  // setState an eine Bedingung gebunden ist, die danach nicht mehr greift.
+  const [settingsSyncedFrom, setSettingsSyncedFrom] = useState<SyncSettings | undefined>(undefined)
+  if (settings !== settingsSyncedFrom) {
+    setSettingsSyncedFrom(settings)
+    if (settings) setSettingsForm(settings)
+  }
 
   const syncLogsVisible = activeTab === 'logs' || activeTab === 'status'
   const syncLogsInterval = useRefetchInterval(syncLogsVisible ? 5000 : false)
-  const { data: syncLogs } = useQuery({
+  const { data: syncLogs } = useQuery<SyncLogEntry[]>({
     queryKey: ['sync-logs'],
     queryFn: async () => {
       const response = await apiClient.get('/sync/logs?limit=50')
@@ -238,8 +268,8 @@ export default function Sync({ editLocked = false }: SyncProps) {
       showSuccess(t('sync.hostKeyResetSuccess'))
       setHostKeyConfirmText('')
     },
-    onError: (error: any) => {
-      showError(t('sync.hostKeyResetError', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('sync.hostKeyResetError', { detail: getErrorDetail(error) }))
     },
   })
 
@@ -254,7 +284,16 @@ export default function Sync({ editLocked = false }: SyncProps) {
     }
   }, [syncLogs])
 
-  useEffect(() => {
+  // Wie oben, zusätzlich am Tab aufgehängt: beim Wechsel auf "repository" wird
+  // das Formular neu aus der Serverkonfiguration aufgebaut. Das leert dabei
+  // bewusst token und deploy_key — eingetippte Zugangsdaten sollen beim
+  // Verlassen des Tabs nicht stehen bleiben.
+  const [repoFormSyncedFrom, setRepoFormSyncedFrom] = useState<{
+    config: RepoConfig | undefined
+    tab: SyncTab
+  } | null>(null)
+  if (repoFormSyncedFrom?.config !== repoConfig || repoFormSyncedFrom?.tab !== activeTab) {
+    setRepoFormSyncedFrom({ config: repoConfig, tab: activeTab })
     if (repoConfig && activeTab === 'repository') {
       setRepoForm({
         repo_url: repoConfig.repo_url || '',
@@ -264,23 +303,16 @@ export default function Sync({ editLocked = false }: SyncProps) {
         pipelines_subdir: repoConfig.pipelines_subdir ?? '',
       })
     }
-  }, [repoConfig, activeTab])
-
-  useEffect(() => {
-    if (!isSshUrl(repoForm.repo_url)) {
-      setGeneratedPublicKey(null)
-      setShowManualDeployKey(false)
-    }
-  }, [repoForm.repo_url])
+  }
 
   const syncMutation = useMutation({
-    mutationFn: async (branch?: string) => {
+    mutationFn: async (branch?: string): Promise<SyncTriggerResult> => {
       // Sync kann durch Git/Pre-Heating deutlich länger dauern als normale API-Calls.
       // Daher hier explizit ohne Axios-Timeout, um falsche "timeout"-Fehler in der UI zu vermeiden.
       const response = await apiClient.post('/sync', branch ? { branch } : {}, { timeout: 0 })
       return response.data
     },
-    onSuccess: (data: any) => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['sync-status'] })
       queryClient.invalidateQueries({ queryKey: ['pipelines'] })
       if (data?.already_running) {
@@ -293,8 +325,8 @@ export default function Sync({ editLocked = false }: SyncProps) {
       }
       showSuccess(t('sync.syncSuccess'))
     },
-    onError: (error: any) => {
-      showError(t('sync.syncError', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('sync.syncError', { detail: getErrorDetail(error) }))
     },
   })
 
@@ -307,8 +339,8 @@ export default function Sync({ editLocked = false }: SyncProps) {
       queryClient.invalidateQueries({ queryKey: ['sync-settings'] })
       showSuccess(t('sync.settingsUpdated'))
     },
-    onError: (error: any) => {
-      showError(t('sync.updateError', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('sync.updateError', { detail: getErrorDetail(error) }))
     },
   })
 
@@ -330,8 +362,8 @@ export default function Sync({ editLocked = false }: SyncProps) {
       setRepoForm((f) => ({ ...f, token: '', deploy_key: '' }))
       queryClient.invalidateQueries({ queryKey: ['pipelines'] })
     },
-    onError: (error: any) => {
-      showError(t('sync.repoSaveError', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('sync.repoSaveError', { detail: getErrorDetail(error) }))
     },
   })
 
@@ -347,8 +379,8 @@ export default function Sync({ editLocked = false }: SyncProps) {
         showError(t('sync.testMessagePrefixFail') + data.message)
       }
     },
-    onError: (error: any) => {
-      showError(t('sync.testError', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('sync.testError', { detail: getErrorDetail(error) }))
     },
   })
 
@@ -365,8 +397,8 @@ export default function Sync({ editLocked = false }: SyncProps) {
         showSuccess(t('sync.deployKeyGenerated'))
       }
     },
-    onError: (error: any) => {
-      showError(t('sync.deployKeyError', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('sync.deployKeyError', { detail: getErrorDetail(error) }))
     },
   })
 
@@ -381,9 +413,10 @@ export default function Sync({ editLocked = false }: SyncProps) {
       showSuccess(t('sync.repoDeleted'))
       setRepoForm({ repo_url: '', token: '', deploy_key: '', branch: 'main', pipelines_subdir: '' })
       setGeneratedPublicKey(null)
+      setShowManualDeployKey(false)
     },
-    onError: (error: any) => {
-      showError(t('sync.deleteError', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('sync.deleteError', { detail: getErrorDetail(error) }))
     },
   })
 
@@ -397,8 +430,8 @@ export default function Sync({ editLocked = false }: SyncProps) {
       queryClient.invalidateQueries({ queryKey: ['pipelines'] })
       showSuccess(t('sync.clearSuccess'))
     },
-    onError: (error: any) => {
-      showError(t('sync.clearError', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('sync.clearError', { detail: getErrorDetail(error) }))
     },
   })
 
@@ -697,7 +730,7 @@ export default function Sync({ editLocked = false }: SyncProps) {
             </div>
             <div className="sync-activity__body" ref={activityBodyRef} onScroll={handleActivityScroll}>
               {syncLogs && syncLogs.length > 0 ? (
-                syncLogs.map((log: any, index: number) => {
+                syncLogs.map((log, index) => {
                   const level = (log.status || log.event || 'info').toLowerCase()
                   return (
                     <div key={index} className="sync-activity__line">
@@ -804,7 +837,7 @@ export default function Sync({ editLocked = false }: SyncProps) {
           <h3>{t('sync.syncLogsTitle')}</h3>
           {syncLogs && syncLogs.length > 0 ? (
             <div className="sync-logs-list">
-              {syncLogs.map((log: any, index: number) => (
+              {syncLogs.map((log, index) => (
                 <div key={index} className="sync-log-entry">
                   <div className="log-header">
                     <span className="log-timestamp">
@@ -863,7 +896,16 @@ export default function Sync({ editLocked = false }: SyncProps) {
                     type="text"
                     className="form-input"
                     value={repoForm.repo_url}
-                    onChange={(e) => setRepoForm({ ...repoForm, repo_url: e.target.value })}
+                    onChange={(e) => {
+                      const repo_url = e.target.value
+                      setRepoForm({ ...repoForm, repo_url })
+                      // Ein erzeugter Deploy-Key gehört zu einer SSH-URL; wird
+                      // auf HTTPS gewechselt, ist er gegenstandslos.
+                      if (!isSshUrl(repo_url)) {
+                        setGeneratedPublicKey(null)
+                        setShowManualDeployKey(false)
+                      }
+                    }}
                     placeholder={t('sync.repoUrlPlaceholder')}
                     disabled={fieldDisabled}
                   />

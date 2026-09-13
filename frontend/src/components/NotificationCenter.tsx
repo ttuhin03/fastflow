@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNotifications } from '../contexts/NotificationContext'
+import { useNotifications, type Notification } from '../contexts/NotificationContext'
 import { LuBell, LuBellOff, LuX, LuCircleX, LuTriangleAlert, LuInfo, LuCircleCheck } from 'react-icons/lu'
 import { useNavigate } from 'react-router-dom'
 import { getFormatLocale } from '../utils/locale'
@@ -25,7 +25,7 @@ export default function NotificationCenter() {
     }
   }
 
-  const handleActionClick = (notification: any) => {
+  const handleActionClick = (notification: Notification) => {
     markAsRead(notification.id)
     if (notification.actionUrl) {
       navigate(notification.actionUrl)
