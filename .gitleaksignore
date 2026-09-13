@@ -39,3 +39,17 @@ d6a73ce400337d4af10ffe4eaf0c7850ba77511c:tests/conftest.py:generic-api-key:17
 # Fake sk-live-Literal in Test-Fixture (False Positive) – tests/test_run_env_persistence.py
 # Commit liegt auf Branch security/run-env-vars-no-plaintext, nicht auf main.
 8eb43d4301d7638b1d174218881d94fb164e03f2:tests/test_run_env_persistence.py:generic-api-key:43
+
+# Fixtures für die Redaction-Tests (False Positives) – mcp-server/tests/test_redaction.py
+# Commit liegt auf Branch mcp/integration-concept, nicht auf main.
+# Der Test prüft, dass redact() bekannte Secret-Formen entfernt; die Fixtures
+# müssen dafür wie Secrets aussehen. Keiner der Werte ist echt:
+#   :25  JWT – dekodiert zu {"alg":"HS256"} / {"sub":"test"} / "signature_here"
+#   :42  RSA-Block mit Stub-Body ("MIIEowIBAAKCAQEA1234567890abcdefghij")
+#   :62  Literal "abcdef123456" als api_key-Wert
+#   :81  wJalrXUtnFEMI/K7MDENG/bPxRfiCY – AWS' eigenes Doku-Beispiel, wie das
+#        AKIAIOSFODNN7EXAMPLE in derselben Datei
+97defd04406a2fd9c2b21350c4173708ae07202f:mcp-server/tests/test_redaction.py:jwt:25
+97defd04406a2fd9c2b21350c4173708ae07202f:mcp-server/tests/test_redaction.py:private-key:42
+97defd04406a2fd9c2b21350c4173708ae07202f:mcp-server/tests/test_redaction.py:generic-api-key:62
+97defd04406a2fd9c2b21350c4173708ae07202f:mcp-server/tests/test_redaction.py:generic-api-key:81
