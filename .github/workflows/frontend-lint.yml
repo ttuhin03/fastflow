@@ -1,0 +1,54 @@
+# ESLint über den Frontend-Workspace.
+#
+# Hintergrund: Der Lint lief lange gar nicht mehr — ESLint stürzte beim Start ab
+# (ajv-Konflikt), die .eslintrc wurde von ESLint 10 nicht mehr gelesen und im
+# lint-Script stand ein Flag, das es seit v9 nicht mehr gibt. Aufgefallen ist das
+# niemandem, weil kein Workflow Lint ausgeführt hat. Genau dagegen ist dieser
+# Workflow da: die Regeln sind jetzt grün, und sie sollen es bleiben.
+#
+# Bewusst ohne paths-Filter: ein übersprungener Job meldet keinen Status, und
+# sobald der Check required ist, hängt ein Backend-PR dann ewig auf "Waiting".
+# Der Lauf dauert rund eine Minute, das ist den Preis wert.
+name: Frontend Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Laufenden Lint für denselben Branch/PR abbrechen, wenn ein neuer Push kommt.
+concurrency:
+  group: frontend-lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  eslint:
+    name: ESLint (--max-warnings 0)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # Node 20 wie im Dockerfile (node:20-slim), damit hier dieselbe Major-Linie
+      # läuft wie beim Bauen des Images. ESLint 10 verlangt >= 20.19 — das gibt
+      # node-version: 20 (jeweils die neueste 20.x) her.
+      - name: Node einrichten
+        uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+          cache: npm
+
+      # Dasselbe Kommando wie in der frontend-builder-Stage des Dockerfiles:
+      # npm workspaces, Lockfile liegt im Repo-Root.
+      - name: Abhängigkeiten installieren
+        run: npm ci --workspace=fastflow-frontend
+
+      # --max-warnings 0 und --report-unused-disable-directives stehen im
+      # lint-Script selbst; überflüssig gewordene eslint-disable-Kommentare
+      # fallen damit ebenfalls auf.
+      - name: ESLint
+        run: npm run lint --workspace=fastflow-frontend
