@@ -1,0 +1,32 @@
+# gitleaks-Konfiguration.
+#
+# Wird von .github/workflows/security-scan.yml automatisch geladen (gitleaks
+# sucht .gitleaks.toml im Scan-Root). Allowlisting einzelner Fundstellen erfolgt
+# weiterhin über .gitleaksignore.
+
+title = "Fast-Flow gitleaks config"
+
+[extend]
+# Die eingebauten Regeln (AWS, GitHub, Slack, private Keys, …) bleiben aktiv.
+# Ohne diese Zeile würden sie durch die eigene Regel unten ersetzt.
+useDefault = true
+
+[[rules]]
+id = "fastflow-api-token"
+description = "Fast-Flow API token (ffp_)"
+# Aufbau siehe app/core/api_token_hash.py: ffp_<8 Zeichen>_<43 Zeichen>.
+# Das feste Präfix existiert genau zu diesem Zweck – ein Token, das je in einen
+# Commit gerät, soll hier auffallen und nicht erst beim Missbrauch.
+regex = '''\bffp_[A-Za-z0-9_-]{8}_[A-Za-z0-9_-]{43}\b'''
+keywords = ["ffp_"]
+entropy = 3.5
+
+[rules.allowlist]
+# Beispiele in Doku und Tests sind keine echten Tokens. Die Pfade sind bewusst
+# eng gefasst, damit ein versehentlich committetes Produktiv-Token an keiner
+# anderen Stelle durchrutscht.
+paths = [
+  '''docs/docs/mcp-integration\.md''',
+  '''tests/test_api_tokens\.py''',
+  '''app/core/api_token_hash\.py''',
+]
