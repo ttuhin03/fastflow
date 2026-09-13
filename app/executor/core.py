@@ -89,6 +89,16 @@ _pre_heating_locks: OrderedDict[str, asyncio.Lock] = OrderedDict()
 CONTAINER_REMOVE_RETRY_DELAY_SECONDS = 1.0
 CONTAINER_REMOVE_ATTEMPTS = 3
 
+# Puffer im Shutdown-Budget zwischen Dockers SIGKILL an den Container und dem
+# Ende des Gesamtbudgets, damit die Antwort noch ankommt
+SHUTDOWN_STOP_RESERVE_SECONDS = 2
+
+# Pause nach Container-Ende, damit der Log-Stream die letzten Zeilen noch schreibt
+STREAM_FLUSH_GRACE_SECONDS = 0.5
+# Begrenztes Warten auf das Ende der Stream-Tasks nach ihrem Abbruch
+LOG_TASK_SHUTDOWN_TIMEOUT_SECONDS = 2.0
+METRICS_TASK_SHUTDOWN_TIMEOUT_SECONDS = 1.0
+
 # Marker für setup_duration: wird vor main.py ausgegeben, in Logs/SSE herausgefiltert
 SETUP_READY_MARKER = "FASTFLOW_SETUP_READY"
 
@@ -835,69 +845,11 @@ async def _run_container_task(
             # Kein Timeout, warte auf natürliches Ende
             exit_code = await stream_pool.run(container.wait)
         
-        # Warte kurz, damit alle Logs geschrieben werden können
-        await asyncio.sleep(0.5)
-        
-        # Tasks beenden (gracefully)
-        log_task.cancel()
-        try:
-            await asyncio.wait_for(log_task, timeout=2.0)
-        except (asyncio.TimeoutError, asyncio.CancelledError):
-            pass
-        
-        # Versuche, verbleibende Logs aus Container zu lesen (falls Stream nicht alle geliefert hat)
-        try:
-            import aiofiles
-            remaining_logs_bytes = await control_pool.run(
-                lambda: container.logs(stdout=True, stderr=True, tail=1000)
-            )
-            if remaining_logs_bytes:
-                # Prüfe ob Log-Datei bereits Logs enthält
-                log_file_size = log_file_path.stat().st_size if log_file_path.exists() else 0
-                
-                # Dekodiere Logs
-                remaining_logs = remaining_logs_bytes.decode("utf-8", errors="replace")
-                
-                # Verarbeite JSON-Log-Format (falls verwendet)
-                log_lines = []
-                for line in remaining_logs.split("\n"):
-                    line = line.strip()
-                    if not line:
-                        continue
-                    # Docker JSON-Log-Format verarbeiten
-                    if line.startswith("{"):
-                        try:
-                            log_json = json.loads(line)
-                            log_lines.append(log_json.get("log", line).rstrip())
-                        except (json.JSONDecodeError, AttributeError):
-                            log_lines.append(line)
-                    else:
-                        log_lines.append(line)
-                
-                # Nur hinzufügen wenn Log-Datei leer oder klein ist
-                if log_file_size < 100:  # Datei ist leer oder fast leer
-                    async with aiofiles.open(log_file_path, "w", encoding="utf-8") as f:
-                        await f.write("\n".join(log_lines))
-                        await f.flush()
-                else:
-                    # Datei hat bereits Inhalte, prüfe ob neue Logs hinzugefügt werden müssen
-                    async with aiofiles.open(log_file_path, "r", encoding="utf-8") as f:
-                        existing_content = await f.read()
-                    
-                    # Füge nur neue Logs hinzu
-                    new_logs_text = "\n".join(log_lines)
-                    if new_logs_text and new_logs_text not in existing_content:
-                        async with aiofiles.open(log_file_path, "a", encoding="utf-8") as f:
-                            await f.write("\n" + new_logs_text)
-                            await f.flush()
-        except Exception as e:
-            logger.debug(f"Fehler beim Lesen verbleibender Logs für Run {run_id}: {e}")
-        
-        metrics_task.cancel()
-        try:
-            await asyncio.wait_for(metrics_task, timeout=1.0)
-        except (asyncio.TimeoutError, asyncio.CancelledError):
-            pass
+        # Streaming beenden und die letzten Logzeilen retten, bevor der
+        # Container entfernt wird
+        await _finalize_run_streams(
+            log_task, metrics_task, container, log_file_path, run_id
+        )
         
         # Exit-Code extrahieren
         exit_code_value = exit_code.get("StatusCode", -1) if isinstance(exit_code, dict) else exit_code
@@ -1248,6 +1200,144 @@ def _build_container_command(pipeline: DiscoveredPipeline) -> List[str]:
     if is_notebook:
         return ["uv", "run", "--python", py] + nb_runner_cmd
     return ["uv", "run", "--python", py, "python", "-u", "-c", _SETUP_READY_WRAPPER]
+
+
+async def _stop_stream_task(
+    task: Optional[asyncio.Task],
+    run_id: UUID,
+    description: str,
+    timeout: float,
+) -> None:
+    """
+    Bricht einen Stream-Task ab und wartet begrenzt auf sein Ende.
+
+    Das Warten ist der Punkt: der ``finally``-Block des Tasks schliesst den
+    Docker-Stream und gibt damit seinen Worker im Stream-Pool frei. Ohne Warten
+    läuft der Aufrufer weiter zum Entfernen des Containers, das die Streams hart
+    beendet — die letzten Zeilen fehlen dann in der Logdatei.
+
+    Args:
+        task: abzubrechender Task (None wird ignoriert)
+        run_id: Run-ID (für Logging)
+        description: Bezeichnung des Tasks für Logmeldungen
+        timeout: maximale Wartezeit in Sekunden
+    """
+    if task is None:
+        return
+    task.cancel()
+    try:
+        # Auch bei einem bereits beendeten Task: holt dessen Exception ab und
+        # verhindert die "exception was never retrieved"-Warnung.
+        await asyncio.wait_for(task, timeout=timeout)
+    except (asyncio.TimeoutError, asyncio.CancelledError):
+        pass
+    except Exception as e:
+        logger.debug("%s für Run %s endete mit Fehler: %s", description, run_id, e)
+
+
+async def _recover_remaining_logs(
+    container: docker.models.containers.Container,
+    log_file_path: Path,
+    run_id: UUID,
+) -> None:
+    """
+    Holt Logzeilen nach, die der Stream nicht mehr geliefert hat.
+
+    Der Log-Stream endet mit dem Container, wobei die letzten Zeilen verloren
+    gehen können. ``container.logs(tail=…)`` liest sie aus dem Docker-Log-Puffer
+    nach — aber nur, solange der Container noch existiert.
+
+    Args:
+        container: Docker-Container-Objekt (noch nicht entfernt)
+        log_file_path: Pfad zur Logdatei des Runs
+        run_id: Run-ID (für Logging)
+    """
+    try:
+        import aiofiles
+        remaining_logs_bytes = await control_pool.run(
+            lambda: container.logs(stdout=True, stderr=True, tail=1000)
+        )
+        if not remaining_logs_bytes:
+            return
+
+        # Prüfe ob Log-Datei bereits Logs enthält
+        log_file_size = log_file_path.stat().st_size if log_file_path.exists() else 0
+
+        # Dekodiere Logs
+        remaining_logs = remaining_logs_bytes.decode("utf-8", errors="replace")
+
+        # Verarbeite JSON-Log-Format (falls verwendet)
+        log_lines = []
+        for line in remaining_logs.split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            # Docker JSON-Log-Format verarbeiten
+            if line.startswith("{"):
+                try:
+                    log_json = json.loads(line)
+                    log_lines.append(log_json.get("log", line).rstrip())
+                except (json.JSONDecodeError, AttributeError):
+                    log_lines.append(line)
+            else:
+                log_lines.append(line)
+
+        # Nur hinzufügen wenn Log-Datei leer oder klein ist
+        if log_file_size < 100:  # Datei ist leer oder fast leer
+            async with aiofiles.open(log_file_path, "w", encoding="utf-8") as f:
+                await f.write("\n".join(log_lines))
+                await f.flush()
+        else:
+            # Datei hat bereits Inhalte, prüfe ob neue Logs hinzugefügt werden müssen
+            async with aiofiles.open(log_file_path, "r", encoding="utf-8") as f:
+                existing_content = await f.read()
+
+            # Füge nur neue Logs hinzu
+            new_logs_text = "\n".join(log_lines)
+            if new_logs_text and new_logs_text not in existing_content:
+                async with aiofiles.open(log_file_path, "a", encoding="utf-8") as f:
+                    await f.write("\n" + new_logs_text)
+                    await f.flush()
+    except Exception as e:
+        logger.debug(f"Fehler beim Lesen verbleibender Logs für Run {run_id}: {e}")
+
+
+async def _finalize_run_streams(
+    log_task: Optional[asyncio.Task],
+    metrics_task: Optional[asyncio.Task],
+    container: Optional[docker.models.containers.Container],
+    log_file_path: Path,
+    run_id: UUID,
+) -> None:
+    """
+    Beendet Log- und Metrics-Streaming eines Runs und rettet die letzten Zeilen.
+
+    Die Reihenfolge ist der Grund, warum beide Pfade — normaler Run und
+    Re-Attach nach Crash-Recovery — dieselbe Funktion benutzen:
+
+    1. kurz warten, damit der Stream die letzten Zeilen noch schreibt,
+    2. Log-Task abbrechen und begrenzt auf sein Ende warten,
+    3. ``container.logs(tail=…)`` nachlesen, solange der Container existiert,
+    4. Metrics-Task abbrechen.
+
+    Erst danach darf der Container entfernt werden.
+
+    Args:
+        log_task: Task des Log-Streamings (None wird ignoriert)
+        metrics_task: Task des Metrics-Monitorings (None wird ignoriert)
+        container: Docker-Container-Objekt; None überspringt das Nachlesen
+        log_file_path: Pfad zur Logdatei des Runs
+        run_id: Run-ID (für Logging)
+    """
+    await asyncio.sleep(STREAM_FLUSH_GRACE_SECONDS)
+    await _stop_stream_task(
+        log_task, run_id, "Log-Streaming", LOG_TASK_SHUTDOWN_TIMEOUT_SECONDS
+    )
+    if container is not None:
+        await _recover_remaining_logs(container, log_file_path, run_id)
+    await _stop_stream_task(
+        metrics_task, run_id, "Metrics-Monitoring", METRICS_TASK_SHUTDOWN_TIMEOUT_SECONDS
+    )
 
 
 async def _remove_container(
@@ -2328,9 +2418,12 @@ async def _re_attach_container(
         # Container-Wait
         exit_code = await stream_pool.run(container.wait)
         
-        # Tasks beenden
-        log_task.cancel()
-        metrics_task.cancel()
+        # Tasks beenden – wie im normalen Run-Pfad mit begrenztem Warten und
+        # Nachlesen der letzten Logzeilen. Ohne das schneidet das Entfernen des
+        # Containers weiter unten die Logdatei ab.
+        await _finalize_run_streams(
+            log_task, metrics_task, container, log_file_path, run_id
+        )
         
         # Exit-Code extrahieren
         exit_code_value = exit_code.get("StatusCode", -1) if isinstance(exit_code, dict) else exit_code
@@ -2463,29 +2556,100 @@ async def graceful_shutdown(session: Session) -> None:
     runs = session.exec(
         select(PipelineRun).where(PipelineRun.status == RunStatus.RUNNING)
     ).all()
-    
+    if not runs:
+        logger.info("Graceful Shutdown abgeschlossen: keine laufenden Runs")
+        return
+
+    budget = max(1, config.GRACEFUL_SHUTDOWN_TIMEOUT)
+    # Docker sendet nach `t` Sekunden SIGKILL an den Container. Der Wert muss
+    # unter dem Gesamtbudget liegen, damit die Antwort noch ankommt.
+    stop_timeout = max(1, budget - SHUTDOWN_STOP_RESERVE_SECONDS)
+
+    async with _concurrency_lock:
+        containers = {run.id: _running_containers.get(run.id) for run in runs}
+
+    # Parallel statt nacheinander: ein einzelner container.stop() blockiert bis
+    # zu `stop_timeout` plus dem Client-Timeout von docker-py. Sequenziell wäre
+    # das Budget nach dem ersten Container aufgebraucht, und alles Weitere
+    # erledigte erst die Zombie-Reconciliation beim nächsten Start.
+    tasks = {
+        run.id: asyncio.create_task(_stop_container_for_shutdown(
+            run.id, containers.get(run.id), stop_timeout
+        ))
+        for run in runs
+    }
+    try:
+        await asyncio.wait_for(
+            asyncio.gather(*tasks.values(), return_exceptions=True), timeout=budget
+        )
+    except asyncio.TimeoutError:
+        unfinished = sum(1 for t in tasks.values() if t.cancelled() or not t.done())
+        logger.warning(
+            "Graceful Shutdown: Budget von %ds erschöpft – %d von %d Containern nicht "
+            "mehr gestoppt. Ihre Runs bleiben auf RUNNING und werden beim nächsten "
+            "Start reconciliert.",
+            budget, unfinished, len(runs),
+        )
+        for task in tasks.values():
+            task.cancel()
+
+    finished_at = datetime.now(timezone.utc)
+    stopped = updated = 0
     for run in runs:
+        task = tasks[run.id]
+        if not task.done() or task.cancelled():
+            # Nicht mehr geschafft: bewusst auf RUNNING lassen. Die
+            # Zombie-Reconciliation beim nächsten Start hängt sich an noch
+            # laufende Container wieder an und schreibt beendete fort; ein
+            # anderer Status würde genau das verhindern.
+            continue
+        if task.exception() is not None or not task.result():
+            run.status = RunStatus.WARNING
+        else:
+            run.status = RunStatus.INTERRUPTED
+            stopped += 1
+        run.finished_at = finished_at
+        session.add(run)
+        updated += 1
+
+    if updated:
         try:
-            # Container stoppen (nicht killen)
-            async with _concurrency_lock:
-                container = _running_containers.get(run.id)
-            
-            if container:
-                try:
-                    # Graceful Stop mit 30s Timeout
-                    await control_pool.run(lambda c=container: c.stop(timeout=30))
-                    run.status = RunStatus.INTERRUPTED
-                except Exception as e:
-                    logger.warning(f"Fehler beim Stoppen von Container für Run {run.id}: {e}")
-                    run.status = RunStatus.WARNING
-            else:
-                run.status = RunStatus.WARNING
-            
-            run.finished_at = datetime.now(timezone.utc)
-            session.add(run)
             session.commit()
-            
         except Exception as e:
-            logger.error(f"Fehler beim Graceful Shutdown für Run {run.id}: {e}")
-    
-    logger.info(f"Graceful Shutdown abgeschlossen: {len(runs)} Runs beendet")
+            session.rollback()
+            logger.error("Graceful Shutdown: Status-Update fehlgeschlagen: %s", e)
+
+    logger.info(
+        "Graceful Shutdown abgeschlossen: %d von %d Runs gestoppt, %d ohne Status-Update "
+        "(werden bei der nächsten Zombie-Reconciliation aufgeräumt)",
+        stopped, len(runs), len(runs) - updated,
+    )
+
+
+async def _stop_container_for_shutdown(
+    run_id: UUID,
+    container: Optional[docker.models.containers.Container],
+    stop_timeout: int,
+) -> bool:
+    """
+    Stoppt einen Container beim Shutdown.
+
+    Args:
+        run_id: Run-ID (für Logging)
+        container: Docker-Container-Objekt oder None, wenn nicht mehr getrackt
+        stop_timeout: Sekunden bis Docker SIGKILL sendet
+
+    Returns:
+        True, wenn der Container gestoppt wurde; False, wenn er nicht mehr
+        getrackt war oder das Stoppen fehlschlug.
+    """
+    if container is None:
+        return False
+    try:
+        await control_pool.run(lambda: container.stop(timeout=stop_timeout))
+        return True
+    except asyncio.CancelledError:
+        raise
+    except Exception as e:
+        logger.warning("Fehler beim Stoppen von Container für Run %s: %s", run_id, e)
+        return False

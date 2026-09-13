@@ -262,6 +262,25 @@ class Config:
     überschreiben diesen Wert. Container wird nach Timeout beendet (killed).
     """
     
+    GRACEFUL_SHUTDOWN_TIMEOUT: int = max(
+        1, int(os.getenv("GRACEFUL_SHUTDOWN_TIMEOUT", "8"))
+    )
+    """
+    Gesamtbudget in Sekunden, um beim Herunterfahren alle laufenden Container zu
+    stoppen.
+
+    Muss unter der Stop-Grace-Period der Orchestrator-Umgebung liegen, sonst
+    greift deren SIGKILL mitten im Shutdown: Docker Compose nutzt ohne
+    `stop_grace_period` 10 Sekunden, Kubernetes ohne
+    `terminationGracePeriodSeconds` 30. Der Default 8 passt unter beide.
+
+    Container werden innerhalb dieses Budgets parallel gestoppt. Runs, die es
+    nicht mehr schaffen, bleiben bewusst auf RUNNING – die Zombie-Reconciliation
+    beim nächsten Start hängt sich dann wieder an noch laufende Container bzw.
+    schreibt den Exit-Code beendeter Container fort. Ein Status ungleich RUNNING
+    würde diese Nacharbeit verhindern.
+    """
+
     RETRY_ATTEMPTS: int = int(os.getenv("RETRY_ATTEMPTS", "0"))
     """
     Globale Anzahl Retry-Versuche bei fehlgeschlagenen Runs.

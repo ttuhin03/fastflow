@@ -1100,18 +1100,24 @@ async def graceful_shutdown(session: Session) -> None:
     namespace = app_config.KUBERNETES_NAMESPACE
     for run in runs:
         try:
-            jobs = batch_api.list_namespaced_job(
-                namespace=namespace,
-                label_selector=f"{JOB_LABEL_RUN_ID}={run.id}",
+            # Control-Pool statt direkt: die K8s-Client-Aufrufe sind synchron und
+            # würden sonst den Event-Loop während des Shutdowns blockieren.
+            jobs = await control_pool.run(
+                lambda r=run: batch_api.list_namespaced_job(
+                    namespace=namespace,
+                    label_selector=f"{JOB_LABEL_RUN_ID}={r.id}",
+                )
             )
             if jobs.items:
                 for job in jobs.items:
                     if job.metadata and job.metadata.name:
                         try:
-                            batch_api.delete_namespaced_job(
-                                name=job.metadata.name,
-                                namespace=namespace,
-                                propagation_policy="Background",
+                            await control_pool.run(
+                                lambda name=job.metadata.name: batch_api.delete_namespaced_job(
+                                    name=name,
+                                    namespace=namespace,
+                                    propagation_policy="Background",
+                                )
                             )
                         except ApiException:
                             pass

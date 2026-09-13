@@ -42,6 +42,7 @@ Fast-Flow is configured primarily via environment variables in a `.env` file. Th
 | `WORKER_BASE_IMAGE` | `fastflow-worker:latest` | Base image for pipeline containers (build with `Dockerfile.worker`; must run as UID 1001 with read-only root). In production use your registry image, e.g. `ghcr.io/<owner>/fastflow-worker:v1.0.0`. |
 | `MAX_CONCURRENT_RUNS` | `10` | Maximum number of pipelines running concurrently. Also sizes the orchestrator's executor thread pools: each running pipeline permanently occupies three threads (log stream, stats stream, container wait), so the pools grow to roughly `4 × MAX_CONCURRENT_RUNS` threads. Current utilization is exposed under `thread_pools` in `GET /api/settings/concurrency`. |
 | `CONTAINER_TIMEOUT` | *Empty* (no timeout) | Global timeout for pipeline runs in seconds. |
+| `GRACEFUL_SHUTDOWN_TIMEOUT` | `8` | Total budget in seconds for stopping all running pipeline containers when the orchestrator shuts down. Containers are stopped in parallel within this budget. Must stay below the orchestrator's own stop grace period (`stop_grace_period` in docker-compose, `terminationGracePeriodSeconds` in Kubernetes) — otherwise the process is killed mid-shutdown. Runs that are not stopped in time stay `RUNNING` on purpose and are cleaned up by the zombie reconciliation on the next start. |
 | `RETRY_ATTEMPTS` | `0` | Default number of retry attempts on failure. |
 
 ## Git Sync
