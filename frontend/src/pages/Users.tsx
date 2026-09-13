@@ -141,30 +141,6 @@ export default function Users({ editLocked = false }: UsersProps) {
     staleTime: 2 * 60 * 1000,
   })
 
-  // Show message if not admin (403 Forbidden) or if error detail contains "Admin"
-  const errorResponse = (error as any)?.response
-  const is403Error = errorResponse?.status === 403
-  const isAdminError = errorResponse?.data?.detail?.includes?.('Admin') || 
-                       errorResponse?.data?.detail === 'Admin-Rechte erforderlich'
-  
-  if (isError && (is403Error || isAdminError)) {
-    return (
-      <div className="users-page">
-        <div className="users-list-card">
-          <div className="empty-state">
-            <h3>{t('users.accessDeniedTitle')}</h3>
-            <p>{t('users.accessDeniedBody')}</p>
-            {errorResponse?.data?.detail && (
-              <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', opacity: 0.8 }}>
-                {errorResponse.data.detail}
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   const inviteUserMutation = useMutation({
     mutationFn: async (data: {
       email: string
@@ -293,6 +269,33 @@ export default function Users({ editLocked = false }: UsersProps) {
       showError(t('users.errorWithDetail', { detail: error.response?.data?.detail || error.message }))
     },
   })
+
+  // Kein Adminzugriff (403 bzw. Admin-Hinweis im Fehlerdetail): Hinweisbox statt
+  // Nutzerverwaltung. Dieser return muss unterhalb *aller* Hooks stehen — die
+  // Bedingung wechselt zur Laufzeit (erst lädt die Query, dann kommt das 403),
+  // und ein früher return würde die Hook-Zahl zwischen zwei Renders verändern.
+  const errorResponse = (error as any)?.response
+  const is403Error = errorResponse?.status === 403
+  const isAdminError = errorResponse?.data?.detail?.includes?.('Admin') || 
+                       errorResponse?.data?.detail === 'Admin-Rechte erforderlich'
+
+  if (isError && (is403Error || isAdminError)) {
+    return (
+      <div className="users-page">
+        <div className="users-list-card">
+          <div className="empty-state">
+            <h3>{t('users.accessDeniedTitle')}</h3>
+            <p>{t('users.accessDeniedBody')}</p>
+            {errorResponse?.data?.detail && (
+              <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', opacity: 0.8 }}>
+                {errorResponse.data.detail}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const resetForm = () => {
     setFormRole('readonly')
