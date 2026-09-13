@@ -59,6 +59,18 @@ class Config:
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
     verify_tls: bool = True
     redact_secrets: bool = True
+    enable_write_tools: bool = False
+    """Schreibende Tools registrieren (Runs starten, abbrechen, wiederholen).
+
+    Standardmäßig aus, und zwar so, dass die Tools gar nicht erst im
+    Werkzeugkasten erscheinen – nicht als Laufzeitprüfung. Ein Modell kann nicht
+    aufrufen, was nicht gelistet ist, und der Kontext wird nicht damit belastet.
+
+    Der Grund ist die Kombination aus zwei Eigenschaften: der Server liest Logs
+    und Quelltext, also Inhalte, die Fast-Flow nicht kontrolliert, und ein
+    Pipeline-Start hat Wirkung in der Welt. Wer beides in einer Sitzung
+    zusammenbringt, soll das bewusst tun.
+    """
 
     @property
     def api_url(self) -> str:
@@ -71,7 +83,8 @@ class Config:
         return (
             f"Config(base_url={self.base_url!r}, token='***', "
             f"timeout_seconds={self.timeout_seconds!r}, verify_tls={self.verify_tls!r}, "
-            f"redact_secrets={self.redact_secrets!r})"
+            f"redact_secrets={self.redact_secrets!r}, "
+            f"enable_write_tools={self.enable_write_tools!r})"
         )
 
 
@@ -137,4 +150,5 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         ),
         verify_tls=_bool_env(source, "FASTFLOW_VERIFY_TLS", True),
         redact_secrets=_bool_env(source, "FASTFLOW_REDACT_SECRETS", True),
+        enable_write_tools=_bool_env(source, "FASTFLOW_ENABLE_WRITE_TOOLS", False),
     )

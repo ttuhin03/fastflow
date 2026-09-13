@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
+from sqlmodel import select
 
 from app.core.api_token_hash import generate_api_token
 from app.models import (
@@ -237,3 +238,111 @@ def test_readonly_role_caps_what_a_token_can_do(client, test_session):
     _run(test_session)
 
     assert client.get("/api/runs", headers=_auth(token)).status_code == 200
+
+
+# --------------------------------------------------------------------------- #
+# run: schreibende Endpoints
+# --------------------------------------------------------------------------- #
+
+
+def _running_run(test_session) -> PipelineRun:
+    run = PipelineRun(
+        id=uuid4(),
+        pipeline_name="etl",
+        status=RunStatus.RUNNING,
+        log_file="/logs/etl.log",
+        started_at=datetime.now(timezone.utc),
+    )
+    test_session.add(run)
+    test_session.commit()
+    test_session.refresh(run)
+    return run
+
+
+@pytest.mark.parametrize(
+    "method,path",
+    [
+        ("post", "/api/pipelines/etl/run"),
+        ("post", "/api/runs/{run_id}/cancel"),
+        ("post", "/api/runs/{run_id}/retry"),
+    ],
+)
+def test_write_endpoints_require_the_run_scope(client, test_session, method, path):
+    """Ein Token ohne run kommt nicht einmal in den Handler."""
+    user = _user(test_session, UserRole.WRITE)
+    token = _token(test_session, user, ApiTokenScope.READ, ApiTokenScope.LOGS)
+    run = _running_run(test_session)
+
+    response = getattr(client, method)(
+        path.format(run_id=run.id), json={}, headers=_auth(token)
+    )
+
+    assert response.status_code == 403
+    assert "run" in response.json()["detail"]
+
+
+def test_readonly_user_can_never_reach_a_write_endpoint(client, test_session):
+    """Selbst wenn run in der Token-Zeile steht: die Rolle streicht ihn."""
+    user = _user(test_session, UserRole.READONLY)
+    token = _token(test_session, user, ApiTokenScope.READ, ApiTokenScope.RUN)
+    run = _running_run(test_session)
+
+    response = client.post(f"/api/runs/{run.id}/cancel", headers=_auth(token))
+
+    assert response.status_code == 403
+
+
+def test_cancel_with_run_scope_succeeds_and_is_attributed(
+    client, test_session, monkeypatch
+):
+    """Der Audit-Eintrag muss erkennen lassen, dass ein Token gehandelt hat.
+
+    Ohne diese Attribution steht im Log nur der Benutzername – und mit
+    wachsender Automatisierung ließe sich nicht mehr unterscheiden, ob ein
+    Mensch im Browser oder ein CI-Job den Run abgebrochen hat.
+    """
+    from app.models import AuditLogEntry
+    import app.api.runs as runs_api
+
+    async def fake_cancel(run_id, session):
+        return True
+
+    monkeypatch.setattr(runs_api, "cancel_run", fake_cancel)
+
+    user = _user(test_session, UserRole.WRITE)
+    token = _token(test_session, user, ApiTokenScope.RUN)
+    run = _running_run(test_session)
+
+    response = client.post(f"/api/runs/{run.id}/cancel", headers=_auth(token))
+
+    assert response.status_code == 200
+    entry = test_session.exec(
+        select(AuditLogEntry).where(AuditLogEntry.action == "run_cancel")
+    ).first()
+    assert entry is not None
+    assert entry.username == user.username
+    assert entry.details["auth_kind"] == "token"
+    assert entry.details["token_label"] == "scope test"
+    assert "token_id" in entry.details
+
+
+def test_browser_session_is_attributed_as_session(
+    authenticated_client, test_session, monkeypatch
+):
+    from app.models import AuditLogEntry
+    import app.api.runs as runs_api
+
+    async def fake_cancel(run_id, session):
+        return True
+
+    monkeypatch.setattr(runs_api, "cancel_run", fake_cancel)
+    run = _running_run(test_session)
+
+    response = authenticated_client.post(f"/api/runs/{run.id}/cancel")
+
+    assert response.status_code == 200
+    entry = test_session.exec(
+        select(AuditLogEntry).where(AuditLogEntry.action == "run_cancel")
+    ).first()
+    assert entry.details["auth_kind"] == "session"
+    assert "token_id" not in entry.details

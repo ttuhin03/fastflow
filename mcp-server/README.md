@@ -1,9 +1,12 @@
 # fastflow-mcp
 
-Lesender [MCP](https://modelcontextprotocol.io)-Server für den Fast-Flow-Orchestrator.
+[MCP](https://modelcontextprotocol.io)-Server für den Fast-Flow-Orchestrator.
 Gibt einem Agenten Zugriff auf Pipelines, Runs, Statistiken und Logs – ohne
 Browser-Session, ohne OpenAPI-Dump im Kontext und ohne dass der Agent das
 Credential zu sehen bekommt.
+
+Standardmäßig **rein lesend**. Runs starten, abbrechen und wiederholen ist
+möglich, aber zweifach abgesichert: Scope am Token und ein eigener Schalter.
 
 ## Warum nicht einfach `curl`?
 
@@ -26,12 +29,13 @@ API-Tokens**. Die Scopes bestimmen, was der Server sehen kann:
 | `read` | Pipelines, Runs, Statistiken, Abhängigkeiten | niedrig |
 | `logs` | Log-Inhalte und Zell-Ausgaben | mittel |
 | `source` | Pipeline-Quelldateien | mittel |
-| `run` | Runs starten/abbrechen – **von diesem Server nicht genutzt** | hoch |
+| `run` | Runs starten, abbrechen, wiederholen – nur mit `FASTFLOW_ENABLE_WRITE_TOOLS=true` | hoch |
 
-Für den vollen Funktionsumfang genügen `read` + `logs`. `source` nur, wenn der
-Agent Quelltext lesen können soll. `run` nicht vergeben: dieser Server ist
-lesend, und ein Token mit Schreibrechten in einem Agenten, der fremde Log-Inhalte
-liest, ist die Kombination, die man vermeiden will (siehe Sicherheit).
+Für den Lesebetrieb genügen `read` + `logs`. `source` nur, wenn der Agent
+Quelltext lesen können soll. `run` nur, wenn die schreibenden Tools wirklich
+gebraucht werden – ein Token mit Schreibrechten in einem Agenten, der fremde
+Log-Inhalte liest, ist die Kombination, die man vermeiden will (siehe
+Sicherheit).
 
 ## Installation
 
@@ -71,6 +75,7 @@ python3 -m venv .venv
 | `FASTFLOW_TIMEOUT_SECONDS` | `30` | Zeitlimit je Request (1–300) |
 | `FASTFLOW_VERIFY_TLS` | `true` | TLS-Zertifikat prüfen |
 | `FASTFLOW_REDACT_SECRETS` | `true` | Zugangsdaten in Logs maskieren |
+| `FASTFLOW_ENABLE_WRITE_TOOLS` | `false` | Schreibende Tools registrieren |
 
 Fehlkonfiguration scheitert beim Start mit einer Meldung auf stderr, nicht später
 an unklaren Tool-Fehlern.
@@ -88,8 +93,27 @@ an unklaren Tool-Fehlern.
 | `get_dependency_report` | `read` | – |
 | `summarize_failures` | `read` (+`logs` für Fehlerzeilen) | 20 Gruppen |
 
-Alle Tools sind als `readOnlyHint` annotiert. Runs starten, abbrechen und
-wiederholen ist bewusst nicht enthalten.
+Alle acht sind als `readOnlyHint` annotiert.
+
+### Schreibende Tools (standardmäßig aus)
+
+Mit `FASTFLOW_ENABLE_WRITE_TOOLS=true` kommen drei Tools dazu, die alle den
+Scope `run` brauchen:
+
+| Tool | Wirkung |
+|---|---|
+| `trigger_pipeline` | Startet einen Lauf. **Keine** Umgebungsvariablen setzbar. |
+| `cancel_run` | Bricht einen laufenden Run ab (`destructiveHint`). |
+| `retry_run` | Erzeugt einen neuen Run mit identischer Konfiguration. |
+
+„Standardmäßig aus" heißt hier: die Tools werden **gar nicht erst registriert**.
+Sie erscheinen nicht in `list_tools`, belasten den Kontext nicht, und ein Modell
+kann nicht aufrufen, was es nicht sieht. Eine Laufzeitprüfung innerhalb der Tools
+wäre schwächer – das Modell sähe sie, riefe sie auf und scheiterte am Fehler.
+
+Jede Aktion landet im Audit-Log von Fast-Flow mit `auth_kind: token`, der
+Token-ID und dem Label. Im Log ist damit unterscheidbar, ob ein Mensch im
+Browser oder ein automatisierter Client gehandelt hat.
 
 ### Resources
 
@@ -108,8 +132,11 @@ wiederholen ist bewusst nicht enthalten.
 kontrolliert. Eine Pipeline, die eine fremde API abfragt, kann eine Zeile ins Log
 schreiben, die wie eine Anweisung aussieht. Jede Rückgabe mit solchem Inhalt
 trägt deshalb einen Hinweis, dass es sich um Daten und nicht um Anweisungen
-handelt. Gefährlich wird das erst in Kombination mit Schreibrechten – deshalb:
-**kein `run`-Scope für dieses Token.**
+handelt. Gefährlich wird das erst in Kombination mit Schreibrechten. Deshalb
+sind die schreibenden Tools standardmäßig aus und müssen zweimal bewusst
+freigeschaltet werden: der Scope `run` am Token **und**
+`FASTFLOW_ENABLE_WRITE_TOOLS=true` in der Client-Konfiguration. Für reines
+Debugging beides weglassen.
 
 **Maskierung ist unvollständig.** Der Redactor erkennt Werte mit
 charakteristischer Form: `ffp_`, `ghp_`, `AKIA…`, `xox…`, JWTs, private

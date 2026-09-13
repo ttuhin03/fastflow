@@ -17,7 +17,6 @@ from app.auth.principal import Principal, require_scope, require_scope_user
 from app.core.database import get_session
 from app.models import ApiTokenScope, PipelineRun, RunStatus, User, RunCellLog
 from app.executor import cancel_run, check_container_health, run_pipeline
-from app.auth import require_write
 from app.schemas.runs import RunsResponse
 from app.services.audit import log_audit
 from app.middleware.rate_limiting import limiter
@@ -330,7 +329,7 @@ async def get_run_cells(
 async def cancel_run_endpoint(
     run_id: UUID,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_write)
+    principal: Principal = Depends(require_scope(ApiTokenScope.RUN))
 ) -> Dict[str, str]:
     """
     Bricht einen laufenden Run ab (Container stoppen).
@@ -369,7 +368,10 @@ async def cancel_run_endpoint(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Fehler beim Abbrechen des Runs: {run_id}"
         )
-    log_audit(session, "run_cancel", "run", str(run_id), None, current_user)
+    log_audit(
+        session, "run_cancel", "run", str(run_id),
+        details=principal.audit_details(), user=principal.user,
+    )
     return {
         "message": f"Run {run_id} wurde erfolgreich abgebrochen"
     }
@@ -379,7 +381,7 @@ async def cancel_run_endpoint(
 async def retry_run(
     run_id: UUID,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_write),
+    principal: Principal = Depends(require_scope(ApiTokenScope.RUN)),
 ) -> Dict[str, Any]:
     """
     Startet einen neuen Run mit denselben Parametern und Env-Variablen wie der angegebene Run.
@@ -414,8 +416,8 @@ async def retry_run(
         )
         log_audit(
             session, "run_retry", "run", str(run_id),
-            details={"new_run_id": str(new_run.id)},
-            user=current_user,
+            details={"new_run_id": str(new_run.id), **principal.audit_details()},
+            user=principal.user,
         )
         return {
             "id": str(new_run.id),

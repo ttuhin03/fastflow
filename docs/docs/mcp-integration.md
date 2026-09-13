@@ -4,14 +4,15 @@ sidebar_position: 13
 
 # MCP Integration (Design Proposal)
 
-:::caution[Phases 1 and 2 are implemented – phases 3 and 4 are not]
+:::caution[Phases 1 to 3 are implemented – phase 4 is not]
 **Implemented**: API tokens (`ApiToken`, migration `041`, `get_principal` / `require_scope`,
-the `/api/tokens` endpoints, the Settings UI) and the read-only MCP server under
-`mcp-server/` with its eight tools, three resources and two prompts. Read endpoints now
-accept API tokens and enforce scopes.
+the `/api/tokens` endpoints, the Settings UI), the MCP server under `mcp-server/` with its
+eight read tools, three resources and two prompts, and the three write tools behind the
+`run` scope. Read and write endpoints enforce scopes; write actions are attributed in the
+audit log.
 
-**Not implemented**: the write tools (`trigger_pipeline`, `cancel_run`, `retry_run`) and
-the HTTP sidecar. See [Phased plan](#part-5-phased-plan).
+**Not implemented**: the HTTP sidecar (phase 4), which stays unbuilt until someone needs
+hosted access. See [Phased plan](#part-5-phased-plan).
 :::
 
 An MCP server would let an agent answer questions like *"why did the nightly ETL fail?"*
@@ -218,7 +219,9 @@ Source paths are relative to `/api`.
 | `cancel_run` | `run` | `POST /runs/:id/cancel` | — |
 | `retry_run` | `run` | `POST /runs/:id/retry` | — |
 
-`env_vars` is deliberately not exposed even though `RunPipelineRequest` accepts it. Free-form
+`env_vars` is deliberately not exposed even though `RunPipelineRequest` accepts it — a test
+asserts the field is absent from the tool schema, because this is the kind of thing that
+gets "helpfully" added back later. Free-form
 environment variables are the most direct way to rewrite a pipeline's behaviour from outside;
 `parameters` and `run_config_id` cover every legitimate agent use case. All three tools carry
 `readOnlyHint: false` and `idempotentHint: false` so clients can treat them as
@@ -247,6 +250,13 @@ refuses to start if a tool violates it, so a later refactor cannot quietly open 
 
 `GET /pipelines/{name}/encrypted-env` returns key names only and can therefore stay under
 `read` — useful for *"which variable does this pipeline expect?"* without exposing values.
+
+The denylist also holds by construction rather than by vigilance: every endpoint not
+converted to `require_scope` still depends on `get_current_user` or `require_write`, both of
+which only accept session JWTs. Resetting pipeline statistics, creating downstream triggers
+and everything under settings, users and secrets are therefore closed to API tokens without
+anyone having to remember to close them. A new endpoint is session-only until someone
+deliberately opens it.
 
 ## Part 3: Deployment
 
@@ -303,6 +313,8 @@ querying a third-party API can write a line that looks like an instruction. This
 dangerous combined with write access in the same token.
 
 - `logs` and `run` are not preselected together in the UI. Wanting both requires ticking both.
+- The write tools need a second, independent switch (`FASTFLOW_ENABLE_WRITE_TOOLS=true`) on
+  top of the scope. Granting `run` to a token is not enough to make an agent able to use it.
 - Log and source results are marked as foreign content in the tool result, not as instruction.
 - Triggering is not a new capability class — the webhook keys in `app/api/webhooks.py` have
   been able to do it without a session for a long time. What is new is that it can happen
@@ -343,7 +355,7 @@ The order is binding: each phase is usable on its own and sensible without the n
 |---|---|---|
 | **1. API tokens** ✅ *done* | Model, migration 041, `get_principal` / `require_scope`, the three `/api/tokens` endpoints, Settings UI, Gitleaks rule, tests. No MCP yet — the value stands alone for CI and scripts. | 2–3 days |
 | **2. MCP, read-only** ✅ *done* | `fastflow-mcp` package over stdio, the eight read tools, three resources, two prompts, log redactor. Lives in `mcp-server/` with its own dependencies — the orchestrator image is untouched. | 1–2 days |
-| **3. MCP, write** | The three `run` tools behind their own scope, off by default. Injection note in the docs, audit attribution verified. | 0.5 days |
+| **3. MCP, write** ✅ *done* | The three `run` tools behind their own scope, off by default — they are not registered at all unless `FASTFLOW_ENABLE_WRITE_TOOLS=true`, so the model cannot call what it cannot see. Audit attribution verified by test. | 0.5 days |
 | **4. Sidecar** | HTTP transport, Compose and K8s manifests. Only once someone actually needs hosted access — not on suspicion. | open |
 
 The estimate is an estimate. What is reliable is the ratio: phase 1 is the bulk of the work,

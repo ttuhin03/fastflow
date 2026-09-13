@@ -60,9 +60,11 @@ def _describe_http_error(response: httpx.Response, what: str) -> FastFlowError:
     if status == 404:
         return FastFlowError(f"Nicht gefunden: {what}." + (f" {detail}" if detail else ""))
     if status == 429:
+        # Der Pipeline-Start meldet mit 429 auch das Erreichen der
+        # MAX_CONCURRENT_RUNS-Grenze – für den Aufrufer derselbe nächste Schritt.
         return FastFlowError(
-            f"Rate-Limit erreicht (429) bei {what}. Bitte kurz warten und erst dann "
-            "erneut versuchen."
+            f"Grenze erreicht (429) bei {what}. {detail or 'Rate-Limit oder '
+            'Nebenläufigkeitsgrenze.'} Bitte kurz warten und erst dann erneut versuchen."
         )
     if status >= 500:
         return FastFlowError(
@@ -135,6 +137,40 @@ class FastFlowClient:
             raise FastFlowError(
                 f"Antwort bei {what} war kein JSON (Status {response.status_code})."
             ) from exc
+
+    async def post_json(
+        self,
+        path: str,
+        *,
+        what: str,
+        payload: dict[str, Any] | None = None,
+    ) -> Any:
+        """POST mit JSON-Body und JSON-Antwort.
+
+        Nur von den schreibenden Tools verwendet. Ein 409 wird eigens behandelt:
+        beim Pipeline-Start bedeutet er "Nebenläufigkeitsgrenze erreicht" und ist
+        ein vorübergehender Zustand, kein Fehler im Aufruf.
+        """
+        try:
+            response = await self._client.post(path, json=payload or {})
+        except httpx.TimeoutException as exc:
+            raise FastFlowError(
+                f"Zeitüberschreitung nach {self._config.timeout_seconds:.0f}s bei {what}. "
+                "Der Aufruf kann trotzdem angekommen sein – vor einem erneuten Versuch "
+                "den Zustand prüfen (list_runs)."
+            ) from exc
+        except httpx.HTTPError as exc:
+            raise FastFlowError(
+                f"Verbindung zu {self._config.base_url} fehlgeschlagen bei {what}: {exc}"
+            ) from exc
+
+        if response.status_code >= 400:
+            raise _describe_http_error(response, what)
+
+        try:
+            return response.json()
+        except ValueError:
+            return {}
 
     async def get_text(
         self,

@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
 from sqlmodel import Session, select, func
 from sqlalchemy import delete
 
-from app.auth.principal import require_scope_user
+from app.auth.principal import Principal, require_scope, require_scope_user
 from app.core.database import get_session
 from app.models import ApiTokenScope, DownstreamTrigger, Pipeline, PipelineDailyStat, PipelineRun, RunStatus, User
 from app.executor import run_pipeline
@@ -453,7 +453,7 @@ async def get_pipeline_dependencies(
 async def start_pipeline(
     name: str,
     request: RunPipelineRequest,
-    current_user: User = Depends(require_write),
+    principal: Principal = Depends(require_scope(ApiTokenScope.RUN)),
     session: Session = Depends(get_session),
 ) -> Dict[str, Any]:
     """
@@ -483,8 +483,15 @@ async def start_pipeline(
         )
         log_audit(
             session, "run_start", "pipeline", name,
-            details={"run_id": str(run.id), "run_config_id": run_config_id},
-            user=current_user,
+            # audit_details() hält fest, ob der Start aus dem Browser oder von
+            # einem automatisierten Client kam – ohne diese Attribution verliert
+            # das Audit-Log mit wachsender Automatisierung seinen Wert.
+            details={
+                "run_id": str(run.id),
+                "run_config_id": run_config_id,
+                **principal.audit_details(),
+            },
+            user=principal.user,
         )
         return {
             "id": str(run.id),

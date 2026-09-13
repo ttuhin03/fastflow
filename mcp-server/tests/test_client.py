@@ -76,8 +76,24 @@ async def test_429_asks_for_a_pause(make_client, routes):
     with pytest.raises(FastFlowError) as exc:
         await client.get_json("/runs", what="die Runs")
 
-    assert "Rate-Limit" in str(exc.value)
+    assert "429" in str(exc.value)
     assert "warten" in str(exc.value)
+
+
+async def test_429_passes_through_the_concurrency_reason(make_client, routes):
+    """Beim Pipeline-Start bedeutet 429 die Nebenläufigkeitsgrenze, nicht das
+    Rate-Limit. Der Grund aus der API gehört deshalb in die Meldung."""
+    routes.json(
+        "/api/pipelines/etl/run",
+        {"detail": "Maximale Anzahl gleichzeitiger Runs erreicht (5)"},
+        status=429,
+    )
+    client = make_client(routes.handler)
+
+    with pytest.raises(FastFlowError) as exc:
+        await client.post_json("/pipelines/etl/run", what="den Pipeline-Start")
+
+    assert "gleichzeitiger Runs" in str(exc.value)
 
 
 async def test_500_does_not_leak_the_response_body(make_client, routes):
