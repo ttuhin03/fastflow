@@ -495,4 +495,11 @@ async def run_shutdown_tasks() -> None:
             session.close()
     await _run_step("Graceful Shutdown", False, graceful, "Graceful Shutdown abgeschlossen")
 
+    # Erst nach dem Graceful Shutdown: dessen container.stop()-Calls laufen selbst
+    # über den Control-Pool.
+    def stop_thread_pools():
+        from app.executor.thread_pools import shutdown_thread_pools
+        shutdown_thread_pools()
+    await _run_step("Executor-Thread-Pools", False, stop_thread_pools, None)
+
     logger.info("Fast-Flow Orchestrator heruntergefahren")

@@ -37,6 +37,7 @@ from app.executor.core import (
     PREFIX_CELL_START,
     _parse_and_persist_cell_line,
 )
+from app.executor.thread_pools import control_pool, stream_pool
 from app.executor.worker_runtime import (
     build_k8s_container_security_context,
     build_k8s_pod_security_context,
@@ -244,10 +245,9 @@ async def run_container_task(
         py_version = pipeline.get_python_version()
         try:
             from app.git_sync.sync import ensure_python_version
-            await asyncio.get_running_loop().run_in_executor(
-                executor_core._executor,
-                lambda: ensure_python_version(py_version),
-            )
+            # Stream-Pool: fehlt der Interpreter, startet uv einen Download, der
+            # Minuten dauern kann.
+            await stream_pool.run(lambda: ensure_python_version(py_version))
         except Exception as e:
             logger.warning("Python-Version %s sicherstellen fehlgeschlagen: %s", py_version, e)
 
@@ -609,7 +609,7 @@ async def _stream_pod_logs(
 
     pod_name = None
     for _ in range(60):
-        pod_name = await asyncio.get_running_loop().run_in_executor(None, _get_pod_name)
+        pod_name = await control_pool.run(_get_pod_name)
         if pod_name:
             break
         await asyncio.sleep(1)
@@ -634,7 +634,7 @@ async def _stream_pod_logs(
         return False
 
     for _ in range(120):
-        if await asyncio.get_running_loop().run_in_executor(None, _can_stream_pod_logs):
+        if await control_pool.run(_can_stream_pod_logs):
             break
         await asyncio.sleep(1)
     else:
@@ -654,7 +654,7 @@ async def _stream_pod_logs(
             line_buffer = b""
             while True:
                 try:
-                    chunk = await asyncio.get_running_loop().run_in_executor(None, resp.read, 4096)
+                    chunk = await stream_pool.run(resp.read, 4096)
                     if not chunk:
                         break
                     line_buffer += chunk
@@ -703,9 +703,8 @@ async def _stream_pod_logs(
                             or content.startswith(PREFIX_CELL_OUTPUT)
                         )
                         if is_cell_protocol:
-                            await asyncio.get_running_loop().run_in_executor(
-                                None,
-                                lambda c=content: _parse_and_persist_cell_line(run_id, c),
+                            await stream_pool.run(
+                                lambda c=content: _parse_and_persist_cell_line(run_id, c)
                             )
                         log_line = f"[{ts_display}] {content}"
                         await log_file.write(log_line + "\n")
@@ -862,7 +861,6 @@ async def _emit_placeholder_metrics(
 ) -> None:
     """Sendet Metrics: bei namespace+job_name wird die K8s Metrics-API (metrics-server) genutzt, sonst 0."""
     import aiofiles
-    loop = asyncio.get_running_loop()
 
     def _get_pod_name() -> Optional[str]:
         if not namespace or not job_name:
@@ -884,10 +882,12 @@ async def _emit_placeholder_metrics(
             while True:
                 cpu_percent, ram_mb = 0.0, 0.0
                 if namespace and job_name:
-                    pod_name = await loop.run_in_executor(None, _get_pod_name)
+                    # Stream-Pool: läuft über die gesamte Laufzeit des Runs im
+                    # Takt weiter – wie der Stats-Stream im Docker-Backend.
+                    pod_name = await stream_pool.run(_get_pod_name)
                     if pod_name:
-                        cpu_percent, ram_mb = await loop.run_in_executor(
-                            None, lambda: _get_pod_metrics_from_api(namespace, pod_name)
+                        cpu_percent, ram_mb = await stream_pool.run(
+                            lambda: _get_pod_metrics_from_api(namespace, pod_name)
                         )
                 metric = {
                     "timestamp": datetime.now(timezone.utc).isoformat(),
