@@ -869,13 +869,20 @@ async def get_system_status(
 ) -> Dict[str, Any]:
     """
     Gibt Readiness-Checks für die UI zurück (DB, Docker/K8s, UV-Cache, Disk, Inodes).
-    Gleiche Logik wie GET /api/ready, aber auth-pflichtig und immer 200.
+    Wie GET /api/ready, aber auth-pflichtig und immer 200.
+
+    Die Roh-Meldungen der Checks sind Exception-Texte: sie enthalten DB-Hostnamen,
+    Cluster-IPs, Dateipfade und den bei Vault-Rotation dynamischen DB-Benutzernamen.
+    Für Nicht-Admins werden sie deshalb durch redact_error gefiltert — dasselbe
+    Least-Privilege-Prinzip, nach dem GET /settings die SMTP- und S3-Endpunkte nur
+    Admins zeigt. Admins sehen den vollen Text; er steht für sie ohnehin im Log.
     """
-    from app.core.readiness import run_readiness_checks
+    from app.core.readiness import redact_checks, run_readiness_checks
     checks, ok = run_readiness_checks()
+    is_admin = getattr(current_user, "role", None) == UserRole.ADMIN
     return {
         "status": "ready" if ok else "not_ready",
-        "checks": checks,
+        "checks": checks if is_admin else redact_checks(checks),
         "version": config.VERSION,
     }
 
