@@ -4,7 +4,7 @@
 # damit Webpack/Docusaurus-Versionen nicht von npm install "latest" abweichen
 # (Webpack 5.100+ validiert ProgressPlugin strikt; Canary-Docusaurus braucht passende Pins).
 
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /app
 
@@ -19,7 +19,7 @@ ENV BASE_URL=/
 RUN npm run build --workspace=docs
 
 # Serve der statischen Doku (SPA-Routing)
-FROM node:20-alpine
+FROM node:24-alpine
 
 # serve zur Build-Zeit installieren, damit zur Laufzeit kein npx-Download
 # als non-root nötig ist (DS-0002).
