@@ -15,7 +15,18 @@ import CalendarHeatmap from '../components/CalendarHeatmap'
 // aus dem PipelineDetail-Hauptchunk; Header/Stats/Tabs werden sofort interaktiv.
 const SuccessRateTrendChart = lazy(() => import('../components/SuccessRateTrendChart'))
 const AverageRuntimeChart = lazy(() => import('../components/AverageRuntimeChart'))
+import { getErrorDetail, getErrorStatus } from '../utils/apiError'
 import './PipelineDetail.css'
+
+/** Zeile der Run-Liste einer Pipeline (GET /pipelines/{name}/runs). */
+interface RunRow {
+  id: string
+  pipeline_name: string
+  status: string
+  started_at: string
+  finished_at: string | null
+  exit_code: number | null
+}
 
 interface PipelineStats {
   pipeline_name: string
@@ -130,7 +141,7 @@ export default function PipelineDetail() {
     enabled: !!name,
   })
 
-  const { data: runs } = useQuery({
+  const { data: runs } = useQuery<RunRow[]>({
     queryKey: ['pipeline-runs', name],
     queryFn: async () => {
       const response = await apiClient.get(`/pipelines/${name}/runs?limit=10`)
@@ -187,8 +198,8 @@ export default function PipelineDetail() {
       queryClient.invalidateQueries({ queryKey: ['pipelines'] })
       showSuccess(t('pipelineDetail.statsResetSuccess'))
     },
-    onError: (error: any) => {
-      showError(t('pipelineDetail.statsResetError', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('pipelineDetail.statsResetError', { detail: getErrorDetail(error) }))
     },
   })
 
@@ -212,12 +223,12 @@ export default function PipelineDetail() {
       showSuccess(t('pipelineDetail.runStarted', 'Run started'))
       if (data?.id) navigate(`/runs/${data.id}`)
     },
-    onError: (error: any) => {
-      const status = error?.response?.status
+    onError: (error) => {
+      const status = getErrorStatus(error)
       if (status === 429) {
         showError(t('pipelineDetail.runConcurrencyLimit', 'Concurrency limit reached — try again later.'))
       } else {
-        showError(error?.response?.data?.detail || error.message)
+        showError(getErrorDetail(error))
       }
     },
   })
@@ -245,8 +256,8 @@ export default function PipelineDetail() {
       queryClient.invalidateQueries({ queryKey: ['downstream-triggers', name] })
       showSuccess(t('pipelineDetail.downstreamAdded'))
     },
-    onError: (error: any) => {
-      showError(error.response?.data?.detail || error.message)
+    onError: (error) => {
+      showError(getErrorDetail(error))
     },
   })
 
@@ -258,8 +269,8 @@ export default function PipelineDetail() {
       queryClient.invalidateQueries({ queryKey: ['downstream-triggers', name] })
       showSuccess(t('pipelineDetail.downstreamRemoved'))
     },
-    onError: (error: any) => {
-      showError(error.response?.data?.detail || error.message)
+    onError: (error) => {
+      showError(getErrorDetail(error))
     },
   })
 
@@ -544,7 +555,7 @@ export default function PipelineDetail() {
                 </button>
               </div>
               <div className="pd-recent-list">
-                {runs.slice(0, 5).map((run: any) => (
+                {runs.slice(0, 5).map((run) => (
                   <div
                     key={run.id}
                     className="pd-recent-row clickable"
@@ -576,7 +587,7 @@ export default function PipelineDetail() {
               <span>{t('pipelineDetail.exitCode')}</span>
               <span>{t('pipelineDetail.actions')}</span>
             </div>
-            {runs.map((run: any) => (
+            {runs.map((run) => (
               <div
                 key={run.id}
                 className="table__row pd-runs-row clickable"

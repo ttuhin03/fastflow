@@ -7,6 +7,7 @@ import apiClient from '../api/client'
 import { showError, showSuccess } from '../utils/toast'
 import Tooltip from '../components/Tooltip'
 import { getFormatLocale } from '../utils/locale'
+import { getErrorDetail } from '../utils/apiError'
 import './Secrets.css'
 
 interface Secret {
@@ -58,8 +59,8 @@ export default function Secrets() {
       setEncryptResult(data.encrypted)
       showSuccess(t('secrets.encryptSuccess'))
     },
-    onError: (error: any) => {
-      showError(t('secrets.encryptError', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('secrets.encryptError', { detail: getErrorDetail(error) }))
     },
   })
 

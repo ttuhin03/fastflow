@@ -20,6 +20,10 @@ interface Run {
   finished_at: string | null
 }
 
+interface RecentRunsResponse {
+  pipelines?: Record<string, Run[]>
+}
+
 interface RunStatusCirclesProps {
   pipelineName: string
   /** 'circles' = legacy round icons; 'strip' = dense colored last-N bar (dashboard cards) */
@@ -30,7 +34,9 @@ interface RunStatusCirclesProps {
 
 function useRecentRunsPerPipeline(pipelineName: string) {
   const runsInterval = useRefetchInterval(5000)
-  return useQuery<Run[]>({
+  // Der Endpoint liefert alle Pipelines auf einmal; select schneidet die
+  // gesuchte heraus — daher unterscheiden sich queryFn- und Ergebnistyp.
+  return useQuery<RecentRunsResponse, Error, Run[]>({
     queryKey: ['recent-runs-per-pipeline'],
     queryFn: async () => {
       // Backend erlaubt maximal 10 Runs pro Pipeline (le=10)
@@ -38,7 +44,7 @@ function useRecentRunsPerPipeline(pipelineName: string) {
       return response.data
     },
     refetchInterval: runsInterval,
-    select: (data: any) => (data?.pipelines?.[pipelineName] ?? []) as Run[],
+    select: (data) => data?.pipelines?.[pipelineName] ?? [],
   })
 }
 

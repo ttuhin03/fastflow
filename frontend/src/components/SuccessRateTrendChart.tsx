@@ -18,6 +18,36 @@ interface SuccessRateTrendChartProps {
   days?: number
 }
 
+// Auf Modulebene, nicht im Rumpf der Chart-Komponente: dort neu erzeugt,
+// behandelt React das Tooltip bei jedem Render als anderen Komponententyp und
+// verwirft dessen Zustand.
+function SuccessRateTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: {
+  dateFull: string
+  successRate: number
+  successfulRuns: number
+  totalRuns: number
+} }> }) {
+  const { t } = useTranslation()
+  if (active && payload && payload.length) {
+    const data = payload[0].payload
+    return (
+      <div className="success-rate-tooltip">
+        <p className="tooltip-date">{data.dateFull}</p>
+        <p className="tooltip-value">
+          <span className="tooltip-label">{t('charts.successRate.tooltipRate')}</span>
+          <span className={`tooltip-number ${data.successRate >= 80 ? 'success' : data.successRate >= 50 ? 'warning' : 'error'}`}>
+            {data.successRate}%
+          </span>
+        </p>
+        <p className="tooltip-details">
+          {t('charts.successRate.tooltipRuns', { successful: data.successfulRuns, total: data.totalRuns })}
+        </p>
+      </div>
+    )
+  }
+  return null
+}
+
 export default function SuccessRateTrendChart({ dailyStats, days = 30 }: SuccessRateTrendChartProps) {
   const { t } = useTranslation()
 
@@ -38,31 +68,6 @@ export default function SuccessRateTrendChart({ dailyStats, days = 30 }: Success
     }))
   }, [dailyStats, days])
 
-  const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload: {
-    dateFull: string
-    successRate: number
-    successfulRuns: number
-    totalRuns: number
-  } }> }) => {
-    if (active && payload && payload.length) {
-      const data = payload[0].payload
-      return (
-        <div className="success-rate-tooltip">
-          <p className="tooltip-date">{data.dateFull}</p>
-          <p className="tooltip-value">
-            <span className="tooltip-label">{t('charts.successRate.tooltipRate')}</span>
-            <span className={`tooltip-number ${data.successRate >= 80 ? 'success' : data.successRate >= 50 ? 'warning' : 'error'}`}>
-              {data.successRate}%
-            </span>
-          </p>
-          <p className="tooltip-details">
-            {t('charts.successRate.tooltipRuns', { successful: data.successfulRuns, total: data.totalRuns })}
-          </p>
-        </div>
-      )
-    }
-    return null
-  }
 
   if (chartData.length === 0) {
     return (
@@ -88,7 +93,7 @@ export default function SuccessRateTrendChart({ dailyStats, days = 30 }: Success
             {...axisProps}
             label={{ value: t('charts.successRate.yAxis'), angle: -90, position: 'insideLeft', style: { fill: chart.axis } }}
           />
-          <Tooltip content={<CustomTooltip />} />
+          <Tooltip content={<SuccessRateTooltip />} />
           <Legend />
           <Line
             type="monotone"

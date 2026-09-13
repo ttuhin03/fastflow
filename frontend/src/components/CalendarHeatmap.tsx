@@ -168,7 +168,7 @@ export default function CalendarHeatmap({ dailyStats, days = 365, showTitle = tr
     })
     
     return { weeks: weeksArray, monthLabels: monthLabelsArray }
-  }, [allDays])
+  }, [allDays, formatLocale])
 
   return (
     <div className="calendar-heatmap">

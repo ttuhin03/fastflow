@@ -49,7 +49,12 @@ function useWarnings(): string[] {
     queryFn: async () => (await apiClient.get('/settings/storage')).data,
     ...refetch,
   })
-  const { data: syncStatus } = useQuery<SyncStatus>({
+  // dataUpdatedAt statt Date.now(): der Zeitpunkt kommt aus dem Query-Cache und
+  // ist damit beim Rendern ein reiner Wert. Date.now() im Rumpf machte die
+  // Komponente unrein — zwei Renders mit identischen Daten konnten sich
+  // unterscheiden. Inhaltlich ist es auch genauer: "wie alt war der Sync, als
+  // wir zuletzt nachgesehen haben" (die Query pollt alle 30s).
+  const { data: syncStatus, dataUpdatedAt: syncCheckedAt } = useQuery<SyncStatus>({
     queryKey: ['sync-status'],
     queryFn: async () => (await apiClient.get('/sync/status')).data,
     ...refetch,
@@ -91,7 +96,7 @@ function useWarnings(): string[] {
       warnings.push(t('warnings.gitSyncFailed'))
     } else if (syncStatus.last_sync) {
       const last = new Date(syncStatus.last_sync).getTime()
-      const hours = (Date.now() - last) / (1000 * 60 * 60)
+      const hours = (syncCheckedAt - last) / (1000 * 60 * 60)
       if (hours > SYNC_STALE_HOURS) {
         warnings.push(t('warnings.gitSyncStale', { hours: Math.round(hours) }))
       }
