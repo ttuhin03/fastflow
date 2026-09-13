@@ -214,7 +214,7 @@ uv run --with-requirements requirements.txt main.py
 
 If no `requirements.txt` exists: `uv run main.py`. Alternative: `pip install -r requirements.txt` and `python main.py`.
 
-:::important "If it runs, it runs"
+:::important["If it runs, it runs"]
 **If the script completes successfully locally this way, it will also run in the Fast-Flow orchestrator.** Same runtime (uv), no custom pipeline images. If you still get an error in the orchestrator: [Troubleshooting](/docs/troubleshooting#pipeline-lokal-orchestrator-fehlt).
 :::
 

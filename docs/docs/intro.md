@@ -10,7 +10,7 @@ sidebar_position: 1
 
 Fast-Flow is the answer to the complexity of Airflow and the heaviness of traditional CI/CD tools. It was built for developers who want real isolation without giving up the speed of local scripts. **Fast-Flow runs with Docker (Compose or socket proxy) or on Kubernetes** – in addition to Docker, native K8s operation is also possible (pipeline runs as Kubernetes Jobs). Details: [Kubernetes Deployment](/docs/deployment/K8S).
 
-:::tip In 30 seconds
+:::tip[In 30 seconds]
 **One Python script per pipeline.** No DAG, no image build. `git push` → sync → run. Each pipeline runs in an isolated container (Docker or K8s Job) with **uv** (JIT dependencies). One FastAPI container + Docker socket proxy or K8s – done.
 :::
 

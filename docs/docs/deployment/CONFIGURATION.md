@@ -61,7 +61,7 @@ Repository URL and authentication (PAT or deploy key) can be set **either** via 
 | `UV_PRE_HEAT` | `true` | Whether dependencies should be preinstalled ("preheated") automatically during sync. |
 | `UV_ALLOW_SOURCE_BUILDS` | `false` | Whether preheating may build source distributions (sdists) inside the orchestrator. **Keep this off.** See the warning below. |
 
-:::danger UV_ALLOW_SOURCE_BUILDS
+:::danger[UV_ALLOW_SOURCE_BUILDS]
 Preheating runs in the **orchestrator process**, not in the isolated worker container, and it processes the `requirements.txt` of your pipeline repository. Building an sdist executes that package's `setup.py` / PEP 517 build backend — so with `UV_ALLOW_SOURCE_BUILDS=true`, a single commit to the pipeline repository is enough to run arbitrary code with access to `ENCRYPTION_KEY`, `JWT_SECRET_KEY`, every stored secret and the Docker socket proxy.
 
 With the default (`false`), preheating only uses prebuilt wheels; unpacking a wheel never executes package code. Pipelines whose dependencies are only published as sdists still **run** — they are simply not preheated, so the build happens later inside the sandboxed worker container and the first start takes longer. Such a pipeline is reported as a preheat failure in the sync log with an explicit hint.

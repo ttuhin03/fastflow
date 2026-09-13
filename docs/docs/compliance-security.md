@@ -31,7 +31,7 @@ Configuration and technical details: [Log Backup (S3/MinIO)](/docs/deployment/S3
 
 ### Data sovereignty
 
-:::info Data sovereignty through on-premise MinIO
+:::info[Data sovereignty through on-premise MinIO]
 If you operate **MinIO in your own infrastructure** (on-premise or in one of your chosen data centers), you keep logs and metadata **entirely within your own legal jurisdiction**. The data **do not need to leave your organization's territory**; there is no dependency on US cloud providers or third parties that bring sub-processor relationships and data transfers.
 :::
 
@@ -41,7 +41,7 @@ This allows you to design your **data processing agreements** and **technical an
 
 ### Accountability (Art. 5(2), Art. 24 GDPR)
 
-:::tip Accountability and audits
+:::tip[Accountability and audits]
 The backup creates an **archive path**: Logs and metadata are transferred to your MinIO in a defined, traceable step before deletion in the live system. During audits or regulatory inquiries, you can document the **data flow** (pipeline → database → backup → MinIO) and **retention period** in your own storage. Object metadata (including run ID, timestamp, status) support **assignability** and **traceability** of processing steps.
 :::
 
@@ -55,7 +55,7 @@ The design follows the principle of **"storage limitation"**:
 2. **Clean transition:** Only **after successful** backup in MinIO are data deleted in the live system. There is **no "blind deletion"**: Without successful archiving, the local copy is retained.
 3. **Long-term archiving:** Retention periods and deletion concepts for MinIO are **your responsibility** and align with your documentation and compliance strategy.
 
-:::caution Your responsibility for retention and deletion
+:::caution[Your responsibility for retention and deletion]
 The **specific retention periods** and **deletion rules** in MinIO (lifecycle policies, retention) must be **defined and implemented by you**. Fast-Flow transfers the data; control of the archive is your IT or data protection team's responsibility.
 :::
 
@@ -68,7 +68,7 @@ The **specific retention periods** and **deletion rules** in MinIO (lifecycle po
 - **S3 Server-Side Encryption (SSE):** MinIO supports **SSE-S3** and **SSE-KMS**. Activation and configuration of encryption at rest is your MinIO instance's responsibility; Fast-Flow uses the standard S3 API. See the [MinIO documentation on Server-Side Encryption](https://min.io/docs/minio/linux/administration/server-side-encryption.html) (SSE-S3, SSE-KMS, SSE-C).
 - **Access control:** Access keys (`S3_ACCESS_KEY`, `S3_SECRET_ACCESS_KEY`) should be managed with **minimal privileges** (write access only to the designated bucket) via a secure secret manager.
 
-:::info Recommendation for production environments
+:::info[Recommendation for production environments]
 For compliance-relevant deployments: Operate MinIO with **TLS**, **encryption at rest**, and **strict access control**. Backup error notifications (email, Microsoft Teams) should be addressed to responsible parties (e.g. IT, data protection) so backup failures are detected promptly.
 :::
 
