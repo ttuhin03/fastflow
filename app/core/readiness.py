@@ -28,10 +28,30 @@ _public_status_cache: Optional[Tuple[float, Dict[str, Any]]] = None
 # den dynamischen DB-Benutzernamen. Nichts davon gehört in eine Antwort, die
 # ohne Authentifizierung abrufbar ist.
 _REDACTION_PATTERNS: Tuple[Tuple[re.Pattern[str], str], ...] = (
-    (re.compile(r'(?i)\buser\s+"[^"]*"'), 'user "<redacted>"'),
-    (re.compile(r'(?i)\brole\s+"[^"]*"'), 'role "<redacted>"'),
-    (re.compile(r'(?i)\b(?:server|host)\s+at\s+"[^"]*"'), 'server at "<redacted>"'),
+    # psycopg stellt dem Wert immer ein Schlüsselwort voran und setzt ihn in
+    # Anführungszeichen. Das Schlüsselwort bleibt stehen (es sagt, *woran* es
+    # scheitert), der Wert dahinter nicht. Die Reihenfolge in der Alternative ist
+    # relevant: die mehrwortigen Formen müssen vor den einwortigen stehen, sonst
+    # greift "host" schon in "host name".
+    #
+    # Abgedeckte Formen (Postgres, alle unauthentifiziert erreichbar):
+    #   connection to server at "db-rw.ns.svc" (10.0.0.1), port 5432 failed
+    #   could not translate host name "db-rw.ns" to address: ...
+    #   Is the server running on host "db-rw.ns" and accepting ...
+    #   password authentication failed for user "v-kubernet-..."
+    (
+        re.compile(
+            r'(?i)\b((?:server|host)\s+at|host\s*name|hostname|user|role|database|host|server)'
+            r'\s+"[^"]*"'
+        ),
+        r'\1 "<redacted>"',
+    ),
     (re.compile(r'\b(?:\d{1,3}\.){3}\d{1,3}\b'), "<redacted-ip>"),
+    # Auffanglinie für Hostnamen ohne vorangestelltes Schlüsselwort. Bewusst erst
+    # ab drei Labels (a.b.c): ab zwei würde sie auch "psycopg2.OperationalError"
+    # und "sqlalche.me" schreddern, also genau das, was die Meldung noch lesbar
+    # macht. Die kurze Cluster-Form "service.namespace" deckt deshalb die
+    # Schlüsselwort-Regel oben ab, nicht diese hier.
     (re.compile(r'\b[\w-]+(?:\.[\w-]+){2,}\b'), "<redacted-host>"),
     (re.compile(r'(?i)\b(?:password|passwd|pwd)\s*=\s*\S+'), "password=<redacted>"),
     (re.compile(r'(?i)\b[a-z+]+://[^\s"\']+'), "<redacted-url>"),

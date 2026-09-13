@@ -40,6 +40,47 @@ class TestRedaction:
         assert "s3cret" not in redacted
         assert "db.internal" not in redacted
 
+    def test_entfernt_hostnamen_aus_den_uebrigen_psycopg_meldungen(self):
+        """
+        Nicht nur die "connection to server at"-Form: Faellt die DNS-Aufloesung
+        aus – der haeufigste Fall, wenn Service oder Namespace weg sind – meldet
+        psycopg "could not translate host name". Beide Meldungen landen
+        unauthentifiziert in /api/system/status und /ready.
+
+        Die Kurzform service.namespace hat nur zwei Labels und wird deshalb von
+        der generischen FQDN-Regel nicht erfasst; sie haengt allein an der
+        Schluesselwort-Regel.
+        """
+        dns = redact_error(
+            'could not translate host name "fastflow-db-rw.fastflow" to address: '
+            "Name or service not known"
+        )
+        assert "fastflow-db-rw.fastflow" not in dns
+        assert "translate host name" in dns
+
+        refused = redact_error(
+            "could not connect to server: Connection refused Is the server "
+            'running on host "fastflow-db-rw.fastflow" (10.96.48.225) and '
+            "accepting TCP/IP connections on port 5432?"
+        )
+        assert "fastflow-db-rw.fastflow" not in refused
+        assert "10.96.48.225" not in refused
+        assert "Connection refused" in refused
+
+    def test_entfernt_den_datenbanknamen(self):
+        redacted = redact_error('FATAL:  database "fastflow_prod" does not exist')
+        assert "fastflow_prod" not in redacted
+        assert "does not exist" in redacted
+
+    def test_laesst_die_fehlerklasse_lesbar(self):
+        """
+        Redaction darf die Meldung nicht unbrauchbar machen: Die Exception-Klasse
+        ist der erste Hinweis fuer den Operator und hat mit Infrastruktur nichts
+        zu tun.
+        """
+        redacted = redact_error("(psycopg2.OperationalError) server closed the connection")
+        assert "psycopg2.OperationalError" in redacted
+
     def test_kuerzt_lange_meldungen(self):
         redacted = redact_error("x" * 500)
         assert len(redacted) <= 200
