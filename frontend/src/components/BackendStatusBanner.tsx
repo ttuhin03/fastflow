@@ -30,6 +30,8 @@ interface SystemStatusResponse {
   detail?: string | null
   log_viewer_url?: string | null
   version?: string
+  /** Alter der Messung in Sekunden — der Server cacht den Status. */
+  age_seconds?: number
 }
 
 /** Häufig genug, um im Incident nützlich zu sein; selten genug für ein Dauer-Polling. */
@@ -82,8 +84,16 @@ export default function BackendStatusBanner() {
     }
     if (!data) return
     cacheLogViewerUrl(data.log_viewer_url)
+
+    // Der Server cacht den Status ein paar Sekunden. Die Antwort beschreibt
+    // also nicht jetzt, sondern einen Moment vor age_seconds — zurueckgerechnet
+    // auf die Uhr dieser Seite, damit keine Server-Zeit verglichen werden muss.
+    // Ohne das wuerde ein gecachtes "ok" die juengere, vom Interceptor live
+    // beobachtete Stoerung wieder ausblenden.
+    const observedAt = performance.now() - (data.age_seconds ?? 0) * 1000
+
     if (data.status === 'ok') {
-      clearDegraded()
+      clearDegraded(observedAt)
     } else if (data.failing?.includes('database')) {
       // Die request_id steht nur in der fehlgeschlagenen Antwort, die der
       // Interceptor gesehen hat - /api/system/status kennt sie nicht. Ohne das
@@ -92,13 +102,16 @@ export default function BackendStatusBanner() {
       // mit der man den Vorfall im Log wiederfindet.
       const previous = getDegradedState()
       const carried = previous.reason === 'database' ? previous : undefined
-      reportDegraded({
-        reason: 'database',
-        requestId: carried?.requestId,
-        cause: data.detail ?? carried?.cause,
-      })
+      reportDegraded(
+        {
+          reason: 'database',
+          requestId: carried?.requestId,
+          cause: data.detail ?? carried?.cause,
+        },
+        observedAt,
+      )
     } else if (data.failing?.includes('sqlite_fallback')) {
-      reportDegraded({ reason: 'sqlite_fallback' })
+      reportDegraded({ reason: 'sqlite_fallback' }, observedAt)
     }
   }, [data, isError])
 

@@ -120,6 +120,22 @@ def _build_public_status() -> Dict[str, Any]:
     }
 
 
+def _with_age(checked_at: float, status: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Ergänzt den Status um sein Alter in Sekunden.
+
+    Notwendig wegen des Caches: Eine Antwort beschreibt nicht den Moment der
+    Anfrage, sondern eine bis zu _PUBLIC_STATUS_TTL_SECONDS alte Beobachtung.
+    Ohne diese Angabe kann das Frontend ein gecachtes "ok" nicht von einem
+    frischen unterscheiden — und würde damit eine jüngere, direkt beobachtete
+    503-Meldung wieder ausblenden (siehe api/degradedState.ts).
+
+    Das Alter wird pro Antwort berechnet, der gecachte Dict bleibt unberührt.
+    """
+    age = max(0.0, time.monotonic() - checked_at)
+    return {**status, "age_seconds": round(age, 1)}
+
+
 def get_public_status() -> Dict[str, Any]:
     """
     Liefert einen knappen, unauthentifiziert abrufbaren Systemstatus.
@@ -130,14 +146,15 @@ def get_public_status() -> Dict[str, Any]:
     deshalb jeder authentifizierte Endpoint (inkl. /api/settings/system-status)
     an der Auth-Dependency scheitert. Alles Weitere bleibt hinter Auth.
 
-    Das Ergebnis wird für _PUBLIC_STATUS_TTL_SECONDS gecached.
+    Das Ergebnis wird für _PUBLIC_STATUS_TTL_SECONDS gecached; wie alt es ist,
+    steht in age_seconds.
     """
     global _public_status_cache
 
     now = time.monotonic()
     cached = _public_status_cache
     if cached is not None and (now - cached[0]) < _PUBLIC_STATUS_TTL_SECONDS:
-        return cached[1]
+        return _with_age(cached[0], cached[1])
 
     with _public_status_lock:
         # Zweiter Blick: ein paralleler Aufrufer kann den Cache befüllt haben,
@@ -145,11 +162,16 @@ def get_public_status() -> Dict[str, Any]:
         cached = _public_status_cache
         now = time.monotonic()
         if cached is not None and (now - cached[0]) < _PUBLIC_STATUS_TTL_SECONDS:
-            return cached[1]
+            return _with_age(cached[0], cached[1])
 
+        # Zeitstempel vom Beginn der Messung, nicht von ihrem Ende: Der DB-Check
+        # kann in genau dem Fall, um den es hier geht, in einen Timeout laufen.
+        # Die Beobachtung ist dann so alt wie ihr Start — lieber zu alt schätzen
+        # als zu jung, sonst verwirft das Frontend die falsche Meldung.
+        checked_at = time.monotonic()
         status = _build_public_status()
-        _public_status_cache = (time.monotonic(), status)
-        return status
+        _public_status_cache = (checked_at, status)
+        return _with_age(checked_at, status)
 
 
 def run_readiness_checks() -> Tuple[Dict[str, Any], bool]:

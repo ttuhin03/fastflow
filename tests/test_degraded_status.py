@@ -131,6 +131,38 @@ class TestSystemStatusEndpoint:
         assert body["status"] == "degraded"
 
 
+class TestStatusAlter:
+    """
+    age_seconds ist die Grundlage dafuer, dass das Frontend eine gecachte
+    Antwort von einer frischen unterscheiden kann. Ohne die Angabe blendet ein
+    "ok" aus dem Cache die gerade erst gemeldete Stoerung wieder aus.
+    """
+
+    def test_frische_messung_ist_null_sekunden_alt(self, client):
+        body = client.get("/api/system/status").json()
+        assert body["age_seconds"] == 0.0
+
+    def test_gecachte_antwort_weist_ihr_alter_aus(self, client, monkeypatch):
+        import app.core.readiness as readiness
+
+        # Erste Anfrage fuellt den Cache, die zweite wird daraus bedient.
+        client.get("/api/system/status")
+        calls: list[int] = []
+        monkeypatch.setattr(
+            readiness, "_build_public_status", lambda: calls.append(1) or {}
+        )
+
+        # Uhr vorstellen, ohne zu warten: 3s < TTL, der Cache bleibt gueltig.
+        real_monotonic = readiness.time.monotonic
+        monkeypatch.setattr(
+            readiness.time, "monotonic", lambda: real_monotonic() + 3.0
+        )
+
+        body = client.get("/api/system/status").json()
+        assert calls == [], "Antwort kam nicht aus dem Cache"
+        assert body["age_seconds"] >= 3.0
+
+
 class TestReadyRedaction:
     def test_ready_gibt_keine_rohen_verbindungsfehler_preis(self, client, monkeypatch):
         def broken_checks():

@@ -159,6 +159,50 @@ describe('BackendStatusBanner', () => {
     expect(screen.getByText('abc-123')).toBeInTheDocument()
   })
 
+  it('laesst ein gecachtes "ok" die live beobachtete Stoerung nicht ausblenden', async () => {
+    // Der Race: Der Server cacht den Status ein paar Sekunden. Faellt die DB
+    // aus, sieht der Interceptor den 503 sofort - der naechste Poll liefert
+    // aber womoeglich noch das "ok", das vor dem Ausfall gemessen wurde. Ohne
+    // Altersvergleich verschwindet das Banner dann genau in dem Moment, in dem
+    // der Benutzer gerade einen Fehler gesehen hat, und kommt erst mit dem
+    // uebernaechsten Poll zurueck.
+    respond({ status: 'ok', failing: [], age_seconds: 0, log_viewer_url: 'https://g.example' })
+    const { container, queryClient } = renderBanner()
+    await waitFor(() =>
+      expect(window.localStorage.getItem('fastflow.logViewerUrl')).toBe('https://g.example'),
+    )
+
+    act(() => reportDegraded({ reason: 'database', requestId: 'abc-123' }))
+    await screen.findByRole('alert')
+
+    // Antwort aus dem Server-Cache: gemessen vier Sekunden vor dem Ausfall.
+    respond({ status: 'ok', failing: [], age_seconds: 4, log_viewer_url: 'https://g.example' })
+    await queryClient.refetchQueries({ queryKey: ['backend-status'] })
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(2))
+
+    expect(container.querySelector('.backend-status-banner')).not.toBeNull()
+    expect(screen.getByText('abc-123')).toBeInTheDocument()
+  })
+
+  it('blendet aus, sobald eine frische Messung Entwarnung gibt', async () => {
+    // Gegenprobe zum Test darueber: Der Altersvergleich darf das Banner nicht
+    // festkleben. Eine Messung, die nach der Meldung des Interceptors entstand,
+    // raeumt es weg - auch wenn die request_id noch daran haengt.
+    respond({ status: 'degraded', failing: ['database'], age_seconds: 0 })
+    const { container, queryClient } = renderBanner()
+    await screen.findByRole('alert')
+
+    act(() => reportDegraded({ reason: 'database', requestId: 'abc-123' }))
+    expect(await screen.findByText('abc-123')).toBeInTheDocument()
+
+    respond({ status: 'ok', failing: [], age_seconds: 0 })
+    await queryClient.refetchQueries({ queryKey: ['backend-status'] })
+
+    await waitFor(() =>
+      expect(container.querySelector('.backend-status-banner')).toBeNull(),
+    )
+  })
+
   it('blendet das Banner wieder aus, sobald sich das Backend erholt', async () => {
     respond({ status: 'degraded', failing: ['database'] })
     const { container, queryClient } = renderBanner()
