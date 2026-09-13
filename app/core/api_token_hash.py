@@ -58,9 +58,35 @@ class GeneratedApiToken(NamedTuple):
 def digest_api_token(value: str) -> str:
     """Liefert den Hex-Digest, der als ``ApiToken.token_hash`` gespeichert wird.
 
-    ``usedforsecurity=False`` markiert die Verwendung als Nicht-Passwort-Digest
-    (relevant für FIPS-Builds und für Reviewer, die nach Passwort-Hashing suchen).
+    **SHA-256 ist hier richtig, kein Versäumnis.** CodeQL meldet an dieser Stelle
+    ``py/weak-sensitive-data-hashing`` ("Sensitive data (password) …"); die Regel
+    zielt auf Passwort-Hashing und greift hier über den Variablennamen ``secret``
+    in :func:`generate_api_token`. Drei Gründe, warum Argon2/bcrypt an dieser
+    Stelle nicht nur unnötig, sondern schädlich wären:
+
+    1. **Es gibt keinen Suchraum.** Ein langsames KDF macht *Raten* teuer. Das
+       lohnt bei Passwörtern, weil Menschen aus einem winzigen Raum wählen. Der
+       Eingabewert hier stammt aus ``secrets.token_urlsafe(32)`` – 256 Bit aus
+       dem CSPRNG des Betriebssystems. Jeden Versuch um Faktor 100.000 zu
+       verteuern ändert nichts, wenn man 2^255 Versuche bräuchte.
+    2. **Es läuft pro Request, nicht pro Login.** Jeder authentifizierte
+       API-Aufruf durchläuft diese Funktion. Argon2id mit sinnvollen Parametern
+       kostet ~100 ms CPU und zweistellige MB RAM – das wäre ein
+       Selbstbedienungs-DoS: wer Müll mit ``ffp_``-Form schickt, verbrennt
+       Serverleistung, bevor der Wert überhaupt abgelehnt werden kann.
+    3. **Ein gesalzenes KDF verträgt sich nicht mit dem Nachschlagen.** Der
+       Digest *ist* der indizierte Suchschlüssel (siehe
+       ``ApiToken.token_hash``). Mit einem Salt pro Zeile ließe sich die
+       passende Zeile nicht finden – man müsste das KDF gegen *jede* Zeile
+       ausführen, oder doch wieder einen ungesalzenen Index führen.
+
+    Dasselbe Verfahren nutzt ``app.core.notification_api_key_hash`` seit jeher,
+    und es entspricht dem, was GitHub, Stripe und AWS für API-Schlüssel tun.
+
+    ``usedforsecurity=False`` markiert die Verwendung zusätzlich als
+    Nicht-Passwort-Digest (relevant für FIPS-Builds).
     """
+    # codeql[py/weak-sensitive-data-hashing]
     return hashlib.sha256(value.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
