@@ -18,7 +18,11 @@ Sicherheit:
 
 Architektur:
 - Asynchrone Tasks für Log-Streaming und Metrics-Monitoring
-- ThreadPoolExecutor für synchrone Docker-API-Calls
+- Getrennte Thread-Pools für synchrone Docker-API-Calls (app.executor.thread_pools):
+  stream_pool für Calls, die über die Laufzeit eines Runs blockieren (Log-/Stats-
+  Stream, container.wait), control_pool für kurze Control-Calls (run/stop/kill/
+  remove). Ohne diese Trennung blockieren drei Worker pro Run den gemeinsamen
+  Pool, und Abbrechen/Aufräumen kommt nicht mehr durch.
 - Queue-basiertes SSE-Streaming für Live-Updates
 """
 
@@ -32,10 +36,9 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Dict, Optional, List, Any, AsyncGenerator
 from uuid import UUID, uuid4
-from concurrent.futures import ThreadPoolExecutor
 
 import docker
-from docker.errors import DockerException, APIError, ImageNotFound
+from docker.errors import DockerException, APIError, ImageNotFound, NotFound
 from sqlalchemy import text
 from sqlmodel import Session, select, update
 
@@ -48,6 +51,7 @@ from app.services.downstream_triggers import get_downstream_pipelines_to_trigger
 from app.resilience.retry_strategy import wait_for_retry
 from app.core.database import get_session
 from app.git_sync.sync import get_current_git_info
+from app.executor.thread_pools import control_pool, stream_pool
 from app.executor.worker_runtime import (
     WORKER_APP_MOUNT,
     WORKER_ROUTE_FILE,
@@ -63,9 +67,6 @@ logger = logging.getLogger(__name__)
 PREFIX_CELL_START = "FASTFLOW_CELL_START\t"
 PREFIX_CELL_END = "FASTFLOW_CELL_END\t"
 PREFIX_CELL_OUTPUT = "FASTFLOW_CELL_OUTPUT\t"
-
-# Thread Pool für synchrone Docker-Operationen
-_executor = ThreadPoolExecutor(max_workers=10)
 
 # Docker Client (wird beim App-Start initialisiert)
 _docker_client: Optional[docker.DockerClient] = None
@@ -83,6 +84,10 @@ _metrics_queues: Dict[UUID, asyncio.Queue] = {}
 # Pre-Heating-Locks (pro Pipeline-Name, LRU-begrenzt gegen Memory-Leak)
 _PRE_HEATING_LOCKS_MAX = 256
 _pre_heating_locks: OrderedDict[str, asyncio.Lock] = OrderedDict()
+
+# Wartezeit zwischen zwei Versuchen, einen Container zu entfernen (wächst linear)
+CONTAINER_REMOVE_RETRY_DELAY_SECONDS = 1.0
+CONTAINER_REMOVE_ATTEMPTS = 3
 
 # Marker für setup_duration: wird vor main.py ausgegeben, in Logs/SSE herausgefiltert
 SETUP_READY_MARKER = "FASTFLOW_SETUP_READY"
@@ -598,9 +603,9 @@ async def _run_container_task(
         py_version = pipeline.get_python_version()
         try:
             from app.git_sync.sync import ensure_python_version
-            await asyncio.get_running_loop().run_in_executor(
-                _executor, lambda: ensure_python_version(py_version)
-            )
+            # Stream-Pool: fehlt der Interpreter, startet uv einen Download, der
+            # Minuten dauern kann — das darf keinen Control-Worker belegen.
+            await stream_pool.run(lambda: ensure_python_version(py_version))
         except Exception as e:
             logger.warning("Sicherstellen der Python-Version %s fehlgeschlagen: %s", py_version, e)
         
@@ -719,10 +724,11 @@ async def _run_container_task(
             def _run_with_circuit_breaker():
                 return circuit_docker.call(lambda: client.containers.run(**container_config))
 
-            container = await asyncio.get_running_loop().run_in_executor(
-                _executor,
-                _run_with_circuit_breaker,
-            )
+            # Stream-Pool: docker-py zieht bei ImageNotFound selbsttätig das Image
+            # (ContainerCollection.run), das kann Minuten dauern. Der Run hält seinen
+            # Concurrency-Slot bereits, seine Stream-Worker laufen noch nicht – der
+            # Call passt also ins eigene Budget und hält den Control-Pool frei.
+            container = await stream_pool.run(_run_with_circuit_breaker)
             setup_start = time.time()  # Ende: wenn SETUP_READY_MARKER im Log erscheint
         except CircuitBreakerOpenError as e:
             logger.error("Docker Circuit Breaker offen: %s", e)
@@ -799,10 +805,7 @@ async def _run_container_task(
             import requests.exceptions
             try:
                 exit_code = await asyncio.wait_for(
-                    asyncio.get_running_loop().run_in_executor(
-                        _executor,
-                        lambda: container.wait(timeout=timeout)
-                    ),
+                    stream_pool.run(lambda: container.wait(timeout=timeout)),
                     timeout=timeout + 10  # Buffer für Timeout
                 )
             except (asyncio.TimeoutError, requests.exceptions.Timeout, requests.exceptions.ConnectionError) as timeout_exc:
@@ -810,17 +813,27 @@ async def _run_container_task(
                 logger.warning(
                     f"Container-Timeout erreicht für Run {run_id} ({timeout_exc.__class__.__name__}), kille Container"
                 )
+                if isinstance(timeout_exc, asyncio.TimeoutError):
+                    # asyncio.wait_for bricht nur das Future ab: der Worker bleibt
+                    # belegt, bis container.wait() aus seinem eigenen Read-Timeout
+                    # zurückkehrt. Sichtbar machen statt still Kapazität verlieren.
+                    logger.warning(
+                        "Run %s: container.wait() hat den Buffer-Timeout überschritten – "
+                        "ein Stream-Pool-Worker bleibt belegt, bis der Docker-Call zurückkehrt",
+                        run_id,
+                    )
                 try:
-                    container.kill()
+                    # Control-Pool: der Kill muss auch durchkommen, wenn alle
+                    # Stream-Worker belegt sind. shield, damit ein Abbruch des
+                    # Run-Tasks (z. B. App-Shutdown) den Kill nicht überspringt –
+                    # vorher war der Call synchron und lief immer zu Ende.
+                    await asyncio.shield(control_pool.run(container.kill))
                 except Exception as kill_err:
                     logger.warning(f"Container-Kill nach Timeout fehlgeschlagen für Run {run_id}: {kill_err}")
                 exit_code = {"StatusCode": -1}  # Timeout-Exit-Code
         else:
             # Kein Timeout, warte auf natürliches Ende
-            exit_code = await asyncio.get_running_loop().run_in_executor(
-                _executor,
-                container.wait
-            )
+            exit_code = await stream_pool.run(container.wait)
         
         # Warte kurz, damit alle Logs geschrieben werden können
         await asyncio.sleep(0.5)
@@ -835,8 +848,7 @@ async def _run_container_task(
         # Versuche, verbleibende Logs aus Container zu lesen (falls Stream nicht alle geliefert hat)
         try:
             import aiofiles
-            remaining_logs_bytes = await asyncio.get_running_loop().run_in_executor(
-                _executor,
+            remaining_logs_bytes = await control_pool.run(
                 lambda: container.logs(stdout=True, stderr=True, tail=1000)
             )
             if remaining_logs_bytes:
@@ -905,7 +917,7 @@ async def _run_container_task(
         oom_killed = False
         if container:
             try:
-                container.reload()
+                await control_pool.run(container.reload)
                 oom_killed = container.attrs.get("State", {}).get("OOMKilled", False)
             except Exception as e:
                 logger.warning(f"Fehler beim Prüfen von OOMKilled für Run {run_id}: {e}")
@@ -1155,15 +1167,14 @@ async def _run_container_task(
         # Container-Cleanup
         if container:
             try:
-                await asyncio.get_running_loop().run_in_executor(
-                    _executor,
-                    lambda: container.remove(force=True)
-                )
+                await _remove_container(container, run_id)
             except Exception as e:
                 container_id = getattr(container, "id", "unbekannt")
-                logger.warning(
-                    "Fehler beim Container-Cleanup für Run %s (Container-ID: %.12s): %s. "
-                    "Container muss ggf. manuell entfernt werden: docker rm -f %s",
+                logger.error(
+                    "Container-Cleanup für Run %s endgültig fehlgeschlagen "
+                    "(Container-ID: %.12s): %s. Container manuell entfernen: docker rm -f %s. "
+                    "Bis dahin bleibt der Stats-Stream dieses Runs offen und belegt "
+                    "dauerhaft einen Worker im Stream-Pool.",
                     run_id, container_id, e, container_id,
                 )
 
@@ -1239,6 +1250,44 @@ def _build_container_command(pipeline: DiscoveredPipeline) -> List[str]:
     return ["uv", "run", "--python", py, "python", "-u", "-c", _SETUP_READY_WRAPPER]
 
 
+async def _remove_container(
+    container: docker.models.containers.Container,
+    run_id: UUID,
+) -> None:
+    """
+    Entfernt den Container – und gibt damit die Streams des Runs frei.
+
+    Mit Retry, weil das Entfernen das einzige Mittel ist, den Stats-Stream zu
+    beenden: ``container.stats(stream=True)`` liefert einen einfachen Generator,
+    keinen ``CancellableStream``. Dessen ``close()`` kann einen Worker, der
+    gerade in ``next()`` blockiert, nicht aufwecken (``ValueError: generator
+    already executing``, wird verschluckt) — der Stream endet erst, wenn Docker
+    ihn beendet. Schlägt das Entfernen endgültig fehl, ist dieser Worker
+    dauerhaft verloren.
+
+    Args:
+        container: Docker-Container-Objekt
+        run_id: Run-ID (für Logging)
+
+    Raises:
+        Exception: die Exception des letzten Versuchs
+    """
+    for attempt in range(1, CONTAINER_REMOVE_ATTEMPTS + 1):
+        try:
+            await control_pool.run(lambda: container.remove(force=True))
+            return
+        except NotFound:
+            return  # Bereits entfernt – Ziel erreicht
+        except Exception as e:
+            if attempt == CONTAINER_REMOVE_ATTEMPTS:
+                raise
+            logger.warning(
+                "Container-Cleanup für Run %s fehlgeschlagen (Versuch %d/%d): %s – neuer Versuch",
+                run_id, attempt, CONTAINER_REMOVE_ATTEMPTS, e,
+            )
+            await asyncio.sleep(CONTAINER_REMOVE_RETRY_DELAY_SECONDS * attempt)
+
+
 async def _get_uv_version(container: docker.models.containers.Container) -> Optional[str]:
     """
     Ermittelt die UV-Version aus dem Container.
@@ -1250,10 +1299,7 @@ async def _get_uv_version(container: docker.models.containers.Container) -> Opti
         UV-Version-String oder None
     """
     try:
-        result = await asyncio.get_running_loop().run_in_executor(
-            _executor,
-            lambda: container.exec_run("uv --version")
-        )
+        result = await control_pool.run(lambda: container.exec_run("uv --version"))
         if result.exit_code == 0:
             # Output ist Bytes, dekodieren
             output = result.output.decode("utf-8").strip()
@@ -1412,8 +1458,7 @@ async def _stream_logs(
         logger.info(f"Starte Log-Streaming für Run {run_id}, Container: {container.id}")
         
         # Log-Stream aus Container abrufen
-        log_stream = await asyncio.get_running_loop().run_in_executor(
-            _executor,
+        log_stream = await control_pool.run(
             lambda: container.logs(stream=True, follow=True, stdout=True, stderr=True)
         )
         
@@ -1474,9 +1519,11 @@ async def _stream_logs(
                             or log_line.startswith(PREFIX_CELL_OUTPUT)
                         )
                         if is_cell_protocol:
-                            await asyncio.get_running_loop().run_in_executor(
-                                _executor,
-                                lambda l=log_line: _parse_and_persist_cell_line(run_id, l),
+                            # Stream-Pool: läuft zwischen zwei next()-Aufrufen dieses
+                            # Runs, belegt also keinen zusätzlichen Worker – und hält
+                            # DB-Schreibzugriffe aus dem Control-Pool heraus.
+                            await stream_pool.run(
+                                lambda line=log_line: _parse_and_persist_cell_line(run_id, line)
                             )
                             # Lesbare Zeile für Log/SSE (Retries etc.); OUTPUT nicht doppelt ausgeben
                             line_to_write = _cell_line_to_readable_log(log_line)
@@ -1577,15 +1624,10 @@ async def _iter_log_stream(stream):
     Yields:
         Bytes: Log-Chunk
     """
-    loop = asyncio.get_running_loop()
-    
     while True:
         try:
             # Lese Chunk im Executor (non-blocking)
-            chunk = await loop.run_in_executor(
-                _executor,
-                lambda: next(stream, None)
-            )
+            chunk = await stream_pool.run(lambda: next(stream, None))
             if chunk is None:
                 # Stream ist beendet
                 break
@@ -1599,10 +1641,7 @@ async def _iter_log_stream(stream):
             await asyncio.sleep(0.1)
             try:
                 # Versuche nochmal
-                chunk = await loop.run_in_executor(
-                    _executor,
-                    lambda: next(stream, None)
-                )
+                chunk = await stream_pool.run(lambda: next(stream, None))
                 if chunk is None:
                     break
                 yield chunk
@@ -1651,8 +1690,7 @@ async def _monitor_metrics(
     try:
         logger.debug(f"Starte Stats-Stream für Container {container.id[:12]} (Run {run_id})")
         # Stats-Stream aus Container abrufen
-        stats_stream = await asyncio.get_running_loop().run_in_executor(
-            _executor,
+        stats_stream = await control_pool.run(
             lambda: container.stats(stream=True, decode=True)
         )
         
@@ -1791,10 +1829,7 @@ async def _iter_stats_stream(stream):
     """
     while True:
         try:
-            stats = await asyncio.get_running_loop().run_in_executor(
-                _executor,
-                lambda: next(stream, None)
-            )
+            stats = await stream_pool.run(lambda: next(stream, None))
             if stats is None:
                 break
             yield stats
@@ -2058,11 +2093,9 @@ async def cancel_run(run_id: UUID, session: Session) -> bool:
             # Container nicht gefunden (bereits beendet?)
             return False
         
-        # Container stoppen
-        await asyncio.get_running_loop().run_in_executor(
-            _executor,
-            lambda: container.stop(timeout=10)
-        )
+        # Container stoppen (Control-Pool, damit der Abbruch auch bei voll
+        # belegten Stream-Workern durchkommt)
+        await control_pool.run(lambda: container.stop(timeout=10))
         
         # Status auf INTERRUPTED setzen
         run = session.get(PipelineRun, run_id)
@@ -2127,8 +2160,7 @@ async def reconcile_zombie_containers(session: Session) -> None:
         client = _get_docker_client()
         
         # Alle Container mit fastflow-run-id Label finden
-        containers = await asyncio.get_running_loop().run_in_executor(
-            _executor,
+        containers = await control_pool.run(
             lambda: client.containers.list(
                 filters={"label": "fastflow-run-id"},
                 all=True  # Auch beendete Container
@@ -2154,10 +2186,7 @@ async def reconcile_zombie_containers(session: Session) -> None:
                 logger.warning(f"Orphaned Container gefunden (Run-ID nicht in DB): {run_id}")
                 # Container entfernen
                 try:
-                    await asyncio.get_running_loop().run_in_executor(
-                        _executor,
-                        lambda: container.remove(force=True)
-                    )
+                    await control_pool.run(lambda c=container: c.remove(force=True))
                 except Exception as e:
                     logger.warning(f"Fehler beim Entfernen von orphaned Container {run_id}: {e}")
                 continue
@@ -2189,7 +2218,7 @@ async def reconcile_zombie_containers(session: Session) -> None:
                 if run.status == RunStatus.RUNNING:
                     logger.info(f"Container beendet für Run {run_id}, Status aktualisieren")
                     # Exit-Code abrufen
-                    container.reload()
+                    await control_pool.run(container.reload)
                     exit_code = container.attrs.get("State", {}).get("ExitCode", -1)
                     
                     # OOM Detection
@@ -2222,10 +2251,7 @@ async def reconcile_zombie_containers(session: Session) -> None:
 
                     # Container entfernen
                     try:
-                        await asyncio.get_running_loop().run_in_executor(
-                            _executor,
-                            lambda: container.remove(force=True)
-                        )
+                        await control_pool.run(lambda c=container: c.remove(force=True))
                     except Exception as e:
                         logger.warning(f"Fehler beim Entfernen von beendetem Container {run_id}: {e}")
         
@@ -2300,10 +2326,7 @@ async def _re_attach_container(
             session.commit()
         
         # Container-Wait
-        exit_code = await asyncio.get_running_loop().run_in_executor(
-            _executor,
-            container.wait
-        )
+        exit_code = await stream_pool.run(container.wait)
         
         # Tasks beenden
         log_task.cancel()
@@ -2338,14 +2361,15 @@ async def _re_attach_container(
             run.pipeline_name, exit_code_value == 0, session, triggered_by=run.triggered_by,
             run_date=run.started_at.date() if run.started_at else None,
         )
-        # Container entfernen
+        # Container entfernen (gibt die Streams des Runs frei)
         try:
-            await asyncio.get_running_loop().run_in_executor(
-                _executor,
-                lambda: container.remove(force=True)
-            )
+            await _remove_container(container, run_id)
         except Exception as e:
-            logger.warning(f"Fehler beim Container-Cleanup für Run {run_id}: {e}")
+            logger.error(
+                "Container-Cleanup für Run %s endgültig fehlgeschlagen: %s. "
+                "Container manuell entfernen: docker rm -f %.12s",
+                run_id, e, getattr(container, "id", "unbekannt"),
+            )
         
         # Container aus Tracking entfernen
         async with _concurrency_lock:
@@ -2385,7 +2409,7 @@ async def check_container_health(run_id: UUID, session: Session) -> Dict[str, An
             }
         
         # Container-Status prüfen
-        container.reload()
+        await control_pool.run(container.reload)
         container_status = container.status
         
         if container_status != "running":
@@ -2448,10 +2472,8 @@ async def graceful_shutdown(session: Session) -> None:
             
             if container:
                 try:
-                    await asyncio.get_running_loop().run_in_executor(
-                        _executor,
-                        lambda: container.stop(timeout=30)  # Graceful Stop mit 30s Timeout
-                    )
+                    # Graceful Stop mit 30s Timeout
+                    await control_pool.run(lambda c=container: c.stop(timeout=30))
                     run.status = RunStatus.INTERRUPTED
                 except Exception as e:
                     logger.warning(f"Fehler beim Stoppen von Container für Run {run.id}: {e}")

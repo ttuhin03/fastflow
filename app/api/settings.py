@@ -886,8 +886,13 @@ async def get_concurrency(
 ) -> Dict[str, Any]:
     """
     Gibt Concurrency-Status zurück: aktive Runs, Limit, Auslastung, Executor-Typ.
+
+    `thread_pools` zeigt die Auslastung der Executor-Thread-Pools (belegte Worker
+    je Pool). Ein dauerhaft voller Stream-Pool bedeutet, dass Runs auf einen
+    Worker warten — genau die Situation, in der Runs früher still nicht starteten.
     """
     from app.executor import _running_containers
+    from app.executor.thread_pools import thread_pool_stats
     limit = config.MAX_CONCURRENT_RUNS
     active = len(_running_containers)
     utilization = (active / limit) if limit > 0 else 0.0
@@ -896,6 +901,7 @@ async def get_concurrency(
         "concurrency_limit": limit,
         "utilization": round(utilization, 4),
         "executor": config.PIPELINE_EXECUTOR,
+        "thread_pools": thread_pool_stats(),
     }
 
 
