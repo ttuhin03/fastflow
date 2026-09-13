@@ -258,7 +258,7 @@ export default function RunDetail() {
       }
     }
 
-    const connectLogStream = () => {
+    const connectLogStream = (resetBuffer: boolean) => {
       logStreamAbortRef.current?.abort()
       const ctrl = new AbortController()
       logStreamAbortRef.current = ctrl
@@ -275,6 +275,10 @@ export default function RunDetail() {
       const url = `${baseURL}/runs/${runId}/logs/stream`
 
       ;(async () => {
+        // Puffer beim Erstverbinden leeren — nicht bei Reconnects, sonst wären
+        // die bereits empfangenen Zeilen weg. Steht hier statt im Effect-Rumpf:
+        // ein synchrones setState dort löst direkt ein zweites Render aus.
+        if (resetBuffer) setLogs([])
         try {
           const res = await fetch(url, {
             headers: { Authorization: `Bearer ${token}` },
@@ -337,8 +341,7 @@ export default function RunDetail() {
     }
 
     if (isRunning) {
-      if (logReconnectAttempts === 0) setLogs([])
-      connectLogStream()
+      connectLogStream(logReconnectAttempts === 0)
       return () => {
         if (reconnectTimeout) clearTimeout(reconnectTimeout)
         logStreamAbortRef.current?.abort()
@@ -382,6 +385,9 @@ export default function RunDetail() {
       const url = `${baseURL}/runs/${runId}/metrics/stream`
 
       ;(async () => {
+        // Anders als beim Log-Stream wird hier bei jedem Verbindungsaufbau
+        // geleert — unverändertes Verhalten, nur nicht mehr im Effect-Rumpf.
+        setMetrics([])
         try {
           const res = await fetch(url, {
             headers: { Authorization: `Bearer ${token}` },
@@ -435,7 +441,6 @@ export default function RunDetail() {
     }
 
     if (isRunning) {
-      setMetrics([])
       connectMetricsStream()
       return () => {
         if (reconnectTimeout) clearTimeout(reconnectTimeout)

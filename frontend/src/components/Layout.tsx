@@ -105,7 +105,6 @@ export default function Layout() {
     },
   ]
 
-  const [backendStatus, setBackendStatus] = useState<'online' | 'offline' | 'checking'>('checking')
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   // Sidebar-Active-State: /pipelines und /settings bündeln mehrere Sektionen
@@ -161,15 +160,16 @@ export default function Layout() {
     ? users.filter((u) => (u.status || 'active') === 'pending').length
     : 0
 
-  useEffect(() => {
-    if (isError || error) {
-      setBackendStatus('offline')
-    } else if (health && health.status === 'healthy') {
-      setBackendStatus('online')
-    } else if (!health && !isError && !isFetching) {
-      setBackendStatus('offline')
-    }
-  }, [health, isError, error, isFetching])
+  // Rein abgeleitet aus dem Query-Zustand — als State gehalten hinkte der Wert
+  // einen Render hinterher und der Effect hat bei jedem Poll neu gerendert.
+  const backendStatus: 'online' | 'offline' | 'checking' =
+    isError || error
+      ? 'offline'
+      : health?.status === 'healthy'
+        ? 'online'
+        : !health && !isFetching
+          ? 'offline'
+          : 'checking'
 
   useEffect(() => {
     const allItems = navSections.flatMap(s => s.items)

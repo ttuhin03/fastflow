@@ -37,6 +37,10 @@ export default function Runs() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [startDate, setStartDate] = useState<string>('')
   const [endDate, setEndDate] = useState<string>('')
+  // Jeder Filter- oder Sortierwechsel springt auf Seite 1 zurück. Das passiert
+  // bewusst im jeweiligen Event-Handler und nicht in einem Effect: sonst rendert
+  // React einmal mit neuem Filter und altem Offset und feuert dafür einen
+  // überflüssigen Request gegen /runs, dessen Ergebnis sofort verworfen wird.
   const [page, setPage] = useState<number>(1)
   const [pageSize, setPageSize] = useState<number>(50)
 
@@ -70,11 +74,6 @@ export default function Runs() {
   })
 
   const runs = runsData?.runs || []
-
-  // Reset to page 1 when filters or sort order change
-  useEffect(() => {
-    setPage(1)
-  }, [pipelineFilter, statusFilter, startDate, endDate, sortOrder])
 
   // Invalidate daily-stats when runs complete
   const prevRunsRef = useRef<Run[]>([])
@@ -206,7 +205,10 @@ export default function Runs() {
           <select
             id="pipeline-filter"
             value={pipelineFilter}
-            onChange={(e) => setPipelineFilter(e.target.value)}
+            onChange={(e) => {
+              setPipelineFilter(e.target.value)
+              setPage(1)
+            }}
             className="runs-search__select"
             aria-label={t('runs.filterPipeline')}
           >
@@ -223,7 +225,10 @@ export default function Runs() {
           <select
             id="status-filter"
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              setStatusFilter(e.target.value)
+              setPage(1)
+            }}
             className="runs-filter-select"
             aria-label={t('runs.filterStatus')}
           >
@@ -240,9 +245,6 @@ export default function Runs() {
           id="sort-order"
           value={sortOrder}
           onChange={(e) => {
-            // Seite im selben Event zurücksetzen, nicht erst im Effect darunter:
-            // sonst rendert React einmal mit neuer Sortierung und altem Offset
-            // und feuert dafür einen überflüssigen Request gegen /runs.
             setSortOrder(e.target.value as 'asc' | 'desc')
             setPage(1)
           }}
@@ -273,7 +275,10 @@ export default function Runs() {
           id="start-date"
           type="datetime-local"
           value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
+          onChange={(e) => {
+            setStartDate(e.target.value)
+            setPage(1)
+          }}
           className="runs-filter-select runs-filter-date"
           aria-label={t('runs.dateFrom')}
         />
@@ -281,7 +286,10 @@ export default function Runs() {
           id="end-date"
           type="datetime-local"
           value={endDate}
-          onChange={(e) => setEndDate(e.target.value)}
+          onChange={(e) => {
+            setEndDate(e.target.value)
+            setPage(1)
+          }}
           className="runs-filter-select runs-filter-date"
           aria-label={t('runs.dateTo')}
         />

@@ -160,6 +160,8 @@ function isSshUrl(url: string): boolean {
   return u.startsWith('git@') || u.startsWith('ssh://')
 }
 
+type SyncTab = 'status' | 'settings' | 'logs' | 'repository'
+
 interface SyncProps {
   /** Gesperrt aus den Einstellungen (Schloss): keine Änderungen bis Entsperren */
   editLocked?: boolean
@@ -174,7 +176,7 @@ export default function Sync({ editLocked = false }: SyncProps) {
   const [hostKeyConfirmText, setHostKeyConfirmText] = useState('')
   const formatLocale = getFormatLocale()
   const [syncBranch, setSyncBranch] = useState('')
-  const [activeTab, setActiveTab] = useState<'status' | 'settings' | 'logs' | 'repository'>('status')
+  const [activeTab, setActiveTab] = useState<SyncTab>('status')
   const [settingsForm, setSettingsForm] = useState<SyncSettings>({
     auto_sync_enabled: false,
     auto_sync_interval: null,
@@ -212,11 +214,16 @@ export default function Sync({ editLocked = false }: SyncProps) {
     },
   })
 
-  useEffect(() => {
-    if (settings) {
-      setSettingsForm(settings)
-    }
-  }, [settings])
+  // Formular an die Serverdaten angleichen, sobald die Query ein neues Objekt
+  // liefert. Das passiert beim Rendern statt in einem Effect: der Effect hätte
+  // erst ein Render mit den alten Werten durchgelassen und dann ein zweites
+  // ausgelöst. React unterstützt dieses Muster ausdrücklich, solange der
+  // setState an eine Bedingung gebunden ist, die danach nicht mehr greift.
+  const [settingsSyncedFrom, setSettingsSyncedFrom] = useState<SyncSettings | undefined>(undefined)
+  if (settings !== settingsSyncedFrom) {
+    setSettingsSyncedFrom(settings)
+    if (settings) setSettingsForm(settings)
+  }
 
   const syncLogsVisible = activeTab === 'logs' || activeTab === 'status'
   const syncLogsInterval = useRefetchInterval(syncLogsVisible ? 5000 : false)
@@ -277,7 +284,16 @@ export default function Sync({ editLocked = false }: SyncProps) {
     }
   }, [syncLogs])
 
-  useEffect(() => {
+  // Wie oben, zusätzlich am Tab aufgehängt: beim Wechsel auf "repository" wird
+  // das Formular neu aus der Serverkonfiguration aufgebaut. Das leert dabei
+  // bewusst token und deploy_key — eingetippte Zugangsdaten sollen beim
+  // Verlassen des Tabs nicht stehen bleiben.
+  const [repoFormSyncedFrom, setRepoFormSyncedFrom] = useState<{
+    config: RepoConfig | undefined
+    tab: SyncTab
+  } | null>(null)
+  if (repoFormSyncedFrom?.config !== repoConfig || repoFormSyncedFrom?.tab !== activeTab) {
+    setRepoFormSyncedFrom({ config: repoConfig, tab: activeTab })
     if (repoConfig && activeTab === 'repository') {
       setRepoForm({
         repo_url: repoConfig.repo_url || '',
@@ -287,14 +303,7 @@ export default function Sync({ editLocked = false }: SyncProps) {
         pipelines_subdir: repoConfig.pipelines_subdir ?? '',
       })
     }
-  }, [repoConfig, activeTab])
-
-  useEffect(() => {
-    if (!isSshUrl(repoForm.repo_url)) {
-      setGeneratedPublicKey(null)
-      setShowManualDeployKey(false)
-    }
-  }, [repoForm.repo_url])
+  }
 
   const syncMutation = useMutation({
     mutationFn: async (branch?: string): Promise<SyncTriggerResult> => {
@@ -404,6 +413,7 @@ export default function Sync({ editLocked = false }: SyncProps) {
       showSuccess(t('sync.repoDeleted'))
       setRepoForm({ repo_url: '', token: '', deploy_key: '', branch: 'main', pipelines_subdir: '' })
       setGeneratedPublicKey(null)
+      setShowManualDeployKey(false)
     },
     onError: (error) => {
       showError(t('sync.deleteError', { detail: getErrorDetail(error) }))
@@ -886,7 +896,16 @@ export default function Sync({ editLocked = false }: SyncProps) {
                     type="text"
                     className="form-input"
                     value={repoForm.repo_url}
-                    onChange={(e) => setRepoForm({ ...repoForm, repo_url: e.target.value })}
+                    onChange={(e) => {
+                      const repo_url = e.target.value
+                      setRepoForm({ ...repoForm, repo_url })
+                      // Ein erzeugter Deploy-Key gehört zu einer SSH-URL; wird
+                      // auf HTTPS gewechselt, ist er gegenstandslos.
+                      if (!isSshUrl(repo_url)) {
+                        setGeneratedPublicKey(null)
+                        setShowManualDeployKey(false)
+                      }
+                    }}
                     placeholder={t('sync.repoUrlPlaceholder')}
                     disabled={fieldDisabled}
                   />

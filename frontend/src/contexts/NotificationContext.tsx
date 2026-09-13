@@ -27,43 +27,51 @@ interface NotificationContextType {
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined)
 
+const STORAGE_KEY = 'fastflow-notifications'
+const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
+
+/**
+ * Gespeicherte Notifications lesen und dabei alles älter als 7 Tage verwerfen.
+ *
+ * Läuft als Initializer von useState, nicht in einem Effect. Vorher taten das
+ * zwei Mount-Effects (laden, dann aufräumen) — mit zwei zusätzlichen Rendern
+ * und einer Lücke dazwischen: der Speicher-Effect lief im ersten Commit noch
+ * mit der leeren Startliste und hat den localStorage-Eintrag gelöscht, bevor
+ * der geladene State ankam und ihn wieder zurückschrieb.
+ */
+function loadStoredNotifications(): Notification[] {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    if (!stored) return []
+    const parsed: StoredNotification[] = JSON.parse(stored)
+    const cutoff = Date.now() - MAX_AGE_MS
+    return parsed
+      .map((n) => ({ ...n, timestamp: new Date(n.timestamp) }))
+      .filter((n) => n.timestamp.getTime() > cutoff)
+  } catch (e) {
+    console.error('Fehler beim Laden von Notifications:', e)
+    return []
+  }
+}
+
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
-  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [notifications, setNotifications] = useState<Notification[]>(loadStoredNotifications)
 
-  // Lade gespeicherte Notifications aus localStorage
+  // Speichere Notifications in localStorage. Der Zugriff ist abgesichert wie
+  // beim Lesen: bei gesperrtem Speicher (privater Modus, Richtlinie) wirft
+  // setItem, und das hier ungefangen mitten im Effect würde die App in die
+  // ErrorBoundary schicken.
   useEffect(() => {
-    const stored = localStorage.getItem('fastflow-notifications')
-    if (stored) {
-      try {
-        const parsed: StoredNotification[] = JSON.parse(stored)
-        setNotifications(
-          parsed.map((n) => ({
-            ...n,
-            timestamp: new Date(n.timestamp),
-          }))
-        )
-      } catch (e) {
-        console.error('Fehler beim Laden von Notifications:', e)
+    try {
+      if (notifications.length > 0) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(notifications))
+      } else {
+        localStorage.removeItem(STORAGE_KEY)
       }
-    }
-  }, [])
-
-  // Speichere Notifications in localStorage
-  useEffect(() => {
-    if (notifications.length > 0) {
-      localStorage.setItem('fastflow-notifications', JSON.stringify(notifications))
-    } else {
-      localStorage.removeItem('fastflow-notifications')
+    } catch (e) {
+      console.error('Fehler beim Speichern von Notifications:', e)
     }
   }, [notifications])
-
-  // Entferne alte Notifications (> 7 Tage)
-  useEffect(() => {
-    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
-    setNotifications((prev) =>
-      prev.filter((n) => n.timestamp.getTime() > sevenDaysAgo)
-    )
-  }, [])
 
   const addNotification = useCallback(
     (notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) => {

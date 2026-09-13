@@ -103,11 +103,19 @@ export default function Settings() {
   const [newKeyLabel, setNewKeyLabel] = useState('')
   const [unlinkingProvider, setUnlinkingProvider] = useState<'github' | 'google' | 'microsoft' | 'custom' | null>(null)
   const [linkingProvider, setLinkingProvider] = useState<AccountLinkPath | null>(null)
-  /** Geschützte Tabs: Eingaben erst nach Klick auf Schloss (verhindert versehentliche Änderungen). */
-  const [sensitiveSettingsLocked, setSensitiveSettingsLocked] = useState(true)
+  /**
+   * Geschützte Tabs: Eingaben erst nach Klick auf Schloss (verhindert
+   * versehentliche Änderungen). Gespeichert wird der aufgeschlossene Tab, nicht
+   * ein Boolean — dadurch fällt das Schloss beim Tabwechsel von selbst wieder
+   * zu, ohne Effect. Das greift auch, wenn section über die URL wechselt
+   * (Zurück-Button, direkter Link) und nicht über setSection.
+   */
+  const [unlockedSection, setUnlockedSection] = useState<SettingsSection | null>(null)
 
   const [searchParams, setSearchParams] = useSearchParams()
   const section = (searchParams.get('section') as SettingsSection) || 'account'
+  const sensitiveSettingsLocked = unlockedSection !== section
+
   const setSection = (s: SettingsSection) => {
     const np = new URLSearchParams(searchParams)
     np.set('section', s)
@@ -135,10 +143,6 @@ export default function Settings() {
     const pr = pill.getBoundingClientRect()
     setIndicator({ left: pr.left - tr.left, width: pr.width })
   }, [section, sectionItems.length])
-
-  useEffect(() => {
-    setSensitiveSettingsLocked(true)
-  }, [section])
 
   const { data: settings, isLoading } = useQuery<Settings>({
     queryKey: ['settings'],
@@ -652,7 +656,7 @@ export default function Settings() {
               <button
                 type="button"
                 className={`settings-edit-lock-btn ${sensitiveSettingsLocked ? 'is-locked' : 'is-unlocked'}`}
-                onClick={() => setSensitiveSettingsLocked((v) => !v)}
+                onClick={() => setUnlockedSection((cur) => (cur === section ? null : section))}
                 aria-pressed={!sensitiveSettingsLocked}
                 aria-label={
                   sensitiveSettingsLocked ? t('settings.editLockUnlockAria') : t('settings.editLockLockAria')
