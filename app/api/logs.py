@@ -20,10 +20,15 @@ from fastapi.responses import StreamingResponse, PlainTextResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlmodel import Session, select
 
-from app.auth.principal import principal_from_api_token, require_scope_user
+from app.auth.principal import (
+    Principal,
+    principal_from_api_token,
+    require_scope,
+    require_scope_user,
+)
 from app.core.api_token_hash import looks_like_api_token
-from app.core.database import get_session, retry_on_sqlite_io
-from app.models import ApiTokenScope, PipelineRun, User
+from app.core.database import engine, get_session, retry_on_sqlite_io
+from app.models import ApiTokenScope, PipelineRun, User, UserStatus
 from app.executor import get_log_queue
 from app.core.config import config
 from app.auth import (
@@ -76,8 +81,19 @@ async def require_log_access(
                 if ApiTokenScope.LOGS in principal.scopes:
                     return
                 token_scope_denied = True
-        elif verify_token(token) and get_session_by_token(session, token):
-            return
+        else:
+            username = verify_token(token)
+            if username and get_session_by_token(session, token):
+                # Sperre und Status mitprüfen. get_current_user tut das auf jedem
+                # anderen Endpoint; hier fehlte es, sodass ein gesperrter Nutzer
+                # mit bestehender Session weiter Logs lesen konnte.
+                user = session.exec(select(User).where(User.username == username)).first()
+                if (
+                    user is not None
+                    and not user.blocked
+                    and getattr(user, "status", UserStatus.ACTIVE) == UserStatus.ACTIVE
+                ):
+                    return
 
     if download_token and verify_log_download_token(session, download_token, run_id):
         return
@@ -99,7 +115,7 @@ async def get_logs_download_url(
     request: Request,
     run_id: UUID,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_scope_user(ApiTokenScope.LOGS)),
+    principal: Principal = Depends(require_scope(ApiTokenScope.LOGS)),
 ) -> dict:
     """
     Liefert einen kurzlebigen Download-Token für die Log-Datei.
@@ -108,7 +124,12 @@ async def get_logs_download_url(
     run = session.get(PipelineRun, run_id)
     if run is None:
         raise HTTPException(status_code=404, detail=f"Run nicht gefunden: {run_id}")
-    token = create_log_download_token(session, run_id)
+    token = create_log_download_token(
+        session,
+        run_id,
+        issued_to_user_id=principal.user.id,
+        issued_via_api_token_id=principal.token_id,
+    )
     return {"token": token}
 
 
@@ -228,11 +249,55 @@ async def get_run_logs(
         )
 
 
+LOG_STREAM_REAUTH_SECONDS = 30.0
+"""Abstand zwischen zwei Neuprüfungen der Berechtigung im laufenden Stream.
+
+Ein SSE-Stream lief bisher mit der Berechtigung, die beim Verbindungsaufbau
+galt — und für einen langen ETL-Lauf sind das Stunden. Widerruf des Tokens,
+Sperren des Nutzers und Rollenentzug ließen bestehende Streams unberührt: sie
+lieferten weiter Live-Ausgaben, lange nachdem der Betreiber den Zugang gekappt
+zu haben glaubte.
+"""
+
+
+def _stream_still_authorized(raw_token: Optional[str]) -> bool:
+    """Prüft in einer eigenen, kurzlebigen Session, ob der Zugriff noch gilt.
+
+    Bewusst nicht die Request-Session: die gehört der Dependency und bliebe
+    sonst über die gesamte Laufzeit des Streams offen — bei SQLite eine
+    Verbindung, die stundenlang gehalten wird.
+    """
+    if not raw_token:
+        return False
+    try:
+        with Session(engine) as check_session:
+            if looks_like_api_token(raw_token):
+                principal = principal_from_api_token(check_session, raw_token)
+                return ApiTokenScope.LOGS in principal.scopes
+            username = verify_token(raw_token)
+            if not username or not get_session_by_token(check_session, raw_token):
+                return False
+            user = check_session.exec(select(User).where(User.username == username)).first()
+            return (
+                user is not None
+                and not user.blocked
+                and getattr(user, "status", UserStatus.ACTIVE) == UserStatus.ACTIVE
+            )
+    except HTTPException:
+        return False
+    except Exception as exc:  # pragma: no cover - Infrastrukturfehler
+        # Im Zweifel weiterlaufen lassen: eine kurzzeitig nicht erreichbare
+        # Datenbank soll keinen laufenden Stream abbrechen.
+        logger.warning("Neuprüfung des Log-Streams fehlgeschlagen: %s", exc)
+        return True
+
+
 @router.get("/{run_id}/logs/stream")
 async def stream_run_logs(
     run_id: UUID,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_scope_user(ApiTokenScope.LOGS))
+    current_user: User = Depends(require_scope_user(ApiTokenScope.LOGS)),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_security)
 ) -> StreamingResponse:
     """
     Server-Sent Events für Live-Logs (für laufende Runs).
@@ -335,6 +400,10 @@ async def stream_run_logs(
             detail=f"Run {run_id} ist noch nicht gestartet oder bereits beendet"
         )
     
+    # Den Bearer-Wert festhalten: der Generator läuft, nachdem die
+    # Dependency-Auflösung abgeschlossen ist, und hat kein Request-Objekt mehr.
+    raw_token = credentials.credentials if credentials is not None else None
+
     # SSE-Streaming-Funktion
     async def generate_sse():
         """
@@ -350,6 +419,7 @@ async def stream_run_logs(
         min_interval = 1.0 / rate_limit if rate_limit > 0 else 0.01
         
         last_send_time = 0.0
+        last_auth_check = asyncio.get_running_loop().time()
 
         try:
             # SCHRITT 1: Lese bereits vorhandene Logs aus der Queue (max. LOG_STREAM_PENDING_MAX_LINES)
@@ -410,7 +480,20 @@ async def stream_run_logs(
                     last_send_time = asyncio.get_running_loop().time()
                     
                 except asyncio.TimeoutError:
-                    # Timeout: Sende Keep-Alive (leeres Event)
+                    # Der Keep-Alive-Tick ist zugleich der Takt für die
+                    # Neuprüfung der Berechtigung.
+                    now = asyncio.get_running_loop().time()
+                    if now - last_auth_check >= LOG_STREAM_REAUTH_SECONDS:
+                        last_auth_check = now
+                        if not await asyncio.to_thread(_stream_still_authorized, raw_token):
+                            logger.info(
+                                "Log-Stream für Run %s beendet: Berechtigung entzogen", run_id
+                            )
+                            yield "data: " + json.dumps({
+                                "error": "Die Berechtigung wurde entzogen; der Stream wurde beendet.",
+                                "code": "unauthorized",
+                            }) + "\n\n"
+                            return
                     yield ": keep-alive\n\n"
                     continue
                     

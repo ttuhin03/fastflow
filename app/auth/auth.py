@@ -75,13 +75,20 @@ def create_access_token(username: str, expires_delta: Optional[timedelta] = None
 
 
 def _create_ephemeral_token(
-    session: Session, token_type: EphemeralTokenType, subject: str, ttl_seconds: int
+    session: Session,
+    token_type: EphemeralTokenType,
+    subject: str,
+    ttl_seconds: int,
+    issued_to_user_id: Optional[UUID] = None,
+    issued_via_api_token_id: Optional[UUID] = None,
 ) -> str:
     """Erstellt ein opakes, DB-gebundenes Kurzzeit-Token (siehe EphemeralToken)."""
     token = secrets.token_urlsafe(32)
     expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
     row = EphemeralToken(
         token=token,
+        issued_to_user_id=issued_to_user_id,
+        issued_via_api_token_id=issued_via_api_token_id,
         token_type=token_type,
         subject=subject,
         expires_at=expires_at,
@@ -91,12 +98,28 @@ def _create_ephemeral_token(
     return token
 
 
-def create_log_download_token(session: Session, run_id: UUID) -> str:
+def create_log_download_token(
+    session: Session,
+    run_id: UUID,
+    issued_to_user_id: Optional[UUID] = None,
+    issued_via_api_token_id: Optional[UUID] = None,
+) -> str:
     """
     Erstellt ein kurzlebiges, DB-gebundenes Token für Log-Download (60 Sekunden).
     Wird für Direktlinks verwendet, damit der Browser den Download nativ ausführt.
+
+    Der Aussteller wird mitgeschrieben. Ohne ihn hing das Token an nichts als der
+    run_id: wer sich vor einem Widerruf eine Handvoll Download-URLs auf Vorrat
+    holte, las danach ohne jede Credential weiter, von beliebiger Adresse.
     """
-    return _create_ephemeral_token(session, EphemeralTokenType.LOG_DOWNLOAD, str(run_id), ttl_seconds=60)
+    return _create_ephemeral_token(
+        session,
+        EphemeralTokenType.LOG_DOWNLOAD,
+        str(run_id),
+        ttl_seconds=60,
+        issued_to_user_id=issued_to_user_id,
+        issued_via_api_token_id=issued_via_api_token_id,
+    )
 
 
 def verify_log_download_token(session: Session, token: str, run_id: UUID) -> bool:
@@ -114,7 +137,52 @@ def verify_log_download_token(session: Session, token: str, run_id: UUID) -> boo
         EphemeralToken.subject == str(run_id),
         EphemeralToken.expires_at > datetime.now(timezone.utc),
     )
-    return retry_on_sqlite_io(lambda: session.exec(statement).first(), session=session) is not None
+    row = retry_on_sqlite_io(lambda: session.exec(statement).first(), session=session)
+    if row is None:
+        return False
+    return _issuer_still_valid(session, row)
+
+
+def _issuer_still_valid(session: Session, row: EphemeralToken) -> bool:
+    """Prüft, ob der Aussteller eines Kurzzeit-Tokens noch berechtigt ist.
+
+    Das schließt das Zeitfenster zwischen Ausstellung und Ablauf: ein Widerruf
+    oder eine Sperre wirkt sofort und nicht erst nach der TTL. Zeilen ohne
+    Aussteller (aus der Zeit vor Migration 042) werden wie bisher behandelt –
+    sie sind binnen 60 Sekunden ohnehin verfallen.
+    """
+    from app.models import ApiToken  # lokal: vermeidet einen Importzyklus
+
+    if row.issued_to_user_id is None and row.issued_via_api_token_id is None:
+        return True
+
+    if row.issued_to_user_id is not None:
+        user = retry_on_sqlite_io(
+            lambda: session.exec(select(User).where(User.id == row.issued_to_user_id)).first(),
+            session=session,
+        )
+        if (
+            user is None
+            or user.blocked
+            or getattr(user, "status", UserStatus.ACTIVE) != UserStatus.ACTIVE
+        ):
+            return False
+
+    if row.issued_via_api_token_id is not None:
+        api_token = retry_on_sqlite_io(
+            lambda: session.exec(
+                select(ApiToken).where(
+                    ApiToken.id == row.issued_via_api_token_id,
+                    ApiToken.revoked_at.is_(None),
+                    ApiToken.expires_at > datetime.now(timezone.utc),
+                )
+            ).first(),
+            session=session,
+        )
+        if api_token is None:
+            return False
+
+    return True
 
 
 def create_link_token(session: Session, user_id: UUID) -> str:

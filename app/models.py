@@ -738,6 +738,24 @@ class EphemeralToken(SQLModel, table=True):
         index=True,
         description="Opaker, zufälliger Token-Wert"
     )
+    issued_to_user_id: Optional[UUID] = Field(
+        default=None,
+        foreign_key="users.id",
+        index=True,
+        description=(
+            "Nutzer, für den das Token ausgestellt wurde. None nur für Alt-Zeilen. "
+            "Beim Einlösen wird geprüft, ob dieser Nutzer noch aktiv ist"
+        ),
+    )
+    issued_via_api_token_id: Optional[UUID] = Field(
+        default=None,
+        foreign_key="api_tokens.id",
+        index=True,
+        description=(
+            "API-Token, mit dem dieses Kurzzeit-Token angefordert wurde (None bei "
+            "Browser-Session). Wird es widerrufen, verfällt auch dieses Token"
+        ),
+    )
     token_type: EphemeralTokenType = Field(
         sa_column=Column(
             SAEnum(EphemeralTokenType, values_callable=lambda x: [e.value for e in x], native_enum=False),

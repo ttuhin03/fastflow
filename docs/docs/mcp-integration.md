@@ -385,6 +385,28 @@ The honest state: there is no masking today. A regex-based redactor in the MCP l
 common forms. It is a mitigation, not a guarantee: a password inside an error message looks
 like ordinary text. That belongs in the documentation, not in the fine print.
 
+### Revocation now actually revokes
+
+Three pre-existing gaps let access outlive its withdrawal. They predate this design but
+matter more once a token is handed to an autonomous client, so they were fixed alongside it.
+
+- **Log streams.** `GET /runs/{id}/logs/stream` authorised once at connect and then yielded
+  for the whole life of the run — hours, for a long ETL job. Revoking the token, blocking the
+  user or demoting their role left established streams exfiltrating live output. The stream
+  now re-checks every 30 seconds, on the keep-alive tick, in its own short-lived session, and
+  closes with an explicit `unauthorized` event when the answer changes.
+- **Download tokens.** `create_log_download_token` minted a 60-second, multi-use token bound
+  to nothing but the run id. Banking a handful of URLs before a revocation kept them working,
+  credential-free, from any address. Migration `042` adds `issued_to_user_id` and
+  `issued_via_api_token_id`; redemption now verifies both are still valid. Rows from before
+  the migration are still honoured — they expire within a minute anyway, and rejecting them
+  would break downloads in flight during a deploy.
+- **Blocking via update.** `POST /users/{id}/block` deleted the user's sessions;
+  `PUT /users/{id}` with `blocked: true` did not, so a user blocked that way kept their JWT
+  until it expired. Both paths now behave the same, and the audit entry records how many
+  sessions were ended. API tokens were never affected — they re-check the block on every
+  request.
+
 ### Traceability
 
 Every token-authenticated request adds `auth_kind="token"`, `token_id` and `label` to `details`
