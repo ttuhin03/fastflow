@@ -4,15 +4,16 @@ sidebar_position: 13
 
 # MCP Integration (Design Proposal)
 
-:::caution[Phases 1 to 3 are implemented – phase 4 is not]
-**Implemented**: API tokens (`ApiToken`, migration `041`, `get_principal` / `require_scope`,
-the `/api/tokens` endpoints, the Settings UI), the MCP server under `mcp-server/` with its
-eight read tools, three resources and two prompts, and the three write tools behind the
-`run` scope. Read and write endpoints enforce scopes; write actions are attributed in the
-audit log.
+:::tip[This design is built]
+API tokens (`ApiToken`, migration `041`, `get_principal` / `require_scope`, the
+`/api/tokens` endpoints, the Settings UI), the MCP server under `mcp-server/` with its eight
+read tools, three resources and two prompts, and the three write tools behind the `run`
+scope. Read and write endpoints enforce scopes; write actions are attributed in the audit
+log.
 
-**Not implemented**: the HTTP sidecar (phase 4), which stays unbuilt until someone needs
-hosted access. See [Phased plan](#part-5-phased-plan).
+The HTTP sidecar that earlier drafts listed as phase 4 is **rejected** — see
+[Deployment](#part-3-deployment) for the reasoning and for the one question that would
+reopen it.
 :::
 
 An MCP server would let an agent answer questions like *"why did the nightly ETL fail?"*
@@ -263,12 +264,39 @@ deliberately opens it.
 | Option | Verdict | For | Against |
 |---|---|---|---|
 | **stdio on the user's machine**<br/>`uvx fastflow-mcp` | **chosen for v1** | No new port, no new service, production image unchanged. The credential lives in the user's MCP client config and never in the agent's context. Versioned independently of the orchestrator. | Each user installs it. No access for hosted or web-based agents. |
-| **HTTP sidecar**<br/>own container, streamable HTTP | later, if asked for | Centrally hosted, one place to update, its own resource and network boundary. Orchestrator image stays clean. | One more service to operate. Needs its own auth story — bearer pass-through or real OAuth 2.1 per MCP spec. |
+| **HTTP sidecar**<br/>own container, streamable HTTP | rejected — conditionally | Centrally hosted, one place to update, its own resource and network boundary. Reaches agents that cannot spawn a local process. | One more service to operate. Needs its own auth story, and routes the credential through a server you run instead of leaving it on the user's machine. |
 | **In-process** under `/mcp` in `app/main.py` | rejected | No duplication: `get_session`, `log_audit` and `limiter` directly available. | Pulls the MCP SDK into the production image — a permanent maintenance cost in a repository that takes Trivy and pip-audit seriously. Couples protocol churn to orchestrator releases, and a bug in the MCP layer is a bug in the orchestrator process. |
 
-The rejection is recorded so the question is not reopened in six months. If the sidecar ever
-wins, it shares tool code with the stdio package — transport choice is one line in the MCP
-SDKs, not the architecture.
+Both rejections are recorded so the questions are not reopened in six months.
+
+#### Why the sidecar is rejected rather than deferred
+
+Deferring it would imply the cost of waiting is the work you skip. It is not — the work is
+already done. `mcp-server/` is transport-independent: the tool cut, the response bounds and
+the redaction know nothing about how bytes reach the client, and the MCP SDK takes the
+transport as an argument.
+
+```python
+server.run(transport="streamable-http")   # instead of "stdio"
+```
+
+What a sidecar actually costs is everything around that line: a service to operate, monitor
+and patch, plus an auth story stdio gets for free. Under stdio the token sits in the user's
+own MCP client config and never passes through a server this project runs. A sidecar has to
+either accept a pass-through bearer — workable, but not what the MCP specification expects of
+a hosted server — or become an OAuth 2.1 resource server, which is a real project: Fast-Flow
+is an OAuth *client* today (GitHub, Google, Microsoft, custom), not a provider.
+
+So the code cost is near zero and the operational cost is the whole of it. That is the wrong
+shape for something built on suspicion.
+
+**The one question that decides it:** should Fast-Flow's MCP surface be usable by someone who
+is *not* running an MCP client locally — a hosted agent, a CI runner that only speaks HTTP,
+or a customer pointing their own agent at their instance? Today the answer is no, and stdio
+is strictly better for the actual use case: the credential stays on the user's machine and
+there is no extra service to keep alive. If that answer ever changes, this becomes a
+deployment and auth task, not a rewrite — reopen it then, and build it as an OAuth resource
+server rather than with pass-through bearers.
 
 ### Client configuration (proposed)
 
@@ -356,7 +384,7 @@ The order is binding: each phase is usable on its own and sensible without the n
 | **1. API tokens** ✅ *done* | Model, migration 041, `get_principal` / `require_scope`, the three `/api/tokens` endpoints, Settings UI, Gitleaks rule, tests. No MCP yet — the value stands alone for CI and scripts. | 2–3 days |
 | **2. MCP, read-only** ✅ *done* | `fastflow-mcp` package over stdio, the eight read tools, three resources, two prompts, log redactor. Lives in `mcp-server/` with its own dependencies — the orchestrator image is untouched. | 1–2 days |
 | **3. MCP, write** ✅ *done* | The three `run` tools behind their own scope, off by default — they are not registered at all unless `FASTFLOW_ENABLE_WRITE_TOOLS=true`, so the model cannot call what it cannot see. Audit attribution verified by test. | 0.5 days |
-| **4. Sidecar** | HTTP transport, Compose and K8s manifests. Only once someone actually needs hosted access — not on suspicion. | open |
+| ~~**4. Sidecar**~~ ❌ *rejected* | HTTP transport, Compose and K8s manifests. Not built: the transport is one argument, the operational and auth cost is the whole of it, and no one needs hosted access today. See [Deployment](#part-3-deployment). | — |
 
 The estimate is an estimate. What is reliable is the ratio: phase 1 is the bulk of the work,
 the MCP server itself is small.
