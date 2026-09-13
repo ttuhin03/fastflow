@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
@@ -73,7 +73,9 @@ export default function Runs() {
     refetchInterval: runsInterval,
   })
 
-  const runs = runsData?.runs || []
+  // Stabile Referenz: als frisches Array pro Render lief der Effect unten (der
+  // runs in den Dependencies hat) bei jedem Render erneut.
+  const runs = useMemo(() => runsData?.runs ?? [], [runsData])
 
   // Invalidate daily-stats when runs complete
   const prevRunsRef = useRef<Run[]>([])

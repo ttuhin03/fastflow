@@ -27,6 +27,50 @@ interface RuntimeData {
   runCount: number
 }
 
+function formatDuration(minutes: number): string {
+  if (minutes < 1) {
+    return `${Math.round(minutes * 60)}s`
+  } else if (minutes < 60) {
+    return `${Math.round(minutes)}m`
+  } else {
+    const hours = Math.floor(minutes / 60)
+    const mins = Math.round(minutes % 60)
+    return `${hours}h ${mins}m`
+  }
+}
+
+// Auf Modulebene, nicht im Rumpf der Chart-Komponente: dort neu erzeugt,
+// behandelt React das Tooltip bei jedem Render als anderen Komponententyp und
+// verwirft dessen Zustand.
+function RuntimeTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: RuntimeData }> }) {
+  const { t } = useTranslation()
+  if (active && payload && payload.length) {
+    const data = payload[0].payload
+    return (
+      <div className="runtime-tooltip">
+        <p className="tooltip-date">{data.dateFull}</p>
+        <p className="tooltip-stat">
+          <span className="tooltip-label">{t('charts.averageRuntime.avg')}</span>
+          <span className="tooltip-value">{formatDuration(data.avgDuration)}</span>
+        </p>
+        <p className="tooltip-stat">
+          <span className="tooltip-label">{t('charts.averageRuntime.min')}</span>
+          <span className="tooltip-value">{formatDuration(data.minDuration)}</span>
+        </p>
+        <p className="tooltip-stat">
+          <span className="tooltip-label">{t('charts.averageRuntime.max')}</span>
+          <span className="tooltip-value">{formatDuration(data.maxDuration)}</span>
+        </p>
+        <p className="tooltip-stat">
+          <span className="tooltip-label">{t('charts.averageRuntime.runs')}</span>
+          <span className="tooltip-value">{data.runCount}</span>
+        </p>
+      </div>
+    )
+  }
+  return null
+}
+
 export default function AverageRuntimeChart({ runs, days = 30 }: AverageRuntimeChartProps) {
   const { t } = useTranslation()
 
@@ -81,45 +125,7 @@ export default function AverageRuntimeChart({ runs, days = 30 }: AverageRuntimeC
     return stats
   }, [runs, days])
 
-  const formatDuration = (minutes: number): string => {
-    if (minutes < 1) {
-      return `${Math.round(minutes * 60)}s`
-    } else if (minutes < 60) {
-      return `${Math.round(minutes)}m`
-    } else {
-      const hours = Math.floor(minutes / 60)
-      const mins = Math.round(minutes % 60)
-      return `${hours}h ${mins}m`
-    }
-  }
 
-  const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload: RuntimeData }> }) => {
-    if (active && payload && payload.length) {
-      const data = payload[0].payload
-      return (
-        <div className="runtime-tooltip">
-          <p className="tooltip-date">{data.dateFull}</p>
-          <p className="tooltip-stat">
-            <span className="tooltip-label">{t('charts.averageRuntime.avg')}</span>
-            <span className="tooltip-value">{formatDuration(data.avgDuration)}</span>
-          </p>
-          <p className="tooltip-stat">
-            <span className="tooltip-label">{t('charts.averageRuntime.min')}</span>
-            <span className="tooltip-value">{formatDuration(data.minDuration)}</span>
-          </p>
-          <p className="tooltip-stat">
-            <span className="tooltip-label">{t('charts.averageRuntime.max')}</span>
-            <span className="tooltip-value">{formatDuration(data.maxDuration)}</span>
-          </p>
-          <p className="tooltip-stat">
-            <span className="tooltip-label">{t('charts.averageRuntime.runs')}</span>
-            <span className="tooltip-value">{data.runCount}</span>
-          </p>
-        </div>
-      )
-    }
-    return null
-  }
 
   if (chartData.length === 0) {
     return (
@@ -144,7 +150,7 @@ export default function AverageRuntimeChart({ runs, days = 30 }: AverageRuntimeC
             {...axisProps}
             label={{ value: t('charts.averageRuntime.yAxisMinutes'), angle: -90, position: 'insideLeft', style: { fill: chart.axis } }}
           />
-          <Tooltip content={<CustomTooltip />} />
+          <Tooltip content={<RuntimeTooltip />} />
           <Legend />
           <Bar
             dataKey="avgDuration"

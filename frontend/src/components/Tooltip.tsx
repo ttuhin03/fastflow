@@ -39,7 +39,7 @@ export default function Tooltip({
     setTooltipPosition(null)
   }
 
-  const updateTooltipPosition = useCallback(() => {
+  const updateTooltipPosition = useCallback(function updatePosition() {
     if (!triggerRef.current || !tooltipRef.current) return
 
     const triggerRect = triggerRef.current.getBoundingClientRect()
@@ -48,7 +48,9 @@ export default function Tooltip({
     // Prüfe ob Tooltip-Element bereits gemessen werden kann (width > 0)
     if (tooltipRect.width === 0 || tooltipRect.height === 0) {
       // Versuche es nochmal nach kurzer Verzögerung
-      setTimeout(() => updateTooltipPosition(), 10)
+      // Benannter Funktionsausdruck: der Name gilt im eigenen Rumpf, damit der
+      // Retry nicht auf die noch nicht initialisierte Variable zugreift.
+      setTimeout(() => updatePosition(), 10)
       return
     }
 

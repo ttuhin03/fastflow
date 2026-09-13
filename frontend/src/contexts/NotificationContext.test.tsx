@@ -5,7 +5,8 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, act } from '@testing-library/react'
-import { NotificationProvider, useNotifications } from './NotificationContext'
+import { NotificationProvider } from './NotificationProvider'
+import { useNotifications } from './NotificationContext'
 
 const KEY = 'fastflow-notifications'
 const DAY = 24 * 60 * 60 * 1000

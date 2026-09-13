@@ -18,9 +18,10 @@ const PipelineDetail = lazy(() => import('./pages/PipelineDetail'))
 const RunDetail = lazy(() => import('./pages/RunDetail'))
 const Settings = lazy(() => import('./pages/Settings'))
 const Audit = lazy(() => import('./pages/Audit'))
-import { AuthProvider, useAuth } from './contexts/AuthContext'
-import { NotificationProvider } from './contexts/NotificationContext'
-import { UiPreferencesProvider } from './contexts/UiPreferencesContext'
+import { AuthProvider } from './contexts/AuthProvider'
+import { useAuth } from './contexts/AuthContext'
+import { NotificationProvider } from './contexts/NotificationProvider'
+import { UiPreferencesProvider } from './contexts/UiPreferencesProvider'
 import { useRunNotifications } from './hooks/useRunNotifications'
 import { useBackupFailurePolling } from './hooks/useBackupFailurePolling'
 import { getErrorStatus } from './utils/apiError'

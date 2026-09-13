@@ -158,11 +158,20 @@ export default function RunDetail() {
     staleTime: 30_000,
   })
 
+  // Aus run herausgezogen: die Effects unten reagieren auf diese Felder, nicht
+  // auf die Objektreferenz — die wechselt bei jedem Poll und würde sonst
+  // Stream-Reconnects auslösen. Als eigene Werte dürfen sie auch ehrlich in den
+  // Dependency-Arrays stehen.
+  const runStatus = run?.status
+  const runPipelineName = run?.pipeline_name
+  const runMetricsFile = run?.metrics_file
+  const runLoaded = run != null
+
   // Invalidate daily-stats when run completes
   const prevStatusRef = useRef<string | null>(null)
   useEffect(() => {
-    if (run && run.pipeline_name) {
-      const currentStatus = run.status
+    if (runLoaded && runPipelineName) {
+      const currentStatus = runStatus
       const prevStatus = prevStatusRef.current
       
       // Only invalidate when status changes from RUNNING/PENDING to SUCCESS/FAILED
@@ -172,18 +181,18 @@ export default function RunDetail() {
         // Invalidate all daily-stats queries immediately
         queryClient.invalidateQueries({ queryKey: ['all-pipelines-daily-stats'] })
         queryClient.invalidateQueries({ queryKey: ['pipeline-daily-stats'] })
-        queryClient.invalidateQueries({ queryKey: ['pipeline-stats', run.pipeline_name] })
+        queryClient.invalidateQueries({ queryKey: ['pipeline-stats', runPipelineName] })
         queryClient.invalidateQueries({ queryKey: ['pipeline-stats'] })
         queryClient.invalidateQueries({ queryKey: ['pipelines'] })
-        queryClient.invalidateQueries({ queryKey: ['pipeline', run.pipeline_name] })
+        queryClient.invalidateQueries({ queryKey: ['pipeline', runPipelineName] })
         // Force refetch immediately with fresh data
         queryClient.refetchQueries({ queryKey: ['all-pipelines-daily-stats'], exact: false })
-        queryClient.refetchQueries({ queryKey: ['pipeline-daily-stats', run.pipeline_name], exact: false })
+        queryClient.refetchQueries({ queryKey: ['pipeline-daily-stats', runPipelineName], exact: false })
       }
       
-      prevStatusRef.current = currentStatus
+      prevStatusRef.current = currentStatus ?? null
     }
-  }, [run?.status, run?.pipeline_name, queryClient])
+  }, [runStatus, runPipelineName, runLoaded, queryClient])
 
   // Hilfsfunktion zum Parsen von Memory-Strings (z.B. "512M" -> 512)
   const parseMemoryString = (memStr: string): number => {
@@ -237,13 +246,13 @@ export default function RunDetail() {
 
   // Log-Streaming mit SSE via fetch (Authorization-Header, kein Token in URL)
   useEffect(() => {
-    if (!run || activeTab !== 'logs') {
+    if (!runLoaded || activeTab !== 'logs') {
       logStreamAbortRef.current?.abort()
       logStreamAbortRef.current = null
       return
     }
 
-    const isRunning = run.status === 'RUNNING' || run.status === 'PENDING'
+    const isRunning = runStatus === 'RUNNING' || runStatus === 'PENDING'
     let reconnectTimeout: ReturnType<typeof setTimeout> | null = null
     const MAX_RECONNECT_ATTEMPTS = 5
     const RECONNECT_DELAY = 3000
@@ -352,18 +361,17 @@ export default function RunDetail() {
       loadHistoricalLogs(abortCtrl.signal)
       return () => abortCtrl.abort()
     }
-  // run?.status statt run (Objekt-Referenz), um Stream-Reconnect bei jedem Poll zu verhindern
-  }, [runId, run?.status, activeTab, logReconnectAttempts])
+  }, [runId, runStatus, runLoaded, activeTab, logReconnectAttempts])
 
   // Metrics-Streaming mit SSE via fetch (Authorization-Header, kein Token in URL)
   useEffect(() => {
-    if (!run || activeTab !== 'metrics') {
+    if (!runLoaded || activeTab !== 'metrics') {
       metricsStreamAbortRef.current?.abort()
       metricsStreamAbortRef.current = null
       return
     }
 
-    const isRunning = run.status === 'RUNNING' || run.status === 'PENDING'
+    const isRunning = runStatus === 'RUNNING' || runStatus === 'PENDING'
     let reconnectTimeout: ReturnType<typeof setTimeout> | null = null
     const MAX_RECONNECT_ATTEMPTS = 5
     const RECONNECT_DELAY = 3000
@@ -447,15 +455,14 @@ export default function RunDetail() {
         metricsStreamAbortRef.current?.abort()
         metricsStreamAbortRef.current = null
       }
-    } else if (run.metrics_file) {
+    } else if (runMetricsFile) {
       const abortCtrl = new AbortController()
       apiClient.get(`/runs/${runId}/metrics`, { signal: abortCtrl.signal })
         .then((r) => setMetrics(r.data))
         .catch(() => { /* Ignored: component unmounted or network error */ })
       return () => abortCtrl.abort()
     }
-  // run?.status + run?.metrics_file statt run (Objekt-Referenz), um Stream-Reconnect bei jedem Poll zu verhindern
-  }, [runId, run?.status, run?.metrics_file, activeTab, metricsReconnectAttempts])
+  }, [runId, runStatus, runMetricsFile, runLoaded, activeTab, metricsReconnectAttempts])
 
   // Auto-Scroll für Logs — scrollt den logviewer__body ans Ende
   useEffect(() => {

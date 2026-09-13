@@ -29,6 +29,19 @@ export default defineConfig([
     plugins: { 'react-refresh': reactRefresh },
     rules: {
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+      // Der Code kennzeichnet bewusst Ungenutztes mit _ (und lässt beim
+      // Rest-Destructuring Felder weg, die nicht ans Backend zurückgehen).
+      // Ohne diese Optionen meldet die Regel genau diese Absicht als Fehler.
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+          destructuredArrayIgnorePattern: '^_',
+          ignoreRestSiblings: true,
+        },
+      ],
     },
   },
 ])

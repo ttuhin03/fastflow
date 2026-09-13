@@ -1,58 +1,11 @@
-import { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { showError as showErrorToast, showWarning as showWarningToast } from '../utils/toast'
-
-export interface Notification {
-  id: string
-  type: 'error' | 'warning' | 'info' | 'success'
-  title: string
-  message: string
-  timestamp: Date
-  read: boolean
-  actionUrl?: string
-  actionLabel?: string
-}
-
-/** Persistierte Form: JSON kennt kein Date, timestamp liegt als ISO-String vor. */
-type StoredNotification = Omit<Notification, 'timestamp'> & { timestamp: string }
-
-interface NotificationContextType {
-  notifications: Notification[]
-  unreadCount: number
-  addNotification: (notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) => void
-  markAsRead: (id: string) => void
-  markAllAsRead: () => void
-  clearNotification: (id: string) => void
-  clearAll: () => void
-}
-
-const NotificationContext = createContext<NotificationContextType | undefined>(undefined)
-
-const STORAGE_KEY = 'fastflow-notifications'
-const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
-
-/**
- * Gespeicherte Notifications lesen und dabei alles älter als 7 Tage verwerfen.
- *
- * Läuft als Initializer von useState, nicht in einem Effect. Vorher taten das
- * zwei Mount-Effects (laden, dann aufräumen) — mit zwei zusätzlichen Rendern
- * und einer Lücke dazwischen: der Speicher-Effect lief im ersten Commit noch
- * mit der leeren Startliste und hat den localStorage-Eintrag gelöscht, bevor
- * der geladene State ankam und ihn wieder zurückschrieb.
- */
-function loadStoredNotifications(): Notification[] {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (!stored) return []
-    const parsed: StoredNotification[] = JSON.parse(stored)
-    const cutoff = Date.now() - MAX_AGE_MS
-    return parsed
-      .map((n) => ({ ...n, timestamp: new Date(n.timestamp) }))
-      .filter((n) => n.timestamp.getTime() > cutoff)
-  } catch (e) {
-    console.error('Fehler beim Laden von Notifications:', e)
-    return []
-  }
-}
+import {
+  NotificationContext,
+  STORAGE_KEY,
+  loadStoredNotifications,
+  type Notification,
+} from './NotificationContext'
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>(loadStoredNotifications)
@@ -131,10 +84,3 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   )
 }
 
-export function useNotifications() {
-  const context = useContext(NotificationContext)
-  if (context === undefined) {
-    throw new Error('useNotifications must be used within NotificationProvider')
-  }
-  return context
-}
