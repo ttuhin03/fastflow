@@ -132,6 +132,33 @@ describe('BackendStatusBanner', () => {
     expect(await screen.findByText('abc-123')).toBeInTheDocument()
   })
 
+  it('behaelt die request_id des Interceptors, wenn der Poll nachzieht', async () => {
+    // Reihenfolge wie im echten Ausfall: Der Interceptor sieht den 503 zuerst
+    // (nur er kennt die request_id), der Poll meldet den Ausfall erst mit dem
+    // naechsten Intervall. Zieht er nach, darf er die Kennung nicht loeschen -
+    // sonst verschwindet genau das aus dem Banner, womit man den Vorfall im Log
+    // wiederfindet.
+    // Der gesunde Poll muss vollstaendig durch sein, bevor der Interceptor
+    // meldet - sonst raeumt dessen Effekt die Meldung gleich wieder weg. Das
+    // Schreiben der Log-URL ist der beobachtbare Beleg, dass er gelaufen ist.
+    respond({ status: 'ok', failing: [], log_viewer_url: 'https://grafana.example/explore' })
+    const { queryClient } = renderBanner()
+    await waitFor(() =>
+      expect(window.localStorage.getItem('fastflow.logViewerUrl')).toBe(
+        'https://grafana.example/explore',
+      ),
+    )
+
+    act(() => reportDegraded({ reason: 'database', requestId: 'abc-123' }))
+    expect(await screen.findByText('abc-123')).toBeInTheDocument()
+
+    respond({ status: 'degraded', failing: ['database'], detail: 'connection refused' })
+    await queryClient.refetchQueries({ queryKey: ['backend-status'] })
+
+    await screen.findByText('connection refused')
+    expect(screen.getByText('abc-123')).toBeInTheDocument()
+  })
+
   it('blendet das Banner wieder aus, sobald sich das Backend erholt', async () => {
     respond({ status: 'degraded', failing: ['database'] })
     const { container, queryClient } = renderBanner()

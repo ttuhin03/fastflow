@@ -61,14 +61,14 @@ apiClient.interceptors.response.use(
     // Backend meldet sich als gestört (z.B. Datenbank nicht erreichbar). Das
     // betrifft jeden geschützten Endpoint, weil bereits die Auth-Dependency an
     // der DB hängt – ohne diesen Zweig käme der Ausfall nirgends in der UI an.
-    const errorDetail = error.response?.data?.detail
-    const backendErrorCode =
-      errorDetail && typeof errorDetail === 'object' ? errorDetail.error_code : undefined
-    if (error.response?.status === 503 && backendErrorCode === 'DATABASE_UNAVAILABLE') {
+    if (getErrorStatus(error) === 503 && getErrorCode(error) === 'DATABASE_UNAVAILABLE') {
+      // request_id und cause deckt utils/apiError nicht ab – die stehen nur in
+      // dieser einen Antwortform.
+      const detail = error.response?.data?.detail
       reportDegraded({
         reason: 'database',
         requestId: error.response?.data?.request_id,
-        cause: typeof errorDetail === 'object' ? errorDetail.cause : undefined,
+        cause: detail && typeof detail === 'object' ? detail.cause : undefined,
       })
       return Promise.reject(error)
     }

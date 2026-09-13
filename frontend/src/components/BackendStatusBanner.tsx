@@ -85,7 +85,18 @@ export default function BackendStatusBanner() {
     if (data.status === 'ok') {
       clearDegraded()
     } else if (data.failing?.includes('database')) {
-      reportDegraded({ reason: 'database', cause: data.detail ?? undefined })
+      // Die request_id steht nur in der fehlgeschlagenen Antwort, die der
+      // Interceptor gesehen hat - /api/system/status kennt sie nicht. Ohne das
+      // Uebernehmen wuerde der naechste Poll sie mit undefined ueberschreiben
+      // und damit nach spaetestens einem Intervall genau die Kennung loeschen,
+      // mit der man den Vorfall im Log wiederfindet.
+      const previous = getDegradedState()
+      const carried = previous.reason === 'database' ? previous : undefined
+      reportDegraded({
+        reason: 'database',
+        requestId: carried?.requestId,
+        cause: data.detail ?? carried?.cause,
+      })
     } else if (data.failing?.includes('sqlite_fallback')) {
       reportDegraded({ reason: 'sqlite_fallback' })
     }
