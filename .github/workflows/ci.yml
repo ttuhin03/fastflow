@@ -27,9 +27,8 @@ concurrency:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Frontend: spiegelt die frontend-builder-Stage des Dockerfiles (Node 20,
-  # dasselbe npm ci), damit hier dieselbe Toolchain läuft wie beim Bauen des
-  # Images.
+  # Frontend: Lint, Build und Tests über dasselbe npm ci wie die
+  # frontend-builder-Stage des Dockerfiles.
   # ---------------------------------------------------------------------------
   frontend:
     name: Frontend (ESLint, Build, Vitest)
@@ -38,13 +37,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      # ESLint 10 verlangt >= 20.19 — das gibt node-version: 20 (jeweils die
-      # neueste 20.x) her; die Engine-Angaben der übrigen Toolchain sind mit 20
-      # verträglich.
+      # Node 24 (aktuelles LTS), NICHT 20 wie im Dockerfile: jsdom 30 verlangt
+      # ^22.22.2 || ^24.15.0 || >=26, und das darunterliegende undici 8 holt
+      # markAsUncloneable aus node:worker_threads — die gibt es erst ab Node 22.
+      # Unter Node 20 startet deshalb kein einziger Vitest-Worker
+      # ("webidl.util.markAsUncloneable is not a function"). npm ci warnt dabei
+      # nur mit EBADENGINE und läuft durch, der Fehler kommt erst im Testlauf.
+      #
+      # Build und Lint liefen auch auf Node 20 (geprüft) — der Docker-Build
+      # bleibt also heil, weil er jsdom nie lädt. Für die Tests hier reicht 20
+      # aber nicht.
       - name: Node einrichten
         uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '24'
           cache: npm
 
       - name: Abhängigkeiten installieren
