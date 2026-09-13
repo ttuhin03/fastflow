@@ -4,11 +4,12 @@ sidebar_position: 13
 
 # MCP Integration (Design Proposal)
 
-:::caution[Design proposal – not implemented]
-Nothing on this page exists in the codebase yet. It describes a planned way to expose
-Fast-Flow to AI agents over the [Model Context Protocol](https://modelcontextprotocol.io).
-Endpoints such as `POST /api/tokens`, the `ApiToken` model and the `fastflow-mcp`
-package are proposals, not API surface. The live API is documented under [API](/docs/api/api).
+:::caution[Partly implemented – read the phase plan]
+**Phase 1 (API tokens) is implemented**: the `ApiToken` model, migration `041`,
+`get_principal` / `require_scope`, the `/api/tokens` endpoints and the Settings UI all exist.
+**Everything MCP-specific is still a proposal** – the `fastflow-mcp` package, the tool
+surface and the resources below describe planned work, not shipped API. See
+[Phased plan](#part-5-phased-plan) for what is done and what is not.
 :::
 
 An MCP server would let an agent answer questions like *"why did the nightly ETL fail?"*
@@ -304,8 +305,12 @@ its value as automation grows.
 
 ### Limits
 
-- Rate limit per token instead of per IP, starting from the existing values (logs `20/min`,
-  runs `60/min`).
+- Rate limiting stays **per IP** for now. Keying the global limiter on the token would be a
+  DoS bypass: `get_client_identifier` runs *before* authentication, so an attacker varying the
+  token on every request would get a fresh bucket each time and escape the IP cap entirely.
+  A correct per-token budget needs an *authenticated* token id, i.e. a limiter that runs after
+  auth — the pattern `app/api/notifications.py` already hand-rolls. Deferred to phase 2, where
+  MCP traffic makes it matter. `POST /api/tokens` carries its own `10/min` limit.
 - `expires_at` is mandatory. Default 90 days, maximum 365. A token without expiry is a password
   without rotation.
 - The byte ceiling is enforced again inside the MCP server. It must not rely on the API already
@@ -317,7 +322,7 @@ The order is binding: each phase is usable on its own and sensible without the n
 
 | Phase | Scope | Estimate |
 |---|---|---|
-| **1. API tokens** | Model, migration 041, `get_principal` / `require_scope`, the three `/api/tokens` endpoints, Settings UI, Gitleaks rule, tests. No MCP yet — the value stands alone for CI and scripts. | 2–3 days |
+| **1. API tokens** ✅ *done* | Model, migration 041, `get_principal` / `require_scope`, the three `/api/tokens` endpoints, Settings UI, Gitleaks rule, tests. No MCP yet — the value stands alone for CI and scripts. | 2–3 days |
 | **2. MCP, read-only** | `fastflow-mcp` package over stdio, the eight read tools, three resources, two prompts, log redactor. Documentation page with client configuration. | 1–2 days |
 | **3. MCP, write** | The three `run` tools behind their own scope, off by default. Injection note in the docs, audit attribution verified. | 0.5 days |
 | **4. Sidecar** | HTTP transport, Compose and K8s manifests. Only once someone actually needs hosted access — not on suspicion. | open |
