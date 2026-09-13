@@ -1108,7 +1108,8 @@
     "pipeline": "Pipeline & runs",
     "notifications": "Notifications",
     "gitSync": "Git Sync",
-    "nutzer": "Users"
+    "nutzer": "Users",
+    "apiTokens": "API tokens"
   },
   "secrets": {
     "adminOnlyTitle": "Admin access only",
@@ -1200,5 +1201,51 @@
   "runStatusCircles": {
     "noRun": "No run",
     "running": "Running…"
+  },
+  "apiTokens": {
+    "intro": "Personal API tokens allow non-interactive access to the API – for CI jobs, scripts and agents. They belong to you and are never more powerful than your role.",
+    "newTokenTitle": "Create new token",
+    "existingTitle": "Existing tokens",
+    "labelField": "Label",
+    "labelPlaceholder": "e.g. CI nightly",
+    "scopesField": "Permissions",
+    "expiryField": "Validity (days)",
+    "expiryHint": "1 to {{max}} days. A token without expiry is a password without rotation.",
+    "createButton": "Create token",
+    "created": "Token created",
+    "createError": "Token could not be created",
+    "shownOnceTitle": "This token is shown only once",
+    "shownOnceHint": "Copy it now and store it safely. Only a hash is kept on the server, so it cannot be shown again.",
+    "copy": "Copy",
+    "copied": "Token copied to clipboard",
+    "copyFailed": "Copy failed – please select it manually",
+    "storedIt": "I've stored it",
+    "showRevoked": "Show revoked",
+    "empty": "No tokens created yet.",
+    "loadError": "Tokens could not be loaded",
+    "noScopes": "Your role currently allows no token permissions.",
+    "colLabel": "Label",
+    "colOwner": "Owner",
+    "colScopes": "Permissions",
+    "colExpires": "Expires",
+    "colLastUsed": "Last used",
+    "revoke": "Revoke",
+    "revoked": "Token revoked",
+    "revokeError": "Token could not be revoked",
+    "revokeConfirm": "Really revoke token “{{label}}”? Clients using it lose access immediately.",
+    "stateRevoked": "revoked",
+    "stateExpired": "expired",
+    "neverUsed": "never",
+    "risk": {
+      "low": "low risk",
+      "medium": "medium risk",
+      "high": "high risk"
+    },
+    "scopeDesc": {
+      "read": "Read pipelines, runs, statistics and dependencies. Metadata without payload.",
+      "logs": "Read log contents and cell output. Payload and credentials can pass through here.",
+      "source": "Read pipeline source files and pipeline.json.",
+      "run": "Start, cancel and retry runs. Requires write permission."
+    }
   }
 }

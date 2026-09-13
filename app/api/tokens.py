@@ -260,6 +260,7 @@ async def list_api_tokens(
     Erzeugung nirgends mehr.
     """
     is_admin = current_user.role == UserRole.ADMIN
+    allowed_scopes = scopes_for_role(current_user.role)
     filters = [] if is_admin else [ApiToken.user_id == current_user.id]
     if not include_revoked:
         filters.append(ApiToken.revoked_at.is_(None))
@@ -294,7 +295,12 @@ async def list_api_tokens(
 
     return ApiTokenListResponse(
         tokens=items,
-        available_scopes=sorted(scope.value for scope in scopes_for_role(current_user.role)),
+        # Reihenfolge der Enum-Deklaration statt alphabetisch: ApiTokenScope ist
+        # nach aufsteigendem Risiko deklariert (read < logs/source < run). Die UI
+        # zeigt die Scopes in dieser Reihenfolge an, der harmloseste zuerst.
+        available_scopes=[
+            scope.value for scope in ApiTokenScope if scope in allowed_scopes
+        ],
     )
 
 

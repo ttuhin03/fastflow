@@ -575,7 +575,7 @@ def test_list_returns_only_own_tokens_and_no_values(client, test_session):
     labels = [item["label"] for item in body["tokens"]]
     assert labels == ["mine"]
     assert own_token not in response.text
-    assert body["available_scopes"] == ["logs", "read", "run", "source"]
+    assert body["available_scopes"] == ["read", "logs", "source", "run"]
 
 
 def test_list_hides_revoked_by_default_and_shows_them_on_request(client, test_session):
@@ -631,7 +631,7 @@ def test_readonly_user_available_scopes_exclude_run(client, test_session):
     finally:
         clear()
 
-    assert body["available_scopes"] == ["logs", "read", "source"]
+    assert body["available_scopes"] == ["read", "logs", "source"]
 
 
 def test_revoke_own_token_is_idempotent(client, test_session):
