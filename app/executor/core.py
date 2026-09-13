@@ -38,7 +38,7 @@ from typing import Dict, Optional, List, Any, AsyncGenerator
 from uuid import UUID, uuid4
 
 import docker
-from docker.errors import DockerException, APIError, ImageNotFound
+from docker.errors import DockerException, APIError, ImageNotFound, NotFound
 from sqlalchemy import text
 from sqlmodel import Session, select, update
 
@@ -84,6 +84,10 @@ _metrics_queues: Dict[UUID, asyncio.Queue] = {}
 # Pre-Heating-Locks (pro Pipeline-Name, LRU-begrenzt gegen Memory-Leak)
 _PRE_HEATING_LOCKS_MAX = 256
 _pre_heating_locks: OrderedDict[str, asyncio.Lock] = OrderedDict()
+
+# Wartezeit zwischen zwei Versuchen, einen Container zu entfernen (wächst linear)
+CONTAINER_REMOVE_RETRY_DELAY_SECONDS = 1.0
+CONTAINER_REMOVE_ATTEMPTS = 3
 
 # Marker für setup_duration: wird vor main.py ausgegeben, in Logs/SSE herausgefiltert
 SETUP_READY_MARKER = "FASTFLOW_SETUP_READY"
@@ -720,7 +724,11 @@ async def _run_container_task(
             def _run_with_circuit_breaker():
                 return circuit_docker.call(lambda: client.containers.run(**container_config))
 
-            container = await control_pool.run(_run_with_circuit_breaker)
+            # Stream-Pool: docker-py zieht bei ImageNotFound selbsttätig das Image
+            # (ContainerCollection.run), das kann Minuten dauern. Der Run hält seinen
+            # Concurrency-Slot bereits, seine Stream-Worker laufen noch nicht – der
+            # Call passt also ins eigene Budget und hält den Control-Pool frei.
+            container = await stream_pool.run(_run_with_circuit_breaker)
             setup_start = time.time()  # Ende: wenn SETUP_READY_MARKER im Log erscheint
         except CircuitBreakerOpenError as e:
             logger.error("Docker Circuit Breaker offen: %s", e)
@@ -816,8 +824,10 @@ async def _run_container_task(
                     )
                 try:
                     # Control-Pool: der Kill muss auch durchkommen, wenn alle
-                    # Stream-Worker belegt sind.
-                    await control_pool.run(container.kill)
+                    # Stream-Worker belegt sind. shield, damit ein Abbruch des
+                    # Run-Tasks (z. B. App-Shutdown) den Kill nicht überspringt –
+                    # vorher war der Call synchron und lief immer zu Ende.
+                    await asyncio.shield(control_pool.run(container.kill))
                 except Exception as kill_err:
                     logger.warning(f"Container-Kill nach Timeout fehlgeschlagen für Run {run_id}: {kill_err}")
                 exit_code = {"StatusCode": -1}  # Timeout-Exit-Code
@@ -1157,12 +1167,14 @@ async def _run_container_task(
         # Container-Cleanup
         if container:
             try:
-                await control_pool.run(lambda: container.remove(force=True))
+                await _remove_container(container, run_id)
             except Exception as e:
                 container_id = getattr(container, "id", "unbekannt")
-                logger.warning(
-                    "Fehler beim Container-Cleanup für Run %s (Container-ID: %.12s): %s. "
-                    "Container muss ggf. manuell entfernt werden: docker rm -f %s",
+                logger.error(
+                    "Container-Cleanup für Run %s endgültig fehlgeschlagen "
+                    "(Container-ID: %.12s): %s. Container manuell entfernen: docker rm -f %s. "
+                    "Bis dahin bleibt der Stats-Stream dieses Runs offen und belegt "
+                    "dauerhaft einen Worker im Stream-Pool.",
                     run_id, container_id, e, container_id,
                 )
 
@@ -1236,6 +1248,44 @@ def _build_container_command(pipeline: DiscoveredPipeline) -> List[str]:
     if is_notebook:
         return ["uv", "run", "--python", py] + nb_runner_cmd
     return ["uv", "run", "--python", py, "python", "-u", "-c", _SETUP_READY_WRAPPER]
+
+
+async def _remove_container(
+    container: docker.models.containers.Container,
+    run_id: UUID,
+) -> None:
+    """
+    Entfernt den Container – und gibt damit die Streams des Runs frei.
+
+    Mit Retry, weil das Entfernen das einzige Mittel ist, den Stats-Stream zu
+    beenden: ``container.stats(stream=True)`` liefert einen einfachen Generator,
+    keinen ``CancellableStream``. Dessen ``close()`` kann einen Worker, der
+    gerade in ``next()`` blockiert, nicht aufwecken (``ValueError: generator
+    already executing``, wird verschluckt) — der Stream endet erst, wenn Docker
+    ihn beendet. Schlägt das Entfernen endgültig fehl, ist dieser Worker
+    dauerhaft verloren.
+
+    Args:
+        container: Docker-Container-Objekt
+        run_id: Run-ID (für Logging)
+
+    Raises:
+        Exception: die Exception des letzten Versuchs
+    """
+    for attempt in range(1, CONTAINER_REMOVE_ATTEMPTS + 1):
+        try:
+            await control_pool.run(lambda: container.remove(force=True))
+            return
+        except NotFound:
+            return  # Bereits entfernt – Ziel erreicht
+        except Exception as e:
+            if attempt == CONTAINER_REMOVE_ATTEMPTS:
+                raise
+            logger.warning(
+                "Container-Cleanup für Run %s fehlgeschlagen (Versuch %d/%d): %s – neuer Versuch",
+                run_id, attempt, CONTAINER_REMOVE_ATTEMPTS, e,
+            )
+            await asyncio.sleep(CONTAINER_REMOVE_RETRY_DELAY_SECONDS * attempt)
 
 
 async def _get_uv_version(container: docker.models.containers.Container) -> Optional[str]:
@@ -2311,11 +2361,15 @@ async def _re_attach_container(
             run.pipeline_name, exit_code_value == 0, session, triggered_by=run.triggered_by,
             run_date=run.started_at.date() if run.started_at else None,
         )
-        # Container entfernen
+        # Container entfernen (gibt die Streams des Runs frei)
         try:
-            await control_pool.run(lambda: container.remove(force=True))
+            await _remove_container(container, run_id)
         except Exception as e:
-            logger.warning(f"Fehler beim Container-Cleanup für Run {run_id}: {e}")
+            logger.error(
+                "Container-Cleanup für Run %s endgültig fehlgeschlagen: %s. "
+                "Container manuell entfernen: docker rm -f %.12s",
+                run_id, e, getattr(container, "id", "unbekannt"),
+            )
         
         # Container aus Tracking entfernen
         async with _concurrency_lock:

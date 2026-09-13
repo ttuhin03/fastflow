@@ -23,8 +23,10 @@ import pytest
 
 from app.core.config import config
 from app.executor import core as executor_core
+from app.executor import thread_pools as thread_pools_module
 from app.executor.thread_pools import (
     BLOCKING_CALLS_PER_RUN,
+    CONTROL_POOL_HEADROOM,
     CONTROL_POOL_MIN_WORKERS,
     DEFAULT_CONCURRENT_RUNS,
     MAX_POOL_WORKERS,
@@ -100,12 +102,17 @@ def test_stream_pool_holds_all_blocking_calls_of_all_runs(max_concurrent_runs):
     assert _stream_pool_capacity() > BLOCKING_CALLS_PER_RUN * 10
 
 
-def test_control_pool_scales_with_concurrent_runs(max_concurrent_runs):
-    """Beim Graceful Shutdown müssen alle Container parallel gestoppt werden."""
+def test_control_pool_keeps_headroom_above_concurrent_runs(max_concurrent_runs):
+    """
+    Am Ende eines Runs fallen mehrere Control-Calls an (logs(tail), remove).
+    Wäre der Pool genau MAX_CONCURRENT_RUNS gross, bliebe beim gleichzeitigen
+    Aufräumen aller Runs nichts für Abbruch und Reconciliation übrig.
+    """
     max_concurrent_runs(2)
     assert _control_pool_capacity() == CONTROL_POOL_MIN_WORKERS
     max_concurrent_runs(64)
-    assert _control_pool_capacity() == 64
+    assert _control_pool_capacity() == 64 + CONTROL_POOL_HEADROOM
+    assert _control_pool_capacity() > 64
 
 
 @pytest.mark.parametrize("value", [0, None, -1, "kaputt"])
@@ -115,7 +122,9 @@ def test_capacity_falls_back_when_limit_is_unset(max_concurrent_runs, value):
     assert _stream_pool_capacity() == (
         BLOCKING_CALLS_PER_RUN * DEFAULT_CONCURRENT_RUNS + STREAM_POOL_HEADROOM
     )
-    assert _control_pool_capacity() == max(CONTROL_POOL_MIN_WORKERS, DEFAULT_CONCURRENT_RUNS)
+    assert _control_pool_capacity() == max(
+        CONTROL_POOL_MIN_WORKERS, DEFAULT_CONCURRENT_RUNS + CONTROL_POOL_HEADROOM
+    )
 
 
 def test_capacity_is_capped(max_concurrent_runs):
@@ -145,20 +154,29 @@ async def test_all_blocking_calls_of_all_runs_start_concurrently(max_concurrent_
         _drain(calls, gate, pool)
 
 
-async def test_saturated_stream_pool_does_not_block_control_calls(max_concurrent_runs):
-    """Der ursprüngliche Schaden: cancel/kill/cleanup hingen hinter den Streams."""
-    max_concurrent_runs(3)
-    streams = BlockingCallPool("test-stream", _stream_pool_capacity)
-    controls = BlockingCallPool("test-control", _control_pool_capacity)
+async def test_pool_grows_when_demand_exceeds_configured_capacity(max_concurrent_runs):
+    """
+    Nicht jede Nachfrage lässt sich aus MAX_CONCURRENT_RUNS herleiten: Re-Attach
+    nach Crash-Recovery läuft ohne Concurrency-Check, Streams eines beendeten
+    Runs laufen nach, und bei Kubernetes heisst 0 "unbegrenzt". Der Pool muss
+    dann mitwachsen statt still zu warten.
+    """
+    max_concurrent_runs(1)
+    pool = BlockingCallPool("test-demand", _stream_pool_capacity)
     gate = _Gate()
     blocked = []
     try:
-        blocked = _saturate(streams, gate)
-        result = await asyncio.wait_for(controls.run(lambda: "abgebrochen"), timeout=5)
-        assert result == "abgebrochen"
+        blocked = _saturate(pool, gate)
+        configured = pool.stats()["max_workers"]
+        assert configured == _stream_pool_capacity()
+
+        # Ein weiterer Call bei unveränderter Konfiguration: muss sofort laufen.
+        extra = pool.submit(gate.block)
+        blocked.append(extra)
+        assert gate.wait_for_entries(1), "Call wartet in der Queue statt zu starten"
+        assert pool.stats()["max_workers"] > configured
     finally:
-        _drain(blocked, gate, streams)
-        controls.shutdown()
+        _drain(blocked, gate, pool)
 
 
 async def test_pool_grows_when_limit_is_raised_at_runtime(max_concurrent_runs):
@@ -173,7 +191,7 @@ async def test_pool_grows_when_limit_is_raised_at_runtime(max_concurrent_runs):
 
         max_concurrent_runs(8)
         assert await asyncio.wait_for(pool.run(lambda: "frei"), timeout=5) == "frei"
-        assert pool.stats()["max_workers"] == _stream_pool_capacity() > small
+        assert pool.stats()["max_workers"] >= _stream_pool_capacity() > small
     finally:
         _drain(blocked, gate, pool)
 
@@ -248,8 +266,11 @@ def test_executor_has_no_shared_pool_left():
     assert executor_core.control_pool is control_pool
 
 
-async def test_cancel_run_works_while_stream_pool_is_saturated(monkeypatch):
+async def test_cancel_run_works_while_stream_pool_is_saturated(
+    monkeypatch, max_concurrent_runs
+):
     """Abbrechen muss gerade dann funktionieren, wenn alle Runs laufen."""
+    max_concurrent_runs(2)
     stopped = threading.Event()
     gate = _Gate()
     blocked = []
@@ -321,3 +342,82 @@ async def test_log_streaming_reads_via_stream_pool_and_sets_up_via_control_pool(
     assert used["control"] == 1, "container.logs() gehört in den Control-Pool"
     # Ein next() je Chunk plus der abschliessende Read, der None liefert.
     assert used["stream"] == 4, "next(stream) gehört in den Stream-Pool"
+
+
+# --- Freigabe der Stream-Worker ---------------------------------------------
+
+class _FlakyContainer:
+    """Container, dessen remove() erst nach `failures` Versuchen klappt."""
+
+    id = "0123456789ab"
+
+    def __init__(self, failures, error=None):
+        self._remaining = failures
+        self._error = error or RuntimeError("daemon busy")
+        self.remove_calls = 0
+
+    def remove(self, force=False):
+        self.remove_calls += 1
+        if self._remaining > 0:
+            self._remaining -= 1
+            raise self._error
+
+
+async def test_container_removal_is_retried(monkeypatch):
+    """
+    Das Entfernen des Containers ist das einzige Mittel, den Stats-Stream zu
+    beenden: er ist ein einfacher Generator, sein close() weckt den blockierten
+    Worker nicht. Ein einzelner fehlgeschlagener Versuch würde den Worker
+    dauerhaft kosten.
+    """
+    monkeypatch.setattr(executor_core, "CONTAINER_REMOVE_RETRY_DELAY_SECONDS", 0.01)
+    container = _FlakyContainer(failures=2)
+    await asyncio.wait_for(executor_core._remove_container(container, uuid4()), timeout=5)
+    assert container.remove_calls == 3
+
+
+async def test_container_removal_gives_up_loudly(monkeypatch):
+    """Nach allen Versuchen muss der Fehler sichtbar werden, nicht verschluckt."""
+    monkeypatch.setattr(executor_core, "CONTAINER_REMOVE_RETRY_DELAY_SECONDS", 0.01)
+    container = _FlakyContainer(failures=99)
+    with pytest.raises(RuntimeError, match="daemon busy"):
+        await asyncio.wait_for(executor_core._remove_container(container, uuid4()), timeout=5)
+    assert container.remove_calls == executor_core.CONTAINER_REMOVE_ATTEMPTS
+
+
+async def test_already_removed_container_is_not_retried(monkeypatch):
+    """404 heisst: Ziel erreicht – kein Grund für weitere Versuche."""
+    from docker.errors import NotFound
+
+    monkeypatch.setattr(executor_core, "CONTAINER_REMOVE_RETRY_DELAY_SECONDS", 0.01)
+    container = _FlakyContainer(failures=99, error=NotFound("weg"))
+    await asyncio.wait_for(executor_core._remove_container(container, uuid4()), timeout=5)
+    assert container.remove_calls == 1
+
+
+async def test_growth_stops_at_the_ceiling_without_creating_pools(monkeypatch):
+    """
+    Übersteigt die Nachfrage MAX_POOL_WORKERS, darf nicht pro Call ein neuer
+    Pool entstehen – das wäre eine Thread-Explosion statt einer Obergrenze.
+    """
+    monkeypatch.setattr("app.executor.thread_pools.MAX_POOL_WORKERS", 4)
+    created = []
+    real_executor = thread_pools_module.ThreadPoolExecutor
+
+    def _counting_executor(*args, **kwargs):
+        created.append(kwargs.get("max_workers"))
+        return real_executor(*args, **kwargs)
+
+    monkeypatch.setattr("app.executor.thread_pools.ThreadPoolExecutor", _counting_executor)
+
+    pool = BlockingCallPool("test-ceiling", lambda: 2)
+    gate = _Gate()
+    calls = []
+    try:
+        calls = [pool.submit(gate.block) for _ in range(12)]
+        assert gate.wait_for_entries(4), "der Pool sollte bis zum Limit belegt sein"
+        assert pool.stats()["max_workers"] == 4
+        # 2 (konfiguriert) -> 4 (Limit); danach kein weiterer Pool mehr.
+        assert created == [2, 4], f"unerwartete Pool-Erzeugungen: {created}"
+    finally:
+        _drain(calls, gate, pool)

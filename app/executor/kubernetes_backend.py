@@ -882,8 +882,10 @@ async def _emit_placeholder_metrics(
             while True:
                 cpu_percent, ram_mb = 0.0, 0.0
                 if namespace and job_name:
-                    # Stream-Pool: läuft über die gesamte Laufzeit des Runs im
-                    # Takt weiter – wie der Stats-Stream im Docker-Backend.
+                    # Stream-Pool: einzeln kurze Calls, die aber über die gesamte
+                    # Laufzeit des Runs alle 2 s wiederkehren. Sie gehören damit
+                    # ins Budget dieses Runs und nicht in den Control-Pool, der
+                    # für Abbruch und Aufräumen freibleiben muss.
                     pod_name = await stream_pool.run(_get_pod_name)
                     if pod_name:
                         cpu_percent, ram_mb = await stream_pool.run(
