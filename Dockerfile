@@ -9,7 +9,10 @@
 
 # Stage 1: React-Frontend Build
 # Nutzt npm workspaces (Root package-lock.json) für konsistente Dependencies
-FROM node:20-slim AS frontend-builder
+# Node 24 (LTS): die Frontend-devDependencies verlangen inzwischen mehr als 20 —
+# jsdom 30 etwa ^22.22.2 || ^24.15.0 || >=26. Der Build lief auf 20 nur noch,
+# weil er jsdom nicht lädt; npm ci hat dafür EBADENGINE-Warnungen ausgegeben.
+FROM node:24-slim AS frontend-builder
 
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -28,7 +31,7 @@ COPY frontend/ ./frontend/
 RUN npm run build --workspace=fastflow-frontend
 
 # Stage 1b: Docusaurus-Docs Build (für /docs unter FastAPI)
-FROM node:20-slim AS docs-builder
+FROM node:24-slim AS docs-builder
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY docs/package.json ./docs/
