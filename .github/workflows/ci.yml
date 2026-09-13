@@ -1,0 +1,96 @@
+# Lint, Typen, Build und Tests für beide Hälften des Projekts.
+#
+# Hintergrund: Bis hierher lief weder Lint noch ein Test in CI. Genau deshalb ist
+# nicht aufgefallen, dass ESLint über längere Zeit gar nicht mehr startete
+# (ajv-Konflikt, nicht mehr gelesene .eslintrc, entferntes --ext-Flag; behoben in
+# 9b098df). Dieselbe Lücke gab es für die 50 Frontend- und 211 Backend-Tests.
+#
+# Bewusst ohne paths-Filter: ein übersprungener Job meldet keinen Status, und
+# sobald die Checks required gesetzt werden, hängt ein PR, der nur die jeweils
+# andere Hälfte anfasst, auf "Waiting for status". Beide Jobs laufen in ein bis
+# zwei Minuten, das ist den Preis wert.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Laufende Prüfung für denselben Branch/PR abbrechen, wenn ein neuer Push kommt.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Frontend: spiegelt die frontend-builder-Stage des Dockerfiles (Node 20,
+  # dasselbe npm ci), damit hier dieselbe Toolchain läuft wie beim Bauen des
+  # Images.
+  # ---------------------------------------------------------------------------
+  frontend:
+    name: Frontend (ESLint, Build, Vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # ESLint 10 verlangt >= 20.19 — das gibt node-version: 20 (jeweils die
+      # neueste 20.x) her; die Engine-Angaben der übrigen Toolchain sind mit 20
+      # verträglich.
+      - name: Node einrichten
+        uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Abhängigkeiten installieren
+        run: npm ci --workspace=fastflow-frontend
+
+      # !cancelled() statt Abbruch beim ersten Fehler: so zeigt ein Lauf alle
+      # Probleme auf einmal statt eines pro Push. Fehlschläge markieren den Job
+      # trotzdem als rot.
+      - name: ESLint
+        if: ${{ !cancelled() }}
+        run: npm run lint --workspace=fastflow-frontend
+
+      # `build` ist `tsc && vite build` — deckt die Typprüfung mit ab.
+      - name: Build (tsc + vite)
+        if: ${{ !cancelled() }}
+        run: npm run build --workspace=fastflow-frontend
+
+      - name: Vitest
+        if: ${{ !cancelled() }}
+        run: npm run test --workspace=fastflow-frontend
+
+  # ---------------------------------------------------------------------------
+  # Backend: Python 3.11 wie im Dockerfile. Die Tests sind hermetisch —
+  # tests/conftest.py legt Temp-Verzeichnisse an und setzt OAuth-Dummies,
+  # ENCRYPTION_KEY und TESTING=1 selbst. Es braucht also weder Docker noch eine
+  # externe Datenbank (SQLite in-memory).
+  # ---------------------------------------------------------------------------
+  backend:
+    name: Backend (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Python einrichten
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      # pytest, pytest-asyncio und httpx stehen mit in requirements.txt.
+      - name: Abhängigkeiten installieren
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # testpaths = tests steht in pytest.ini.
+      - name: pytest
+        run: pytest
