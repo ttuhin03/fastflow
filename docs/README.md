@@ -68,6 +68,25 @@ Without SSH: `GIT_USER=<your-github-user> npm run deploy`.
 
 In Markdown, [Mermaid](https://mermaid.js.org/) diagrams are rendered via ` ```mermaid ` code blocks (e.g. in `docs/architektur.md`).
 
+## Admonitions (callout boxes)
+
+`docusaurus.config.ts` sets `future: { v4: true }`, which implies
+`mdx1CompatDisabledByDefault: true` and therefore **disables the legacy,
+space-separated admonition title syntax**. Titles must be in square brackets:
+
+```markdown
+:::caution[Important notice]
+Text of the callout.
+:::
+```
+
+Written as `:::caution Important notice`, the block is **not** rendered as a callout —
+the `:::` line ends up as literal text on the page, in dev server and production build
+alike. Admonitions without a title (`:::note` on its own line) are unaffected.
+
+Do not remove `future: { v4: true }` to get the old syntax back: the flag is set
+deliberately, and dropping it has already broken the build before.
+
 ## Structure
 
 - `docs/` – Markdown sources

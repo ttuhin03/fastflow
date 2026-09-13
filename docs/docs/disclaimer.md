@@ -4,7 +4,7 @@ sidebar_position: 30
 
 # Disclaimer & Liability
 
-:::caution Important notice on security and liability
+:::caution[Important notice on security and liability]
 This project is in an **early stage / beta status**. In **`PIPELINE_EXECUTOR=docker`** mode, the orchestrator has indirect access to the Docker daemon (via the recommended socket proxy) – with **improper configuration**, there is a **security risk** to the host system. In **`kubernetes`** mode, runs are decoupled from host Docker; typical K8s concerns apply instead (RBAC, networking, secrets).
 :::
 
