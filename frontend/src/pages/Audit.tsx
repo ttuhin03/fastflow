@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../api/client'
 import { getFormatLocale } from '../utils/locale'
+import { getErrorDetail } from '../utils/apiError'
 import './Audit.css'
 
 interface AuditEntry {
@@ -90,7 +91,7 @@ export default function Audit() {
     return (
       <div className="audit-page">
         <div className="audit-error card">
-          <p>{t('audit.loadError')}: {(error as any)?.response?.data?.detail || (error as Error)?.message}</p>
+          <p>{t('audit.loadError')}: {getErrorDetail(error)}</p>
         </div>
       </div>
     )

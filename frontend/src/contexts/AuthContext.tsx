@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import apiClient from '../api/client'
 import { showError } from '../utils/toast'
+import { getErrorStatus } from '../utils/apiError'
 
 interface AuthContextType {
   isAuthenticated: boolean
@@ -30,12 +31,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const role = response.data.role?.toLowerCase() as 'readonly' | 'write' | 'admin'
       setUserRole(role || 'readonly')
       setIsSetupCompleted(response.data.is_setup_completed !== false)
-    } catch (error: any) {
+    } catch (error) {
       setUserRole(null)
       setIsAuthenticated(false)
       setToken(null)
       setIsSetupCompleted(true)
-      if (error?.response?.status !== 401) {
+      if (getErrorStatus(error) !== 401) {
         showError('Sitzung konnte nicht geladen werden. Bitte erneut anmelden.')
       }
     }

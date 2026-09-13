@@ -12,6 +12,9 @@ export interface Notification {
   actionLabel?: string
 }
 
+/** Persistierte Form: JSON kennt kein Date, timestamp liegt als ISO-String vor. */
+type StoredNotification = Omit<Notification, 'timestamp'> & { timestamp: string }
+
 interface NotificationContextType {
   notifications: Notification[]
   unreadCount: number
@@ -32,9 +35,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     const stored = localStorage.getItem('fastflow-notifications')
     if (stored) {
       try {
-        const parsed = JSON.parse(stored)
+        const parsed: StoredNotification[] = JSON.parse(stored)
         setNotifications(
-          parsed.map((n: any) => ({
+          parsed.map((n) => ({
             ...n,
             timestamp: new Date(n.timestamp),
           }))

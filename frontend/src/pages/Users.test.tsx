@@ -12,6 +12,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { AxiosError, AxiosHeaders } from 'axios'
 
 vi.mock('../api/client', () => {
   const get = vi.fn()
@@ -25,10 +26,20 @@ vi.mock('../contexts/AuthContext', () => ({
 import apiClient from '../api/client'
 import Users from './Users'
 
-function forbidden() {
-  return Object.assign(new Error('Request failed with status code 403'), {
-    response: { status: 403, data: { detail: 'Admin-Rechte erforderlich' } },
-  })
+// Echter AxiosError statt eines Objekts mit response-Feld: die Auswertung in
+// utils/apiError geht über axios.isAxiosError, das am Flag erkennt — ein
+// nachgebauter Fehler würde hier vorbeilaufen und den Test wertlos machen.
+function forbidden(): AxiosError {
+  const config = { headers: new AxiosHeaders() }
+  const error = new AxiosError('Request failed with status code 403', 'ERR_BAD_REQUEST', config)
+  error.response = {
+    status: 403,
+    statusText: 'Forbidden',
+    data: { detail: 'Admin-Rechte erforderlich' },
+    headers: {},
+    config,
+  }
+  return error
 }
 
 function renderUsers() {

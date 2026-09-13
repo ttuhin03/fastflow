@@ -9,6 +9,7 @@ import { showError, showSuccess } from '../utils/toast'
 import { LineChart } from '../components/LineChart'
 import { RunEnvSection } from '../components/RunEnvSection'
 import { LuSearch, LuWrapText, LuArrowDown, LuDownload, LuHash, LuCopy, LuCheck } from 'react-icons/lu'
+import { getErrorDetail } from '../utils/apiError'
 import '../components/LogViewer.css'
 import './RunDetail.css'
 
@@ -213,8 +214,8 @@ export default function RunDetail() {
       }
       showSuccess(t('runDetail.cancelSuccess'))
     },
-    onError: (error: any) => {
-      showError(t('runs.cancelError', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('runs.cancelError', { detail: getErrorDetail(error) }))
     },
   })
 
@@ -229,8 +230,8 @@ export default function RunDetail() {
       queryClient.invalidateQueries({ queryKey: ['pipeline-daily-stats'] })
       navigate(`/runs/${data.id}`)
     },
-    onError: (error: any) => {
-      showError(t('runDetail.retryError', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('runDetail.retryError', { detail: getErrorDetail(error) }))
     },
   })
 

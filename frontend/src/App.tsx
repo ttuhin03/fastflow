@@ -23,15 +23,16 @@ import { NotificationProvider } from './contexts/NotificationContext'
 import { UiPreferencesProvider } from './contexts/UiPreferencesContext'
 import { useRunNotifications } from './hooks/useRunNotifications'
 import { useBackupFailurePolling } from './hooks/useBackupFailurePolling'
+import { getErrorStatus } from './utils/apiError'
 import './App.css'
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
-      retry: (failureCount, error: any) => {
+      retry: (failureCount, error) => {
         // Don't retry on 401 Unauthorized errors
-        if (error?.response?.status === 401) {
+        if (getErrorStatus(error) === 401) {
           return false
         }
         // Retry once for other errors

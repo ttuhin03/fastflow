@@ -5,6 +5,7 @@ import apiClient from '../api/client'
 import { getFormatLocale } from '../utils/locale'
 import { showError, showSuccess, showConfirm } from '../utils/toast'
 import { LuUsers, LuPlus, LuPencil, LuTrash2, LuBan, LuShieldCheck, LuKeyRound, LuMail, LuX } from 'react-icons/lu'
+import { getErrorDetail } from '../utils/apiError'
 import './UserManagement.css'
 
 interface User {
@@ -77,8 +78,8 @@ export default function UserManagement() {
       resetForm()
       showSuccess(t('users.toastUserCreated'))
     },
-    onError: (error: any) => {
-      showError(t('users.errorWithDetail', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('users.errorWithDetail', { detail: getErrorDetail(error) }))
     },
   })
 
@@ -100,8 +101,8 @@ export default function UserManagement() {
       navigator.clipboard.writeText(fullLink)
       showSuccess(t('users.toastInviteCreatedWithLink', { link: fullLink }))
     },
-    onError: (error: any) => {
-      showError(t('users.errorWithDetail', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('users.errorWithDetail', { detail: getErrorDetail(error) }))
     },
   })
 
@@ -116,8 +117,8 @@ export default function UserManagement() {
       resetForm()
       showSuccess(t('users.toastUserUpdated'))
     },
-    onError: (error: any) => {
-      showError(t('users.errorWithDetail', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('users.errorWithDetail', { detail: getErrorDetail(error) }))
     },
   })
 
@@ -131,8 +132,8 @@ export default function UserManagement() {
     onSuccess: () => {
       showSuccess(t('users.toastPasswordReset'))
     },
-    onError: (error: any) => {
-      showError(t('users.errorWithDetail', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('users.errorWithDetail', { detail: getErrorDetail(error) }))
     },
   })
 
@@ -145,8 +146,8 @@ export default function UserManagement() {
       queryClient.invalidateQueries({ queryKey: ['users'] })
       showSuccess(t('users.toastUserBlocked'))
     },
-    onError: (error: any) => {
-      showError(t('users.errorWithDetail', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('users.errorWithDetail', { detail: getErrorDetail(error) }))
     },
   })
 
@@ -159,8 +160,8 @@ export default function UserManagement() {
       queryClient.invalidateQueries({ queryKey: ['users'] })
       showSuccess(t('users.toastUserUnblocked'))
     },
-    onError: (error: any) => {
-      showError(t('users.errorWithDetail', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('users.errorWithDetail', { detail: getErrorDetail(error) }))
     },
   })
 
@@ -173,8 +174,8 @@ export default function UserManagement() {
       queryClient.invalidateQueries({ queryKey: ['users'] })
       showSuccess(t('users.toastUserDeleted'))
     },
-    onError: (error: any) => {
-      showError(t('users.errorWithDetail', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('users.errorWithDetail', { detail: getErrorDetail(error) }))
     },
   })
 

@@ -16,6 +16,7 @@ import SystemStatus from '../components/SystemStatus'
 import ConcurrencyStatus from '../components/ConcurrencyStatus'
 import SummaryStatsCard from '../components/SummaryStatsCard'
 import Sparkline from '../components/Sparkline'
+import { getErrorDetail } from '../utils/apiError'
 import './Dashboard.css'
 
 interface Pipeline {
@@ -123,8 +124,8 @@ export default function Dashboard() {
       queryClient.invalidateQueries({ queryKey: ['sync-status'] })
       showSuccess(t('dashboard.syncSuccess'))
     },
-    onError: (error: any) => {
-      showError(t('dashboard.syncError', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('dashboard.syncError', { detail: getErrorDetail(error) }))
     },
   })
 

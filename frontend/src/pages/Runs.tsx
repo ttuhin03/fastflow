@@ -40,7 +40,8 @@ export default function Runs() {
   const [page, setPage] = useState<number>(1)
   const [pageSize, setPageSize] = useState<number>(50)
 
-  const { data: pipelines } = useQuery({
+  // Nur der Name wird hier gebraucht — der Endpoint liefert mehr.
+  const { data: pipelines } = useQuery<{ name: string }[]>({
     queryKey: ['pipelines'],
     queryFn: async () => {
       const response = await apiClient.get('/pipelines')
@@ -210,7 +211,7 @@ export default function Runs() {
             aria-label={t('runs.filterPipeline')}
           >
             <option value="">{t('runs.filterPipeline')} {t('runs.listAll')}</option>
-            {pipelines?.map((p: any) => (
+            {pipelines?.map((p) => (
               <option key={p.name} value={p.name}>
                 {p.name}
               </option>

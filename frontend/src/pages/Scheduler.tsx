@@ -8,7 +8,17 @@ import apiClient from '../api/client'
 import { showError } from '../utils/toast'
 import { getFormatLocale } from '../utils/locale'
 import Tooltip from '../components/Tooltip'
+import { getErrorDetail } from '../utils/apiError'
 import './Scheduler.css'
+
+/** Zeile der Run-Liste eines Scheduler-Jobs (GET /scheduler/jobs/{id}/runs). */
+interface JobRun {
+  id: string
+  status: string
+  started_at: string
+  finished_at: string | null
+  exit_code: number | null
+}
 
 interface Job {
   id: string
@@ -47,8 +57,8 @@ export default function Scheduler() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['scheduler-jobs'] })
     },
-    onError: (error: any) => {
-      showError(t('scheduler.toggleError', { detail: error.response?.data?.detail || error.message }))
+    onError: (error) => {
+      showError(t('scheduler.toggleError', { detail: getErrorDetail(error) }))
     },
   })
 
@@ -253,7 +263,7 @@ function JobDetails({ jobId, triggerType }: { jobId: string; triggerType: Job['t
   const { t } = useTranslation()
   const formatLocale = getFormatLocale()
 
-  const { data: runs, isLoading: runsLoading } = useQuery({
+  const { data: runs, isLoading: runsLoading } = useQuery<JobRun[]>({
     queryKey: ['job-runs', jobId],
     queryFn: async () => {
       const response = await apiClient.get(`/scheduler/jobs/${jobId}/runs?limit=10`)
@@ -307,7 +317,7 @@ function JobDetails({ jobId, triggerType }: { jobId: string; triggerType: Job['t
             <span>{t('schedulerExtra.exitCode')}</span>
             <span>{t('scheduler.actions')}</span>
           </div>
-          {runs.map((run: any) => (
+          {runs.map((run) => (
             <div key={run.id} className="table__row job-runs-row">
               <span className="mono">{run.id.substring(0, 8)}…</span>
               <span>

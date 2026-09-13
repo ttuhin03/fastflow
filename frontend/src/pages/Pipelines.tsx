@@ -13,6 +13,7 @@ import Runs from './Runs'
 import Scheduler from './Scheduler'
 import Secrets from './Secrets'
 import Dependencies from './Dependencies'
+import { getErrorDetail } from '../utils/apiError'
 import './Pipelines.css'
 
 export type PipelinesSection = 'pipelines' | 'runs' | 'scheduler' | 'secrets' | 'dependencies'
@@ -109,9 +110,9 @@ export default function Pipelines() {
       setStartingPipeline(null)
       navigate(`/runs/${data.id}`)
     },
-    onError: (error: any) => {
+    onError: (error) => {
       setStartingPipeline(null)
-      showError(t('pipelines.startError', { detail: error.response?.data?.detail || error.message }))
+      showError(t('pipelines.startError', { detail: getErrorDetail(error) }))
     },
   })
 
@@ -179,8 +180,8 @@ export default function Pipelines() {
         try {
           await apiClient.post(`/pipelines/${p.name}/run`, { env_vars: {}, parameters: {} })
           started += 1
-        } catch (error: any) {
-          showError(t('pipelines.startError', { detail: error.response?.data?.detail || error.message }))
+        } catch (error) {
+          showError(t('pipelines.startError', { detail: getErrorDetail(error) }))
         }
       }
     } finally {
