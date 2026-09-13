@@ -61,6 +61,13 @@ kubectl apply -f k8s/deployment.yaml
 kubectl apply -f k8s/service.yaml
 ```
 
+`postgres.yaml` ist optional — ohne das Manifest läuft der Orchestrator auf SQLite
+im PVC. Das gilt aber nur bei `ENVIRONMENT: development`. Unter
+`ENVIRONMENT: production` ist `DATABASE_URL` Pflicht: Fehlt der Wert, bricht der
+Start hart ab, damit niemand unbemerkt auf einer leeren SQLite-DB landet. Wer
+production ohne PostgreSQL fahren will, setzt SQLite in der ConfigMap explizit
+(`DATABASE_URL: "sqlite:////app/data/fastflow.db"`).
+
 ### 4. Zugriff auf die App
 
 - **NodePort (Standard in service.yaml):** Service nutzt NodePort 30080. App erreichbar unter `http://<eine-Node-IP>:30080`. Für feste URL und TLS einen **Ingress** anlegen (z. B. mit cert-manager).
@@ -279,5 +286,6 @@ Vorgehen wie unter **„Deployment auf einem Kubernetes-Cluster“**; zusätzlic
 
 - **Secrets:** Alle Werte ersetzen (Fernet-Key neu generieren, OAuth-Credentials), `SKIP_OAUTH_VERIFICATION: "false"`. Secrets nicht im Repo; über CI/CD oder externes Secret-Management einspielen.
 - **ConfigMap:** `BASE_URL` / `FRONTEND_URL` = echte Domain, `ENVIRONMENT: production`, `WORKER_BASE_IMAGE` = Registry-Image inkl. Tag.
+- **Datenbank:** `DATABASE_URL` muss gesetzt sein — unter `production` ist ein fehlender Wert ein Startup-Abbruch. Mit `postgres.yaml` kommt der Wert aus `postgres-secret`; sonst SQLite in der ConfigMap explizit eintragen.
 - **Images:** Orchestrator und Worker aus Registry mit festem Tag (nicht `:latest`).
 - Optional: Ingress + TLS, Ressourcen sind im Deployment bereits gesetzt, mehrere Replicas, HPA, eigener Namespace.

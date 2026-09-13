@@ -3,6 +3,7 @@ import { showError } from '../utils/toast'
 import { getApiBaseUrl } from '../config'
 import i18n from '../i18n'
 import { getErrorCode, getErrorStatus } from '../utils/apiError'
+import { reportDegraded } from './degradedState'
 
 const LOGIN_PATH = import.meta.env.VITE_LOGIN_PATH || '/login'
 
@@ -56,6 +57,28 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config
+
+    // Backend meldet sich als gestört (z.B. Datenbank nicht erreichbar). Das
+    // betrifft jeden geschützten Endpoint, weil bereits die Auth-Dependency an
+    // der DB hängt – ohne diesen Zweig käme der Ausfall nirgends in der UI an.
+    if (getErrorStatus(error) === 503 && getErrorCode(error) === 'DATABASE_UNAVAILABLE') {
+      // request_id und cause deckt utils/apiError nicht ab – die stehen nur in
+      // dieser einen Antwortform.
+      const detail = error.response?.data?.detail
+      reportDegraded({
+        reason: 'database',
+        requestId: error.response?.data?.request_id,
+        cause: detail && typeof detail === 'object' ? detail.cause : undefined,
+      })
+      return Promise.reject(error)
+    }
+
+    // Kein Response-Objekt und kein Abbruch durch uns selbst = Backend war nicht
+    // erreichbar (Pod NotReady, Ingress-Fehler, Netzwerk weg).
+    if (!error.response && error.code !== 'ERR_CANCELED') {
+      reportDegraded({ reason: 'unreachable' })
+      return Promise.reject(error)
+    }
 
     const isRefreshEndpoint = originalRequest?.url?.includes('/auth/refresh')
 

@@ -880,6 +880,22 @@
       "inodes": "Inodes"
     }
   },
+  "backendStatus": {
+    "database": {
+      "title": "Database unreachable",
+      "body": "The application currently cannot reach the database. Displayed data may be incomplete or stale, and scheduled pipeline runs will fail. Please check the orchestrator logs."
+    },
+    "unreachable": {
+      "title": "Backend unreachable",
+      "body": "The orchestrator is not responding. It may be restarting or in a failed state. Please check the orchestrator logs."
+    },
+    "sqlite_fallback": {
+      "title": "Running on a local SQLite database",
+      "body": "No DATABASE_URL is configured, so the application is working against a local SQLite file instead of the intended database. Changes will be lost when the pod restarts."
+    },
+    "requestId": "Request ID:",
+    "openLogs": "Open logs"
+  },
   "systemStatus": {
     "loading": "Loading system status…",
     "error": "Failed to load system status.",

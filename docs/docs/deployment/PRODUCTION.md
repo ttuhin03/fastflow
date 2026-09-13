@@ -15,7 +15,7 @@ Before go-live, ensure:
 - [ ] **Set JWT key**: Set a long, random `JWT_SECRET_KEY`.
 - [ ] **Set encryption key**: Generate and store `ENCRYPTION_KEY` securely.
 - [ ] **Environment**: Set `ENVIRONMENT=production` in `.env`.
-- [ ] **PostgreSQL for production** (see Database section).
+- [ ] **Set `DATABASE_URL`** — mandatory under `ENVIRONMENT=production`; PostgreSQL recommended (see Database section).
 
 ## Database: PostgreSQL for Production
 
@@ -28,6 +28,20 @@ Before go-live, ensure:
 | **Enterprise readiness** | Development/prototyping | Production, multi-user |
 
 **Setup:** Set `DATABASE_URL=postgresql://user:password@host:5432/fastflow` in `.env` (or as a secret in Kubernetes). The orchestrator then automatically uses PostgreSQL including a connection pool.
+
+**`DATABASE_URL` is mandatory under `ENVIRONMENT=production`.** Without it, startup
+aborts with an error instead of falling back to local SQLite. The reason is that the
+silent fallback is dangerous in production: if the value is missing — because a
+secret injector has not written it yet, for example — the app would come up on a
+freshly stamped, empty SQLite database, report itself healthy via `/ready`, and
+process runs against the wrong data. Failing fast is the safer outcome.
+
+If you knowingly want SQLite in production (small single-user setups), set it
+explicitly — the guard is aimed at the silent fallback, not at a deliberate choice:
+
+```bash
+DATABASE_URL=sqlite:////app/data/fastflow.db
+```
 
 ## Reverse Proxy Setup (Nginx)
 
@@ -76,7 +90,7 @@ The default `docker-compose.yaml` is already production-oriented:
 - **Docker proxy**: Port 2375 is not mapped to the host (only reachable internally, smaller attack surface).
 - **Orchestrator**: logging (json-file, max-size/max-file), restart policy, health check.
 
-**Important:** `ENVIRONMENT=production` is **not** set by the compose file — set it in `.env` (the compose file loads `.env` via `env_file`). Only then are insecure defaults (e.g. `JWT_SECRET_KEY`) blocked at startup.
+**Important:** `ENVIRONMENT=production` is **not** set by the compose file — set it in `.env` (the compose file loads `.env` via `env_file`). Only then are insecure defaults (e.g. `JWT_SECRET_KEY`) blocked at startup. Set `DATABASE_URL` in the same `.env`: the compose file does not ship a database either, and under `production` a missing value aborts startup (see the Database section).
 
 Start with:
 ```bash

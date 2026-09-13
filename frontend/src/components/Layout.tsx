@@ -6,6 +6,7 @@ import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import { useAuth } from '../contexts/AuthContext'
 import { useUiPreferences } from '../contexts/UiPreferencesContext'
 import apiClient from '../api/client'
+import BackendStatusBanner from './BackendStatusBanner'
 import { formatDateTime, formatRelativeTime } from '../utils/locale'
 import {
   LuLayoutGrid,
@@ -368,6 +369,10 @@ export default function Layout() {
         </header>
 
         <main className="main-content">
+          {/* Vor dem Seiteninhalt und außerhalb des Transition-Wrappers: Das
+              Banner soll auf jeder Route stehen und beim Navigieren nicht
+              mit-animiert werden. */}
+          <BackendStatusBanner />
           <div key={location.pathname} className="page-transition-wrap">
             <Outlet />
           </div>

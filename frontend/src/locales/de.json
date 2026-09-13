@@ -880,6 +880,22 @@
       "inodes": "Inodes"
     }
   },
+  "backendStatus": {
+    "database": {
+      "title": "Datenbank nicht erreichbar",
+      "body": "Die Anwendung kann derzeit nicht auf die Datenbank zugreifen. Angezeigte Daten können unvollständig oder veraltet sein, und geplante Pipeline-Läufe schlagen fehl. Bitte die Logs des Orchestrators prüfen."
+    },
+    "unreachable": {
+      "title": "Backend nicht erreichbar",
+      "body": "Der Orchestrator antwortet nicht. Möglicherweise startet er gerade neu oder ist gestört. Bitte die Logs des Orchestrators prüfen."
+    },
+    "sqlite_fallback": {
+      "title": "Läuft auf lokaler SQLite-Datenbank",
+      "body": "Es ist keine DATABASE_URL konfiguriert, deshalb arbeitet die Anwendung auf einer lokalen SQLite-Datei statt auf der vorgesehenen Datenbank. Änderungen gehen beim nächsten Neustart des Pods verloren."
+    },
+    "requestId": "Request-ID:",
+    "openLogs": "Logs öffnen"
+  },
   "systemStatus": {
     "loading": "System-Status wird geladen…",
     "error": "System-Status konnte nicht geladen werden.",
