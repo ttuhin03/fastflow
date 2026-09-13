@@ -21,6 +21,12 @@ spec:
         component: api
     spec:
       serviceAccountName: fastflow-executor
+      # Zeit für den Graceful Shutdown, bevor Kubernetes SIGKILL sendet. Muss über
+      # GRACEFUL_SHUTDOWN_TIMEOUT (Default 8s) liegen, sonst wird der Orchestrator
+      # mitten im Beenden der Pipeline-Jobs abgeschossen und deren Runs bleiben auf
+      # RUNNING stehen. Entspricht dem impliziten Default – hier explizit, weil
+      # GRACEFUL_SHUTDOWN_TIMEOUT daran hängt.
+      terminationGracePeriodSeconds: 30
       securityContext:
         runAsNonRoot: true
         runAsUser: 1001

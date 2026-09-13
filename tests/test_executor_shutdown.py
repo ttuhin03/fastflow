@@ -1,7 +1,7 @@
 """
 Tests für den Shutdown-Pfad des Docker-Executors.
 
-Zwei Verhaltensweisen, die vorher fehlten:
+Drei Verhaltensweisen, die vorher fehlten:
 
 1. ``graceful_shutdown`` stoppte Container nacheinander. Ein einzelner
    ``container.stop(timeout=30)`` blockiert bis zu 30 s plus dem Client-Timeout
@@ -10,7 +10,12 @@ Zwei Verhaltensweisen, die vorher fehlten:
 2. ``_re_attach_container`` brach seine Stream-Tasks mit ``cancel()`` ohne
    ``await`` ab. Das Entfernen des Containers rannte damit gegen das Aufräumen
    der Streams, und die letzten Logzeilen fehlten – ausgerechnet nach einer
-   Crash-Recovery.
+   Crash-Recovery. Auf seinem Fehlerpfad blieben die Streams ganz verwaist.
+3. Das Warten auf einen Stream-Task war unbegrenzt: ``asyncio.wait_for`` wartet
+   auf das *Ende* der Cancellation. Ein Task, der sie nicht beantwortet – etwa
+   weil ``close()`` des Docker-Sockets blockiert –, hielt damit den gesamten
+   Abschlusspfad eines Runs auf. Umgekehrt versickerte ein Abbruch des Aufrufers
+   im ``except CancelledError``.
 """
 
 import asyncio
@@ -64,6 +69,38 @@ class _FailingContainer:
 
     def stop(self, timeout=None):
         raise RuntimeError("daemon weg")
+
+
+class _StubbornStream:
+    """
+    Stream-Task, der seine Cancellation ignoriert – wie ein Docker-Stream, der
+    in einem blockierenden Read steht.
+
+    Als Context-Manager, weil das Freigeben Pflicht ist: ein Task, der
+    Cancellation dauerhaft ignoriert, hängt sonst beim Abräumen des Event-Loops.
+    """
+
+    async def __aenter__(self) -> asyncio.Task:
+        self._release = asyncio.Event()
+        self._started = asyncio.Event()
+        self.task = asyncio.create_task(self._run())
+        # Erst zurückgeben, wenn der Task wirklich läuft: ein noch nicht
+        # gestarteter Task nimmt seine Cancellation sofort an und wäre damit
+        # kein Hänger.
+        await self._started.wait()
+        return self.task
+
+    async def __aexit__(self, *exc_info) -> None:
+        self._release.set()
+        await asyncio.wait_for(self.task, timeout=5)
+
+    async def _run(self) -> None:
+        self._started.set()
+        while not self._release.is_set():
+            try:
+                await self._release.wait()
+            except asyncio.CancelledError:
+                pass  # ignoriert den Abbruch bewusst
 
 
 def _running_run(session, name="demo"):
@@ -215,27 +252,105 @@ async def test_finalize_waits_for_the_stream_cleanup(tmp_path, no_flush_grace):
     assert log_task.done() and metrics_task.done()
 
 
-async def test_finalize_survives_a_hanging_stream_task(tmp_path, no_flush_grace):
-    """Ein Task, der die Cancellation ignoriert, darf den Shutdown nicht halten."""
-    monkeypatch_timeout = 0.2
+async def test_finalize_survives_a_hanging_stream_task(tmp_path, no_flush_grace, caplog):
+    """
+    Ein Task, der die Cancellation ignoriert, darf den Shutdown nicht halten –
+    muss aber auffallen: sein Docker-Stream belegt weiter einen Worker im
+    Stream-Pool.
+    """
+    stop_timeout = 0.2
 
-    async def _stubborn():
-        while True:
-            try:
-                await asyncio.sleep(10)
-            except asyncio.CancelledError:
-                pass  # ignoriert den Abbruch bewusst
+    async with _StubbornStream() as task:
+        with caplog.at_level("WARNING", logger=executor_core.logger.name):
+            stopper = asyncio.create_task(
+                executor_core._stop_stream_task(task, uuid4(), "Log-Streaming", stop_timeout)
+            )
+            # asyncio.wait statt wait_for: bricht bei Ablauf nichts ab. Sonst
+            # verdeckt der Abbruchversuch genau das, was hier geprüft wird.
+            done, _ = await asyncio.wait({stopper}, timeout=2)
 
-    task = asyncio.create_task(_stubborn())
-    try:
-        started = time.monotonic()
-        await asyncio.wait_for(
-            executor_core._stop_stream_task(task, uuid4(), "Test", monkeypatch_timeout),
-            timeout=5,
+        assert done, "_stop_stream_task wartet unbegrenzt auf einen hängenden Stream-Task"
+        assert any("Log-Streaming" in record.message for record in caplog.records), (
+            "Ein hängender Stream-Task muss sichtbar sein"
         )
-        assert time.monotonic() - started < 2
-    finally:
-        task.cancel()
+
+
+async def test_stop_stream_task_lets_an_outer_cancellation_through():
+    """
+    Ein Abbruch des Aufrufers darf im Warten auf den Stream-Task nicht
+    versickern. Sonst läuft der Run-Task beim App-Shutdown weiter und schreibt
+    Status, Downstream-Trigger und Retries fort – genau das, was der Shutdown
+    gerade beendet.
+    """
+    async with _StubbornStream() as stream_task:
+        waiter = asyncio.create_task(
+            executor_core._stop_stream_task(stream_task, uuid4(), "Log-Streaming", 30.0)
+        )
+        # Kurz laufen lassen, damit der Waiter wirklich im Warten steht.
+        await asyncio.sleep(0.05)
+        assert not waiter.done()
+
+        waiter.cancel()
+        done, _ = await asyncio.wait({waiter}, timeout=2)
+
+        assert done, "Der Waiter reagierte nicht auf den Abbruch"
+        assert waiter.cancelled(), "Der Abbruch des Aufrufers wurde verschluckt"
+
+
+async def test_re_attach_releases_its_streams_when_the_wait_fails(
+    test_session, tracked_containers, monkeypatch
+):
+    """
+    Bricht der Re-Attach ab – etwa weil container.wait() die Verbindung zum
+    Daemon verliert –, dürfen Log- und Metrics-Task nicht weiterlaufen: sie
+    belegen sonst bis zum Prozessende je einen Worker im Stream-Pool, und der
+    Run bliebe dauerhaft als laufend getrackt.
+    """
+    cleaned_up = []
+
+    class _FakePipeline:
+        name = "reattach-fehler"
+        metadata = type("Meta", (), {"cpu_soft_limit": None, "mem_soft_limit": None})()
+
+    async def _never_ending(*args, **kwargs):
+        try:
+            await asyncio.sleep(30)
+        finally:
+            cleaned_up.append(True)
+
+    class _ExplodingContainer:
+        id = "0123456789ab"
+
+        def wait(self):
+            # Kurz blockieren wie ein echtes container.wait(): die Streams
+            # laufen dann bereits, wenn die Verbindung abreisst.
+            time.sleep(0.05)
+            raise RuntimeError("Verbindung zum Docker-Daemon verloren")
+
+    run = _running_run(test_session, "reattach-fehler")
+    run.metrics_file = str(uuid4())
+    test_session.add(run)
+    test_session.commit()
+
+    container = _ExplodingContainer()
+    tracked_containers[run.id] = container
+    monkeypatch.setattr(executor_core, "get_pipeline", lambda name: _FakePipeline())
+    monkeypatch.setattr(executor_core, "_stream_logs", _never_ending)
+    monkeypatch.setattr(executor_core, "_monitor_metrics", _never_ending)
+
+    await asyncio.wait_for(
+        executor_core._re_attach_container(run.id, container, test_session),
+        timeout=10,
+    )
+
+    assert len(cleaned_up) == 2, "Log- und Metrics-Task laufen weiter"
+    assert run.id not in tracked_containers, "Run gilt weiterhin als laufend"
+    assert executor_core.get_log_queue(run.id) is None
+    assert executor_core.get_metrics_queue(run.id) is None
+    test_session.refresh(run)
+    assert run.status == RunStatus.RUNNING, (
+        "Ein anderer Status würde die Zombie-Reconciliation überspringen"
+    )
 
 
 async def test_remaining_logs_are_appended_before_removal(tmp_path):
@@ -281,8 +396,13 @@ async def test_re_attach_finalizes_streams_before_removing_the_container(
     async def _never_ending(*args, **kwargs):
         await asyncio.sleep(30)
 
-    async def _record_finalize(*args, **kwargs):
+    async def _record_finalize(log_task, metrics_task, *args, **kwargs):
         order.append("finalize")
+        # Der echte _finalize_run_streams beendet die Tasks; der Stub muss das
+        # auch tun, sonst laufen sie über das Testende hinaus.
+        log_task.cancel()
+        metrics_task.cancel()
+        await asyncio.gather(log_task, metrics_task, return_exceptions=True)
 
     async def _record_remove(*args, **kwargs):
         order.append("remove")

@@ -1225,14 +1225,28 @@ async def _stop_stream_task(
     if task is None:
         return
     task.cancel()
-    try:
-        # Auch bei einem bereits beendeten Task: holt dessen Exception ab und
-        # verhindert die "exception was never retrieved"-Warnung.
-        await asyncio.wait_for(task, timeout=timeout)
-    except (asyncio.TimeoutError, asyncio.CancelledError):
-        pass
-    except Exception as e:
-        logger.debug("%s für Run %s endete mit Fehler: %s", description, run_id, e)
+    # ``asyncio.wait`` statt ``wait_for``: dessen ``CancelledError`` bei Ablauf
+    # liesse sich nicht von einem Abbruch des Aufrufers unterscheiden. Wer es
+    # abfängt, verschluckt den Abbruch des Run-Tasks — der liefe dann beim
+    # App-Shutdown weiter und schriebe Status, Downstream-Trigger und Retries
+    # fort. ``asyncio.wait`` bricht bei Ablauf nichts ab und wirft nichts; ein
+    # Abbruch von aussen schlägt durch.
+    done, _ = await asyncio.wait({task}, timeout=timeout)
+    if not done:
+        # Der Task ignoriert seine Cancellation: sein Docker-Stream bleibt offen
+        # und belegt weiter einen Worker im Stream-Pool.
+        logger.warning(
+            "%s für Run %s hat den Abbruch nach %.1fs nicht beantwortet – "
+            "der Stream-Pool-Worker bleibt belegt",
+            description, run_id, timeout,
+        )
+        return
+    if task.cancelled():
+        return
+    # Exception abholen, sonst meldet asyncio "exception was never retrieved".
+    exc = task.exception()
+    if exc is not None:
+        logger.debug("%s für Run %s endete mit Fehler: %s", description, run_id, exc)
 
 
 async def _recover_remaining_logs(
@@ -2364,6 +2378,10 @@ async def _re_attach_container(
         container: Docker-Container-Objekt
         session: SQLModel Session (vom Aufrufer übergeben)
     """
+    # Vor dem try gebunden, damit der Fehlerpfad die Streams auch dann beenden
+    # kann, wenn die Exception zwischen Task-Start und Finalisierung auftritt.
+    log_task: Optional[asyncio.Task] = None
+    metrics_task: Optional[asyncio.Task] = None
     try:
         run = session.get(PipelineRun, run_id)
         if not run:
@@ -2474,6 +2492,24 @@ async def _re_attach_container(
         
     except Exception as e:
         logger.error(f"Fehler beim Re-attach für Run {run_id}: {e}", exc_info=True)
+        # Ohne das hier bleiben die Streams verwaist: bricht der Re-Attach ab –
+        # etwa weil container.wait() die Verbindung zum Daemon verliert –, laufen
+        # Log- und Metrics-Task bis zum Prozessende weiter und belegen je einen
+        # Worker im Stream-Pool. Der Run bliebe ausserdem im Tracking stehen und
+        # gälte damit dauerhaft als laufend.
+        await _stop_stream_task(
+            log_task, run_id, "Log-Streaming", LOG_TASK_SHUTDOWN_TIMEOUT_SECONDS
+        )
+        await _stop_stream_task(
+            metrics_task, run_id, "Metrics-Monitoring", METRICS_TASK_SHUTDOWN_TIMEOUT_SECONDS
+        )
+        async with _concurrency_lock:
+            _running_containers.pop(run_id, None)
+        _log_queues.pop(run_id, None)
+        _metrics_queues.pop(run_id, None)
+        # Status bleibt RUNNING: der Container läuft womöglich noch, und die
+        # Zombie-Reconciliation beim nächsten Start hängt sich nur an solche
+        # Runs wieder an bzw. schreibt beendete Container fort.
 
 
 async def check_container_health(run_id: UUID, session: Session) -> Dict[str, Any]:
@@ -2573,9 +2609,10 @@ async def graceful_shutdown(session: Session) -> None:
     # das Budget nach dem ersten Container aufgebraucht, und alles Weitere
     # erledigte erst die Zombie-Reconciliation beim nächsten Start.
     tasks = {
-        run.id: asyncio.create_task(_stop_container_for_shutdown(
-            run.id, containers.get(run.id), stop_timeout
-        ))
+        run.id: asyncio.create_task(
+            _stop_container_for_shutdown(run.id, containers.get(run.id), stop_timeout),
+            name=f"shutdown-stop-{run.id}",
+        )
         for run in runs
     }
     try:
@@ -2620,9 +2657,10 @@ async def graceful_shutdown(session: Session) -> None:
             logger.error("Graceful Shutdown: Status-Update fehlgeschlagen: %s", e)
 
     logger.info(
-        "Graceful Shutdown abgeschlossen: %d von %d Runs gestoppt, %d ohne Status-Update "
+        "Graceful Shutdown abgeschlossen: %d von %d Runs gestoppt, %d als WARNING markiert "
+        "(Stop fehlgeschlagen oder Container nicht mehr getrackt), %d ohne Status-Update "
         "(werden bei der nächsten Zombie-Reconciliation aufgeräumt)",
-        stopped, len(runs), len(runs) - updated,
+        stopped, len(runs), updated - stopped, len(runs) - updated,
     )
 
 
