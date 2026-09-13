@@ -34,6 +34,14 @@ interface PipelineDeps {
   packages: PackageRow[]
   vulnerabilities?: VulnRow[]
   audit_error?: string
+  /**
+   * Pakete ohne exakte Version, die deshalb nicht geprüft werden konnten.
+   * Der Scan löst bewusst keine Abhängigkeiten auf (das würde fremden
+   * Paket-Code im Orchestrator ausführen), also ist eine exakte Version die
+   * Voraussetzung für eine Prüfung. Muss sichtbar sein, damit "keine
+   * Schwachstellen" nicht mit "nichts geprüft" verwechselt wird.
+   */
+  unaudited_packages?: string[]
 }
 
 type Severity = 'critical' | 'high' | 'medium' | 'low'
@@ -300,6 +308,14 @@ export default function Dependencies() {
                     <div className="pipeline-deps-body">
                       {d.audit_error && (
                         <div className="audit-error">{d.audit_error}</div>
+                      )}
+                      {showAuditColumn && (d.unaudited_packages?.length ?? 0) > 0 && (
+                        <div className="audit-error">
+                          {t('dependencies.unauditedHint', {
+                            count: d.unaudited_packages?.length ?? 0,
+                            packages: (d.unaudited_packages ?? []).join(', '),
+                          })}
+                        </div>
                       )}
                       <div className="table deps-table">
                         <div className="table__head">

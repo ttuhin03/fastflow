@@ -25,6 +25,29 @@ Filters:
 The security scan uses **pip-audit** and must be installed in the backend (`pip install pip-audit` or in `requirements.txt`). If pip-audit is missing, a notice is shown; the package list is still displayed.
 :::
 
+## What the scan covers — and what it does not
+
+The scan deliberately performs **no dependency resolution**. It runs in the orchestrator process over files from your pipeline repository; resolving would make pip-audit download packages and execute the build backend of any source distribution, i.e. run untrusted code outside the container isolation. Instead, pip-audit is given a generated list of exact `name==version` pins.
+
+This has a direct consequence for coverage:
+
+| Situation | What is scanned |
+|-----------|-----------------|
+| `requirements.txt.lock` exists (created by preheating) | **Everything**, including transitive dependencies — the lock file pins the full tree. |
+| No lock file, `requests==2.32.3` | That package. |
+| No lock file, `requests>=2.0` or `requests` | **Nothing** for that package — no exact version is known. |
+| Package is not published on PyPI (e.g. from an internal index) | **Nothing** for that package — pip-audit has no advisory data for it. |
+
+Packages that could not be checked are listed as `unaudited_packages` in the API response and in the audit log, so "no vulnerabilities found" is never confused with "nothing was looked at".
+
+:::tip
+For complete coverage, make sure a lock file exists — it is produced automatically by preheating (`UV_PRE_HEAT=true`, the default) — or pin your direct dependencies exactly with `==`.
+:::
+
+Pip options (`--index-url`, `--find-links`, `-e .`, VCS/URL references) are never passed to the scanner. Every line handed to pip-audit is generated from a validated package name and version, so options are dropped whether they appear in `requirements.txt` or in a committed `requirements.txt.lock`; the affected entries appear under `unaudited_packages`.
+
+If pip-audit cannot produce a result at all — it is not installed, or it aborts on a malformed input — that is reported as `audit_error`. It is never reported as "no vulnerabilities found".
+
 ## Automatic security scan (daily)
 
 You can set up a **daily check** that runs at night and sends email and/or Teams notifications **only when findings are detected**.

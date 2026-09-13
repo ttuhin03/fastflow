@@ -40,6 +40,7 @@ class Config:
         WORKER_BASE_IMAGE: Docker-Image für Pipeline-Container
         UV_CACHE_DIR: Verzeichnis für UV-Package-Cache
         UV_PRE_HEAT: Automatisches Pre-Heating von Dependencies beim Git-Sync
+        UV_ALLOW_SOURCE_BUILDS: sdist-Builds im Orchestrator zulassen (unsicher, Standard false)
         UV_STORAGE_STATS: UV-Cache-/Python-Größen in /settings/storage ermitteln (teuer bei großem Cache)
         MAX_CONCURRENT_RUNS: Maximale Anzahl gleichzeitiger Pipeline-Runs
         CONTAINER_TIMEOUT: Globaler Timeout für Container in Sekunden (None = unbegrenzt)
@@ -194,6 +195,29 @@ class Config:
     um Lock-Files zu erstellen und Dependencies im Cache zu speichern. Beim Pipeline-Run
     wird dann `uv run --frozen` verwendet, um die Resolution zu überspringen und nur den Cache zu nutzen.
     Verhindert Wartezeiten beim ersten Pipeline-Start nach einem Sync.
+    """
+
+    UV_ALLOW_SOURCE_BUILDS: bool = os.getenv("UV_ALLOW_SOURCE_BUILDS", "false").lower() == "true"
+    """
+    Erlaubt dem Pre-Heating, Source-Distributions (sdists) im Orchestrator zu bauen.
+
+    ⚠️ SICHERHEIT: Standard false, und das sollte so bleiben. Ein sdist-Build führt
+    das setup.py bzw. den PEP-517-Build-Backend des Pakets aus — im
+    Orchestrator-Prozess, nicht im isolierten Worker-Container. Der Paketname
+    stammt aus der requirements.txt des Pipeline-Repositories, ist also nicht
+    vertrauenswürdig. Mit true genügt ein Commit ins Pipeline-Repo für
+    Codeausführung mit Zugriff auf ENCRYPTION_KEY, JWT_SECRET_KEY, alle Secrets
+    und den Docker-Socket-Proxy.
+
+    Mit false (Standard) nutzt das Pre-Heating ausschliesslich vorgebaute Wheels
+    (`uv --no-build`); das Entpacken eines Wheels führt keinen Paket-Code aus.
+    Pipelines, deren Dependencies nur als sdist verfügbar sind, werden dann nicht
+    vorgewärmt — sie funktionieren weiterhin, der Build passiert nur später im
+    Worker-Container (sandboxed) und der erste Start dauert entsprechend länger.
+
+    Nur aktivieren, wenn das Pipeline-Repository dasselbe Vertrauensniveau hat wie
+    der Orchestrator selbst (z. B. Single-Tenant mit geschütztem Branch und
+    Review-Pflicht).
     """
 
     UV_STORAGE_STATS: bool = os.getenv("UV_STORAGE_STATS", "false").lower() == "true"

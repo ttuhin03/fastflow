@@ -559,6 +559,7 @@
     "packagesCount": "{{count}} package",
     "packagesCountPlural": "{{count}} packages",
     "vulnNone": "None",
+    "unauditedHint": "{{count}} package(s) without an exact version were not scanned: {{packages}}. The scan deliberately performs no dependency resolution — pin with == or have a lock file generated (UV_PRE_HEAT).",
     "foundVulns": "Vulnerabilities found:",
     "installed": "Installed",
     "latest": "Latest",

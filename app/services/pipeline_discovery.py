@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timezone
 from app.core.config import config
+from app.core.python_version import is_valid_python_version, sanitize_python_version
 
 
 class PipelineMetadata:
@@ -109,7 +110,12 @@ class PipelineMetadata:
         )
         # Normalize empty strings to None (webhooks disabled)
         self.webhook_key = webhook_key if webhook_key and webhook_key.strip() else None
-        self.python_version = python_version if python_version and str(python_version).strip() else None
+        # Nur validierte Versionsangaben übernehmen: der Wert wird als `uv --python`
+        # an Subprozesse übergeben, und uv führt dort angegebene Pfade aus
+        # (siehe app.core.python_version). Ungültige Werte fallen still auf None
+        # zurück -> DEFAULT_PYTHON_VERSION; die operator-sichtbare Warnung kommt
+        # aus _load_pipeline_metadata, das den Pipeline-Namen kennt.
+        self.python_version = python_version if is_valid_python_version(python_version) else None
         self.type = (type or "script").strip().lower() if type else "script"
         if self.type not in ("script", "notebook"):
             self.type = "script"
@@ -612,12 +618,13 @@ def _load_pipeline_metadata(
             if not webhook_key:
                 webhook_key = None
         
-        # Normalize python_version: empty or null -> None (dann DEFAULT_PYTHON_VERSION)
-        python_version = data.get("python_version")
-        if python_version == "" or python_version is None:
-            python_version = None
-        else:
-            python_version = str(python_version).strip() or None
+        # Normalize python_version: leer, null oder unzulässig -> None (dann
+        # DEFAULT_PYTHON_VERSION). Unzulässig heisst alles ausserhalb des Musters
+        # aus app.core.python_version – insbesondere Pfade, die uv als Interpreter
+        # ausführen würde, und führende "-" (Argument-Injection).
+        python_version = sanitize_python_version(
+            data.get("python_version"), source=f"pipeline '{pipeline_name}'"
+        )
         
         # Normalize type: "script" | "notebook", default "script"
         pipeline_type = data.get("type")
