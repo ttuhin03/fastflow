@@ -15,7 +15,7 @@ import shutil
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Set
 from uuid import UUID
 
 from kubernetes import client, config
@@ -55,6 +55,11 @@ _initialized = False
 # Label für Run-Zuordnung
 JOB_LABEL_RUN_ID = "fastflow-run-id"
 JOB_LABEL_PIPELINE = "fastflow-pipeline"
+
+#: API-Calls pro Run im Graceful Shutdown: Job-Liste und Job-Löschung. Das
+#: Shutdown-Budget wird gleichmässig auf beide verteilt, damit auch der zweite
+#: Call noch hineinpasst.
+SHUTDOWN_API_CALLS_PER_RUN = 2
 
 def init_kubernetes_client() -> None:
     """Lädt Kubeconfig (in-cluster oder KUBECONFIG) und initialisiert API-Clients."""
@@ -1047,6 +1052,7 @@ async def reconcile_zombie_jobs(session: Session) -> None:
     """Reconciliert Jobs mit DB (orphaned beenden, laufende ggf. re-attach)."""
     batch_api, _ = _get_apis()
     namespace = app_config.KUBERNETES_NAMESPACE
+    seen_run_ids: Set[UUID] = set()
     try:
         jobs = batch_api.list_namespaced_job(
             namespace=namespace,
@@ -1060,6 +1066,7 @@ async def reconcile_zombie_jobs(session: Session) -> None:
                 run_id = UUID(run_id_str)
             except ValueError:
                 continue
+            seen_run_ids.add(run_id)
             run = session.get(PipelineRun, run_id)
             if run is None:
                 try:
@@ -1087,39 +1094,248 @@ async def reconcile_zombie_jobs(session: Session) -> None:
                 session.add(run)
                 session.commit()
                 _cleanup_shared_pipeline_run(run_id)
-        logger.info("Kubernetes Zombie-Reconciliation abgeschlossen")
     except Exception as e:
         logger.error("Zombie-Reconciliation Fehler: %s", e, exc_info=True)
+        # Ohne vollständig durchlaufene Job-Liste wird unten nichts aufgelöst:
+        # sonst räumt ein Fehler des API-Servers alle laufenden Runs ab.
+        return
+
+    # Ein Continue-Token heisst, die Antwort war nur eine Seite. Die fehlenden
+    # Jobs stünden unten als "kein Job vorhanden" da — deshalb lieber nichts tun.
+    if getattr(getattr(jobs, "metadata", None), "_continue", None):
+        logger.warning(
+            "Zombie-Reconciliation: Job-Liste unvollständig (Continue-Token) – "
+            "RUNNING-Runs ohne Job bleiben unangetastet"
+        )
+    else:
+        _resolve_running_runs_without_job(session, seen_run_ids)
+    logger.info("Kubernetes Zombie-Reconciliation abgeschlossen")
+
+
+def _resolve_running_runs_without_job(session: Session, seen_run_ids: Set[UUID]) -> int:
+    """
+    Schliesst RUNNING-Runs ab, zu denen es im Cluster keinen Job mehr gibt.
+
+    Die Schleife darüber sieht nur noch existierende Jobs. Ein Run, dessen Job
+    weg ist, bliebe damit für immer auf RUNNING — und das ist kein Randfall:
+    der Job verschwindet nach seinem Ende durch den TTL-Controller
+    (``KUBERNETES_JOB_TTL_SECONDS_AFTER_FINISHED``, Default 300 s), und der
+    Graceful Shutdown löscht ihn sogar selbst. Wird der Orchestrator dabei per
+    SIGKILL beendet, bevor er den Status schreiben konnte, ist genau diese
+    Kombination erreicht: Job gelöscht, Run RUNNING.
+
+    Aufgelöst wird nach INTERRUPTED, nicht nach SUCCESS/FAILED: der Cluster hat
+    keine Information mehr über den Ausgang, und ein geratener Ausgang wäre
+    schlechter als ein ehrliches "abgebrochen".
+
+    Sicher ist das, weil die Reconciliation beim Start läuft, bevor Scheduler
+    und API eigene Runs starten (siehe ``app/startup.py``): jeder RUNNING-Run
+    stammt aus einem früheren Prozess.
+
+    Args:
+        session: SQLModel Session
+        seen_run_ids: Run-IDs, zu denen gerade ein Job im Cluster liegt
+
+    Returns:
+        Anzahl der aufgelösten Runs.
+    """
+    runs = session.exec(
+        select(PipelineRun).where(PipelineRun.status == RunStatus.RUNNING)
+    ).all()
+    stale = [run for run in runs if run.id not in seen_run_ids]
+    if not stale:
+        return 0
+    finished_at = datetime.now(timezone.utc)
+    for run in stale:
+        run.status = RunStatus.INTERRUPTED
+        run.finished_at = finished_at
+        session.add(run)
+    # IDs vor dem Commit einsammeln: danach sind die Objekte expired.
+    resolved = [run.id for run in stale]
+    try:
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        logger.error("Zombie-Reconciliation: Status-Update fehlgeschlagen: %s", e)
+        return 0
+    for run_id in resolved:
+        _cleanup_shared_pipeline_run(run_id)
+    logger.warning(
+        "Zombie-Reconciliation: %d RUNNING-Run(s) ohne Job auf INTERRUPTED gesetzt "
+        "(Job beendet und aufgeräumt, oder Orchestrator im Shutdown abgeschossen)",
+        len(resolved),
+    )
+    return len(resolved)
 
 
 async def graceful_shutdown(session: Session) -> None:
-    """Beendet alle laufenden Runs (Jobs löschen, DB auf INTERRUPTED/WARNING)."""
+    """
+    Beendet alle laufenden Runs (Jobs löschen, DB auf INTERRUPTED/WARNING).
+
+    Das Gesamtbudget ist ``GRACEFUL_SHUTDOWN_TIMEOUT``; es muss unter der
+    ``terminationGracePeriodSeconds`` des Deployments liegen, sonst kommt
+    SIGKILL mitten hinein. Deshalb laufen die Runs parallel und nicht
+    nacheinander: pro Run sind zwei API-Calls fällig, und schon ein einziger
+    nicht antwortender Call hätte sequenziell das Budget aller übrigen Runs
+    aufgebraucht.
+
+    Was im Budget nicht mehr geschafft wird, bleibt bewusst auf RUNNING —
+    dieselbe Zusage wie im Docker-Pfad. Dahinter steht
+    ``reconcile_zombie_jobs()`` beim nächsten Start, und zwar in beiden
+    Richtungen: existiert der Job noch, wird sein tatsächlicher Ausgang
+    fortgeschrieben; ist er weg, löst ``_resolve_running_runs_without_job()``
+    den Run nach INTERRUPTED auf. Ein hier geratener Endstatus wäre schlechter,
+    denn er würde den echten Ausgang eines noch laufenden Jobs verdecken — und
+    er hülfe ohnehin nur, wenn dieser Code noch zum Schreiben kommt, also genau
+    dann nicht, wenn SIGKILL ihn unterbricht.
+
+    Das Verzeichnis im shared Volume räumt hier nichts mehr ab: ``rmtree`` über
+    ein RWX-Volume ist blockierende I/O ohne Obergrenze und gehört nicht ins
+    Budget. ``cleanup_orphaned_shared_pipeline_runs()`` erledigt das beim
+    nächsten Start für jeden Run, der dann nicht mehr RUNNING ist.
+
+    Args:
+        session: SQLModel Session
+    """
     logger.info("Graceful Shutdown (Kubernetes): Beende alle laufenden Runs...")
     runs = session.exec(select(PipelineRun).where(PipelineRun.status == RunStatus.RUNNING)).all()
+    if not runs:
+        logger.info("Graceful Shutdown (Kubernetes) abgeschlossen: keine laufenden Runs")
+        return
+
     batch_api, _ = _get_apis()
     namespace = app_config.KUBERNETES_NAMESPACE
+    budget = max(1, app_config.GRACEFUL_SHUTDOWN_TIMEOUT)
+    # Der K8s-Client hat kein Default-Timeout: gegen einen nicht erreichbaren
+    # API-Server blockiert ein Call unbegrenzt. Das Budget unten beendet nur das
+    # Warten, nicht den Call — der Thread im Control-Pool bliebe belegt und
+    # hielte am Ende den Prozess-Exit auf (ThreadPoolExecutor joint seine
+    # Threads beim Interpreter-Exit). Deshalb zusätzlich ein Client-Timeout, das
+    # so bemessen ist, dass beide Calls eines Runs ins Budget passen.
+    # Ganzzahlig, weil der Client nur int und (connect, read)-Tupel auswertet
+    # und einen float still verwirft — das urllib3-Timeout bliebe dann None.
+    request_timeout = max(1, budget // SHUTDOWN_API_CALLS_PER_RUN)
+
+    tasks = {
+        run.id: asyncio.create_task(
+            _delete_jobs_for_shutdown(batch_api, namespace, run.id, request_timeout),
+            name=f"shutdown-delete-{run.id}",
+        )
+        for run in runs
+    }
+    try:
+        await asyncio.wait_for(
+            asyncio.gather(*tasks.values(), return_exceptions=True), timeout=budget
+        )
+    except asyncio.TimeoutError:
+        unfinished = sum(1 for t in tasks.values() if t.cancelled() or not t.done())
+        logger.warning(
+            "Graceful Shutdown (Kubernetes): Budget von %ds erschöpft – %d von %d Runs "
+            "nicht mehr abgeräumt. Sie bleiben auf RUNNING und werden bei der nächsten "
+            "Zombie-Reconciliation aufgelöst.",
+            budget, unfinished, len(runs),
+        )
+        for task in tasks.values():
+            task.cancel()
+
+    finished_at = datetime.now(timezone.utc)
+    deleted = updated = 0
     for run in runs:
-        try:
-            jobs = batch_api.list_namespaced_job(
-                namespace=namespace,
-                label_selector=f"{JOB_LABEL_RUN_ID}={run.id}",
-            )
-            if jobs.items:
-                for job in jobs.items:
-                    if job.metadata and job.metadata.name:
-                        try:
-                            batch_api.delete_namespaced_job(
-                                name=job.metadata.name,
-                                namespace=namespace,
-                                propagation_policy="Background",
-                            )
-                        except ApiException:
-                            pass
+        task = tasks[run.id]
+        if not task.done() or task.cancelled():
+            continue
+        if task.exception() is not None or not task.result():
+            run.status = RunStatus.WARNING
+        else:
             run.status = RunStatus.INTERRUPTED
-            run.finished_at = datetime.now(timezone.utc)
-            session.add(run)
+            deleted += 1
+        run.finished_at = finished_at
+        session.add(run)
+        updated += 1
+
+    if updated:
+        try:
             session.commit()
-            _cleanup_shared_pipeline_run(run.id)
         except Exception as e:
-            logger.warning("Graceful Shutdown Run %s: %s", run.id, e)
-    logger.info("Graceful Shutdown (Kubernetes) abgeschlossen: %s Runs", len(runs))
+            session.rollback()
+            logger.error("Graceful Shutdown (Kubernetes): Status-Update fehlgeschlagen: %s", e)
+
+    logger.info(
+        "Graceful Shutdown (Kubernetes) abgeschlossen: %d von %d Runs beendet, %d als "
+        "WARNING markiert (API-Fehler), %d ohne Status-Update (werden bei der nächsten "
+        "Zombie-Reconciliation aufgeräumt)",
+        deleted, len(runs), updated - deleted, len(runs) - updated,
+    )
+
+
+async def _delete_jobs_for_shutdown(
+    batch_api: client.BatchV1Api,
+    namespace: str,
+    run_id: UUID,
+    request_timeout: int,
+) -> bool:
+    """
+    Löscht die Jobs eines Runs beim Shutdown.
+
+    Läuft über den Control-Pool, weil die K8s-Client-Aufrufe synchron sind und
+    sonst den Event-Loop während des Shutdowns blockieren würden.
+
+    Args:
+        batch_api: BatchV1Api-Client
+        namespace: Namespace der Jobs
+        run_id: Run-ID (Label-Selektor und Logging)
+        request_timeout: Client-Timeout je API-Call in Sekunden
+
+    Returns:
+        True, wenn zu dem Run kein Job mehr im Cluster liegt (gelöscht oder
+        schon weg); False, wenn die API nicht antwortete oder das Löschen
+        fehlschlug.
+    """
+    try:
+        jobs = await control_pool.run(
+            lambda: batch_api.list_namespaced_job(
+                namespace=namespace,
+                label_selector=f"{JOB_LABEL_RUN_ID}={run_id}",
+                _request_timeout=request_timeout,
+            )
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception as e:
+        logger.warning("Graceful Shutdown: Job-Liste für Run %s fehlgeschlagen: %s", run_id, e)
+        return False
+
+    job_names = [
+        job.metadata.name for job in (jobs.items or []) if job.metadata and job.metadata.name
+    ]
+    if not job_names:
+        # Antwort des API-Servers, nicht bloss eine Lücke im lokalen Tracking:
+        # zu diesem Run läuft nichts mehr. Der Docker-Pfad markiert einen nicht
+        # mehr getrackten Container dagegen als WARNING, weil er über dessen
+        # Zustand nichts weiss.
+        logger.info("Graceful Shutdown: Run %s hat keinen Job mehr", run_id)
+        return True
+
+    all_gone = True
+    for job_name in job_names:
+        try:
+            await control_pool.run(
+                lambda name=job_name: batch_api.delete_namespaced_job(
+                    name=name,
+                    namespace=namespace,
+                    propagation_policy="Background",
+                    _request_timeout=request_timeout,
+                )
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            # Breit gefangen, nicht nur ApiException: ein abgelaufenes
+            # Client-Timeout kommt als urllib3-Fehler durch.
+            if isinstance(e, ApiException) and e.status == 404:
+                continue  # Race mit TTL-Controller oder Cancel: schon weg
+            logger.warning(
+                "Graceful Shutdown: Job %s für Run %s nicht gelöscht: %s", job_name, run_id, e
+            )
+            all_gone = False
+    return all_gone

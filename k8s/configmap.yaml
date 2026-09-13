@@ -49,6 +49,9 @@ data:
   MAX_CONCURRENT_RUNS: "10"
   # CONTAINER_TIMEOUT: ""
   # RETRY_ATTEMPTS: "0"
+  # Gesamtbudget zum Beenden aller laufenden Runs beim Herunterfahren. Muss unter
+  # terminationGracePeriodSeconds des Orchestrator-Pods liegen (deployment.yaml: 30).
+  # GRACEFUL_SHUTDOWN_TIMEOUT: "8"
 
   # Kubernetes (PIPELINE_EXECUTOR=kubernetes): KUBERNETES_NAMESPACE etc. werden im Deployment gesetzt
   # Abgeschlossene Pipeline-Jobs (succeeded/failed) nach N Sekunden automatisch löschen. 0 = nicht löschen.

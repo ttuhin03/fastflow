@@ -41,6 +41,12 @@ services:
       dockerfile: Dockerfile
     container_name: fastflow-orchestrator
     image: fastflow-orchestrator:latest
+    # Zeit für den Graceful Shutdown, bevor Docker SIGKILL sendet. Muss über
+    # GRACEFUL_SHUTDOWN_TIMEOUT (Default 8s) liegen, sonst wird der Orchestrator
+    # mitten im Stoppen der Pipeline-Container abgeschossen und deren Runs
+    # bleiben bis zur nächsten Zombie-Reconciliation auf RUNNING stehen.
+    # Ohne diese Angabe wären es Dockers 10 Sekunden.
+    stop_grace_period: 30s
     read_only: true
     tmpfs:
       - /tmp
