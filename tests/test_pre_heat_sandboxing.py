@@ -170,3 +170,111 @@ def test_python_install_skips_unsafe_versions(monkeypatch):
 
     assert len(recorder.calls) == 1
     assert recorder.calls[0]["args"] == ["uv", "python", "install", "3.12"]
+
+
+# --------------------------------------------------------------------------- #
+# Symlinks aus dem Repository
+# --------------------------------------------------------------------------- #
+
+
+def _preheat_with_symlink(recorded_preheat, pipeline_dir, name, target):
+    (pipeline_dir / name).unlink(missing_ok=True)
+    (pipeline_dir / name).symlink_to(target)
+    return recorded_preheat()
+
+
+def test_symlinked_lock_file_aborts_before_any_subprocess(
+    recorded_preheat, pipeline_dir, tmp_path
+):
+    """
+    uv liest die -o-Datei ein, bevor es sie schreibt, und zitiert die erste
+    unparsbare Zeile in seiner Fehlermeldung — die im Sync-Log und in der UI
+    landet. `requirements.txt.lock -> /app/.env` wäre damit ein Leseprimitiv auf
+    Orchestrator-Secrets; ist das Ziel parsebar, überschreibt uv es stattdessen.
+    """
+    secrets = tmp_path / "orchestrator.env"
+    secrets.write_text("ENCRYPTION_KEY=s3cr3t\n", encoding="utf-8")
+
+    recorder, ok, message = _preheat_with_symlink(
+        recorded_preheat, pipeline_dir, "requirements.txt.lock", secrets
+    )
+
+    assert ok is False
+    assert recorder.calls == [], "es darf gar kein uv-Prozess starten"
+    assert "Symlink" in message
+    assert secrets.read_text(encoding="utf-8") == "ENCRYPTION_KEY=s3cr3t\n"
+
+
+def test_symlinked_requirements_file_aborts_before_any_subprocess(
+    recorded_preheat, pipeline_dir, tmp_path
+):
+    secrets = tmp_path / "orchestrator.env"
+    secrets.write_text("JWT_SECRET_KEY=s3cr3t\n", encoding="utf-8")
+
+    recorder, ok, message = _preheat_with_symlink(
+        recorded_preheat, pipeline_dir, "requirements.txt", secrets
+    )
+
+    assert ok is False
+    assert recorder.calls == []
+    assert "Symlink" in message
+
+
+def test_regular_files_are_not_mistaken_for_symlinks(recorded_preheat, pipeline_dir):
+    """Gegenprobe: ein bereits vorhandenes, echtes Lock-File blockiert nichts."""
+    (pipeline_dir / "requirements.txt.lock").write_text("requests==2.32.3\n", encoding="utf-8")
+
+    recorder, ok, _ = recorded_preheat()
+
+    assert ok is True
+    assert len(recorder.calls) == 2
+
+
+def test_include_directive_may_not_escape_the_pipeline(
+    recorded_preheat, pipeline_dir, tmp_path
+):
+    """
+    uv löst `-r` relativ zur einschliessenden Datei auf, nicht zum
+    Arbeitsverzeichnis — ein neutrales cwd hilft hier also nicht. Die Zieldatei
+    wird gelesen und ihre erste unparsbare Zeile in der uv-Fehlermeldung zitiert,
+    und die steht anschliessend im Sync-Log und in der UI.
+    """
+    secrets = tmp_path / "orchestrator.env"
+    secrets.write_text("ENCRYPTION_KEY=s3cr3t\n", encoding="utf-8")
+    (pipeline_dir / "requirements.txt").write_text(
+        f"-r {secrets}\n", encoding="utf-8"
+    )
+
+    recorder, ok, message = recorded_preheat()
+
+    assert ok is False
+    assert recorder.calls == []
+    assert "s3cr3t" not in message
+
+
+def test_nested_include_may_not_escape_the_pipeline(recorded_preheat, pipeline_dir, tmp_path):
+    """Eine erlaubte base.txt darf ihrerseits nicht nach aussen zeigen."""
+    secrets = tmp_path / "orchestrator.env"
+    secrets.write_text("JWT_SECRET_KEY=s3cr3t\n", encoding="utf-8")
+    (pipeline_dir / "base.txt").write_text(f"-r {secrets}\n", encoding="utf-8")
+    (pipeline_dir / "requirements.txt").write_text("-r base.txt\n", encoding="utf-8")
+
+    recorder, ok, _ = recorded_preheat()
+
+    assert ok is False
+    assert recorder.calls == []
+
+
+def test_includes_inside_the_pipeline_are_allowed(recorded_preheat, pipeline_dir):
+    """
+    Gegenprobe: das Aufteilen der Anforderungen auf mehrere Dateien innerhalb der
+    Pipeline ist ein normales Muster und muss weiter funktionieren.
+    """
+    (pipeline_dir / "base.txt").write_text("requests==2.32.3\n", encoding="utf-8")
+    (pipeline_dir / "requirements.txt").write_text("-r base.txt\n", encoding="utf-8")
+
+    recorder, ok, _ = recorded_preheat()
+
+    assert ok is True
+    assert len(recorder.calls) == 2
+

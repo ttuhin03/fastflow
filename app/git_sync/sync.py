@@ -4,6 +4,7 @@ Git-Sync: Pull, Pre-Heating, Sync-Status.
 
 import asyncio
 import os
+import re
 import shutil
 import subprocess
 import logging
@@ -86,6 +87,72 @@ def _uv_build_args() -> List[str]:
     if config.UV_ALLOW_SOURCE_BUILDS:
         return []
     return ["--no-build"]
+
+
+#: Include-Direktive in einer requirements.txt: "-r base.txt", "--constraint x.txt".
+_REQUIREMENTS_INCLUDE_PATTERN = re.compile(
+    r"^\s*(?:-r|--requirement|-c|--constraint)(?:[=\s]+|(?<=-r)|(?<=-c))(\S+)"
+)
+
+
+def _reject_untrusted_requirement_sources(pipeline_dir: Path, *names: str) -> Optional[str]:
+    """
+    Stellt sicher, dass uv beim Pre-Heating nur Dateien der eigenen Pipeline liest.
+
+    Zwei Wege führen sonst aus dem Pipeline-Verzeichnis heraus, beide allein durch
+    einen Commit ins Repository:
+
+    * Symlink — Git überträgt ihn unverändert, das Pipeline-Verzeichnis ist im
+      Orchestrator gemountet.
+    * Include — `-r ../../.env` in der requirements.txt; uv löst solche Verweise
+      relativ zur einschliessenden Datei auf, nicht zum Arbeitsverzeichnis.
+
+    Beides ist ein Leseprimitiv auf Orchestrator-Dateien: uv zitiert die erste
+    unparsbare Zeile der gelesenen Datei in seiner Fehlermeldung, und die landet
+    über _uv_failure_message im Sync-Log und in der UI. Beim Lock-File kommt
+    hinzu, dass uv ein parsebares Ziel mit dem erzeugten Lock-File überschreibt.
+
+    Includes werden transitiv verfolgt: eine erlaubte base.txt darf ihrerseits
+    nicht nach aussen zeigen.
+
+    Returns:
+        None wenn alles unbedenklich ist, sonst die Fehlermeldung.
+    """
+    directory = pipeline_dir.resolve()
+    pending = [pipeline_dir / name for name in names]
+    seen: Set[Path] = set()
+
+    while pending:
+        candidate = pending.pop()
+        if candidate.is_symlink():
+            return (
+                f"{candidate.name} ist ein Symlink. Pre-Heating verarbeitet nur echte "
+                "Dateien im Pipeline-Verzeichnis, damit ein Repository nicht auf "
+                "Dateien des Orchestrators zeigen kann."
+            )
+        try:
+            resolved = candidate.resolve()
+            resolved.relative_to(directory)
+        except ValueError:
+            return (
+                f"{candidate.name} verweist mit {candidate} aus dem Pipeline-Verzeichnis "
+                f"{directory} heraus. Pre-Heating liest nur Dateien der eigenen Pipeline."
+            )
+        if resolved in seen or not resolved.is_file():
+            continue
+        seen.add(resolved)
+
+        try:
+            content = resolved.read_text(encoding="utf-8", errors="replace")
+        except OSError as e:
+            logger.debug("Requirements-Datei %s nicht lesbar: %s", resolved, e)
+            continue
+        for line in content.splitlines():
+            match = _REQUIREMENTS_INCLUDE_PATTERN.match(line)
+            if match:
+                pending.append(resolved.parent / match.group(1))
+
+    return None
 
 
 def _uv_failure_message(prefix: str, result: subprocess.CompletedProcess) -> str:
@@ -499,7 +566,8 @@ async def _pre_heat_pipeline(
     requirements.txt aus dem Pipeline-Repository, also nicht vertrauenswürdige
     Eingaben. Sie sind deshalb eingeschnürt: keine sdist-Builds, kein
     Projekt-Modus, keine repo-eigene uv-Konfiguration, neutrales
-    Arbeitsverzeichnis und eine validierte Python-Version.
+    Arbeitsverzeichnis, keine Symlinks auf Dateien ausserhalb der Pipeline und
+    eine validierte Python-Version.
     """
     try:
         safe_python_version = ensure_safe_python_version(python_version)
@@ -508,9 +576,18 @@ async def _pre_heat_pipeline(
         logger.error(error_msg)
         return (False, error_msg)
 
+    pipeline_dir = requirements_path.parent
+    source_error = _reject_untrusted_requirement_sources(
+        pipeline_dir, "requirements.txt", "requirements.txt.lock"
+    )
+    if source_error:
+        error_msg = f"Pre-Heating für {pipeline_name} abgebrochen: {source_error}"
+        logger.error(error_msg)
+        return (False, error_msg)
+
     env = _uv_env()
     build_args = _uv_build_args()
-    lock_file_path = (requirements_path.parent / "requirements.txt.lock").resolve()
+    lock_file_path = (pipeline_dir / "requirements.txt.lock").resolve()
     loop = asyncio.get_running_loop()
 
     def _run_uv(cmd: List[str], cwd: Path) -> subprocess.CompletedProcess:

@@ -39,6 +39,7 @@ _PYTHON_VERSION_PATTERN = re.compile(
     (?:(?:cpython|pypy|graalpy)[-@])?   # optionale Implementierung
     \d{1,2}\.\d{1,3}                    # Major.Minor (z. B. 3.11)
     (?:\.\d{1,4})?                      # optionale Patch-Version
+    t?                                  # free-threaded Build (z. B. 3.13t)
     $
     """,
     re.VERBOSE,
@@ -53,7 +54,7 @@ def is_valid_python_version(value: object) -> bool:
     """
     Prüft, ob `value` eine akzeptierte Python-Versionsangabe ist.
 
-    Akzeptiert: "3.11", "3.12.1", "cpython@3.12", "pypy-3.10".
+    Akzeptiert: "3.11", "3.12.1", "cpython@3.12", "pypy-3.10", "3.13t".
     Abgelehnt: Pfade, Optionen ("--foo"), Glob-/Shell-Zeichen, leere Werte.
     """
     if not isinstance(value, str):

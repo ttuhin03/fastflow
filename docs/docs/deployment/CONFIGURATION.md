@@ -69,6 +69,8 @@ With the default (`false`), preheating only uses prebuilt wheels; unpacking a wh
 Only enable this if commits to the pipeline repository are as trusted as commits to the orchestrator itself (protected branch, mandatory review).
 :::
 
+Independently of this setting, preheating only reads files belonging to the pipeline itself. A pipeline is skipped if its `requirements.txt` or `requirements.txt.lock` is a symlink, or if an include directive (`-r`, `-c`, followed transitively) points outside its own directory. Both would otherwise let a repository make `uv` read orchestrator files — `uv` quotes the first unparsable line of whatever it reads into its error message, and that message ends up in the sync log and the UI. Splitting requirements across several files **inside** the pipeline directory keeps working.
+
 **Deploy Key (SSH):** For an SSH URL (e.g. `git@github.com:org/repo.git`), a private SSH key must be configured. Create the deploy key in the repository under *Settings → Deploy keys*; enter the **private** key here or in the Sync UI. **Semi-automatic:** In the Sync UI, a deploy key can be generated on the server for SSH—only add the displayed public key on GitHub (Deploy keys). Only one method (PAT or deploy key) is ever used—depending on the chosen URL. When switching methods (e.g. from HTTPS to SSH), clear the pipelines directory in the UI and run sync again.
 
 ## Logs & Retention

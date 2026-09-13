@@ -36,6 +36,7 @@ This has a direct consequence for coverage:
 | `requirements.txt.lock` exists (created by preheating) | **Everything**, including transitive dependencies — the lock file pins the full tree. |
 | No lock file, `requests==2.32.3` | That package. |
 | No lock file, `requests>=2.0` or `requests` | **Nothing** for that package — no exact version is known. |
+| Package is not published on PyPI (e.g. from an internal index) | **Nothing** for that package — pip-audit has no advisory data for it. |
 
 Packages that could not be checked are listed as `unaudited_packages` in the API response and in the audit log, so "no vulnerabilities found" is never confused with "nothing was looked at".
 
@@ -43,7 +44,9 @@ Packages that could not be checked are listed as `unaudited_packages` in the API
 For complete coverage, make sure a lock file exists — it is produced automatically by preheating (`UV_PRE_HEAT=true`, the default) — or pin your direct dependencies exactly with `==`.
 :::
 
-Pip options inside `requirements.txt` (`--index-url`, `--find-links`, `-e .`, VCS/URL references) are never passed to the scanner. They are ignored for scanning purposes, and the affected entries appear under `unaudited_packages`.
+Pip options (`--index-url`, `--find-links`, `-e .`, VCS/URL references) are never passed to the scanner. Every line handed to pip-audit is generated from a validated package name and version, so options are dropped whether they appear in `requirements.txt` or in a committed `requirements.txt.lock`; the affected entries appear under `unaudited_packages`.
+
+If pip-audit cannot produce a result at all — it is not installed, or it aborts on a malformed input — that is reported as `audit_error`. It is never reported as "no vulnerabilities found".
 
 ## Automatic security scan (daily)
 

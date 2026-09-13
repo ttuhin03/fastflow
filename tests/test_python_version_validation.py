@@ -23,7 +23,20 @@ from app.services.pipeline_discovery import PipelineMetadata, _load_pipeline_met
 
 @pytest.mark.parametrize(
     "value",
-    ["3.11", "3.12", "3.12.1", "3.9", "cpython@3.12", "cpython-3.12", "pypy@3.10", "graalpy@3.11"],
+    [
+        "3.11",
+        "3.12",
+        "3.12.1",
+        "3.9",
+        "cpython@3.12",
+        "cpython-3.12",
+        "pypy@3.10",
+        "graalpy@3.11",
+        # Free-threaded Builds: uv liest "3.13t" als "Python 3.13+freethreaded".
+        # Ein legitimer Wert — das Muster darf ihn nicht still auf den Default kippen.
+        "3.13t",
+        "3.13.1t",
+    ],
 )
 def test_accepts_plausible_versions(value):
     assert is_valid_python_version(value) is True

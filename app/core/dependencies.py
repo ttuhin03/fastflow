@@ -145,9 +145,39 @@ class PipAuditResult(NamedTuple):
     unaudited: List[str]
 
 
-#: Exakte Versionsfestlegung ("==1.2.3"). PEP 440 erlaubt neben Ziffern auch
-#: Epoche (!), Pre-/Post-/Dev-Segmente und lokale Versionen (+).
-_EXACT_PIN_PATTERN = re.compile(r"^==\s*([A-Za-z0-9][A-Za-z0-9._+!-]*)$")
+#: Zeichenvorrat einer PEP-440-Version: neben Ziffern auch Epoche (!),
+#: Pre-/Post-/Dev-Segmente und lokale Versionen (+).
+_VERSION_CHARS = r"[A-Za-z0-9][A-Za-z0-9._+!-]*"
+
+#: Exakte Versionsfestlegung ("==1.2.3").
+_EXACT_PIN_PATTERN = re.compile(rf"^==\s*({_VERSION_CHARS})$")
+
+#: Vollständige Version ohne Operator, für die selbst erzeugte Audit-Eingabe.
+_VERSION_PATTERN = re.compile(rf"^{_VERSION_CHARS}$")
+
+#: Paketname nach PEP 508.
+_PACKAGE_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+
+def _normalized_pin(name: object, version: object) -> Optional[str]:
+    """
+    Baut eine "name==version"-Zeile — aber nur aus unbedenklichen Bestandteilen.
+
+    Das ist die Stelle, an der die Zusage aus dem Modul-Docstring eingelöst wird:
+    pip-audit sieht ausschliesslich, was hier erzeugt wurde. Beide Quellen sind
+    repo-kontrolliert, und der Lock-File-Parser prüft nichts — eine Zeile wie
+    `foo==1.0 --index-url http://fremd/` würde sonst unverändert in der
+    Eingabedatei landen und pip-audit mitten im Lauf abbrechen lassen.
+
+    Returns:
+        Die normalisierte Zeile, oder None wenn Name oder Version nicht dem
+        erlaubten Muster entsprechen (der Aufrufer meldet sie dann als ungeprüft).
+    """
+    name = str(name or "").strip()
+    version = str(version or "").strip()
+    if not _PACKAGE_NAME_PATTERN.match(name) or not _VERSION_PATTERN.match(version):
+        return None
+    return f"{name}=={version}"
 
 
 def _exact_pin_version(specifier: str) -> Optional[str]:
@@ -179,19 +209,30 @@ def collect_pinned_requirements(requirements_path: Path) -> Tuple[List[str], Lis
     (--index-url, --find-links, -e, VCS-/URL-Referenzen) erreichen das Werkzeug
     dadurch gar nicht erst.
 
+    Das gilt für beide Quellen. Auch das Lock-File liegt im Repository und kann
+    committet statt vom Pre-Heating erzeugt worden sein; jede Zeile geht deshalb
+    durch _normalized_pin, nicht nur die aus der requirements.txt.
+
     Returns:
         (pinned, unaudited): normalisierte Zeilen und Namen ohne exakte Version.
     """
-    locked = parse_lock_file(requirements_path.parent / "requirements.txt.lock")
-    if locked:
-        return [f"{name}=={version}" for name, version in sorted(locked.items())], []
-
     pinned: List[str] = []
     unaudited: List[str] = []
+
+    locked = parse_lock_file(requirements_path.parent / "requirements.txt.lock")
+    if locked:
+        for name, version in sorted(locked.items()):
+            line = _normalized_pin(name, version)
+            if line:
+                pinned.append(line)
+            else:
+                unaudited.append(name)
+        return pinned, unaudited
+
     for entry in parse_requirements(requirements_path):
-        version = _exact_pin_version(entry["specifier"])
-        if version:
-            pinned.append(f"{entry['name']}=={version}")
+        line = _normalized_pin(entry["name"], _exact_pin_version(entry["specifier"]))
+        if line:
+            pinned.append(line)
         else:
             unaudited.append(entry["name"])
     return pinned, unaudited
@@ -243,6 +284,42 @@ def _extract_vulnerabilities(data: Any) -> List[Dict[str, Any]]:
     return vulns
 
 
+def _no_output_error(proc: subprocess.CompletedProcess) -> str:
+    """
+    Fehlermeldung für einen pip-audit-Lauf, der gar keine Ausgabe geliefert hat.
+
+    Der häufigste Grund ist ein fehlendes pip-audit: dann startet zwar der
+    Fallback `python -m pip_audit`, bricht aber mit Exit 1 ab. Dafür gibt es eine
+    handlungsanweisende Meldung statt der rohen Traceback-Zeile.
+    """
+    detail = (proc.stderr or proc.stdout or "").strip()
+    if "No module named" in detail and "pip_audit" in detail:
+        return "pip-audit not installed (pip install pip-audit)"
+    suffix = f": {detail}" if detail else ""
+    return f"pip-audit lieferte keine Ausgabe (exit {proc.returncode}){suffix}"
+
+
+def _extract_skipped(data: Any) -> List[str]:
+    """
+    Liefert die Pakete, die pip-audit selbst nicht prüfen konnte.
+
+    pip-audit markiert solche Einträge mit `skip_reason` statt mit `vulns` — etwa
+    bei Paketen, die es auf PyPI nicht findet (typisch für Pakete aus einem
+    internen Index). Sie stehen dann mit null Funden in der Ausgabe und sähen
+    ohne diese Auswertung wie geprüft und sauber aus.
+    """
+    if not isinstance(data, dict):
+        return []
+    dependencies = data.get("dependencies")
+    if not isinstance(dependencies, list):
+        return []
+    return [
+        str(dep.get("name") or "?")
+        for dep in dependencies
+        if isinstance(dep, dict) and dep.get("skip_reason")
+    ]
+
+
 def _run_pip_audit_sync(requirements_path: Path) -> PipAuditResult:
     """
     Prüft die Abhängigkeiten einer Pipeline mit pip-audit auf bekannte Schwachstellen.
@@ -288,8 +365,17 @@ def _run_pip_audit_sync(requirements_path: Path) -> PipAuditResult:
 
         out = (proc.stdout or "").strip()
         if not out:
-            return PipAuditResult([], None, unaudited)
-        return PipAuditResult(_extract_vulnerabilities(json.loads(out)), None, unaudited)
+            if proc.returncode == 0:
+                return PipAuditResult([], None, unaudited)
+            # Exit 1 heisst "Funde" — dann steht das JSON auf stdout. Ohne Ausgabe
+            # ist pip-audit vorher abgebrochen (Modul fehlt, Eingabezeile
+            # unlesbar, Netzwerkfehler). Das als "keine Schwachstellen" zu melden
+            # wäre die gefährlichste aller Antworten.
+            return PipAuditResult([], _no_output_error(proc), unaudited)
+
+        data = json.loads(out)
+        skipped = [name for name in _extract_skipped(data) if name not in unaudited]
+        return PipAuditResult(_extract_vulnerabilities(data), None, unaudited + skipped)
 
     except subprocess.TimeoutExpired:
         return PipAuditResult([], "pip-audit timeout", unaudited)
