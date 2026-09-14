@@ -86,6 +86,16 @@ def digest_api_token(value: str) -> str:
     ``usedforsecurity=False`` markiert die Verwendung zusätzlich als
     Nicht-Passwort-Digest (relevant für FIPS-Builds).
     """
+    # Der Marker unten bleibt für den Fall, dass Code Scanning einmal auf
+    # advanced setup umgestellt wird. Wirkung hat er derzeit nicht: CodeQL
+    # sammelt Suppression-Kommentare zwar als suppressions[] ins SARIF, das
+    # default setup wertet sie aber nicht aus – dafür bräuchte es die
+    # AlertSuppression-Query plus eine Dismiss-Action. Der Befund ist deshalb
+    # in Code Scanning selbst als "false positive" abgelehnt (Alert #183).
+    #
+    # Die vier Taint-Pfade starten übrigens alle am Test-Helper _api_token()
+    # in tests/test_auth_revocation.py: CodeQL stuft dessen Rückgabe allein
+    # wegen des Namens als Passwort ein, nicht wegen irgendetwas an der Krypto.
     # codeql[py/weak-sensitive-data-hashing]
     return hashlib.sha256(value.encode("utf-8"), usedforsecurity=False).hexdigest()
 
