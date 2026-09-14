@@ -12,6 +12,7 @@ Alle authentifizierten Benutzer (READONLY, WRITE, ADMIN) können Logs lesen.
 import asyncio
 import json
 import aiofiles
+from enum import Enum
 from pathlib import Path
 from typing import Optional
 from uuid import UUID
@@ -47,6 +48,64 @@ router = APIRouter(prefix="/runs", tags=["logs"])
 _security = HTTPBearer(auto_error=False)
 
 
+class _HeaderVerdict(Enum):
+    """Was der Authorization-Header für den Log-Zugriff hergibt.
+
+    ``SCOPE_MISSING`` ist von ``NO_MATCH`` getrennt, weil beide zu
+    unterschiedlichen Statuscodes führen: ein gültiges Token ohne logs-Scope
+    ist ein Berechtigungsproblem (403), alles andere ein
+    Authentifizierungsproblem (401).
+    """
+
+    ALLOWED = "allowed"
+    SCOPE_MISSING = "scope-missing"
+    NO_MATCH = "no-match"
+
+
+def _api_token_verdict(session: Session, token: str) -> _HeaderVerdict:
+    """Prüft ein API-Token auf den logs-Scope."""
+    try:
+        principal = principal_from_api_token(session, token)
+    except HTTPException:
+        return _HeaderVerdict.NO_MATCH
+    if principal is None:
+        return _HeaderVerdict.NO_MATCH
+    if ApiTokenScope.LOGS in principal.scopes:
+        return _HeaderVerdict.ALLOWED
+    return _HeaderVerdict.SCOPE_MISSING
+
+
+def _session_jwt_is_usable(session: Session, token: str) -> bool:
+    """Prüft ein Session-JWT samt Sperre und Status des Nutzers.
+
+    Sperre und Status werden mitgeprüft, weil get_current_user das auf jedem
+    anderen Endpoint tut; hier fehlte es, sodass ein gesperrter Nutzer mit
+    bestehender Session weiter Logs lesen konnte.
+    """
+    username = verify_token(token)
+    if not username or not get_session_by_token(session, token):
+        return False
+    user = session.exec(select(User).where(User.username == username)).first()
+    if user is None or user.blocked:
+        return False
+    return getattr(user, "status", UserStatus.ACTIVE) == UserStatus.ACTIVE
+
+
+def _header_verdict(
+    session: Session, credentials: Optional[HTTPAuthorizationCredentials]
+) -> _HeaderVerdict:
+    """Ordnet den Authorization-Header einem der beiden Mechanismen zu."""
+    if credentials is None:
+        return _HeaderVerdict.NO_MATCH
+    token = credentials.credentials
+    # API-Token: am Präfix erkannt, bevor irgendetwas als JWT gelesen wird.
+    if looks_like_api_token(token):
+        return _api_token_verdict(session, token)
+    if _session_jwt_is_usable(session, token):
+        return _HeaderVerdict.ALLOWED
+    return _HeaderVerdict.NO_MATCH
+
+
 async def require_log_access(
     run_id: UUID,
     request: Request,
@@ -60,48 +119,24 @@ async def require_log_access(
     Direkt-Download über einen kurzlebigen Token in der Query. Deshalb hier eine
     eigene Prüfung statt require_scope_user.
     """
-    download_token = request.query_params.get("download_token")
-
     # Jeder Mechanismus wird versucht; ein fehlgeschlagener bricht nicht ab,
     # sondern lässt den nächsten zum Zug kommen. Sonst verlöre ein Client, der
     # pauschal einen Authorization-Header setzt (die dokumentierte MCP/CI-
     # Konfiguration), den Direkt-Download in dem Moment, in dem sein Token
     # abläuft – während derselbe Aufruf mit einem *unbrauchbaren* Header
     # weiterhin funktionierte.
-    token_scope_denied = False
-    if credentials is not None:
-        token = credentials.credentials
-        # API-Token: am Präfix erkannt, bevor irgendetwas als JWT gelesen wird.
-        if looks_like_api_token(token):
-            try:
-                principal = principal_from_api_token(session, token)
-            except HTTPException:
-                principal = None
-            if principal is not None:
-                if ApiTokenScope.LOGS in principal.scopes:
-                    return
-                token_scope_denied = True
-        else:
-            username = verify_token(token)
-            if username and get_session_by_token(session, token):
-                # Sperre und Status mitprüfen. get_current_user tut das auf jedem
-                # anderen Endpoint; hier fehlte es, sodass ein gesperrter Nutzer
-                # mit bestehender Session weiter Logs lesen konnte.
-                user = session.exec(select(User).where(User.username == username)).first()
-                if (
-                    user is not None
-                    and not user.blocked
-                    and getattr(user, "status", UserStatus.ACTIVE) == UserStatus.ACTIVE
-                ):
-                    return
+    verdict = _header_verdict(session, credentials)
+    if verdict is _HeaderVerdict.ALLOWED:
+        return
 
+    download_token = request.query_params.get("download_token")
     if download_token and verify_log_download_token(session, download_token, run_id):
         return
 
     # Ein gültiges Token ohne logs-Scope ist ein Berechtigungs- und kein
     # Authentifizierungsproblem – 403 sagt dem Aufrufer, dass ein erneuter
     # Versuch mit demselben Token zwecklos ist.
-    if token_scope_denied:
+    if verdict is _HeaderVerdict.SCOPE_MISSING:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Fehlende Berechtigung: logs",

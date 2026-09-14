@@ -124,7 +124,9 @@ def test_path_segment_neutralises_traversal(hostile):
     # Entscheidend ist, dass kein Zeichen übrig bleibt, mit dem sich das
     # Pfadsegment verlassen lässt – ".." allein ist harmlos, "/" nicht.
     assert "/" not in encoded
-    assert "?" not in encoded and "#" not in encoded and " " not in encoded
+    assert "?" not in encoded
+    assert "#" not in encoded
+    assert " " not in encoded
     assert "%" not in hostile or "%25" in encoded, "% muss selbst kodiert werden"
 
 

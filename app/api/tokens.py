@@ -151,7 +151,7 @@ def _to_item(token: ApiToken, now: datetime, owner_username: Optional[str] = Non
     )
 
 
-@router.post("", response_model=CreateApiTokenResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED)
 @limiter.limit("10/minute")
 async def create_api_token(
     request: Request,
@@ -271,7 +271,7 @@ async def create_api_token(
     )
 
 
-@router.get("", response_model=ApiTokenListResponse)
+@router.get("")
 async def list_api_tokens(
     include_revoked: bool = Query(
         default=False, description="Widerrufene Tokens mit ausgeben"
@@ -329,7 +329,7 @@ async def list_api_tokens(
     )
 
 
-@router.delete("/{token_id}", response_model=Dict[str, Any])
+@router.delete("/{token_id}")
 async def revoke_api_token(
     token_id: UUID,
     current_user: User = Depends(get_current_user),

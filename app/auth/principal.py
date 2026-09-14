@@ -272,7 +272,7 @@ def require_scope_user(*needed: ApiTokenScope) -> Callable[..., User]:
     """
     inner = require_scope(*needed)
 
-    async def _require(principal: Principal = Depends(inner)) -> User:
+    def _require(principal: Principal = Depends(inner)) -> User:
         return principal.user
 
     return _require
@@ -294,7 +294,7 @@ def require_scope(*needed: ApiTokenScope) -> Callable[..., Principal]:
     if not needed:
         raise ValueError("require_scope benötigt mindestens einen Scope")
 
-    async def _require(principal: Principal = Depends(get_principal)) -> Principal:
+    def _require(principal: Principal = Depends(get_principal)) -> Principal:
         missing = [scope.value for scope in needed if scope not in principal.scopes]
         if missing:
             raise HTTPException(

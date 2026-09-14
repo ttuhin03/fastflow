@@ -20,6 +20,12 @@ from sqlalchemy import Enum as SAEnum, Text
 from sqlmodel import SQLModel, Field, JSON, Column
 
 
+# Foreign-Key-Ziel der users-Tabelle. Vier Modelle verweisen darauf; als Konstante,
+# damit ein Umbenennen der Tabelle nicht an ebenso vielen Stellen einzeln nachgezogen
+# werden muss – ein übersehenes Vorkommen fiele erst beim Anlegen des Schemas auf.
+USERS_ID_FK = "users.id"
+
+
 def _utc_now() -> datetime:
     """Gibt die aktuelle UTC-Zeit zurück (zeitzone-aware)."""
     return datetime.now(timezone.utc)
@@ -637,7 +643,7 @@ class ApiToken(SQLModel, table=True):
         description="Vom Nutzer vergebene Bezeichnung, z.B. 'CI nightly'"
     )
     user_id: UUID = Field(
-        foreign_key="users.id",
+        foreign_key=USERS_ID_FK,
         index=True,
         description="Besitzer des Tokens"
     )
@@ -672,7 +678,7 @@ class AuditLogEntry(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True, description="Eindeutige Eintrags-ID")
     created_at: datetime = Field(default_factory=_utc_now, index=True, description="Zeitpunkt der Aktion (UTC)")
-    user_id: Optional[UUID] = Field(default=None, foreign_key="users.id", index=True, description="User der die Aktion ausgeführt hat")
+    user_id: Optional[UUID] = Field(default=None, foreign_key=USERS_ID_FK, index=True, description="User der die Aktion ausgeführt hat")
     username: str = Field(default="", description="Benutzername zum Zeitpunkt der Aktion (Snapshot)")
     action: str = Field(index=True, description="Aktion z.B. run_start, system_settings_update, user_block, git_sync, downstream_trigger_create, …")
     resource_type: str = Field(index=True, description="Betroffene Ressource: pipeline, run, user, settings, secret, invite")
@@ -701,7 +707,7 @@ class Session(SQLModel, table=True):
         description="JWT-Token (eindeutig)"
     )
     user_id: UUID = Field(
-        foreign_key="users.id",
+        foreign_key=USERS_ID_FK,
         index=True,
         description="Verknüpfte User-ID"
     )
@@ -740,7 +746,7 @@ class EphemeralToken(SQLModel, table=True):
     )
     issued_to_user_id: Optional[UUID] = Field(
         default=None,
-        foreign_key="users.id",
+        foreign_key=USERS_ID_FK,
         index=True,
         description=(
             "Nutzer, für den das Token ausgestellt wurde. None nur für Alt-Zeilen. "

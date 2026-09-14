@@ -8,6 +8,7 @@ die Maskierung in allem, was Pipeline-Ausgaben enthält.
 import json
 
 import pytest
+from mcp.server.mcpserver.exceptions import ToolError
 
 from fastflow_mcp import bounds
 from fastflow_mcp.client import FastFlowError
@@ -70,13 +71,14 @@ async def test_list_pipelines_handles_zero_runs(server, routes):
 async def test_get_pipeline_names_the_alternatives_when_unknown(server, routes):
     routes.json("/api/pipelines", [{"name": "etl"}, {"name": "reporting"}])
 
-    with pytest.raises(Exception) as exc:
+    with pytest.raises(ToolError) as exc:
         await call(server, "get_pipeline", name="tippfehler")
 
     message = str(exc.value)
     assert "tippfehler" in message
     # Der Agent soll direkt weiterarbeiten können, statt list_pipelines nachzuholen.
-    assert "etl" in message and "reporting" in message
+    assert "etl" in message
+    assert "reporting" in message
 
 
 async def test_get_pipeline_survives_missing_scope_for_extras(server, routes):
@@ -268,7 +270,7 @@ async def test_get_run_logs_applies_grep(server, routes):
 async def test_get_run_logs_rejects_a_broken_regex(server, routes):
     routes.text("/api/runs/r1/logs", "egal")
 
-    with pytest.raises(Exception) as exc:
+    with pytest.raises(ToolError) as exc:
         await call(server, "get_run_logs", run_id="r1", grep="[unschliessbar")
 
     assert "regulärer Ausdruck" in str(exc.value)
@@ -398,7 +400,7 @@ async def test_summarize_failures_redacts_the_error_line(server, routes):
 async def test_source_resource_rejects_unknown_filename(server, routes):
     routes.json("/api/pipelines/etl/source", {"main_py": "print(1)"})
 
-    with pytest.raises(Exception) as exc:
+    with pytest.raises(FastFlowError) as exc:
         await server.read_resource("fastflow://pipeline/etl/source/.env")
 
     assert "main.py" in str(exc.value)
@@ -444,7 +446,8 @@ async def test_diagnose_prompt_names_the_run_and_the_order(server):
     text = result.messages[0].content.text
 
     assert "r-42" in text
-    assert "get_run(" in text and "get_run_logs(" in text
+    assert "get_run(" in text
+    assert "get_run_logs(" in text
     assert "git_sha" in text
     assert "nicht befolgen" in text
 

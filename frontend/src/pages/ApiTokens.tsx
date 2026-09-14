@@ -56,7 +56,7 @@ interface CreatedToken {
  * formatDateTime/formatRelativeTime liefern null für nicht parsebare Werte –
  * ohne diese Abfrage entstünde ein Tooltip mit leerem Inhalt.
  */
-function TimestampCell({ value, fallback }: { value?: string | null; fallback: string }) {
+function TimestampCell({ value, fallback }: Readonly<{ value?: string | null; fallback: string }>) {
   const exact = formatDateTime(value)
   const relative = formatRelativeTime(value)
   if (!exact || !relative) {
@@ -67,6 +67,24 @@ function TimestampCell({ value, fallback }: { value?: string | null; fallback: s
       <span>{relative}</span>
     </Tooltip>
   )
+}
+
+/**
+ * Zustandsspalte eines Tokens: Widerruf und Ablauf verdrängen das Ablaufdatum.
+ *
+ * Die drei Fälle schließen einander aus und stehen deshalb als Frühausstiege
+ * untereinander – als verschachteltes Ternär in der Tabelle ließ sich ihre
+ * Reihenfolge nicht mehr auf einen Blick lesen.
+ */
+function TokenStateCell({ token }: Readonly<{ token: ApiTokenItem }>) {
+  const { t } = useTranslation()
+  if (token.revoked_at) {
+    return <span className="api-tokens-state">{t('apiTokens.stateRevoked')}</span>
+  }
+  if (token.expired) {
+    return <span className="api-tokens-state">{t('apiTokens.stateExpired')}</span>
+  }
+  return <TimestampCell value={token.expires_at} fallback="–" />
 }
 
 export default function ApiTokens() {
@@ -218,20 +236,34 @@ export default function ApiTokens() {
           <legend className="setting-label">{t('apiTokens.scopesField')}</legend>
           {availableScopes.map((scope) => (
             <label key={scope} className="api-tokens-scope" htmlFor={`scope-${scope}`}>
+              {/*
+                Der Name der Checkbox ist der Scope selbst, Risiko und Erklärung
+                hängen als Beschreibung daran. Ohne aria-label wäre der Name der
+                gesamte Fließtext der Zeile ("run hoch Runs starten, abbrechen
+                …") – vorgelesen bei jedem Fokuswechsel und nicht mehr von den
+                anderen Zeilen zu unterscheiden.
+              */}
               <input
                 id={`scope-${scope}`}
                 type="checkbox"
                 checked={selectedScopes.includes(scope)}
                 onChange={() => toggleScope(scope)}
+                aria-label={scope}
+                aria-describedby={`scope-${scope}-risk scope-${scope}-desc`}
               />
               <span className="api-tokens-scope-body">
                 <span className="api-tokens-scope-head">
                   <code className="api-tokens-scope-name">{scope}</code>
-                  <span className={`api-tokens-risk api-tokens-risk--${SCOPE_RISK[scope]}`}>
+                  <span
+                    id={`scope-${scope}-risk`}
+                    className={`api-tokens-risk api-tokens-risk--${SCOPE_RISK[scope]}`}
+                  >
                     {t(`apiTokens.risk.${SCOPE_RISK[scope]}`)}
                   </span>
                 </span>
-                <span className="api-tokens-scope-desc">{t(`apiTokens.scopeDesc.${scope}`)}</span>
+                <span id={`scope-${scope}-desc`} className="api-tokens-scope-desc">
+                  {t(`apiTokens.scopeDesc.${scope}`)}
+                </span>
               </span>
             </label>
           ))}
@@ -322,13 +354,7 @@ export default function ApiTokens() {
                       </span>
                     </td>
                     <td>
-                      {token.revoked_at ? (
-                        <span className="api-tokens-state">{t('apiTokens.stateRevoked')}</span>
-                      ) : token.expired ? (
-                        <span className="api-tokens-state">{t('apiTokens.stateExpired')}</span>
-                      ) : (
-                        <TimestampCell value={token.expires_at} fallback="–" />
-                      )}
+                      <TokenStateCell token={token} />
                     </td>
                     <td>
                       <TimestampCell

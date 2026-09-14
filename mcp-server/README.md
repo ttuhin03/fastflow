@@ -43,7 +43,16 @@ Sicherheit).
 uvx fastflow-mcp
 ```
 
-Oder aus diesem Repository:
+Oder aus diesem Repository. `uv sync` installiert exakt die Versionen aus
+`uv.lock` – dieselben, gegen die hier getestet wurde:
+
+```bash
+cd mcp-server
+uv sync --extra dev
+```
+
+Ohne uv geht es auch, dann lösen sich die Abhängigkeiten allerdings frei
+innerhalb der Bereiche aus `pyproject.toml` auf:
 
 ```bash
 cd mcp-server

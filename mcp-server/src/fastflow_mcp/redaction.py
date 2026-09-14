@@ -38,7 +38,9 @@ _PATTERNS: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
     ("fastflow-token", re.compile(r"\bffp_[A-Za-z0-9_-]{8}_[A-Za-z0-9_-]{43}\b")),
     # GitHub: klassische und fine-grained Tokens.
     ("github-token", re.compile(r"\bgh[pousr]_[A-Za-z0-9]{36,}\b")),
-    ("github-pat", re.compile(r"\bgithub_pat_[A-Za-z0-9_]{22,}\b")),
+    # ``(?a:...)`` hält ``\w`` bei ASCII: ohne den Schalter zöge die Klasse auch
+    # Unicode-Wortzeichen an, die in einem GitHub-Token nie vorkommen.
+    ("github-pat", re.compile(r"\bgithub_pat_(?a:\w{22,})\b")),
     # AWS Access Key IDs (der Secret Key hat keine erkennbare Form und wird nur
     # über die Zuweisungsregel unten erwischt).
     ("aws-access-key-id", re.compile(r"\b(?:AKIA|ASIA|ABIA|ACCA)[0-9A-Z]{16}\b")),

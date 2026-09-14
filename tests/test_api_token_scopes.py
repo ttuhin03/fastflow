@@ -423,7 +423,8 @@ def test_source_derived_metadata_needs_the_source_scope(client, test_session, te
 
     with_source = _token(test_session, user, ApiTokenScope.READ, ApiTokenScope.SOURCE)
     got = json.dumps(client.get("/api/pipelines", headers=_auth(with_source)).json())
-    assert "DB_PASS" in got and "PLAIN" in got
+    assert "DB_PASS" in got
+    assert "PLAIN" in got
 
 
 def test_browser_session_keeps_the_full_metadata(authenticated_client, temp_pipelines_dir):

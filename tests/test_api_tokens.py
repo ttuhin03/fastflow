@@ -192,8 +192,14 @@ def test_generated_tokens_are_unique():
 
 def test_digest_is_stable_and_differs_per_token():
     a, b = generate_api_token(), generate_api_token()
-    assert digest_api_token(a.token) == digest_api_token(a.token)
-    assert digest_api_token(a.token) != digest_api_token(b.token)
+
+    # Zweimal derselbe Klartext muss denselben Digest ergeben – sonst fände die
+    # Suche in api_tokens.token_hash ein gültiges Token nie wieder.
+    first_pass = digest_api_token(a.token)
+    second_pass = digest_api_token(a.token)
+
+    assert first_pass == second_pass
+    assert digest_api_token(b.token) != first_pass
 
 
 @pytest.mark.parametrize(

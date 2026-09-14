@@ -13,6 +13,7 @@ es Tests und keine Kommentare.
 from dataclasses import replace
 
 import pytest
+from mcp.server.mcpserver.exceptions import ToolError
 
 from fastflow_mcp.client import FastFlowError
 from fastflow_mcp.server import build_server
@@ -63,7 +64,9 @@ async def test_write_tools_appear_only_when_enabled(write_server):
 
 
 async def test_calling_a_disabled_write_tool_fails(read_server):
-    with pytest.raises(Exception):
+    # "Unknown tool" und nicht "fehlende Berechtigung": das Tool ist nicht
+    # abgewiesen, es existiert nicht.
+    with pytest.raises(ToolError, match="Unknown tool"):
         await call(read_server, "trigger_pipeline", name="etl")
 
 
@@ -164,7 +167,7 @@ async def test_trigger_surfaces_the_concurrency_limit(write_server, routes):
         status=429,
     )
 
-    with pytest.raises(Exception) as exc:
+    with pytest.raises(ToolError) as exc:
         await call(write_server, "trigger_pipeline", name="etl")
 
     assert "gleichzeitiger Runs" in str(exc.value)
@@ -175,7 +178,7 @@ async def test_trigger_reports_a_missing_run_scope(write_server, routes):
         "/api/pipelines/etl/run", {"detail": "Fehlende Berechtigung: run"}, status=403
     )
 
-    with pytest.raises(Exception) as exc:
+    with pytest.raises(ToolError) as exc:
         await call(write_server, "trigger_pipeline", name="etl")
 
     message = str(exc.value)
@@ -204,7 +207,7 @@ async def test_cancelling_a_finished_run_explains_itself(write_server, routes):
         status=400,
     )
 
-    with pytest.raises(Exception) as exc:
+    with pytest.raises(ToolError) as exc:
         await call(write_server, "cancel_run", run_id="r1")
 
     assert "bereits beendet" in str(exc.value)
@@ -235,7 +238,7 @@ async def test_timeout_on_a_write_warns_against_blind_retry(write_server, config
         make_client(handler, cfg=replace(config, enable_write_tools=True)),
     )
 
-    with pytest.raises(Exception) as exc:
+    with pytest.raises(ToolError) as exc:
         await call(server, "trigger_pipeline", name="etl")
 
     message = str(exc.value)

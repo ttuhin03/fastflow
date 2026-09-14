@@ -37,16 +37,20 @@ def test_trailing_slash_is_stripped():
 
 @pytest.mark.parametrize("missing", ["FASTFLOW_URL", "FASTFLOW_TOKEN"])
 def test_missing_required_values_name_the_variable(missing):
+    environment = env(**{missing: None})
+
     with pytest.raises(ConfigError) as exc:
-        load_config(env(**{missing: None}))
+        load_config(environment)
 
     assert missing in str(exc.value)
 
 
 @pytest.mark.parametrize("url", ["fastflow.example.com", "ftp://host", "  "])
 def test_unusable_url_is_rejected(url):
+    environment = env(FASTFLOW_URL=url)
+
     with pytest.raises(ConfigError) as exc:
-        load_config(env(FASTFLOW_URL=url))
+        load_config(environment)
 
     assert "FASTFLOW_URL" in str(exc.value)
 
@@ -55,8 +59,10 @@ def test_session_jwt_is_rejected_with_an_explanation():
     """Ein Browser-Token läuft nach Stunden ab und taugt nicht für Dauerbetrieb."""
     jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4In0.signature"
 
+    environment = env(FASTFLOW_TOKEN=jwt)
+
     with pytest.raises(ConfigError) as exc:
-        load_config(env(FASTFLOW_TOKEN=jwt))
+        load_config(environment)
 
     message = str(exc.value)
     assert "ffp_" in message
@@ -67,8 +73,10 @@ def test_timeout_bounds_are_enforced():
     assert load_config(env(FASTFLOW_TIMEOUT_SECONDS="60")).timeout_seconds == 60.0
 
     for bad in ("0.1", "1000", "abc"):
+        environment = env(FASTFLOW_TIMEOUT_SECONDS=bad)
+
         with pytest.raises(ConfigError):
-            load_config(env(FASTFLOW_TIMEOUT_SECONDS=bad))
+            load_config(environment)
 
 
 @pytest.mark.parametrize("raw,expected", [("0", False), ("false", False), ("no", False),
