@@ -45,12 +45,19 @@ from sqlmodel import Session, select, update
 from app.core.config import config
 from app.metrics_prometheus import track_run_started, track_run_finished
 from app.resilience import circuit_docker, CircuitBreakerOpenError
-from app.models import Pipeline, PipelineDailyStat, PipelineRun, RunStatus, RunCellLog
+from app.models import Pipeline, PipelineDailyStat, PipelineRun, RunStatus
 from app.services.pipeline_discovery import DiscoveredPipeline, get_pipeline
 from app.services.downstream_triggers import get_downstream_pipelines_to_trigger
 from app.resilience.retry_strategy import wait_for_retry
 from app.core.database import get_session
 from app.git_sync.sync import get_current_git_info
+# Notebook-Zellen-Protokoll und dessen gepufferte Persistenz (nb_runner.py)
+from app.executor.cell_logs import (
+    PREFIX_CELL_END,
+    PREFIX_CELL_OUTPUT,
+    PREFIX_CELL_START,
+    CellLogBuffer,
+)
 from app.executor.thread_pools import control_pool, stream_pool
 from app.executor.worker_runtime import (
     WORKER_APP_MOUNT,
@@ -63,10 +70,15 @@ from app.executor.worker_runtime import (
 
 logger = logging.getLogger(__name__)
 
-# Präfixe für Notebook-Zellen-Log-Protokoll (nb_runner.py)
-PREFIX_CELL_START = "FASTFLOW_CELL_START\t"
-PREFIX_CELL_END = "FASTFLOW_CELL_END\t"
-PREFIX_CELL_OUTPUT = "FASTFLOW_CELL_OUTPUT\t"
+LOG_FILE_FLUSH_INTERVAL_SECONDS = 0.25
+"""
+Höchstabstand zwischen zwei ``flush()`` auf die Log-Datei.
+
+Vorher wurde nach jeder Zeile geflusht — über aiofiles ist das ein Thread-Hop
+plus Syscall pro Zeile, bei geschwätzigen Pipelines zehntausende pro Sekunde. Der
+Live-Pfad der UI ist ohnehin die SSE-Queue, nicht die Datei; für sie genügt es,
+regelmäßig statt sofort zu schreiben.
+"""
 
 # Docker Client (wird beim App-Start initialisiert)
 _docker_client: Optional[docker.DockerClient] = None
@@ -1451,94 +1463,6 @@ def _cell_line_to_readable_log(line: str) -> Optional[str]:
     return None
 
 
-def _parse_and_persist_cell_line(run_id: UUID, line: str) -> None:
-    """
-    Parst eine FASTFLOW_CELL_*-Zeile vom Notebook-Runner und schreibt in RunCellLog.
-    Wird synchron im ThreadPool ausgeführt (DB-Zugriff).
-    """
-    import base64
-    session_gen = get_session()
-    try:
-        session = next(session_gen)
-    except StopIteration:
-        return
-    try:
-        if line.startswith(PREFIX_CELL_START):
-            cell_index = int(line[len(PREFIX_CELL_START) :].strip())
-            existing = session.get(RunCellLog, (run_id, cell_index))
-            if existing:
-                existing.status = "RUNNING"
-            else:
-                session.add(
-                    RunCellLog(run_id=run_id, cell_index=cell_index, status="RUNNING")
-                )
-            session.commit()
-            return
-        if line.startswith(PREFIX_CELL_END):
-            rest = line[len(PREFIX_CELL_END) :].strip()
-            parts = rest.split("\t", 2)
-            if len(parts) < 2:
-                return
-            cell_index = int(parts[0])
-            status = parts[1].upper()
-            msg = parts[2].strip() if len(parts) > 2 else ""
-            existing = session.get(RunCellLog, (run_id, cell_index))
-            if not existing:
-                existing = RunCellLog(run_id=run_id, cell_index=cell_index, status=status)
-                session.add(existing)
-                session.flush()
-            else:
-                existing.status = status
-            # Alle Versuche in stderr sammeln (Retries + Final), damit sie in der UI sichtbar sind
-            if status == "RETRYING" and msg:
-                attempt_part = msg.split("\t", 1)
-                attempt_num = attempt_part[0] if attempt_part else "?"
-                err_text = attempt_part[1].strip() if len(attempt_part) > 1 else ""
-                existing.stderr = (existing.stderr or "") + f"--- Retry-Versuch {attempt_num} fehlgeschlagen ---\n{err_text}\n\n"
-            elif status == "FAILED":
-                existing.stderr = (existing.stderr or "") + "--- Endgültig fehlgeschlagen ---\n"
-            session.commit()
-            return
-        if line.startswith(PREFIX_CELL_OUTPUT):
-            rest = line[len(PREFIX_CELL_OUTPUT) :]
-            parts = rest.split("\t", 3)
-            if len(parts) < 3:
-                return
-            cell_index = int(parts[0])
-            stream = parts[1]
-            third = parts[2]
-            payload = parts[3] if len(parts) > 3 else ""
-            existing = session.get(RunCellLog, (run_id, cell_index))
-            if not existing:
-                existing = RunCellLog(run_id=run_id, cell_index=cell_index, status="RUNNING")
-                session.add(existing)
-                session.flush()
-            if stream in ("stdout", "stderr"):
-                encoding = third
-                if encoding == "base64":
-                    try:
-                        payload = base64.b64decode(payload).decode("utf-8")
-                    except Exception:
-                        payload = ""
-                if stream == "stdout":
-                    existing.stdout = (existing.stdout or "") + payload + "\n"
-                else:
-                    existing.stderr = (existing.stderr or "") + payload + "\n"
-            elif stream == "image":
-                mime = third
-                if existing.outputs is None:
-                    existing.outputs = {"images": []}
-                existing.outputs.setdefault("images", []).append({"mime": mime, "data": payload})
-            session.commit()
-    except Exception as e:
-        logger.warning("Fehler beim Parsen/Persistieren einer Zellen-Log-Zeile: %s", e)
-    finally:
-        try:
-            next(session_gen)
-        except StopIteration:
-            pass
-
-
 async def _stream_logs(
     container: docker.models.containers.Container,
     log_file_path: Path,
@@ -1557,7 +1481,11 @@ async def _stream_logs(
         first_log_event: Optional; wird gesetzt wenn SETUP_READY_MARKER erscheint (für setup_duration)
     """
     import aiofiles
-    
+
+    # Zellen-Logs gebündelt schreiben statt pro Zeile (siehe app.executor.cell_logs).
+    cell_buffer = CellLogBuffer(run_id)
+    cell_buffer.start()
+
     try:
         logger.info(f"Starte Log-Streaming für Run {run_id}, Container: {container.id}")
         
@@ -1573,6 +1501,7 @@ async def _stream_logs(
         async with aiofiles.open(log_file_path, "a", encoding="utf-8") as log_file:
             line_count = 0
             last_size_check = time.time()
+            last_flush = time.monotonic()
             first_log_received = False
             should_break = False
             
@@ -1623,12 +1552,11 @@ async def _stream_logs(
                             or log_line.startswith(PREFIX_CELL_OUTPUT)
                         )
                         if is_cell_protocol:
-                            # Stream-Pool: läuft zwischen zwei next()-Aufrufen dieses
-                            # Runs, belegt also keinen zusätzlichen Worker – und hält
-                            # DB-Schreibzugriffe aus dem Control-Pool heraus.
-                            await stream_pool.run(
-                                lambda line=log_line: _parse_and_persist_cell_line(run_id, line)
-                            )
+                            # Puffert Ausgaben und schreibt gebündelt; Statuswechsel
+                            # gehen sofort raus. Die Datenbankzugriffe laufen im
+                            # Stream-Pool, also zwischen zwei next()-Aufrufen dieses
+                            # Runs, und belegen keinen zusätzlichen Worker.
+                            await cell_buffer.handle_line(log_line)
                             # Lesbare Zeile für Log/SSE (Retries etc.); OUTPUT nicht doppelt ausgeben
                             line_to_write = _cell_line_to_readable_log(log_line)
                             if line_to_write is None:
@@ -1643,9 +1571,13 @@ async def _stream_logs(
                         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
                         log_line_with_timestamp = f"[{timestamp}] {line_to_write}"
                         
-                        # In Datei schreiben (asynchron)
+                        # In Datei schreiben (asynchron). Geflusht wird zeitgetaktet,
+                        # nicht pro Zeile — siehe LOG_FILE_FLUSH_INTERVAL_SECONDS.
                         await log_file.write(log_line_with_timestamp + "\n")
-                        await log_file.flush()
+                        jetzt = time.monotonic()
+                        if jetzt - last_flush >= LOG_FILE_FLUSH_INTERVAL_SECONDS:
+                            await log_file.flush()
+                            last_flush = jetzt
                         
                         # In Queue für SSE-Streaming (mit Zeitstempel)
                         try:
@@ -1699,7 +1631,15 @@ async def _stream_logs(
                             except asyncio.QueueEmpty:
                                 pass
                         line_count += 1
-        
+
+            # Der Stream ist zu Ende: das seit dem letzten Takt Geschriebene
+            # sicher auf Platte bringen.
+            await log_file.flush()
+
+        # Normaler Weg (Container beendet, Stream lieferte EOF): Restpuffer der
+        # Zellen-Logs schreiben, solange noch sauber awaitet werden kann.
+        await cell_buffer.flush()
+
     except asyncio.CancelledError:
         # Task wurde abgebrochen (normal bei Container-Ende)
         logger.debug(f"Log-Streaming für Run {run_id} wurde abgebrochen (Container beendet)")
@@ -1707,6 +1647,15 @@ async def _stream_logs(
     except Exception as e:
         logger.error(f"Fehler beim Log-Streaming für Run {run_id}: {e}", exc_info=True)
     finally:
+        # Hintergrund-Flush beenden und Verbliebenes wegschreiben. Synchron, weil
+        # auf dem Abbruchpfad kein await mehr verlässlich durchläuft.
+        try:
+            cell_buffer.drain_sync()
+        except Exception as e:
+            logger.warning(
+                "Restliche Zellen-Logs für Run %s nicht geschrieben: %s", run_id, e
+            )
+
         # Stream explizit schließen
         try:
             if hasattr(log_stream, 'close'):

@@ -30,13 +30,14 @@ from app.services.pipeline_discovery import DiscoveredPipeline, get_pipeline
 from app.services.downstream_triggers import get_downstream_pipelines_to_trigger
 from app.resilience.retry_strategy import wait_for_retry
 
-# Notebook-Zellen-Protokoll: gleiche Präfixe wie in core, für RunCellLog-Persistenz
-from app.executor.core import (
+# Notebook-Zellen-Protokoll und gepufferte Persistenz (geteilt mit dem Docker-Pfad)
+from app.executor.cell_logs import (
     PREFIX_CELL_END,
     PREFIX_CELL_OUTPUT,
     PREFIX_CELL_START,
-    _parse_and_persist_cell_line,
+    CellLogBuffer,
 )
+from app.executor.core import LOG_FILE_FLUSH_INTERVAL_SECONDS
 from app.executor.thread_pools import control_pool, stream_pool
 from app.executor.worker_runtime import (
     build_k8s_container_security_context,
@@ -646,6 +647,10 @@ async def _stream_pod_logs(
         logger.warning("Pod %s (Run %s) weder Running noch beendet – Log-Stream übersprungen", pod_name, run_id)
         return
 
+    # Zellen-Logs gebündelt schreiben statt pro Zeile (siehe app.executor.cell_logs).
+    cell_buffer = CellLogBuffer(run_id)
+    cell_buffer.start()
+
     try:
         resp = core_api.read_namespaced_pod_log(
             name=pod_name,
@@ -657,6 +662,9 @@ async def _stream_pod_logs(
         )
         async with aiofiles.open(log_file_path, "a", encoding="utf-8") as log_file:
             line_buffer = b""
+            line_count = 0
+            last_flush = time.monotonic()
+            last_size_check = time.monotonic()
             while True:
                 try:
                     chunk = await stream_pool.run(resp.read, 4096)
@@ -708,20 +716,31 @@ async def _stream_pod_logs(
                             or content.startswith(PREFIX_CELL_OUTPUT)
                         )
                         if is_cell_protocol:
-                            await stream_pool.run(
-                                lambda c=content: _parse_and_persist_cell_line(run_id, c)
-                            )
+                            await cell_buffer.handle_line(content)
                         log_line = f"[{ts_display}] {content}"
                         await log_file.write(log_line + "\n")
-                        await log_file.flush()
-                        if app_config.LOG_MAX_SIZE_MB and log_file_path.exists():
-                            file_size_mb = log_file_path.stat().st_size / (1024 * 1024)
-                            if file_size_mb > app_config.LOG_MAX_SIZE_MB:
-                                logger.warning(
-                                    "Log-Datei für Run %s überschreitet LOG_MAX_SIZE_MB (%s MB): %.2f MB – Stream gekappt",
-                                    run_id, app_config.LOG_MAX_SIZE_MB, file_size_mb,
-                                )
-                                break
+                        line_count += 1
+                        # Zeitgetaktet flushen statt pro Zeile: über aiofiles ist
+                        # jedes flush() ein Thread-Hop plus Syscall.
+                        jetzt = time.monotonic()
+                        if jetzt - last_flush >= LOG_FILE_FLUSH_INTERVAL_SECONDS:
+                            await log_file.flush()
+                            last_flush = jetzt
+                        # Größencheck ebenfalls getaktet – vorher ein stat() pro Zeile.
+                        if app_config.LOG_MAX_SIZE_MB and (
+                            line_count % 1000 == 0 or jetzt - last_size_check > 10
+                        ):
+                            last_size_check = jetzt
+                            await log_file.flush()
+                            last_flush = jetzt
+                            if log_file_path.exists():
+                                file_size_mb = log_file_path.stat().st_size / (1024 * 1024)
+                                if file_size_mb > app_config.LOG_MAX_SIZE_MB:
+                                    logger.warning(
+                                        "Log-Datei für Run %s überschreitet LOG_MAX_SIZE_MB (%s MB): %.2f MB – Stream gekappt",
+                                        run_id, app_config.LOG_MAX_SIZE_MB, file_size_mb,
+                                    )
+                                    break
                         try:
                             log_queue.put_nowait(log_line)
                         except asyncio.QueueFull:
@@ -732,10 +751,21 @@ async def _stream_pod_logs(
                                 pass
                 except (StopIteration, AttributeError):
                     break
+            await log_file.flush()
+        await cell_buffer.flush()
     except asyncio.CancelledError:
         pass
     except Exception as e:
         logger.warning("Log-Stream für Run %s: %s", run_id, e)
+    finally:
+        # Hintergrund-Flush beenden und Verbliebenes wegschreiben. Synchron, weil
+        # auf dem Abbruchpfad kein await mehr verlässlich durchläuft.
+        try:
+            cell_buffer.drain_sync()
+        except Exception as e:
+            logger.warning(
+                "Restliche Zellen-Logs für Run %s nicht geschrieben: %s", run_id, e
+            )
 
 
 def _parse_cpu_quantity(s: str) -> float:

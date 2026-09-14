@@ -15,7 +15,7 @@ from enum import Enum
 from typing import Optional, Dict, Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import Enum as SAEnum, Text
+from sqlalchemy import Enum as SAEnum, Index, Text
 from sqlmodel import SQLModel, Field, JSON, Column
 
 
@@ -104,7 +104,11 @@ class PipelineDailyStat(SQLModel, table=True):
     """
     __tablename__ = "pipeline_daily_stats"
 
-    pipeline_name: str = Field(foreign_key="pipelines.pipeline_name", primary_key=True)
+    pipeline_name: str = Field(
+        foreign_key="pipelines.pipeline_name",
+        ondelete="CASCADE",
+        primary_key=True,
+    )
     day: date = Field(primary_key=True, description="Kalendertag (UTC)")
     total_runs: int = Field(default=0)
     successful_runs: int = Field(default=0)
@@ -119,6 +123,14 @@ class PipelineRun(SQLModel, table=True):
     inklusive Status, Logs, Metrics und Environment-Variablen.
     """
     __tablename__ = "pipeline_runs"
+    __table_args__ = (
+        # Deckt die häufigste Query der App ab: "letzte N Runs einer Pipeline"
+        # (Pipeline-Detail, /runs/recent-per-pipeline, Retention-Cleanup). Ohne
+        # diesen Index nutzt SQLite zwar ix_pipeline_runs_pipeline_name, muss die
+        # Treffer für ORDER BY started_at aber komplett in einen temporären B-Baum
+        # sortieren — der LIMIT greift dann erst nach dem Sortieren.
+        Index("ix_pipeline_runs_pipeline_name_started_at", "pipeline_name", "started_at"),
+    )
     
     id: UUID = Field(
         default_factory=uuid4,
@@ -204,7 +216,12 @@ class RunCellLog(SQLModel, table=True):
     __tablename__ = "run_cell_logs"
     __table_args__ = ({"sqlite_autoincrement": False})
 
-    run_id: UUID = Field(foreign_key="pipeline_runs.id", primary_key=True, description="Run-ID")
+    run_id: UUID = Field(
+        foreign_key="pipeline_runs.id",
+        ondelete="CASCADE",
+        primary_key=True,
+        description="Run-ID",
+    )
     cell_index: int = Field(primary_key=True, description="Index der Code-Zelle (0-basiert)")
     status: str = Field(default="RUNNING", description="SUCCESS | FAILED | RETRYING | RUNNING")
     stdout: str = Field(default="", sa_column=Column(Text()), description="Stdout der Zelle")
@@ -590,7 +607,13 @@ class AuditLogEntry(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True, description="Eindeutige Eintrags-ID")
     created_at: datetime = Field(default_factory=_utc_now, index=True, description="Zeitpunkt der Aktion (UTC)")
-    user_id: Optional[UUID] = Field(default=None, foreign_key="users.id", index=True, description="User der die Aktion ausgeführt hat")
+    user_id: Optional[UUID] = Field(
+        default=None,
+        foreign_key="users.id",
+        ondelete="SET NULL",
+        index=True,
+        description="User der die Aktion ausgeführt hat (NULL, wenn der User gelöscht wurde)",
+    )
     username: str = Field(default="", description="Benutzername zum Zeitpunkt der Aktion (Snapshot)")
     action: str = Field(index=True, description="Aktion z.B. run_start, system_settings_update, user_block, git_sync, downstream_trigger_create, …")
     resource_type: str = Field(index=True, description="Betroffene Ressource: pipeline, run, user, settings, secret, invite")
