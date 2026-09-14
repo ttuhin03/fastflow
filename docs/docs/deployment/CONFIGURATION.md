@@ -97,6 +97,7 @@ Pipeline logs are backed up to S3/MinIO before local deletion (cleanup). Details
 | `S3_REGION` | `us-east-1` | Region (often irrelevant for MinIO). |
 | `S3_PREFIX` | `pipeline-logs` | Prefix for object keys. |
 | `S3_USE_PATH_STYLE` | `true` | Path-style URLs (typical for MinIO). |
+| `S3_EXPECTED_BUCKET_OWNER` | *Empty* | AWS account ID (12 digits) that must own the bucket. When set, every S3 operation is sent with `ExpectedBucketOwner`, so S3 answers `403` instead of acting on a bucket that now belongs to someone else. Leave empty for MinIO. |
 
 Alternatively (or additionally), S3 backup parameters can be managed in the **Settings UI** under **Pipeline & Runs**: values are stored in `orchestrator_settings` (access/secret encrypted). Environment variables still apply; on startup, saved DB values are applied to the running configuration. A **connection test** is available via button or optionally **after saving** (`POST /api/settings/s3/test`, admin only).
 

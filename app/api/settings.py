@@ -27,7 +27,7 @@ from app.core.config import config
 from app.core.notification_api_key_hash import digest_notification_api_token
 from app.models import NotificationApiKey
 from app.services.cleanup import cleanup_logs, cleanup_docker_resources
-from app.services.s3_backup import get_backup_failures, get_last_backup_timestamp
+from app.services.s3_backup import bucket_owner_kwargs, get_backup_failures, get_last_backup_timestamp
 from app.models import PipelineRun, RunStatus, User, UserRole
 from app.services.notifications import send_email_notification, send_teams_notification
 from app.executor import _get_docker_client
@@ -44,6 +44,7 @@ from app.services.audit import log_audit
 from app.services.dependency_audit import get_last_dependency_audit
 from sqlmodel import text
 from botocore.config import Config as BotoConfig
+from botocore.exceptions import ClientError
 import boto3
 
 logger = logging.getLogger(__name__)
@@ -1064,6 +1065,41 @@ class S3ConnectivityTestResponse(BaseModel):
     tested_at: str
 
 
+# Bewusst ohne Details aus der boto3-Exception: die Meldungen gehen an die UI und
+# dürfen weder Endpoint noch Credentials oder interne Netzwerkinfos preisgeben.
+_S3_TEST_FAILED_MESSAGE = (
+    "S3-Verbindungstest fehlgeschlagen. Bitte Konfiguration und Netzwerk prüfen."
+)
+_S3_TEST_FAILED_OWNER_MESSAGE = (
+    "S3-Verbindungstest fehlgeschlagen: Der Bucket gehört nicht der erwarteten "
+    "Account-ID (S3_EXPECTED_BUCKET_OWNER) oder der Zugriff wurde verweigert."
+)
+
+
+def _record_failed_s3_test(
+    session: Session,
+    row: Any,
+    tested_at: datetime,
+    current_user: User,
+    detail: str,
+) -> HTTPException:
+    """
+    Schreibt einen fehlgeschlagenen S3-Verbindungstest nach OrchestratorSettings,
+    auditiert ihn und gibt die passende HTTPException zum Werfen zurück.
+
+    Gibt die Exception zurück statt sie selbst zu werfen, damit am Aufrufer
+    sichtbar bleibt, dass der Zweig abbricht.
+    """
+    row.s3_last_test_at = tested_at
+    row.s3_last_test_status = "failed"
+    row.s3_last_test_error = detail
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    log_audit(session, "s3_connectivity_test", "settings", None, {"status": "failed"}, current_user)
+    return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
+
+
 @router.get("/backup-failures", response_model=BackupFailuresResponse)
 async def get_backup_failures_endpoint(
     current_user: User = Depends(get_current_user),
@@ -1115,7 +1151,8 @@ async def test_s3_connectivity(
             region_name=config.S3_REGION,
             config=boto_cfg,
         )
-        client.head_bucket(Bucket=config.S3_BUCKET)
+        # ExpectedBucketOwner nur mitschicken, wenn konfiguriert (siehe bucket_owner_kwargs)
+        client.head_bucket(Bucket=config.S3_BUCKET, **bucket_owner_kwargs())
         row.s3_last_test_at = tested_at
         row.s3_last_test_status = "success"
         row.s3_last_test_error = None
@@ -1137,19 +1174,20 @@ async def test_s3_connectivity(
         session.refresh(row)
         log_audit(session, "s3_connectivity_test", "settings", None, {"status": "failed", "reason": str(e.detail)}, current_user)
         raise
+    except ClientError as e:
+        # 403 bei gesetztem ExpectedBucketOwner heißt fast immer: Bucket gehört einem
+        # anderen Account. Ohne eigenen Hinweis bliebe davon nur "Konfiguration prüfen".
+        http_status = e.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+        if bucket_owner_kwargs() and http_status == 403:
+            logger.warning("S3 connectivity test failed (bucket owner mismatch or access denied)")
+            raise _record_failed_s3_test(
+                session, row, tested_at, current_user, _S3_TEST_FAILED_OWNER_MESSAGE
+            )
+        logger.warning("S3 connectivity test failed: %s", e)
+        raise _record_failed_s3_test(session, row, tested_at, current_user, _S3_TEST_FAILED_MESSAGE)
     except Exception as e:
         logger.warning("S3 connectivity test failed: %s", e)
-        row.s3_last_test_at = tested_at
-        row.s3_last_test_status = "failed"
-        row.s3_last_test_error = "S3-Verbindungstest fehlgeschlagen. Bitte Konfiguration und Netzwerk prüfen."
-        session.add(row)
-        session.commit()
-        session.refresh(row)
-        log_audit(session, "s3_connectivity_test", "settings", None, {"status": "failed"}, current_user)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="S3-Verbindungstest fehlgeschlagen. Bitte Konfiguration und Netzwerk prüfen.",
-        )
+        raise _record_failed_s3_test(session, row, tested_at, current_user, _S3_TEST_FAILED_MESSAGE)
 
 
 @router.post("/cleanup/force", response_model=Dict[str, Any])

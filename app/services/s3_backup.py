@@ -72,6 +72,20 @@ def get_backup_failures() -> List[Dict[str, str]]:
     return list(_backup_failures)
 
 
+def bucket_owner_kwargs() -> Dict[str, str]:
+    """
+    Liefert `{"ExpectedBucketOwner": <Account-ID>}`, wenn S3_EXPECTED_BUCKET_OWNER
+    konfiguriert ist, sonst ein leeres Dict.
+
+    Damit prüft S3 bei jeder Operation, dass der Bucket noch dem erwarteten
+    Account gehört (403 statt stiller Ausführung). Bewusst optional: MinIO und
+    andere S3-kompatible Endpoints kennen keine AWS-Account-IDs, dort würde ein
+    fest gesetzter Parameter die Backups brechen.
+    """
+    owner = getattr(config, "S3_EXPECTED_BUCKET_OWNER", None)
+    return {"ExpectedBucketOwner": owner} if owner else {}
+
+
 def _get_client():
     """Erzeugt den boto3 S3-Client lazy (MinIO-kompatibel)."""
     global _s3_client
@@ -135,12 +149,14 @@ class S3BackupService:
         Wirft bei Fehlern (ClientError, IOError, ...).
         """
         client = _get_client()
+        # ExpectedBucketOwner nur mitschicken, wenn konfiguriert (siehe bucket_owner_kwargs)
+        extra_args: Dict[str, Any] = {"Metadata": metadata, **bucket_owner_kwargs()}
         with open(path, "rb") as f:
             client.upload_fileobj(
                 f,
                 Bucket=bucket,
                 Key=key,
-                ExtraArgs={"Metadata": metadata},
+                ExtraArgs=extra_args,
             )
 
     async def upload_run_logs(self, run: PipelineRun) -> Tuple[bool, Optional[str]]:

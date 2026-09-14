@@ -450,7 +450,21 @@ class Config:
     
     S3_USE_PATH_STYLE: bool = os.getenv("S3_USE_PATH_STYLE", "true").lower() == "true"
     """Path-Style-URLs für S3 (für MinIO typischerweise true)."""
-    
+
+    S3_EXPECTED_BUCKET_OWNER: Optional[str] = os.getenv("S3_EXPECTED_BUCKET_OWNER") or None
+    """
+    AWS-Account-ID des erwarteten Bucket-Eigentümers (12 Ziffern).
+
+    Wenn gesetzt, wird jede S3-Operation mit `ExpectedBucketOwner` ausgeführt:
+    Gehört der Bucket einer anderen Account-ID, antwortet S3 mit 403 statt die
+    Operation auszuführen. Das schützt gegen Bucket-Sniping — wird der Bucket
+    gelöscht und der Name von einem Fremd-Account neu registriert, laufen Logs
+    sonst unbemerkt an den Angreifer.
+
+    Leer lassen für MinIO und andere S3-kompatible Speicher: dort gibt es keine
+    AWS-Account-IDs, und der Parameter würde je nach Implementierung abgelehnt.
+    """
+
     # Secrets-Verschlüsselung
     ENCRYPTION_KEY: Optional[str] = os.getenv("ENCRYPTION_KEY")
     """
