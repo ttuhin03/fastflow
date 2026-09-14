@@ -51,7 +51,7 @@ def _parse_iso_datetime(value: Optional[str], param_name: str) -> Optional[datet
 
 
 @router.get("", response_model=AuditListResponse)
-async def get_audit_log(
+def get_audit_log(
     user_id: Optional[str] = Query(None, description="Filter nach User-ID (UUID)"),
     action: Optional[str] = Query(None, description="Filter nach Aktion (z.B. run_start, run_cancel)"),
     resource_type: Optional[str] = Query(None, description="Filter nach Ressourcentyp (pipeline, run, user, settings)"),

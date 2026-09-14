@@ -20,6 +20,11 @@ Fast-Flow is configured primarily via environment variables in a `.env` file. Th
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DATABASE_URL` | *Empty* (SQLite) | Database connection string. If empty, SQLite (`./data/fastflow.db`) is used. For PostgreSQL: `postgresql://user:password@host:5432/dbname`. |
+| `API_THREADPOOL_WORKERS` | `40` | Maximum number of API requests handled in parallel. Synchronous endpoints run in AnyIO's worker threadpool; this sets its capacity. Each of these threads can hold one database connection, so raising it means raising `DB_POOL_SIZE` too. |
+| `DB_POOL_SIZE` | `0` (derived) | Number of pooled database connections. `0` derives it from `API_THREADPOOL_WORKERS` plus a reserve for background work (scheduler, cleanup, executor). Set a fixed value only when an external limit applies, e.g. PgBouncer or a Postgres connection cap. |
+| `DB_MAX_OVERFLOW` | `10` | Extra connections opened above `DB_POOL_SIZE` during load spikes; closed again afterwards. |
+| `DB_POOL_TIMEOUT_SECONDS` | `10` | How long a request waits for a free connection before failing. Deliberately below SQLAlchemy's default of 30 s: a fast error is more useful than a request that hangs while occupying a worker thread. |
+| `SQLITE_BUSY_TIMEOUT_MS` | `15000` | How long SQLite waits for a held write lock before returning "database is locked" (`PRAGMA busy_timeout`). Only relevant for SQLite: readers do not block under WAL, but writers serialise. |
 
 ## Directories
 

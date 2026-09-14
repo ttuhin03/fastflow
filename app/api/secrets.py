@@ -63,7 +63,7 @@ async def encrypt_for_pipeline(
 
 
 @router.get("", response_model=Dict[str, Any])
-async def get_secrets(
+def get_secrets(
     limit: Optional[int] = Query(None, ge=1, le=500, description="Max. Anzahl Secrets (ohne Angabe: alle)"),
     offset: int = Query(0, ge=0, description="Offset für Pagination"),
     session: Session = Depends(get_session),

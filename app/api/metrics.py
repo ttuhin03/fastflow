@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse, JSONResponse
 from sqlmodel import Session
 
-from app.core.database import get_session
+from app.core.database import get_session, release_connection
 from app.models import PipelineRun, User
 from app.executor import get_metrics_queue
 from app.auth import get_current_user
@@ -160,16 +160,25 @@ async def stream_run_metrics(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Run nicht gefunden: {run_id}"
         )
-    
+
+    # Ab hier greift der Endpoint nicht mehr auf die Datenbank zu, der Stream kann
+    # aber beliebig lange offen bleiben. Die Poolverbindung deshalb sofort
+    # zurückgeben: FastAPI schließt die Session der Dependency erst, wenn die
+    # Response fertig gesendet ist — bei SSE also erst beim Verbindungsabbruch des
+    # Clients. Ohne die Freigabe belegt jeder offene Stream dauerhaft eine
+    # Verbindung (siehe app.core.database.release_connection).
+    metrics_file_ref = run.metrics_file
+    release_connection(session)
+
     # Metrics-Queue abrufen
     metrics_queue = get_metrics_queue(run_id)
     
     if metrics_queue is None:
         # Queue nicht vorhanden (Run ist bereits beendet oder noch nicht gestartet)
         # Versuche Metrics aus Datei zu lesen (für abgeschlossene Runs)
-        if run.metrics_file:
+        if metrics_file_ref:
             try:
-                metrics_file_path = _resolve_metrics_path(run.metrics_file)
+                metrics_file_path = _resolve_metrics_path(metrics_file_ref)
             except HTTPException:
                 raise
             except (ValueError, OSError):

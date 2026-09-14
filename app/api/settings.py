@@ -523,7 +523,7 @@ class SettingsUpdate(BaseModel):
 
 
 @router.get("", response_model=SettingsResponse)
-async def get_settings(
+def get_settings(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> SettingsResponse:
@@ -587,7 +587,7 @@ async def get_settings(
 
 
 @router.put("", response_model=Dict[str, str])
-async def update_settings(
+def update_settings(
     settings: SettingsUpdate,
     current_user: User = Depends(require_admin),
     session: Session = Depends(get_session),
@@ -704,7 +704,7 @@ class CreateNotificationApiKeyResponse(BaseModel):
 
 
 @router.post("/notification-api/keys", response_model=CreateNotificationApiKeyResponse, status_code=status.HTTP_201_CREATED)
-async def create_notification_api_key(
+def create_notification_api_key(
     body: Optional[CreateNotificationApiKeyRequest] = None,
     current_user: User = Depends(require_write),
     session: Session = Depends(get_session),
@@ -729,7 +729,7 @@ async def create_notification_api_key(
 
 
 @router.delete("/notification-api/keys/{key_id}", status_code=status.HTTP_200_OK)
-async def delete_notification_api_key(
+def delete_notification_api_key(
     key_id: int,
     current_user: User = Depends(require_write),
     session: Session = Depends(get_session),
@@ -790,7 +790,7 @@ async def get_dependency_audit_last(
 
 
 @router.put("/system", response_model=SystemSettingsResponse)
-async def update_system_settings_endpoint(
+def update_system_settings_endpoint(
     body: SystemSettingsUpdate,
     current_user: User = Depends(require_admin),
     session: Session = Depends(get_session),
@@ -1124,7 +1124,7 @@ async def get_backup_failures_endpoint(
 
 
 @router.post("/s3/test", response_model=S3ConnectivityTestResponse)
-async def test_s3_connectivity(
+def test_s3_connectivity(
     current_user: User = Depends(require_admin),
     session: Session = Depends(get_session),
 ) -> S3ConnectivityTestResponse:
