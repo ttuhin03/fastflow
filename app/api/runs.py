@@ -13,10 +13,10 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlmodel import Session, select, func
 
+from app.auth.principal import Principal, require_scope, require_scope_user
 from app.core.database import get_session
-from app.models import PipelineRun, RunStatus, User, RunCellLog
+from app.models import ApiTokenScope, PipelineRun, RunStatus, User, RunCellLog
 from app.executor import cancel_run, check_container_health, run_pipeline
-from app.auth import get_current_user, require_write
 from app.schemas.runs import RunsResponse
 from app.services.audit import log_audit
 from app.middleware.rate_limiting import limiter
@@ -65,7 +65,7 @@ async def get_recent_runs_per_pipeline(
     request: Request,
     limit_per_pipeline: int = Query(5, ge=1, le=10, description="Anzahl Runs pro Pipeline"),
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_scope_user(ApiTokenScope.READ)),
 ) -> Dict[str, Any]:
     """
     Gibt die letzten N Runs pro Pipeline zurück (Batch-Endpoint).
@@ -128,7 +128,7 @@ async def get_runs(
     offset: int = Query(0, ge=0, description="Offset für Pagination"),
     sort_order: Literal["asc", "desc"] = Query("desc", description="Sortierung nach Startzeit: desc (neueste zuerst) oder asc (älteste zuerst)"),
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_scope_user(ApiTokenScope.READ))
 ) -> RunsResponse:
     """
     Gibt alle Runs anzeigen (mit Filterung und Pagination).
@@ -218,7 +218,7 @@ async def get_run_details(
     request: Request,
     run_id: UUID,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    principal: Principal = Depends(require_scope(ApiTokenScope.READ))
 ) -> Dict[str, Any]:
     """
     Gibt Details eines Runs zurück.
@@ -249,8 +249,15 @@ async def get_run_details(
         error_message = run.env_vars.get("_fastflow_error_message")
     
     # Zellen-Logs (Notebook-Pipelines) laden
-    cell_logs_stmt = select(RunCellLog).where(RunCellLog.run_id == run_id).order_by(RunCellLog.cell_index)
-    cell_logs = list(session.exec(cell_logs_stmt).all())
+    # Erst die Berechtigung, dann die Abfrage: ohne logs-Scope werden die Zeilen
+    # ohnehin verworfen, und eine Notebook-Pipeline kann hunderte Megabyte
+    # stdout tragen. Ein read-Token wäre sonst ein unbegrenzter Verstärker für
+    # Speicher und IO, obwohl es die Daten nie zu sehen bekommt.
+    may_see_cell_logs = principal.has_scope(ApiTokenScope.LOGS)
+    cell_logs = []
+    if may_see_cell_logs:
+        cell_logs_stmt = select(RunCellLog).where(RunCellLog.run_id == run_id).order_by(RunCellLog.cell_index)
+        cell_logs = list(session.exec(cell_logs_stmt).all())
     cell_logs_data = [
         {
             "cell_index": c.cell_index,
@@ -277,7 +284,12 @@ async def get_run_details(
         "error_type": error_type,  # "pipeline_error" oder "infrastructure_error"
         "error_message": error_message,
         "setup_duration": run.setup_duration,
+        # Zell-Ausgaben sind Nutzdaten, keine Metadaten: sie brauchen den
+        # logs-Scope. Ohne ihn bleibt der Rest der Antwort nutzbar – der
+        # Aufrufer sieht Status und Fehlertyp, nur nicht die Ausgaben selbst.
+        # Eine Browser-Session hat alle Scopes ihrer Rolle und ist nicht betroffen.
         "cell_logs": cell_logs_data,
+        "cell_logs_withheld": not may_see_cell_logs,
         "git_sha": run.git_sha,
         "git_branch": run.git_branch,
         "git_commit_message": run.git_commit_message,
@@ -288,7 +300,7 @@ async def get_run_details(
 async def get_run_cells(
     run_id: UUID,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_scope_user(ApiTokenScope.LOGS))
 ) -> List[Dict[str, Any]]:
     """
     Gibt die Zellen-Logs eines Runs zurück (Notebook-Pipelines).
@@ -324,7 +336,7 @@ async def get_run_cells(
 async def cancel_run_endpoint(
     run_id: UUID,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_write)
+    principal: Principal = Depends(require_scope(ApiTokenScope.RUN))
 ) -> Dict[str, str]:
     """
     Bricht einen laufenden Run ab (Container stoppen).
@@ -363,7 +375,10 @@ async def cancel_run_endpoint(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Fehler beim Abbrechen des Runs: {run_id}"
         )
-    log_audit(session, "run_cancel", "run", str(run_id), None, current_user)
+    log_audit(
+        session, "run_cancel", "run", str(run_id),
+        details=principal.audit_details(), user=principal.user,
+    )
     return {
         "message": f"Run {run_id} wurde erfolgreich abgebrochen"
     }
@@ -373,7 +388,7 @@ async def cancel_run_endpoint(
 async def retry_run(
     run_id: UUID,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_write),
+    principal: Principal = Depends(require_scope(ApiTokenScope.RUN)),
 ) -> Dict[str, Any]:
     """
     Startet einen neuen Run mit denselben Parametern und Env-Variablen wie der angegebene Run.
@@ -408,8 +423,8 @@ async def retry_run(
         )
         log_audit(
             session, "run_retry", "run", str(run_id),
-            details={"new_run_id": str(new_run.id)},
-            user=current_user,
+            details={"new_run_id": str(new_run.id), **principal.audit_details()},
+            user=principal.user,
         )
         return {
             "id": str(new_run.id),
@@ -439,7 +454,7 @@ async def retry_run(
 async def get_run_health(
     run_id: UUID,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_scope_user(ApiTokenScope.READ))
 ) -> Dict[str, Any]:
     """
     Gibt Container-Health-Status für einen Run zurück.

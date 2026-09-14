@@ -8,15 +8,22 @@ Dieses Modul definiert alle SQLModel-Models für die Datenbank:
 - Secret (Verschlüsselte Secrets)
 - User (Benutzer für Authentifizierung)
 - Session (Session-Tokens für persistente Authentifizierung)
+- ApiToken (persönliche API-Tokens für nicht-interaktive Clients)
 """
 
 from datetime import date, datetime, timezone
 from enum import Enum
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from uuid import UUID, uuid4
 
 from sqlalchemy import Enum as SAEnum, Text
 from sqlmodel import SQLModel, Field, JSON, Column
+
+
+# Foreign-Key-Ziel der users-Tabelle. Vier Modelle verweisen darauf; als Konstante,
+# damit ein Umbenennen der Tabelle nicht an ebenso vielen Stellen einzeln nachgezogen
+# werden muss – ein übersehenes Vorkommen fiele erst beim Anlegen des Schemas auf.
+USERS_ID_FK = "users.id"
 
 
 def _utc_now() -> datetime:
@@ -53,6 +60,27 @@ class UserStatus(str, Enum):
     ACTIVE = "active"
     PENDING = "pending"
     REJECTED = "rejected"
+
+
+class ApiTokenScope(str, Enum):
+    """Berechtigungsbereich eines API-Tokens.
+
+    Geschnitten nach Risikoklasse, nicht nach Endpoint – ein Token für
+    Laufzeit-Statistiken soll nicht zwangsläufig auch Logs lesen dürfen.
+
+    - READ:   Metadaten (Pipelines, Runs, Stats, Dependencies, Graph)
+    - LOGS:   Log-Inhalte und Cell-stdout/stderr (potenziell Nutzdaten/Credentials)
+    - SOURCE: Pipeline-Quelldateien und pipeline.json
+    - RUN:    Runs starten, abbrechen, wiederholen (setzt UserRole.WRITE voraus)
+
+    Es gibt bewusst keinen Admin-Scope: Settings, Nutzerverwaltung, Secrets und
+    Deploy-Keys bleiben ausschließlich über eine Browser-Session erreichbar,
+    damit ein entwendetes Token die Instanz nicht umkonfigurieren kann.
+    """
+    READ = "read"
+    LOGS = "logs"
+    SOURCE = "source"
+    RUN = "run"
 
 
 class EphemeralTokenType(str, Enum):
@@ -582,6 +610,66 @@ class NotificationApiKey(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utc_now)
 
 
+class ApiToken(SQLModel, table=True):
+    """Persönliches API-Token für nicht-interaktive Clients (CI, Skripte, MCP).
+
+    Im Unterschied zu :class:`Session` entsteht ein Token nicht aus einem
+    OAuth-Flow, sondern wird vom Nutzer selbst erzeugt. Gespeichert wird nur der
+    SHA-256-Digest (siehe app.core.api_token_hash); der Klartext existiert
+    ausschließlich in der Antwort des erzeugenden Requests.
+
+    Die effektive Berechtigung ist stets die Schnittmenge aus ``scopes`` und den
+    Scopes, die die Rolle des Besitzers zulässt (siehe app.auth.principal).
+    Dadurch entwertet ein Rollenentzug bestehende Tokens sofort mit, ohne dass
+    sie einzeln widerrufen werden müssen.
+    """
+
+    __tablename__ = "api_tokens"
+
+    id: UUID = Field(
+        default_factory=uuid4,
+        primary_key=True,
+        description="Eindeutige Token-ID (auch in Audit-Einträgen referenziert)"
+    )
+    token_hash: str = Field(
+        unique=True,
+        index=True,
+        description="SHA-256-Hex-Digest des vollständigen Tokens (Nachschlage-Schlüssel)"
+    )
+    prefix: str = Field(
+        description="Öffentlicher Teil des Tokens (8 Zeichen), zur Wiedererkennung in der UI"
+    )
+    label: str = Field(
+        description="Vom Nutzer vergebene Bezeichnung, z.B. 'CI nightly'"
+    )
+    user_id: UUID = Field(
+        foreign_key=USERS_ID_FK,
+        index=True,
+        description="Besitzer des Tokens"
+    )
+    scopes: List[str] = Field(
+        default_factory=list,
+        sa_column=Column(JSON, nullable=False),
+        description="Gewährte Scopes als Liste von ApiTokenScope-Werten"
+    )
+    expires_at: datetime = Field(
+        index=True,
+        description="Ablauf-Zeitpunkt (UTC). Pflicht – ein Token ohne Ablauf ist ein Passwort ohne Rotation"
+    )
+    last_used_at: Optional[datetime] = Field(
+        default=None,
+        description="Letzte erfolgreiche Verwendung (UTC); gedrosselt geschrieben, siehe app.auth.principal"
+    )
+    revoked_at: Optional[datetime] = Field(
+        default=None,
+        description="Zeitpunkt des Widerrufs (UTC); None = aktiv. Bewusst kein Hard-Delete, damit Audit-Einträge zuordenbar bleiben"
+    )
+    created_at: datetime = Field(
+        default_factory=_utc_now,
+        description="Erstellungs-Zeitpunkt (UTC)"
+    )
+
+
 class AuditLogEntry(SQLModel, table=True):
     """
     Audit-Log: Wer hat wann welche Aktion ausgeführt (Compliance, Nachvollziehbarkeit).
@@ -590,7 +678,7 @@ class AuditLogEntry(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True, description="Eindeutige Eintrags-ID")
     created_at: datetime = Field(default_factory=_utc_now, index=True, description="Zeitpunkt der Aktion (UTC)")
-    user_id: Optional[UUID] = Field(default=None, foreign_key="users.id", index=True, description="User der die Aktion ausgeführt hat")
+    user_id: Optional[UUID] = Field(default=None, foreign_key=USERS_ID_FK, index=True, description="User der die Aktion ausgeführt hat")
     username: str = Field(default="", description="Benutzername zum Zeitpunkt der Aktion (Snapshot)")
     action: str = Field(index=True, description="Aktion z.B. run_start, system_settings_update, user_block, git_sync, downstream_trigger_create, …")
     resource_type: str = Field(index=True, description="Betroffene Ressource: pipeline, run, user, settings, secret, invite")
@@ -619,7 +707,7 @@ class Session(SQLModel, table=True):
         description="JWT-Token (eindeutig)"
     )
     user_id: UUID = Field(
-        foreign_key="users.id",
+        foreign_key=USERS_ID_FK,
         index=True,
         description="Verknüpfte User-ID"
     )
@@ -655,6 +743,24 @@ class EphemeralToken(SQLModel, table=True):
         unique=True,
         index=True,
         description="Opaker, zufälliger Token-Wert"
+    )
+    issued_to_user_id: Optional[UUID] = Field(
+        default=None,
+        foreign_key=USERS_ID_FK,
+        index=True,
+        description=(
+            "Nutzer, für den das Token ausgestellt wurde. None nur für Alt-Zeilen. "
+            "Beim Einlösen wird geprüft, ob dieser Nutzer noch aktiv ist"
+        ),
+    )
+    issued_via_api_token_id: Optional[UUID] = Field(
+        default=None,
+        foreign_key="api_tokens.id",
+        index=True,
+        description=(
+            "API-Token, mit dem dieses Kurzzeit-Token angefordert wurde (None bei "
+            "Browser-Session). Wird es widerrufen, verfällt auch dieses Token"
+        ),
     )
     token_type: EphemeralTokenType = Field(
         sa_column=Column(

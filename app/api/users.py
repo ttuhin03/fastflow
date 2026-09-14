@@ -333,6 +333,7 @@ async def update_user(
     if request.role is not None:
         user.role = request.role
     
+    newly_blocked = request.blocked is True and not user.blocked
     if request.blocked is not None:
         user.blocked = request.blocked
     
@@ -340,12 +341,26 @@ async def update_user(
     session.commit()
     session.refresh(user)
 
+    # Sperren muss hier dasselbe bewirken wie über POST /users/{id}/block:
+    # ohne das Löschen der Sessions behielt ein so gesperrter Nutzer sein
+    # bestehendes JWT und damit Zugriff, bis es von selbst ablief.
+    # API-Tokens sind nicht betroffen – die prüfen die Sperre bei jedem Request.
+    deleted_sessions = delete_all_user_sessions(session, user.id) if newly_blocked else 0
+    if newly_blocked:
+        logger.info(
+            "Nutzer %s gesperrt (via update): %d Session(s) beendet",
+            user.username,
+            deleted_sessions,
+        )
+
     if request.role is not None or request.blocked is not None:
         details: Dict[str, Any] = {}
         if request.role is not None:
             details["role"] = user.role.value
         if request.blocked is not None:
             details["blocked"] = user.blocked
+            if newly_blocked:
+                details["sessions_deleted"] = deleted_sessions
         log_audit(session, "user_update", "user", str(user_id), details, current_user)
 
     logger.info(f"Admin '{current_user.username}' hat Benutzer '{user.username}' aktualisiert")

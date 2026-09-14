@@ -18,11 +18,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
 from sqlmodel import Session, select, func
 from sqlalchemy import delete
 
+from app.auth.principal import Principal, require_scope, require_scope_user
 from app.core.database import get_session
-from app.models import DownstreamTrigger, Pipeline, PipelineDailyStat, PipelineRun, RunStatus, User
+from app.models import ApiTokenScope, DownstreamTrigger, Pipeline, PipelineDailyStat, PipelineRun, RunStatus, User
 from app.executor import run_pipeline
 from app.services.pipeline_discovery import discover_pipelines, get_pipeline as get_discovered_pipeline
-from app.auth import require_write, get_current_user
+from app.auth import require_write
 from app.services.audit import log_audit
 from app.middleware.rate_limiting import limiter
 from app.core.config import config
@@ -254,6 +255,47 @@ def _metadata_matches_tag_terms(
     return False
 
 
+# Felder aus pipeline.json, die nicht in jede Antwort gehören.
+#
+# webhook_key ist ein *Credential*: POST /webhooks/{pipeline}/{key} hat bewusst
+# keine Auth-Dependency, der Schlüssel allein startet also einen Run. Wer ihn
+# lesen kann, umgeht damit den run-Scope vollständig. Er wird deshalb für jedes
+# API-Token entfernt – auch für eines mit run-Scope, das ihn nicht braucht.
+#
+# encrypted_env, secrets und default_env stammen aus derselben Datei, die
+# /pipelines/{name}/source hinter dem source-Scope schützt. Ohne diesen Filter
+# wäre der source-Scope Dokumentation statt Grenze.
+_WEBHOOK_FIELDS = ("webhook_key",)
+_SOURCE_DERIVED_FIELDS = ("encrypted_env", "secrets", "default_env")
+
+
+def _filtered_metadata(metadata: Dict[str, Any], principal: Principal) -> Dict[str, Any]:
+    """Entfernt Felder, die der Principal nicht sehen darf.
+
+    Eine Browser-Session besitzt alle Scopes ihrer Rolle und behält die
+    vollständige Ansicht – die UI zeigt Webhook-URLs und Env-Chips in
+    PipelineDetail und wäre sonst still kaputt.
+    """
+    if principal.auth_kind != "token":
+        return metadata
+
+    cleaned = {k: v for k, v in metadata.items() if k not in _WEBHOOK_FIELDS}
+    if not principal.has_scope(ApiTokenScope.SOURCE):
+        cleaned = {k: v for k, v in cleaned.items() if k not in _SOURCE_DERIVED_FIELDS}
+
+    # schedules[] tragen eigene webhook_keys und eigene Env-Overrides.
+    schedules = cleaned.get("schedules")
+    if isinstance(schedules, list):
+        drop = set(_WEBHOOK_FIELDS)
+        if not principal.has_scope(ApiTokenScope.SOURCE):
+            drop |= set(_SOURCE_DERIVED_FIELDS)
+        cleaned["schedules"] = [
+            {k: v for k, v in entry.items() if k not in drop} if isinstance(entry, dict) else entry
+            for entry in schedules
+        ]
+    return cleaned
+
+
 @router.get("", response_model=List[PipelineResponse])
 async def get_pipelines(
     tags: Optional[str] = Query(
@@ -261,7 +303,7 @@ async def get_pipelines(
         description="Komma-getrennte Suchbegriffe; Pipelines mit Tag, das einen Begriff als Teilstring enthält (Groß/Klein egal), z.B. tags=prod,ml",
     ),
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    principal: Principal = Depends(require_scope(ApiTokenScope.READ)),
 ) -> List[PipelineResponse]:
     """
     Gibt eine Liste aller verfügbaren Pipelines zurück (via Discovery, inkl. Statistiken).
@@ -325,7 +367,7 @@ async def get_pipelines(
                 successful_runs=pipeline.successful_runs,
                 failed_runs=pipeline.failed_runs,
                 enabled=discovered.is_enabled(),
-                metadata=discovered.metadata.to_dict()
+                metadata=_filtered_metadata(discovered.metadata.to_dict(), principal)
             )
             pipelines_response.append(response)
 
@@ -343,7 +385,7 @@ async def get_pipelines(
 async def get_pipelines_dependencies(
     request: Request,
     audit: bool = Query(False, description="Run pip-audit for vulnerabilities (can be slow)"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_scope_user(ApiTokenScope.SOURCE)),
 ) -> List[Dict[str, Any]]:
     """
     Returns dependencies (packages + versions) for all pipelines that have requirements.txt.
@@ -388,7 +430,7 @@ async def get_pipelines_dependencies(
 @router.get("/graph", response_model=PipelineGraphResponse)
 async def get_pipelines_graph(
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_scope_user(ApiTokenScope.READ)),
 ) -> PipelineGraphResponse:
     """
     Gibt den gerichteten Pipeline-Abhängigkeitsgraphen zurück.
@@ -423,7 +465,7 @@ async def get_pipelines_graph(
 async def get_pipeline_dependencies(
     name: str,
     audit: bool = Query(False, description="Run pip-audit for vulnerabilities"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_scope_user(ApiTokenScope.SOURCE)),
 ) -> Dict[str, Any]:
     """
     Returns dependencies (packages + versions) for one pipeline.
@@ -452,7 +494,7 @@ async def get_pipeline_dependencies(
 async def start_pipeline(
     name: str,
     request: RunPipelineRequest,
-    current_user: User = Depends(require_write),
+    principal: Principal = Depends(require_scope(ApiTokenScope.RUN)),
     session: Session = Depends(get_session),
 ) -> Dict[str, Any]:
     """
@@ -482,8 +524,15 @@ async def start_pipeline(
         )
         log_audit(
             session, "run_start", "pipeline", name,
-            details={"run_id": str(run.id), "run_config_id": run_config_id},
-            user=current_user,
+            # audit_details() hält fest, ob der Start aus dem Browser oder von
+            # einem automatisierten Client kam – ohne diese Attribution verliert
+            # das Audit-Log mit wachsender Automatisierung seinen Wert.
+            details={
+                "run_id": str(run.id),
+                "run_config_id": run_config_id,
+                **principal.audit_details(),
+            },
+            user=principal.user,
         )
         return {
             "id": str(run.id),
@@ -519,7 +568,7 @@ async def get_pipeline_runs(
     name: str,
     limit: int = Query(100, ge=1, le=1000, description="Maximale Anzahl Runs (Standard: 100)"),
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_scope_user(ApiTokenScope.READ))
 ) -> List[Dict[str, Any]]:
     """
     Gibt die Historie eines Pipeline-Runs zurück.
@@ -575,7 +624,7 @@ async def get_pipeline_runs(
 async def get_pipeline_stats(
     name: str,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_scope_user(ApiTokenScope.READ))
 ) -> PipelineStatsResponse:
     """
     Gibt Pipeline-Statistiken abrufen (total_runs, successful_runs, failed_runs).
@@ -703,7 +752,7 @@ async def get_pipeline_daily_stats(
     start_date: Optional[str] = Query(None, description="Startdatum für Filterung (ISO-Format: YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="Enddatum für Filterung (ISO-Format: YYYY-MM-DD)"),
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_scope_user(ApiTokenScope.READ))
 ) -> DailyStatsResponse:
     """
     Gibt tägliche Pipeline-Statistiken zurück, gruppiert nach Datum.
@@ -741,7 +790,7 @@ async def get_pipeline_daily_stats(
 @router.get("/{name}/source", response_model=PipelineSourceFilesResponse)
 async def get_pipeline_source_files(
     name: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_scope_user(ApiTokenScope.SOURCE))
 ) -> PipelineSourceFilesResponse:
     """
     Gibt die Quelldateien einer Pipeline zurück (main.py, requirements.txt, pipeline.json).
@@ -804,7 +853,7 @@ async def get_pipeline_source_files(
 @router.get("/{name}/encrypted-env", response_model=Dict[str, List[str]])
 async def get_pipeline_encrypted_env_keys(
     name: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_scope_user(ApiTokenScope.READ)),
 ) -> Dict[str, List[str]]:
     """
     Gibt die Keys der in pipeline.json unter encrypted_env eingetragenen Variablen zurück (ohne Werte).
@@ -824,7 +873,7 @@ async def get_pipeline_encrypted_env_keys(
 async def get_downstream_triggers(
     name: str,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_scope_user(ApiTokenScope.READ)),
 ) -> List[DownstreamTriggerResponse]:
     """
     Gibt alle Downstream-Triggert für eine Pipeline zurück (JSON + DB gemergt).
@@ -1008,7 +1057,7 @@ async def get_all_pipelines_daily_stats(
     start_date: Optional[str] = Query(None, description="Startdatum für Filterung (ISO-Format: YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="Enddatum für Filterung (ISO-Format: YYYY-MM-DD)"),
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_scope_user(ApiTokenScope.READ))
 ) -> DailyStatsResponse:
     """
     Gibt tägliche Statistiken für alle Pipelines kombiniert zurück.
@@ -1034,7 +1083,7 @@ async def get_all_pipelines_daily_stats(
 @router.get("/summary-stats", response_model=Dict[str, Any])
 async def get_summary_stats(
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_scope_user(ApiTokenScope.READ)),
 ) -> Dict[str, Any]:
     """
     Aggregierte Run-Statistiken für die letzten 24 Stunden und 7 Tage.

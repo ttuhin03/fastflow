@@ -17,6 +17,7 @@ from app.api import (
     secrets,
     settings,
     sync,
+    tokens,
     users,
     version,
     webhooks,
@@ -37,5 +38,6 @@ ROUTERS = [
     users.router,
     webhooks.router,
     notifications.router,
+    tokens.router,
     version.router,
 ]

@@ -1108,7 +1108,8 @@
     "pipeline": "Pipeline & Runs",
     "notifications": "Benachrichtigungen",
     "gitSync": "Git Sync",
-    "nutzer": "Nutzer"
+    "nutzer": "Nutzer",
+    "apiTokens": "API-Tokens"
   },
   "secrets": {
     "adminOnlyTitle": "Nur für Administratoren",
@@ -1200,5 +1201,51 @@
   "runStatusCircles": {
     "noRun": "Kein Run",
     "running": "Läuft…"
+  },
+  "apiTokens": {
+    "intro": "Persönliche API-Tokens erlauben nicht-interaktiven Zugriff auf die API – für CI-Jobs, Skripte und Agenten. Sie gehören dir und sind nie mächtiger als deine Rolle.",
+    "newTokenTitle": "Neues Token erzeugen",
+    "existingTitle": "Vorhandene Tokens",
+    "labelField": "Bezeichnung",
+    "labelPlaceholder": "z.B. CI nightly",
+    "scopesField": "Berechtigungen",
+    "expiryField": "Gültigkeit (Tage)",
+    "expiryHint": "1 bis {{max}} Tage. Ein Token ohne Ablauf ist ein Passwort ohne Rotation.",
+    "createButton": "Token erzeugen",
+    "created": "Token erzeugt",
+    "createError": "Token konnte nicht erzeugt werden",
+    "shownOnceTitle": "Dieses Token wird nur einmal angezeigt",
+    "shownOnceHint": "Kopiere es jetzt und lege es sicher ab. Es wird nur als Hash gespeichert und lässt sich später nicht erneut anzeigen.",
+    "copy": "Kopieren",
+    "copied": "Token in die Zwischenablage kopiert",
+    "copyFailed": "Kopieren fehlgeschlagen – bitte manuell markieren",
+    "storedIt": "Habe ich gespeichert",
+    "showRevoked": "Widerrufene anzeigen",
+    "empty": "Noch keine Tokens angelegt.",
+    "loadError": "Tokens konnten nicht geladen werden",
+    "noScopes": "Deine Rolle erlaubt derzeit keine Token-Berechtigungen.",
+    "colLabel": "Bezeichnung",
+    "colOwner": "Besitzer",
+    "colScopes": "Berechtigungen",
+    "colExpires": "Läuft ab",
+    "colLastUsed": "Zuletzt genutzt",
+    "revoke": "Widerrufen",
+    "revoked": "Token widerrufen",
+    "revokeError": "Token konnte nicht widerrufen werden",
+    "revokeConfirm": "Token „{{label}}“ wirklich widerrufen? Clients, die es nutzen, verlieren sofort den Zugriff.",
+    "stateRevoked": "widerrufen",
+    "stateExpired": "abgelaufen",
+    "neverUsed": "nie",
+    "risk": {
+      "low": "geringes Risiko",
+      "medium": "mittleres Risiko",
+      "high": "hohes Risiko"
+    },
+    "scopeDesc": {
+      "read": "Pipelines, Runs, Statistiken und Abhängigkeiten lesen. Metadaten ohne Nutzdaten.",
+      "logs": "Log-Inhalte und Zell-Ausgaben lesen. Hier können Nutzdaten und Zugangsdaten durchlaufen.",
+      "source": "Pipeline-Quelldateien und pipeline.json lesen.",
+      "run": "Runs starten, abbrechen und wiederholen. Erfordert Schreibrechte."
+    }
   }
 }

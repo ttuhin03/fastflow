@@ -19,6 +19,12 @@ from app.auth.auth import (
     verify_log_download_token,
     verify_token,
 )
+from app.auth.principal import (
+    Principal,
+    get_principal,
+    require_scope,
+    scopes_for_role,
+)
 from app.auth.github_oauth import (
     delete_oauth_state,
     generate_oauth_state,
@@ -64,6 +70,10 @@ __all__ = [
     "verify_log_download_token",
     "verify_token",
     "require_write",
+    "Principal",
+    "get_principal",
+    "require_scope",
+    "scopes_for_role",
     "delete_oauth_state",
     "generate_oauth_state",
     "get_oauth_state",

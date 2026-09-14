@@ -24,6 +24,7 @@ from sqlmodel import SQLModel, Session, create_engine, text
 
 from app.core.config import config
 from app.models import (
+    ApiToken,
     Invitation,
     NotificationApiKey,
     OrchestratorSettings,

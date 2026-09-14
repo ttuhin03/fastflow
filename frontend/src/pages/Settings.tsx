@@ -16,6 +16,7 @@ import StorageStats from '../components/StorageStats'
 import SystemMetrics from '../components/SystemMetrics'
 import Sync from './Sync'
 import Users from './Users'
+import ApiTokens from './ApiTokens'
 import { getErrorDetail } from '../utils/apiError'
 import './Settings.css'
 
@@ -34,7 +35,7 @@ async function startAccountLink(path: AccountLinkPath): Promise<void> {
   window.location.href = `${base}?link_token=${encodeURIComponent(linkToken)}`
 }
 
-export type SettingsSection = 'account' | 'system' | 'pipeline' | 'notifications' | 'git-sync' | 'nutzer'
+export type SettingsSection = 'account' | 'api-tokens' | 'system' | 'pipeline' | 'notifications' | 'git-sync' | 'nutzer'
 
 const SENSITIVE_SETTINGS_SECTIONS: SettingsSection[] = ['system', 'pipeline', 'notifications', 'git-sync', 'nutzer']
 
@@ -124,6 +125,7 @@ export default function Settings() {
 
   const sectionItems: { id: SettingsSection; labelKey: string; icon: React.ReactNode }[] = [
     { id: 'account', labelKey: 'settingsSections.account', icon: <LuUser /> },
+    { id: 'api-tokens', labelKey: 'settingsSections.apiTokens', icon: <LuKey /> },
     { id: 'system', labelKey: 'settingsSections.system', icon: <LuDatabase /> },
     { id: 'pipeline', labelKey: 'settingsSections.pipeline', icon: <LuCirclePlay /> },
     { id: 'notifications', labelKey: 'settingsSections.notifications', icon: <LuBell /> },
@@ -640,7 +642,7 @@ export default function Settings() {
       {renderNav()}
       <div
         className={`settings-content${isSensitiveSection ? ' settings-content--sensitive' : ''}${
-          section === 'git-sync' || section === 'nutzer' ? ' settings-embedded' : ''
+          section === 'git-sync' || section === 'nutzer' || section === 'api-tokens' ? ' settings-embedded' : ''
         }`}
       >
         {isSensitiveSection && (
@@ -1760,6 +1762,8 @@ export default function Settings() {
         )}
           </div>
         )}
+
+        {section === 'api-tokens' && <ApiTokens />}
 
         {section === 'git-sync' && <Sync editLocked={fieldLocked} />}
 

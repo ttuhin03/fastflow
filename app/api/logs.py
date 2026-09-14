@@ -12,6 +12,7 @@ Alle authentifizierten Benutzer (READONLY, WRITE, ADMIN) können Logs lesen.
 import asyncio
 import json
 import aiofiles
+from enum import Enum
 from pathlib import Path
 from typing import Optional
 from uuid import UUID
@@ -20,12 +21,18 @@ from fastapi.responses import StreamingResponse, PlainTextResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlmodel import Session, select
 
-from app.core.database import get_session, retry_on_sqlite_io
-from app.models import PipelineRun, User
+from app.auth.principal import (
+    Principal,
+    principal_from_api_token,
+    require_scope,
+    require_scope_user,
+)
+from app.core.api_token_hash import looks_like_api_token
+from app.core.database import engine, get_session, retry_on_sqlite_io
+from app.models import ApiTokenScope, PipelineRun, User, UserStatus
 from app.executor import get_log_queue
 from app.core.config import config
 from app.auth import (
-    get_current_user,
     create_log_download_token,
     verify_log_download_token,
     verify_token,
@@ -41,23 +48,99 @@ router = APIRouter(prefix="/runs", tags=["logs"])
 _security = HTTPBearer(auto_error=False)
 
 
+class _HeaderVerdict(Enum):
+    """Was der Authorization-Header für den Log-Zugriff hergibt.
+
+    ``SCOPE_MISSING`` ist von ``NO_MATCH`` getrennt, weil beide zu
+    unterschiedlichen Statuscodes führen: ein gültiges Token ohne logs-Scope
+    ist ein Berechtigungsproblem (403), alles andere ein
+    Authentifizierungsproblem (401).
+    """
+
+    ALLOWED = "allowed"
+    SCOPE_MISSING = "scope-missing"
+    NO_MATCH = "no-match"
+
+
+def _api_token_verdict(session: Session, token: str) -> _HeaderVerdict:
+    """Prüft ein API-Token auf den logs-Scope."""
+    try:
+        principal = principal_from_api_token(session, token)
+    except HTTPException:
+        return _HeaderVerdict.NO_MATCH
+    if principal is None:
+        return _HeaderVerdict.NO_MATCH
+    if ApiTokenScope.LOGS in principal.scopes:
+        return _HeaderVerdict.ALLOWED
+    return _HeaderVerdict.SCOPE_MISSING
+
+
+def _session_jwt_is_usable(session: Session, token: str) -> bool:
+    """Prüft ein Session-JWT samt Sperre und Status des Nutzers.
+
+    Sperre und Status werden mitgeprüft, weil get_current_user das auf jedem
+    anderen Endpoint tut; hier fehlte es, sodass ein gesperrter Nutzer mit
+    bestehender Session weiter Logs lesen konnte.
+    """
+    username = verify_token(token)
+    if not username or not get_session_by_token(session, token):
+        return False
+    user = session.exec(select(User).where(User.username == username)).first()
+    if user is None or user.blocked:
+        return False
+    return getattr(user, "status", UserStatus.ACTIVE) == UserStatus.ACTIVE
+
+
+def _header_verdict(
+    session: Session, credentials: Optional[HTTPAuthorizationCredentials]
+) -> _HeaderVerdict:
+    """Ordnet den Authorization-Header einem der beiden Mechanismen zu."""
+    if credentials is None:
+        return _HeaderVerdict.NO_MATCH
+    token = credentials.credentials
+    # API-Token: am Präfix erkannt, bevor irgendetwas als JWT gelesen wird.
+    if looks_like_api_token(token):
+        return _api_token_verdict(session, token)
+    if _session_jwt_is_usable(session, token):
+        return _HeaderVerdict.ALLOWED
+    return _HeaderVerdict.NO_MATCH
+
+
 async def require_log_access(
     run_id: UUID,
     request: Request,
     session: Session = Depends(get_session),
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(_security),
 ) -> None:
-    """Prüft Bearer-Auth ODER gültigen download_token."""
+    """Prüft Session-JWT, API-Token mit logs-Scope ODER gültigen download_token.
+
+    Der Endpoint kennt drei Aufrufer: das Frontend mit Session-JWT, ein
+    nicht-interaktiver Client (CI, MCP) mit API-Token, und der Browser beim
+    Direkt-Download über einen kurzlebigen Token in der Query. Deshalb hier eine
+    eigene Prüfung statt require_scope_user.
+    """
+    # Jeder Mechanismus wird versucht; ein fehlgeschlagener bricht nicht ab,
+    # sondern lässt den nächsten zum Zug kommen. Sonst verlöre ein Client, der
+    # pauschal einen Authorization-Header setzt (die dokumentierte MCP/CI-
+    # Konfiguration), den Direkt-Download in dem Moment, in dem sein Token
+    # abläuft – während derselbe Aufruf mit einem *unbrauchbaren* Header
+    # weiterhin funktionierte.
+    verdict = _header_verdict(session, credentials)
+    if verdict is _HeaderVerdict.ALLOWED:
+        return
+
     download_token = request.query_params.get("download_token")
-
-    if credentials is not None:
-        token = credentials.credentials
-        if verify_token(token) and get_session_by_token(session, token):
-            return
-
     if download_token and verify_log_download_token(session, download_token, run_id):
         return
 
+    # Ein gültiges Token ohne logs-Scope ist ein Berechtigungs- und kein
+    # Authentifizierungsproblem – 403 sagt dem Aufrufer, dass ein erneuter
+    # Versuch mit demselben Token zwecklos ist.
+    if verdict is _HeaderVerdict.SCOPE_MISSING:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Fehlende Berechtigung: logs",
+        )
     raise HTTPException(status_code=401, detail="Authentifizierung erforderlich")
 
 
@@ -67,7 +150,7 @@ async def get_logs_download_url(
     request: Request,
     run_id: UUID,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    principal: Principal = Depends(require_scope(ApiTokenScope.LOGS)),
 ) -> dict:
     """
     Liefert einen kurzlebigen Download-Token für die Log-Datei.
@@ -76,7 +159,12 @@ async def get_logs_download_url(
     run = session.get(PipelineRun, run_id)
     if run is None:
         raise HTTPException(status_code=404, detail=f"Run nicht gefunden: {run_id}")
-    token = create_log_download_token(session, run_id)
+    token = create_log_download_token(
+        session,
+        run_id,
+        issued_to_user_id=principal.user.id,
+        issued_via_api_token_id=principal.token_id,
+    )
     return {"token": token}
 
 
@@ -196,11 +284,55 @@ async def get_run_logs(
         )
 
 
+LOG_STREAM_REAUTH_SECONDS = 30.0
+"""Abstand zwischen zwei Neuprüfungen der Berechtigung im laufenden Stream.
+
+Ein SSE-Stream lief bisher mit der Berechtigung, die beim Verbindungsaufbau
+galt — und für einen langen ETL-Lauf sind das Stunden. Widerruf des Tokens,
+Sperren des Nutzers und Rollenentzug ließen bestehende Streams unberührt: sie
+lieferten weiter Live-Ausgaben, lange nachdem der Betreiber den Zugang gekappt
+zu haben glaubte.
+"""
+
+
+def _stream_still_authorized(raw_token: Optional[str]) -> bool:
+    """Prüft in einer eigenen, kurzlebigen Session, ob der Zugriff noch gilt.
+
+    Bewusst nicht die Request-Session: die gehört der Dependency und bliebe
+    sonst über die gesamte Laufzeit des Streams offen — bei SQLite eine
+    Verbindung, die stundenlang gehalten wird.
+    """
+    if not raw_token:
+        return False
+    try:
+        with Session(engine) as check_session:
+            if looks_like_api_token(raw_token):
+                principal = principal_from_api_token(check_session, raw_token)
+                return ApiTokenScope.LOGS in principal.scopes
+            username = verify_token(raw_token)
+            if not username or not get_session_by_token(check_session, raw_token):
+                return False
+            user = check_session.exec(select(User).where(User.username == username)).first()
+            return (
+                user is not None
+                and not user.blocked
+                and getattr(user, "status", UserStatus.ACTIVE) == UserStatus.ACTIVE
+            )
+    except HTTPException:
+        return False
+    except Exception as exc:  # pragma: no cover - Infrastrukturfehler
+        # Im Zweifel weiterlaufen lassen: eine kurzzeitig nicht erreichbare
+        # Datenbank soll keinen laufenden Stream abbrechen.
+        logger.warning("Neuprüfung des Log-Streams fehlgeschlagen: %s", exc)
+        return True
+
+
 @router.get("/{run_id}/logs/stream")
 async def stream_run_logs(
     run_id: UUID,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_scope_user(ApiTokenScope.LOGS)),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_security)
 ) -> StreamingResponse:
     """
     Server-Sent Events für Live-Logs (für laufende Runs).
@@ -303,6 +435,10 @@ async def stream_run_logs(
             detail=f"Run {run_id} ist noch nicht gestartet oder bereits beendet"
         )
     
+    # Den Bearer-Wert festhalten: der Generator läuft, nachdem die
+    # Dependency-Auflösung abgeschlossen ist, und hat kein Request-Objekt mehr.
+    raw_token = credentials.credentials if credentials is not None else None
+
     # SSE-Streaming-Funktion
     async def generate_sse():
         """
@@ -318,6 +454,7 @@ async def stream_run_logs(
         min_interval = 1.0 / rate_limit if rate_limit > 0 else 0.01
         
         last_send_time = 0.0
+        last_auth_check = asyncio.get_running_loop().time()
 
         try:
             # SCHRITT 1: Lese bereits vorhandene Logs aus der Queue (max. LOG_STREAM_PENDING_MAX_LINES)
@@ -378,7 +515,20 @@ async def stream_run_logs(
                     last_send_time = asyncio.get_running_loop().time()
                     
                 except asyncio.TimeoutError:
-                    # Timeout: Sende Keep-Alive (leeres Event)
+                    # Der Keep-Alive-Tick ist zugleich der Takt für die
+                    # Neuprüfung der Berechtigung.
+                    now = asyncio.get_running_loop().time()
+                    if now - last_auth_check >= LOG_STREAM_REAUTH_SECONDS:
+                        last_auth_check = now
+                        if not await asyncio.to_thread(_stream_still_authorized, raw_token):
+                            logger.info(
+                                "Log-Stream für Run %s beendet: Berechtigung entzogen", run_id
+                            )
+                            yield "data: " + json.dumps({
+                                "error": "Die Berechtigung wurde entzogen; der Stream wurde beendet.",
+                                "code": "unauthorized",
+                            }) + "\n\n"
+                            return
                     yield ": keep-alive\n\n"
                     continue
                     
