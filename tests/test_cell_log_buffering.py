@@ -187,6 +187,45 @@ class TestBuendelung:
         assert len(db.statements) > 1, "Schwellwert löst keinen Zwischen-Flush aus"
         assert _zelle(db, run_id).stdout.count("\n") == 100
 
+    def test_schwellwert_gilt_fuer_den_ganzen_puffer(self, db):
+        """
+        Der Schwellwert begrenzt den Speicherverbrauch — also die Summe über alle
+        Zellen, nicht jede Zelle für sich. Würde je Zelle geprüft, hielten zwanzig
+        Zellen knapp unter dem Schwellwert zusammen das Zwanzigfache im Speicher.
+
+        Gezählt werden Schreibrunden (eine Session je Runde), nicht Statements: Die
+        Zahl der Statements hängt an der Zahl der Zellen und wäre hier in beiden
+        Fällen gleich.
+        """
+        run_id = uuid4()
+        runden = []
+
+        def sitzung():
+            runden.append(1)
+            return Session(db)
+
+        puffer = CellLogBuffer(
+            run_id,
+            session_factory=sitzung,
+            max_pending_chars=200,
+            flush_interval=3600,
+        )
+
+        async def ablauf():
+            # Jede Zelle bleibt für sich klar unter dem Schwellwert (21 Zeichen),
+            # zusammen überschreiten sie ihn mehrfach.
+            for zelle in range(20):
+                await puffer.handle_line(
+                    PREFIX_CELL_OUTPUT + f"{zelle}\tstdout\tplain\t{'x' * 20}"
+                )
+            await puffer.flush()
+
+        asyncio.run(ablauf())
+        assert len(runden) > 1, (
+            "Alles in einer Runde geschrieben – der Schwellwert wird je Zelle "
+            "statt über den ganzen Puffer geprüft"
+        )
+
     def test_text_wird_angehaengt_nicht_ersetzt(self, db):
         """Mehrere Flush-Runden derselben Zelle müssen sich aufaddieren."""
         run_id = uuid4()
@@ -257,7 +296,8 @@ class TestReihenfolge:
 
         asyncio.run(ablauf())
         stderr = _zelle(db, run_id).stderr
-        assert "erster Fehler" in stderr and "zweiter Fehler" in stderr
+        assert "erster Fehler" in stderr
+        assert "zweiter Fehler" in stderr
 
     def test_ausgabe_ohne_vorherigen_zellstart_legt_die_zeile_an(self, db):
         """Robustheit: Das UPDATE trifft dann keine Zeile, es muss eingefügt werden."""

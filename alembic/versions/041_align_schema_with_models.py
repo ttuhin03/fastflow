@@ -43,46 +43,60 @@ def _inspector():
     return sa.inspect(op.get_bind())
 
 
+def _index_anlegen(inspector) -> None:
+    """Composite-Index nachziehen. Idempotent, weil Datenbanken aus der
+    Migrationskette ihn seit 014 schon haben."""
+    vorhanden = {i["name"] for i in inspector.get_indexes("pipeline_runs")}
+    if INDEX_NAME not in vorhanden:
+        op.create_index(INDEX_NAME, "pipeline_runs", ["pipeline_name", "started_at"])
+
+
+def _ondelete_regel(fk) -> str:
+    return (fk.get("options") or {}).get("ondelete") or ""
+
+
+def _ondelete_nachziehen(
+    inspector, tabelle: str, spalte: str, ziel_tabelle: str, ziel_spalte: str, regel: str
+) -> None:
+    """Ersetzt den Fremdschlüssel auf ``tabelle.spalte`` durch einen mit ``regel``."""
+    for fk in inspector.get_foreign_keys(tabelle):
+        if spalte not in fk["constrained_columns"]:
+            continue
+        if _ondelete_regel(fk) == regel:
+            continue  # bereits korrekt (Datenbank aus der Migrationskette)
+        if fk.get("name"):
+            op.drop_constraint(fk["name"], tabelle, type_="foreignkey")
+        op.create_foreign_key(
+            f"fk_{tabelle}_{spalte}",
+            tabelle,
+            ziel_tabelle,
+            [spalte],
+            [ziel_spalte],
+            ondelete=regel,
+        )
+
+
 def upgrade() -> None:
     inspector = _inspector()
     tabellen = set(inspector.get_table_names())
 
-    # 1) Composite-Index. Idempotent, weil Datenbanken aus der Migrationskette ihn
-    #    seit 014 schon haben.
     if "pipeline_runs" in tabellen:
-        vorhanden = {i["name"] for i in inspector.get_indexes("pipeline_runs")}
-        if INDEX_NAME not in vorhanden:
-            op.create_index(
-                INDEX_NAME, "pipeline_runs", ["pipeline_name", "started_at"]
-            )
+        _index_anlegen(inspector)
 
-    # 2) ondelete-Regeln. Bewusst nur auf PostgreSQL:
-    #    SQLite prüft Fremdschlüssel nur bei PRAGMA foreign_keys=ON, und Fast-Flow
-    #    setzt das nicht (es würde bestehende Datenbanken mit unpassenden Regeln
-    #    beim Löschen scheitern lassen). Dort hätte die Änderung also keine Wirkung,
-    #    kostete aber einen vollständigen Tabellen-Rebuild — inklusive Kopie der
-    #    Base64-Bilder in run_cell_logs.outputs. Verwaiste Zeilen verhindert unter
-    #    SQLite stattdessen app.services.cleanup, das Kindzeilen explizit löscht.
+    # ondelete-Regeln bewusst nur auf PostgreSQL:
+    # SQLite prüft Fremdschlüssel nur bei PRAGMA foreign_keys=ON, und Fast-Flow
+    # setzt das nicht (es würde bestehende Datenbanken mit unpassenden Regeln beim
+    # Löschen scheitern lassen). Dort hätte die Änderung also keine Wirkung, kostete
+    # aber einen vollständigen Tabellen-Rebuild — inklusive Kopie der Base64-Bilder
+    # in run_cell_logs.outputs. Verwaiste Zeilen verhindert unter SQLite stattdessen
+    # app.services.cleanup, das Kindzeilen explizit löscht.
     if op.get_bind().dialect.name != "postgresql":
         return
 
     for tabelle, spalte, ziel_tabelle, ziel_spalte, regel in FOREIGN_KEYS:
-        if tabelle not in tabellen:
-            continue
-        for fk in inspector.get_foreign_keys(tabelle):
-            if spalte not in fk["constrained_columns"]:
-                continue
-            if (fk.get("options") or {}).get("ondelete") == regel:
-                continue  # bereits korrekt (Datenbank aus der Migrationskette)
-            if fk.get("name"):
-                op.drop_constraint(fk["name"], tabelle, type_="foreignkey")
-            op.create_foreign_key(
-                f"fk_{tabelle}_{spalte}",
-                tabelle,
-                ziel_tabelle,
-                [spalte],
-                [ziel_spalte],
-                ondelete=regel,
+        if tabelle in tabellen:
+            _ondelete_nachziehen(
+                inspector, tabelle, spalte, ziel_tabelle, ziel_spalte, regel
             )
 
 

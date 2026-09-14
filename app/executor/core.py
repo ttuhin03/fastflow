@@ -51,6 +51,13 @@ from app.services.downstream_triggers import get_downstream_pipelines_to_trigger
 from app.resilience.retry_strategy import wait_for_retry
 from app.core.database import get_session
 from app.git_sync.sync import get_current_git_info
+# Notebook-Zellen-Protokoll und dessen gepufferte Persistenz (nb_runner.py)
+from app.executor.cell_logs import (
+    PREFIX_CELL_END,
+    PREFIX_CELL_OUTPUT,
+    PREFIX_CELL_START,
+    CellLogBuffer,
+)
 from app.executor.thread_pools import control_pool, stream_pool
 from app.executor.worker_runtime import (
     WORKER_APP_MOUNT,
@@ -62,14 +69,6 @@ from app.executor.worker_runtime import (
 )
 
 logger = logging.getLogger(__name__)
-
-# Präfixe für Notebook-Zellen-Log-Protokoll (nb_runner.py)
-from app.executor.cell_logs import (  # noqa: E402  (Protokoll hat sein Zuhause in cell_logs)
-    PREFIX_CELL_END,
-    PREFIX_CELL_OUTPUT,
-    PREFIX_CELL_START,
-    CellLogBuffer,
-)
 
 LOG_FILE_FLUSH_INTERVAL_SECONDS = 0.25
 """

@@ -111,40 +111,54 @@ def parse_cell_line(line: str) -> Optional[CellEvent]:
     try:
         if line.startswith(PREFIX_CELL_START):
             return CellStart(cell_index=int(line[len(PREFIX_CELL_START):].strip()))
-
         if line.startswith(PREFIX_CELL_END):
-            parts = line[len(PREFIX_CELL_END):].strip().split("\t", 2)
-            if len(parts) < 2:
-                return None
-            return CellEnd(
-                cell_index=int(parts[0]),
-                status=parts[1].upper(),
-                message=parts[2].strip() if len(parts) > 2 else "",
-            )
-
+            return _parse_end(line[len(PREFIX_CELL_END):].strip())
         if line.startswith(PREFIX_CELL_OUTPUT):
-            parts = line[len(PREFIX_CELL_OUTPUT):].split("\t", 3)
-            if len(parts) < 3:
-                return None
-            cell_index = int(parts[0])
-            stream = parts[1]
-            third = parts[2]
-            payload = parts[3] if len(parts) > 3 else ""
-
-            if stream == "image":
-                return CellImage(cell_index=cell_index, mime=third, data=payload)
-            if stream in ("stdout", "stderr"):
-                if third == "base64":
-                    try:
-                        payload = base64.b64decode(payload).decode("utf-8")
-                    except Exception:
-                        payload = ""
-                return CellText(cell_index=cell_index, stream=stream, text=payload + "\n")
-            return None
+            return _parse_output(line[len(PREFIX_CELL_OUTPUT):])
     except ValueError:
         # Kaputter Zellindex — die Zeile wird als normale Log-Ausgabe behandelt.
         return None
     return None
+
+
+def _parse_end(rest: str) -> Optional[CellEnd]:
+    r"""``<index>\t<status>[\t<nachricht>]``"""
+    parts = rest.split("\t", 2)
+    if len(parts) < 2:
+        return None
+    return CellEnd(
+        cell_index=int(parts[0]),
+        status=parts[1].upper(),
+        message=parts[2].strip() if len(parts) > 2 else "",
+    )
+
+
+def _parse_output(rest: str) -> Optional[CellEvent]:
+    r"""``<index>\t<stream>\t<kodierung|mime>\t<inhalt>``"""
+    parts = rest.split("\t", 3)
+    if len(parts) < 3:
+        return None
+    cell_index = int(parts[0])
+    stream, third = parts[1], parts[2]
+    payload = parts[3] if len(parts) > 3 else ""
+
+    if stream == "image":
+        return CellImage(cell_index=cell_index, mime=third, data=payload)
+    if stream in ("stdout", "stderr"):
+        return CellText(
+            cell_index=cell_index, stream=stream, text=_decode(payload, third) + "\n"
+        )
+    return None
+
+
+def _decode(payload: str, kodierung: str) -> str:
+    """Base64-Nutzlast dekodieren; alles andere geht unverändert durch."""
+    if kodierung != "base64":
+        return payload
+    try:
+        return base64.b64decode(payload).decode("utf-8")
+    except Exception:
+        return ""
 
 
 @dataclass
@@ -153,8 +167,12 @@ class _Pending:
     stdout: List[str] = field(default_factory=list)
     stderr: List[str] = field(default_factory=list)
 
-    def chars(self) -> int:
-        return sum(len(t) for t in self.stdout) + sum(len(t) for t in self.stderr)
+    def append(self, stream: str, text: str) -> None:
+        """Hängt an ``stdout`` oder ``stderr`` an — der Stream ist geparst, nicht roh."""
+        if stream == "stderr":
+            self.stderr.append(text)
+        else:
+            self.stdout.append(text)
 
 
 class CellLogBuffer:
@@ -179,6 +197,10 @@ class CellLogBuffer:
         self._max_pending_chars = max_pending_chars
         self._flush_interval = flush_interval
         self._pending: Dict[int, _Pending] = {}
+        # Mitgezählt statt bei jeder Zeile neu aufsummiert: Ein Summieren über den
+        # gesamten Puffer pro Zeile wäre wieder quadratisch — genau das, was diese
+        # Klasse abstellen soll, nur in Python statt in der Datenbank.
+        self._pending_chars = 0
         self._lock = asyncio.Lock()
         self._flusher: Optional[asyncio.Task] = None
 
@@ -215,7 +237,7 @@ class CellLogBuffer:
             self._flusher = None
         if not self._pending:
             return
-        batch, self._pending = self._pending, {}
+        batch = self._take_pending()
         self._write_batch(batch)
 
     async def handle_line(self, line: str) -> bool:
@@ -235,9 +257,11 @@ class CellLogBuffer:
 
         async with self._lock:
             if isinstance(event, CellText):
-                pending = self._pending.setdefault(event.cell_index, _Pending())
-                getattr(pending, event.stream).append(event.text)
-                if pending.chars() >= self._max_pending_chars:
+                self._pending.setdefault(event.cell_index, _Pending()).append(
+                    event.stream, event.text
+                )
+                self._pending_chars += len(event.text)
+                if self._pending_chars >= self._max_pending_chars:
                     await self._flush_locked()
                 return True
 
@@ -255,8 +279,14 @@ class CellLogBuffer:
     async def _flush_locked(self) -> None:
         if not self._pending:
             return
-        batch, self._pending = self._pending, {}
+        batch = self._take_pending()
         await stream_pool.run(lambda: self._write_batch(batch))
+
+    def _take_pending(self) -> Dict[int, _Pending]:
+        """Nimmt den Puffer heraus und setzt ihn zurück."""
+        batch, self._pending = self._pending, {}
+        self._pending_chars = 0
+        return batch
 
     async def _flush_loop(self) -> None:
         while True:
