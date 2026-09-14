@@ -347,9 +347,22 @@ if os.path.exists(static_dir):
 
 if __name__ == "__main__":
     import uvicorn
+
+    # Nur der Direktstart aus der IDE/Shell für lokale Entwicklung. Container
+    # starten über entrypoint.sh mit explizitem --host 0.0.0.0 und laufen hier
+    # nie durch.
+    #
+    # Default ist deshalb Loopback statt aller Interfaces: Dieser Server läuft
+    # mit reload=True auf einem Entwicklerrechner, der typischerweise in einem
+    # fremden Netz hängt (Büro-LAN, WLAN). An 0.0.0.0 gebunden ist er dort für
+    # jeden erreichbar — inklusive der unauthentifizierten /api/system/status
+    # und der laxen Dev-Konfiguration (SKIP_OAUTH_VERIFICATION, Dev-Secrets).
+    #
+    # DEV_SERVER_HOST=0.0.0.0 hebt das auf, wenn der Prozess in einem Container,
+    # Devcontainer oder WSL läuft und Loopback von außen nicht erreichbar wäre.
     uvicorn.run(
         "app.main:app",
-        host="0.0.0.0",
+        host=os.getenv("DEV_SERVER_HOST", "127.0.0.1"),
         port=8000,
         reload=True
     )
