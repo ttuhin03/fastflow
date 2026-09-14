@@ -145,6 +145,15 @@ kubectl apply -f k8s/service.yaml
 
 Full guide (images, OAuth, production): [k8s/README.md](k8s/README.md) · [Kubernetes Deployment (docs)](docs/docs/deployment/K8S.md).
 
+**Prefer Helm?** A chart wrapping the same manifests (with values for image tags, ingress, autoscaling, external/bundled Postgres, secret management, etc.) lives in [`helm/fastflow`](helm/fastflow/README.md):
+
+```bash
+helm install fastflow ./helm/fastflow \
+  --set secrets.encryptionKey=<fernet-key> \
+  --set secrets.jwtSecretKey=<32-char-key> \
+  --set secrets.github.clientId=<id> --set secrets.github.clientSecret=<secret>
+```
+
 ### 🔐 Login (GitHub, Google, Microsoft, Custom OAuth)
 
 Authentication is via **GitHub, Google, Microsoft (Entra ID), or Custom OAuth (e.g. Keycloak/Auth0)**:

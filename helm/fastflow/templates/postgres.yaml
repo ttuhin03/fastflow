@@ -1,0 +1,137 @@
+{{- if .Values.postgresql.enabled -}}
+{{- if not .Values.postgresql.auth.existingSecret }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "fastflow.postgresSecretName" . }}
+  labels:
+    {{- include "fastflow.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+type: Opaque
+stringData:
+  POSTGRES_USER: {{ .Values.postgresql.auth.username | quote }}
+  POSTGRES_PASSWORD: {{ .Values.postgresql.auth.password | quote }}
+  POSTGRES_DB: {{ .Values.postgresql.auth.database | quote }}
+  DATABASE_URL: "postgresql://{{ .Values.postgresql.auth.username }}:{{ .Values.postgresql.auth.password }}@{{ include "fastflow.fullname" . }}-postgres:5432/{{ .Values.postgresql.auth.database }}"
+---
+{{- end }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "fastflow.fullname" . }}-postgres
+  labels:
+    {{- include "fastflow.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- if .Values.postgresql.persistence.storageClassName }}
+  storageClassName: {{ .Values.postgresql.persistence.storageClassName | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.postgresql.persistence.size | quote }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "fastflow.fullname" . }}-postgres
+  labels:
+    {{- include "fastflow.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "fastflow.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: postgres
+  template:
+    metadata:
+      labels:
+        {{- include "fastflow.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: postgres
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        fsGroup: 70
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: postgres
+          image: "{{ .Values.postgresql.image.repository }}:{{ .Values.postgresql.image.tag }}"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            seccompProfile:
+              type: RuntimeDefault
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            {{- toYaml .Values.postgresql.resources | nindent 12 }}
+          ports:
+            - containerPort: 5432
+              name: postgres
+          envFrom:
+            - secretRef:
+                name: {{ include "fastflow.postgresSecretName" . }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "{{ .Values.postgresql.auth.username }}"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "{{ .Values.postgresql.auth.username }}"]
+            initialDelaySeconds: 15
+            periodSeconds: 10
+      volumes:
+        - name: data
+          {{- if .Values.postgresql.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "fastflow.fullname" . }}-postgres
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "fastflow.fullname" . }}-postgres
+  labels:
+    {{- include "fastflow.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "fastflow.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres
+{{- else if .Values.externalDatabaseUrl }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "fastflow.postgresSecretName" . }}
+  labels:
+    {{- include "fastflow.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  DATABASE_URL: {{ .Values.externalDatabaseUrl | quote }}
+{{- end }}
