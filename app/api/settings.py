@@ -27,7 +27,7 @@ from app.core.config import config
 from app.core.notification_api_key_hash import digest_notification_api_token
 from app.models import NotificationApiKey
 from app.services.cleanup import cleanup_logs, cleanup_docker_resources
-from app.services.s3_backup import get_backup_failures, get_last_backup_timestamp
+from app.services.s3_backup import bucket_owner_kwargs, get_backup_failures, get_last_backup_timestamp
 from app.models import PipelineRun, RunStatus, User, UserRole
 from app.services.notifications import send_email_notification, send_teams_notification
 from app.executor import _get_docker_client
@@ -44,6 +44,7 @@ from app.services.audit import log_audit
 from app.services.dependency_audit import get_last_dependency_audit
 from sqlmodel import text
 from botocore.config import Config as BotoConfig
+from botocore.exceptions import ClientError
 import boto3
 
 logger = logging.getLogger(__name__)
@@ -1115,7 +1116,8 @@ async def test_s3_connectivity(
             region_name=config.S3_REGION,
             config=boto_cfg,
         )
-        client.head_bucket(Bucket=config.S3_BUCKET)
+        # ExpectedBucketOwner nur mitschicken, wenn konfiguriert (siehe bucket_owner_kwargs)
+        client.head_bucket(Bucket=config.S3_BUCKET, **bucket_owner_kwargs())
         row.s3_last_test_at = tested_at
         row.s3_last_test_status = "success"
         row.s3_last_test_error = None
@@ -1137,6 +1139,28 @@ async def test_s3_connectivity(
         session.refresh(row)
         log_audit(session, "s3_connectivity_test", "settings", None, {"status": "failed", "reason": str(e.detail)}, current_user)
         raise
+    except ClientError as e:
+        # 403 bei gesetztem ExpectedBucketOwner heißt fast immer: Bucket gehört einem
+        # anderen Account. Ohne eigenen Hinweis bliebe davon nur "Konfiguration prüfen".
+        http_status = e.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+        if bucket_owner_kwargs() and http_status == 403:
+            detail = (
+                "S3-Verbindungstest fehlgeschlagen: Der Bucket gehört nicht der "
+                "erwarteten Account-ID (S3_EXPECTED_BUCKET_OWNER) oder der Zugriff "
+                "wurde verweigert."
+            )
+            logger.warning("S3 connectivity test failed (bucket owner mismatch or access denied)")
+        else:
+            detail = "S3-Verbindungstest fehlgeschlagen. Bitte Konfiguration und Netzwerk prüfen."
+            logger.warning("S3 connectivity test failed: %s", e)
+        row.s3_last_test_at = tested_at
+        row.s3_last_test_status = "failed"
+        row.s3_last_test_error = detail
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+        log_audit(session, "s3_connectivity_test", "settings", None, {"status": "failed"}, current_user)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
     except Exception as e:
         logger.warning("S3 connectivity test failed: %s", e)
         row.s3_last_test_at = tested_at

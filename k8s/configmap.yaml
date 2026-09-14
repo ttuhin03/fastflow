@@ -83,6 +83,8 @@ data:
   # S3_REGION: "us-east-1"
   # S3_PREFIX: "pipeline-logs"
   # S3_USE_PATH_STYLE: "true"
+  # AWS-Account-ID des erwarteten Bucket-Eigentümers (nur AWS S3, nicht MinIO)
+  # S3_EXPECTED_BUCKET_OWNER: "123456789012"
 
   # JWT (nicht-sensible Teile)
   # JWT_ALGORITHM: "HS256"

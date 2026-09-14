@@ -69,6 +69,18 @@ S3_PREFIX=pipeline-logs
 S3_USE_PATH_STYLE=true
 ```
 
+### Bucket ownership (AWS S3)
+
+On AWS, set `S3_EXPECTED_BUCKET_OWNER` to the 12-digit account ID that owns the bucket:
+
+```env
+S3_EXPECTED_BUCKET_OWNER=123456789012
+```
+
+Every upload and the connection test then carry the `ExpectedBucketOwner` parameter. If the bucket belongs to a different account, S3 rejects the request with `403` instead of executing it. This guards against bucket sniping: if the bucket is ever deleted and its name re-registered by a third party, logs would otherwise keep flowing to that account unnoticed.
+
+Leave the variable empty for MinIO and other S3-compatible stores — they have no AWS account IDs, and the parameter would be rejected depending on the implementation.
+
 ## API
 
 - **`GET /api/settings/backup-failures`** (auth required): Returns recent S3 backup failures (`run_id`, `pipeline_name`, `error_message`, `created_at`). Used by the frontend for UI notifications. The list is in-memory, bounded, and lost on restart.
