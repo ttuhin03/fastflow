@@ -383,7 +383,7 @@ def cleanup_expired_ephemeral_tokens(session: Session) -> None:
         logger.info(f"{len(expired_tokens)} abgelaufene Ephemeral-Tokens bereinigt")
 
 
-async def get_current_user(
+def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     db_session: Session = Depends(get_session)
 ) -> User:

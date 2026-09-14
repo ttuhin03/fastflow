@@ -176,7 +176,7 @@ async def get_sync_settings(
 
 
 @router.put("/settings", response_model=Dict[str, Any])
-async def update_sync_settings(
+def update_sync_settings(
     request: SyncSettingsRequest,
     current_user = Depends(require_write),
     session: Session = Depends(get_session),

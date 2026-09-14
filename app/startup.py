@@ -35,6 +35,30 @@ def _setup_logging() -> None:
     do_setup_logging(log_level=config.LOG_LEVEL, log_json=config.LOG_JSON)
 
 
+def _configure_api_threadpool() -> None:
+    """
+    Setzt die Kapazität von AnyIOs Worker-Threadpool auf API_THREADPOOL_WORKERS.
+
+    Endpoints, die mit ``def`` statt ``async def`` definiert sind, führt FastAPI in
+    diesem Pool aus. Seine Größe ist damit die Obergrenze gleichzeitig bearbeiteter
+    Requests und muss zur Größe des Datenbankpools passen — sonst warten Threads nur
+    auf Verbindungen (siehe app.core.database.resolved_pool_size).
+
+    Muss aus dem laufenden Event-Loop heraus aufgerufen werden: Der Limiter hängt an
+    einer RunVar und existiert außerhalb eines Loops nicht.
+    """
+    import anyio.to_thread
+
+    limiter = anyio.to_thread.current_default_thread_limiter()
+    previous = limiter.total_tokens
+    limiter.total_tokens = config.API_THREADPOOL_WORKERS
+    logger.info(
+        "API-Threadpool: %d Worker (vorher %s)",
+        config.API_THREADPOOL_WORKERS,
+        previous,
+    )
+
+
 def _validate_security_config() -> None:
     """
     Validiert Sicherheits-Konfiguration beim App-Start.
@@ -297,6 +321,8 @@ async def run_startup_tasks() -> None:
     _setup_logging()
     print(STARTUP_BANNER_TEMPLATE.format(version=config.VERSION))
     logger.info("Fast-Flow Orchestrator startet...")
+
+    _configure_api_threadpool()
 
     _validate_security_config()
     await _validate_oauth_config()

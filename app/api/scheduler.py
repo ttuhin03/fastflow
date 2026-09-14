@@ -274,7 +274,7 @@ async def get_job_next_runs(
 
 
 @router.get("/jobs/{job_id}/runs", response_model=List[Dict[str, Any]])
-async def get_job_runs(
+def get_job_runs(
     job_id: UUID,
     limit: int = Query(50, ge=1, le=500, description="Maximale Anzahl Runs"),
     session: Session = Depends(get_session),

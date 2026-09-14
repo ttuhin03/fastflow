@@ -74,6 +74,59 @@ class Config:
     damit die App nicht still auf einer leeren lokalen SQLite-DB hochkommt.
     """
 
+    API_THREADPOOL_WORKERS: int = max(1, int(os.getenv("API_THREADPOOL_WORKERS", "40")))
+    """
+    Obergrenze für gleichzeitig laufende synchrone Endpoints.
+
+    FastAPI führt Endpoints, die mit ``def`` statt ``async def`` definiert sind, in
+    AnyIOs Worker-Threadpool aus. Dieser Wert setzt dessen Kapazität und ist damit
+    die eigentliche Parallelität der API — der Event-Loop bleibt derweil frei für
+    Streams und Executor-Tasks.
+
+    Der Wert ist bewusst mit DB_POOL_SIZE gekoppelt: Jeder dieser Threads kann eine
+    Datenbankverbindung halten. Siehe app.core.database.resolved_pool_size().
+
+    Standard 40 entspricht AnyIOs eigenem Default; er wird hier nur explizit gesetzt,
+    damit er zusammen mit der Pool-Größe an einer Stelle sichtbar ist.
+    """
+
+    DB_POOL_SIZE: int = max(0, int(os.getenv("DB_POOL_SIZE", "0")))
+    """
+    Feste Größe des Datenbank-Verbindungspools. 0 = automatisch herleiten.
+
+    Automatisch bedeutet: API_THREADPOOL_WORKERS plus Reserve für Hintergrund-Threads
+    (Scheduler, Cleanup, Executor). Kleiner zu dimensionieren heißt, dass Requests
+    unter Last auf eine freie Verbindung warten statt zu arbeiten — deshalb ist die
+    Herleitung der Standard und ein fester Wert die Ausnahme (z. B. wenn ein
+    PgBouncer oder ein Postgres-Verbindungslimit die Obergrenze vorgibt).
+    """
+
+    DB_MAX_OVERFLOW: int = max(0, int(os.getenv("DB_MAX_OVERFLOW", "10")))
+    """
+    Zusätzliche Verbindungen über DB_POOL_SIZE hinaus, die der Pool bei Lastspitzen
+    kurzfristig öffnen darf. Sie werden nach Gebrauch wieder geschlossen.
+    """
+
+    DB_POOL_TIMEOUT_SECONDS: int = max(1, int(os.getenv("DB_POOL_TIMEOUT_SECONDS", "10")))
+    """
+    Wartezeit auf eine freie Verbindung, bevor SQLAlchemy ``TimeoutError`` wirft.
+
+    Bewusst deutlich unter SQLAlchemys Default von 30 s: Ist der Pool erschöpft,
+    ist ein schneller 500er mit klarer Meldung im Log brauchbarer als ein Request,
+    der eine halbe Minute hängt und dabei einen Worker-Thread belegt.
+    """
+
+    SQLITE_BUSY_TIMEOUT_MS: int = max(0, int(os.getenv("SQLITE_BUSY_TIMEOUT_MS", "15000")))
+    """
+    Wartezeit von SQLite auf eine belegte Schreibsperre, bevor "database is locked"
+    zurückkommt (``PRAGMA busy_timeout``).
+
+    Unter WAL blockieren sich Leser nicht, Schreiber aber serialisieren. Mit
+    parallelen Endpoint-Threads können mehrere Schreiber gleichzeitig anstehen,
+    weshalb der Wert höher liegt als die früheren 5000 ms. Transiente Fälle fängt
+    zusätzlich app.core.database.retry_on_sqlite_io ab.
+    """
+
     LOG_VIEWER_URL: Optional[str] = os.getenv("LOG_VIEWER_URL", None) or None
     """
     Optionale URL zum Log-Viewer (z. B. eine vorbereitete Grafana/Loki-Query).

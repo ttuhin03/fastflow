@@ -20,6 +20,7 @@ from typing import Any, Callable, Generator, Optional, TypeVar
 
 import sqlalchemy.exc
 from sqlalchemy import event
+from sqlalchemy.engine import make_url
 from sqlmodel import SQLModel, Session, create_engine, text
 
 from app.core.config import config
@@ -70,32 +71,133 @@ if config.DATABASE_URL is None:
 else:
     database_url = config.DATABASE_URL
 
+BACKGROUND_CONNECTION_HEADROOM = 8
+"""
+Verbindungen, die über die API-Threads hinaus für Hintergrund-Arbeit reserviert
+werden: Scheduler-Jobs, Cleanup, WAL-Checkpoint und die Executor-Tasks, die
+Run-Status und Zell-Logs schreiben. Ohne diese Reserve können API-Requests unter
+Last den Pool vollständig belegen und ein Run-Abschluss käme nicht mehr in die DB.
+"""
+
+
+def resolved_pool_size() -> int:
+    """
+    Ermittelt die Größe des Verbindungspools.
+
+    Ist DB_POOL_SIZE gesetzt, gilt dieser Wert unverändert. Andernfalls wird er aus
+    API_THREADPOOL_WORKERS plus BACKGROUND_CONNECTION_HEADROOM hergeleitet.
+
+    Hintergrund: Synchrone Endpoints laufen in AnyIOs Threadpool, und jeder dieser
+    Threads hält für die Dauer seines Requests eine Verbindung. Ist der Pool kleiner
+    als der Threadpool, wartet ein Teil der Threads nur auf Verbindungen — die
+    Parallelität wäre dann nicht durch die Datenbank begrenzt, sondern durch eine
+    unpassend gewählte Zahl.
+
+    Returns:
+        int: Anzahl dauerhaft gehaltener Verbindungen (ohne DB_MAX_OVERFLOW).
+    """
+    if config.DB_POOL_SIZE > 0:
+        return config.DB_POOL_SIZE
+    return config.API_THREADPOOL_WORKERS + BACKGROUND_CONNECTION_HEADROOM
+
+
+def _is_memory_sqlite(url: str) -> bool:
+    """
+    Prüft, ob die URL auf eine In-Memory-SQLite-Datenbank zeigt.
+
+    Für solche Datenbanken wählt SQLAlchemy einen Pool ohne Überlauf
+    (SingletonThreadPool bzw. StaticPool). Pool-Argumente wie max_overflow sind
+    dort nicht zulässig und würden den Start mit einem TypeError abbrechen.
+
+    Die Prüfung spiegelt bewusst die Regel des SQLite-Dialekts selbst
+    (``_is_url_file_db``): kein Datenbankname, ``:memory:`` oder ``mode=memory``
+    in der Query. Ein eigener Test auf Teilstrings würde die dritte Form
+    übersehen — und genau dann bräche der Start mit dem TypeError ab, den diese
+    Funktion verhindern soll.
+    """
+    if not url.startswith("sqlite"):
+        return False
+    try:
+        parsed = make_url(url)
+    except sqlalchemy.exc.ArgumentError:
+        # Unlesbare URL: create_engine scheitert gleich selbst und mit der
+        # besseren Meldung. Hier nicht raten, sondern wie eine Datei behandeln.
+        return False
+    if not parsed.database or parsed.database == ":memory:":
+        return True
+    return parsed.query.get("mode") == "memory"
+
+
+# Pool-Argumente. Bewusst für beide Backends identisch: Auch SQLite bekommt hier
+# einen QueuePool (Default für dateibasierte SQLite-DBs), dessen Standardgröße von
+# 5 sonst deutlich unter der Zahl paralleler API-Threads läge.
+_POOL_KWARGS: dict = {
+    "pool_size": resolved_pool_size(),
+    "max_overflow": config.DB_MAX_OVERFLOW,
+    "pool_timeout": config.DB_POOL_TIMEOUT_SECONDS,
+}
+
 # Engine erstellen
 # Hinweis: Bei Docker mit Volume-Mounts (v.a. Mac/Windows) können bei SQLite
 # disk I/O-Fehler auftreten. busy_timeout und retry_on_sqlite_io fangen
 # viele transiente Fälle ab. Produktion: DATABASE_URL=postgresql://... empfohlen.
 if database_url.startswith("sqlite"):
+    # check_same_thread=False ist Pflicht, weil Endpoints in wechselnden
+    # Threadpool-Threads laufen und eine gepoolte Verbindung dabei den Thread
+    # wechselt. Die Serialisierung übernimmt SQLite selbst (busy_timeout).
     connect_args = {"check_same_thread": False}
     engine = create_engine(
         database_url,
         connect_args=connect_args,
         echo=False,
+        **({} if _is_memory_sqlite(database_url) else _POOL_KWARGS),
     )
 
     @event.listens_for(engine, "connect")
     def _set_sqlite_pragma(dbapi_conn: Any, connection_record: Any) -> None:
         cursor = dbapi_conn.cursor()
-        cursor.execute("PRAGMA busy_timeout=5000")
+        cursor.execute(f"PRAGMA busy_timeout={config.SQLITE_BUSY_TIMEOUT_MS}")
         cursor.close()
 else:
     engine = create_engine(
         database_url,
         echo=False,
-        pool_size=10,
-        max_overflow=20,
         pool_pre_ping=True,
         pool_recycle=300,
+        **_POOL_KWARGS,
     )
+
+logger.info(
+    "Datenbank-Pool: pool_size=%s max_overflow=%s timeout=%ss (API-Threads: %s)",
+    _POOL_KWARGS["pool_size"],
+    _POOL_KWARGS["max_overflow"],
+    _POOL_KWARGS["pool_timeout"],
+    config.API_THREADPOOL_WORKERS,
+)
+
+
+def release_connection(session: Session) -> None:
+    """
+    Gibt die Verbindung einer Session vorzeitig an den Pool zurück.
+
+    Gedacht für Endpoints, die nach ihrem letzten Datenbankzugriff noch lange
+    laufen — allen voran die SSE-Streams für Logs und Metriken. Deren Session
+    stammt aus der Dependency ``get_session``, und FastAPI schließt Dependencies
+    mit ``yield`` erst, wenn die Response vollständig gesendet ist. Bei einem
+    Stream ist das erst beim Verbindungsabbruch des Clients der Fall: Ohne diesen
+    Aufruf belegt jeder offene Stream eine Poolverbindung über seine gesamte
+    Laufzeit, und genügend gleichzeitige Streams legen die ganze App lahm.
+
+    Die Session bleibt benutzbar — ein späterer Zugriff holt sich einfach eine neue
+    Verbindung. Achtung: ``close()`` löst alle geladenen ORM-Objekte von der
+    Session. Bereits geladene Attribute bleiben lesbar, noch nicht geladene oder
+    durch ein Commit invalidierte nicht. Aufrufer lesen deshalb vorher aus, was sie
+    danach noch brauchen.
+
+    Args:
+        session: Die freizugebende Session.
+    """
+    session.close()
 
 
 _T = TypeVar("_T")

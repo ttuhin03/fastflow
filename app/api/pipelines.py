@@ -515,7 +515,7 @@ async def start_pipeline(
 
 
 @router.get("/{name}/runs", response_model=List[Dict[str, Any]])
-async def get_pipeline_runs(
+def get_pipeline_runs(
     name: str,
     limit: int = Query(100, ge=1, le=1000, description="Maximale Anzahl Runs (Standard: 100)"),
     session: Session = Depends(get_session),
@@ -572,7 +572,7 @@ async def get_pipeline_runs(
 
 
 @router.get("/{name}/stats", response_model=PipelineStatsResponse)
-async def get_pipeline_stats(
+def get_pipeline_stats(
     name: str,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
@@ -642,7 +642,7 @@ async def get_pipeline_stats(
 
 
 @router.post("/{name}/stats/reset", response_model=Dict[str, str])
-async def reset_pipeline_stats(
+def reset_pipeline_stats(
     name: str,
     current_user: User = Depends(require_write),
     session: Session = Depends(get_session),
@@ -821,7 +821,7 @@ async def get_pipeline_encrypted_env_keys(
 
 
 @router.get("/{name}/downstream-triggers", response_model=List[DownstreamTriggerResponse])
-async def get_downstream_triggers(
+def get_downstream_triggers(
     name: str,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
@@ -880,7 +880,7 @@ async def get_downstream_triggers(
 
 
 @router.post("/{name}/downstream-triggers", response_model=DownstreamTriggerResponse)
-async def create_downstream_trigger(
+def create_downstream_trigger(
     name: str,
     body: DownstreamTriggerCreate,
     session: Session = Depends(get_session),
@@ -960,7 +960,7 @@ async def create_downstream_trigger(
 
 
 @router.delete("/{name}/downstream-triggers/{trigger_id}")
-async def delete_downstream_trigger(
+def delete_downstream_trigger(
     name: str,
     trigger_id: str,
     session: Session = Depends(get_session),

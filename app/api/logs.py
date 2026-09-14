@@ -20,7 +20,7 @@ from fastapi.responses import StreamingResponse, PlainTextResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlmodel import Session, select
 
-from app.core.database import get_session, retry_on_sqlite_io
+from app.core.database import get_session, release_connection, retry_on_sqlite_io
 from app.models import PipelineRun, User
 from app.executor import get_log_queue
 from app.core.config import config
@@ -63,7 +63,7 @@ async def require_log_access(
 
 @router.get("/{run_id}/logs/download-url")
 @limiter.limit("20/minute")
-async def get_logs_download_url(
+def get_logs_download_url(
     request: Request,
     run_id: UUID,
     session: Session = Depends(get_session),
@@ -227,14 +227,23 @@ async def stream_run_logs(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Run nicht gefunden: {run_id}"
         )
-    
+
+    # Ab hier greift der Endpoint nicht mehr auf die Datenbank zu, der Stream kann
+    # aber beliebig lange offen bleiben. Die Poolverbindung deshalb sofort
+    # zurückgeben: FastAPI schließt die Session der Dependency erst, wenn die
+    # Response fertig gesendet ist — bei SSE also erst beim Verbindungsabbruch des
+    # Clients. Ohne die Freigabe belegt jeder offene Stream dauerhaft eine
+    # Verbindung (siehe app.core.database.release_connection).
+    log_file_ref = run.log_file
+    release_connection(session)
+
     # Log-Queue abrufen
     log_queue = get_log_queue(run_id)
     
     if log_queue is None:
         # Queue nicht vorhanden (Run ist bereits beendet oder noch nicht gestartet)
         # Versuche Logs aus Datei zu lesen (für abgeschlossene Runs)
-        log_file_path = Path(run.log_file)
+        log_file_path = Path(log_file_ref)
         # Pfad auflösen (falls relativ, wird relativ zu LOGS_DIR aufgelöst)
         # Path Traversal-Schutz: Sicherstellen dass Pfad innerhalb LOGS_DIR liegt
         if not log_file_path.is_absolute():
@@ -249,7 +258,7 @@ async def stream_run_logs(
         except ValueError:
             logger.warning(
                 f"Path Traversal-Versuch erkannt bei Log-Stream: "
-                f"Run {run_id}, Pfad {run.log_file} -> {log_file_path_abs}"
+                f"Run {run_id}, Pfad {log_file_ref} -> {log_file_path_abs}"
             )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

@@ -106,7 +106,7 @@ class InviteUserRequest(BaseModel):
 
 
 @router.get("", response_model=List[UserResponse])
-async def list_users(
+def list_users(
     current_user: User = Depends(require_admin),
     session: Session = Depends(get_session)
 ) -> List[UserResponse]:
@@ -133,7 +133,7 @@ async def list_users(
 
 
 @router.get("/invites", response_model=List[InvitationResponse])
-async def list_invites(
+def list_invites(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> List[InvitationResponse]:
@@ -156,7 +156,7 @@ async def list_invites(
 
 
 @router.post("/invite", response_model=dict, status_code=status.HTTP_201_CREATED)
-async def invite_user(
+def invite_user(
     request: InviteUserRequest,
     current_user: User = Depends(require_admin),
     session: Session = Depends(get_session),
@@ -188,7 +188,7 @@ async def invite_user(
 
 
 @router.delete("/invites/{invitation_id}", status_code=status.HTTP_200_OK)
-async def delete_invite(
+def delete_invite(
     invitation_id: UUID,
     current_user: User = Depends(require_admin),
     session: Session = Depends(get_session),
@@ -206,7 +206,7 @@ async def delete_invite(
 
 
 @router.get("/{user_id}", response_model=UserResponse)
-async def get_user(
+def get_user(
     user_id: UUID,
     current_user: User = Depends(require_admin),
     session: Session = Depends(get_session)
@@ -273,7 +273,7 @@ async def approve_user(
 
 
 @router.post("/{user_id}/reject", response_model=UserResponse)
-async def reject_user(
+def reject_user(
     user_id: UUID,
     current_user: User = Depends(require_admin),
     session: Session = Depends(get_session),
@@ -299,7 +299,7 @@ async def reject_user(
 
 
 @router.put("/{user_id}", response_model=UserResponse)
-async def update_user(
+def update_user(
     user_id: UUID,
     request: UpdateUserRequest,
     current_user: User = Depends(require_admin),
@@ -354,7 +354,7 @@ async def update_user(
 
 
 @router.post("/{user_id}/block", response_model=UserResponse)
-async def block_user(
+def block_user(
     user_id: UUID,
     current_user: User = Depends(require_admin),
     session: Session = Depends(get_session)
@@ -414,7 +414,7 @@ async def block_user(
 
 
 @router.post("/{user_id}/unblock", response_model=UserResponse)
-async def unblock_user(
+def unblock_user(
     user_id: UUID,
     current_user: User = Depends(require_admin),
     session: Session = Depends(get_session)
@@ -455,7 +455,7 @@ async def unblock_user(
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_200_OK)
-async def delete_user(
+def delete_user(
     user_id: UUID,
     current_user: User = Depends(require_admin),
     session: Session = Depends(get_session)

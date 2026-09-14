@@ -754,7 +754,7 @@ async def get_current_user_info(
 
 
 @router.delete("/link/{provider}", response_model=dict, status_code=status.HTTP_200_OK)
-async def unlink_provider(
+def unlink_provider(
     provider: str,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
@@ -808,7 +808,7 @@ async def unlink_provider(
 
 @router.post("/refresh", response_model=LoginResponse, status_code=status.HTTP_200_OK)
 @limiter.limit("30/minute")
-async def refresh_token(
+def refresh_token(
     request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     session: Session = Depends(get_session)

@@ -61,7 +61,7 @@ def _parse_iso_datetime(value: str, param_name: str) -> datetime:
 
 @router.get("/recent-per-pipeline", response_model=Dict[str, Any])
 @limiter.limit("30/minute")
-async def get_recent_runs_per_pipeline(
+def get_recent_runs_per_pipeline(
     request: Request,
     limit_per_pipeline: int = Query(5, ge=1, le=10, description="Anzahl Runs pro Pipeline"),
     session: Session = Depends(get_session),
@@ -118,7 +118,7 @@ async def get_recent_runs_per_pipeline(
 
 @router.get("", response_model=RunsResponse)
 @limiter.limit("60/minute")
-async def get_runs(
+def get_runs(
     request: Request,
     pipeline_name: Optional[str] = Query(None, description="Filter nach Pipeline-Name"),
     status_filter: Optional[RunStatus] = Query(None, description="Filter nach Status"),
@@ -214,7 +214,7 @@ async def get_runs(
 
 @router.get("/{run_id}", response_model=Dict[str, Any])
 @limiter.limit("60/minute")
-async def get_run_details(
+def get_run_details(
     request: Request,
     run_id: UUID,
     session: Session = Depends(get_session),
@@ -285,7 +285,7 @@ async def get_run_details(
 
 
 @router.get("/{run_id}/cells", response_model=List[Dict[str, Any]])
-async def get_run_cells(
+def get_run_cells(
     run_id: UUID,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
