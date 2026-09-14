@@ -174,6 +174,9 @@ class TestPoolDimensionierung:
         [
             ("sqlite:///:memory:", True),
             ("sqlite://", True),
+            ("sqlite:///", True),
+            # Dritte Schreibweise für In-Memory, die SQLAlchemy genauso behandelt.
+            ("sqlite:///file:db1?mode=memory&cache=shared&uri=true", True),
             ("sqlite:////var/data/fastflow.db", False),
             ("postgresql://user:pw@host:5432/db", False),
         ],
@@ -185,6 +188,23 @@ class TestPoolDimensionierung:
         Start mit einem TypeError abbrechen — die Erkennung verhindert das.
         """
         assert _is_memory_sqlite(url) is erwartet
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "sqlite:///:memory:",
+            "sqlite://",
+            "sqlite:///file:db1?mode=memory&cache=shared&uri=true",
+        ],
+    )
+    def test_erkannte_urls_vertragen_wirklich_keine_pool_argumente(self, url):
+        """
+        Die Gegenprobe zur Erkennung: Für jede als In-Memory erkannte URL muss
+        create_engine mit den Pool-Argumenten tatsächlich scheitern. Sonst prüft
+        der Test oben nur eine selbst erfundene Regel statt der von SQLAlchemy.
+        """
+        with pytest.raises(TypeError):
+            create_engine(url, **database_module._POOL_KWARGS)
 
 
 class TestVerbindungsfreigabe:

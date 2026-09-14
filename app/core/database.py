@@ -20,6 +20,7 @@ from typing import Any, Callable, Generator, Optional, TypeVar
 
 import sqlalchemy.exc
 from sqlalchemy import event
+from sqlalchemy.engine import make_url
 from sqlmodel import SQLModel, Session, create_engine, text
 
 from app.core.config import config
@@ -107,10 +108,24 @@ def _is_memory_sqlite(url: str) -> bool:
     Für solche Datenbanken wählt SQLAlchemy einen Pool ohne Überlauf
     (SingletonThreadPool bzw. StaticPool). Pool-Argumente wie max_overflow sind
     dort nicht zulässig und würden den Start mit einem TypeError abbrechen.
+
+    Die Prüfung spiegelt bewusst die Regel des SQLite-Dialekts selbst
+    (``_is_url_file_db``): kein Datenbankname, ``:memory:`` oder ``mode=memory``
+    in der Query. Ein eigener Test auf Teilstrings würde die dritte Form
+    übersehen — und genau dann bräche der Start mit dem TypeError ab, den diese
+    Funktion verhindern soll.
     """
     if not url.startswith("sqlite"):
         return False
-    return ":memory:" in url or url.rstrip("/") == "sqlite:"
+    try:
+        parsed = make_url(url)
+    except sqlalchemy.exc.ArgumentError:
+        # Unlesbare URL: create_engine scheitert gleich selbst und mit der
+        # besseren Meldung. Hier nicht raten, sondern wie eine Datei behandeln.
+        return False
+    if not parsed.database or parsed.database == ":memory:":
+        return True
+    return parsed.query.get("mode") == "memory"
 
 
 # Pool-Argumente. Bewusst für beide Backends identisch: Auch SQLite bekommt hier
