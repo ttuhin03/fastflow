@@ -18,11 +18,11 @@ from uuid import UUID
 
 import docker
 from docker.errors import DockerException, APIError
-from sqlmodel import Session, select, update, func
+from sqlmodel import Session, delete, select, update, func
 
 from app.core.config import config
 from app.core.database import get_session
-from app.models import PipelineRun, Pipeline, RunStatus
+from app.models import PipelineRun, Pipeline, RunCellLog, RunStatus
 from app.services.s3_backup import _s3_backup, append_backup_failure
 from app.services.notifications import notify_s3_backup_failed
 
@@ -157,8 +157,8 @@ async def _cleanup_by_retention_runs(session: Session, max_runs: int) -> int:
                     skipped_backup_failures += 1
                     continue
                 await _delete_run_files(run)
-                # Datenbank-Eintrag löschen
-                session.delete(run)
+                # Datenbank-Eintrag samt Zellen-Logs löschen
+                _delete_run_row(session, run)
                 deleted_count += 1
 
             if skipped_backup_failures > 0:
@@ -217,8 +217,8 @@ async def _cleanup_by_retention_days(session: Session, max_days: int) -> int:
                 skipped_backup_failures += 1
                 continue
             await _delete_run_files(run)
-            # Datenbank-Eintrag löschen
-            session.delete(run)
+            # Datenbank-Eintrag samt Zellen-Logs löschen
+            _delete_run_row(session, run)
             deleted_count += 1
 
         if skipped_backup_failures > 0:
@@ -337,6 +337,28 @@ async def _truncate_log_file(log_file_path: Path, max_size_bytes: int) -> None:
     except Exception as e:
         logger.error(f"Fehler beim Kürzen von Log-Datei {log_file_path}: {e}")
         raise
+
+
+def _delete_run_row(session: Session, run: PipelineRun) -> None:
+    """
+    Löscht einen Run samt seiner Zellen-Logs.
+
+    Die Kindzeilen werden bewusst explizit gelöscht statt über ON DELETE CASCADE:
+    SQLite prüft Fremdschlüssel nur bei ``PRAGMA foreign_keys=ON``, und Fast-Flow
+    aktiviert das nicht — bestehende Datenbanken haben teils Constraints ohne
+    passende Regel und würden dann beim Löschen scheitern. Ohne diesen expliziten
+    Schritt blieben die Zeilen aus run_cell_logs für immer liegen, inklusive der
+    Base64-Bilder in ``outputs``.
+
+    Auf PostgreSQL greift zusätzlich die CASCADE-Regel; das doppelte Löschen ist
+    dort wirkungslos, weil die Kindzeilen bereits weg sind.
+
+    Args:
+        session: SQLModel-Session (Commit erfolgt durch den Aufrufer).
+        run: Der zu löschende Run.
+    """
+    session.exec(delete(RunCellLog).where(RunCellLog.run_id == run.id))
+    session.delete(run)
 
 
 async def _delete_run_files(run: PipelineRun) -> None:
