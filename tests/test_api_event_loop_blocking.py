@@ -30,6 +30,7 @@ from uuid import uuid4
 
 import anyio.to_thread
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import text
 from sqlmodel import Session, create_engine
 
@@ -289,20 +290,24 @@ class TestStreamsHaltenKeineVerbindung:
         assert session.geschlossen, "Metrics-Stream hält die Verbindung über die Streamdauer"
         assert antwort.media_type == "text/event-stream"
 
-    def test_freigabe_passiert_auch_wenn_der_run_fehlt(self, tmp_path, monkeypatch):
+    def test_fehlender_run_endet_mit_404_statt_an_der_freigabe(self, tmp_path, monkeypatch):
         """
-        Fehlt der Run, endet der Request mit 404 — die Verbindung gibt in dem Fall
-        FastAPI selbst frei. Geprüft wird hier nur, dass der Pfad nicht vorher an
-        einer fehlenden Freigabe scheitert.
+        Fehlt der Run, endet der Request mit 404, bevor die Freigabe überhaupt
+        erreicht wird — die Verbindung gibt in dem Fall FastAPI selbst frei.
+        Geprüft wird deshalb, dass der Pfad genau diese 404 liefert und nicht
+        vorher an der neuen Freigabe scheitert.
         """
         monkeypatch.setattr(config, "LOGS_DIR", tmp_path)
         session = _MitschreibendeSession(None)
+        # Die Koroutine wird hier nur erzeugt, nicht ausgeführt: Im raises-Block
+        # steht damit ein einziger Aufruf, der überhaupt werfen kann.
+        stream = stream_run_logs(run_id=uuid4(), session=session, current_user=None)
 
-        with pytest.raises(Exception) as fehler:
-            asyncio.run(
-                stream_run_logs(run_id=uuid4(), session=session, current_user=None)
-            )
-        assert getattr(fehler.value, "status_code", None) == 404
+        with pytest.raises(HTTPException) as fehler:
+            asyncio.run(stream)
+
+        assert fehler.value.status_code == 404
+        assert not session.geschlossen
 
 
 def test_configure_api_threadpool_setzt_den_limiter(monkeypatch):
