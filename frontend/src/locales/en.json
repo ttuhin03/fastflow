@@ -857,7 +857,8 @@
     "sharedBreakdownFailed": "Breakdown failed.",
     "sharedBreakdownFiles": "{{count}} files",
     "sharedBreakdownRunningFor": "Computing … ({{seconds}} s)",
-    "sharedBreakdownStale": "Computed at {{time}}"
+    "sharedBreakdownStale": "Computed at {{time}}",
+    "sharedBreakdownProgress": "{{files}} files, {{size}} GB read"
   },
   "notifications": {
     "title": "Notifications",

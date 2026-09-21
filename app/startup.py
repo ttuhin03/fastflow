@@ -391,6 +391,34 @@ async def run_startup_tasks() -> None:
             "Kubernetes pipeline_runs Startup-Cleanup", False, k8s_cleanup_orphaned_pipeline_runs
         )
 
+    # Vor dem Scheduler-Start, damit während des Räumens kein Run anläuft, und nach
+    # der Zombie-Reconciliation, damit stehengebliebene RUNNING-Zeilen des
+    # abgeschossenen Vorgängers nicht als "Runs aktiv" gelesen werden. Dieser
+    # Moment ist die beste Gelegenheit überhaupt: der Shutdown des Vorgängers hat
+    # dessen Worker-Jobs gelöscht.
+    def uv_cache_startup_maintenance():
+        from app.core.database import get_session
+        from app.services.uv_cache_maintenance import maintain_uv_cache, wipe_uv_cache
+        if config.UV_CACHE_WIPE_ON_START:
+            result = wipe_uv_cache()
+        else:
+            session_gen = get_session()
+            session = next(session_gen)
+            try:
+                result = maintain_uv_cache(session)
+            finally:
+                session.close()
+        # Unbedingt loggen, auch wenn nichts zu tun war: Ein Schritt, der nur bei
+        # Treffern eine Zeile schreibt, ist im Boot-Log nicht von einem Schritt zu
+        # unterscheiden, der gar nicht gelaufen ist.
+        logger.info(
+            "UV-Cache-Pflege: %s%s",
+            result.get("status"),
+            f" ({result['reason']})" if result.get("reason") else "",
+        )
+    if not config.TESTING:
+        await _run_step("UV-Cache-Pflege", False, uv_cache_startup_maintenance)
+
     def start_sched():
         from app.services.scheduler import set_main_loop, start_scheduler
         set_main_loop(asyncio.get_running_loop())
@@ -461,6 +489,30 @@ async def run_startup_tasks() -> None:
             False,
             schedule_k8s_pipeline_runs_cleanup,
             "Kubernetes pipeline_runs Cleanup stündlich geplant",
+        )
+
+    # Der Startup-Lauf greift nur beim Deploy. Zwischen zwei Deploys kann das
+    # Volume erneut volllaufen — dann soll nicht bis zum nächsten Release gewartet
+    # werden, denn ohne Platz scheitert jeder Run.
+    def schedule_uv_cache_maintenance():
+        from app.services.scheduler import get_scheduler
+        from app.services.uv_cache_maintenance import run_uv_cache_maintenance_job
+        scheduler = get_scheduler()
+        if scheduler is not None:
+            # Callable auf Modulebene, sonst lehnt der SQLAlchemyJobStore den Job ab.
+            scheduler.add_job(
+                run_uv_cache_maintenance_job,
+                "interval",
+                minutes=60,
+                id="uv_cache_maintenance",
+                replace_existing=True,
+            )
+    if not config.TESTING and config.UV_CACHE_PRUNE:
+        await _run_step(
+            "UV-Cache-Pflege-Job",
+            False,
+            schedule_uv_cache_maintenance,
+            "UV-Cache-Pflege stündlich geplant",
         )
 
     def schedule_git_auto_sync():
