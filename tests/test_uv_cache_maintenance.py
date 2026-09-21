@@ -56,41 +56,49 @@ def _run(session, status):
     return run
 
 
-# --- Schranke: laufende Runs --------------------------------------------------
-
-@pytest.mark.parametrize("status", [RunStatus.PENDING, RunStatus.RUNNING])
-def test_active_runs_are_detected(test_session, status):
-    """
-    PENDING zählt mit: zwischen Anlegen des Runs und dem Wechsel auf RUNNING
-    passiert schon Arbeit am Cache.
-    """
-    _run(test_session, status)
-    assert uvm.has_active_runs(test_session) is True
-
-
-@pytest.mark.parametrize(
-    "status",
-    [RunStatus.SUCCESS, RunStatus.FAILED, RunStatus.INTERRUPTED, RunStatus.WARNING],
-)
-def test_finished_runs_are_not_active(test_session, status):
-    _run(test_session, status)
-    assert uvm.has_active_runs(test_session) is False
-
-
 # --- Politik ------------------------------------------------------------------
+#
+# Ein erster Entwurf hatte ein Gate auf laufende Runs. In Prod bewirkte es das
+# Gegenteil: dort läuft im Minutentakt eine Pipeline, es gibt also kein
+# Leerlauffenster. Das Gate verklemmte sich selbst — Volume voll, Runs hängen,
+# sehen aktiv aus, es wird nicht geräumt, Volume bleibt voll. Im Boot-Log stand
+# "UV-Cache: räumen verschoben, es laufen Runs (0.00 GB frei)", während jeder Run
+# an genau diesem fehlenden Platz scheiterte.
+#
+# Geschützt wird jetzt von uv selbst: `prune` ohne `--force` respektiert Einträge
+# in Benutzung — eine Prüfung an der Wirklichkeit statt an der DB-Buchhaltung.
 
-def test_prunes_when_space_is_short_and_nothing_runs(test_session, cache_dir, monkeypatch):
-    _freier_platz(monkeypatch, 0.1)
+
+def test_prunes_even_while_runs_are_active(test_session, cache_dir, monkeypatch):
+    """
+    Der Regressionstest zur Verklemmung.
+
+    Laufende Runs dürfen das Räumen nicht verhindern. Die Abwägung ist
+    asymmetrisch: ohne Gate scheitert im schlimmsten Fall ein einzelner Run und
+    wird wiederholt, mit Gate scheitern alle dauerhaft.
+    """
+    _run(test_session, RunStatus.RUNNING)
+    _run(test_session, RunStatus.PENDING)
+    _freier_platz(monkeypatch, 0.0)
     gerufen = []
     monkeypatch.setattr(uvm, "prune_uv_cache", lambda: gerufen.append(1) or {"status": "pruned"})
 
-    result = uvm.maintain_uv_cache(test_session)
+    result = uvm.maintain_uv_cache()
 
     assert result["status"] == "pruned"
     assert gerufen == [1]
 
 
-def test_keeps_the_cache_warm_above_the_threshold(test_session, cache_dir, monkeypatch):
+def test_prunes_when_space_is_short(cache_dir, monkeypatch):
+    _freier_platz(monkeypatch, 0.1)
+    gerufen = []
+    monkeypatch.setattr(uvm, "prune_uv_cache", lambda: gerufen.append(1) or {"status": "pruned"})
+
+    assert uvm.maintain_uv_cache()["status"] == "pruned"
+    assert gerufen == [1]
+
+
+def test_keeps_the_cache_warm_above_the_threshold(cache_dir, monkeypatch):
     """
     Oberhalb der Schwelle wird nicht geräumt.
 
@@ -100,37 +108,25 @@ def test_keeps_the_cache_warm_above_the_threshold(test_session, cache_dir, monke
     _freier_platz(monkeypatch, 9.0)
     monkeypatch.setattr(uvm, "prune_uv_cache", lambda: pytest.fail("darf nicht räumen"))
 
-    result = uvm.maintain_uv_cache(test_session)
+    result = uvm.maintain_uv_cache()
 
     assert result["status"] == "skipped"
     assert result["reason"] == "genug Platz"
 
 
-def test_defers_while_runs_are_active(test_session, cache_dir, monkeypatch):
-    """Ein Run, der gerade installiert, liest aus dem Cache."""
-    _freier_platz(monkeypatch, 0.1)
-    _run(test_session, RunStatus.RUNNING)
-    monkeypatch.setattr(uvm, "prune_uv_cache", lambda: pytest.fail("darf nicht räumen"))
-
-    result = uvm.maintain_uv_cache(test_session)
-
-    assert result["status"] == "skipped"
-    assert result["reason"] == "Runs aktiv"
-
-
-def test_does_nothing_when_disabled(test_session, cache_dir, monkeypatch):
+def test_does_nothing_when_disabled(cache_dir, monkeypatch):
     monkeypatch.setattr(config, "UV_CACHE_PRUNE", False)
     monkeypatch.setattr(uvm, "prune_uv_cache", lambda: pytest.fail("darf nicht räumen"))
 
-    assert uvm.maintain_uv_cache(test_session)["status"] == "disabled"
+    assert uvm.maintain_uv_cache()["status"] == "disabled"
 
 
-def test_unmeasurable_volume_does_not_prune(test_session, cache_dir, monkeypatch):
+def test_unmeasurable_volume_does_not_prune(cache_dir, monkeypatch):
     """Ohne Messwert wird nicht geraten."""
     monkeypatch.setattr(uvm, "uv_cache_free_bytes", lambda: None)
     monkeypatch.setattr(uvm, "prune_uv_cache", lambda: pytest.fail("darf nicht räumen"))
 
-    assert uvm.maintain_uv_cache(test_session)["status"] == "unmeasurable"
+    assert uvm.maintain_uv_cache()["status"] == "unmeasurable"
 
 
 # --- Der Aufruf selbst --------------------------------------------------------

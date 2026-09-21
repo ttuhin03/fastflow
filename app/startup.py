@@ -396,28 +396,39 @@ async def run_startup_tasks() -> None:
     # abgeschossenen Vorgängers nicht als "Runs aktiv" gelesen werden. Dieser
     # Moment ist die beste Gelegenheit überhaupt: der Shutdown des Vorgängers hat
     # dessen Worker-Jobs gelöscht.
-    def uv_cache_startup_maintenance():
-        from app.core.database import get_session
+    # Im Hintergrund und nicht blockierend. Ein `uv cache prune --ci` über die
+    # 431.528 Dateien, die in Prod im Cache lagen, sind hunderttausende unlinks auf
+    # Netzwerk-Storage und dauern Minuten. Uvicorn nimmt erst Verbindungen an, wenn
+    # der Lifespan-Start durch ist, und die Liveness-Probe erlaubt gut 60 s
+    # (initialDelaySeconds 30 + 3x10 s). Blockierend geräumt hätte der Pod sich in
+    # einen Crash-Loop geprobt — und bei jedem Neustart von vorn geräumt.
+    #
+    # Dass währenddessen Runs anlaufen, ist hingenommen: Bei vollem Volume
+    # scheitern sie ohnehin am Kopieren, und sobald der Prune Platz gemacht hat,
+    # laufen sie wieder. Ein Gate, das Runs davon abhält, würde in einer Umgebung
+    # mit minütlichem Takt nur alles blockieren.
+    async def uv_cache_startup_maintenance():
         from app.services.uv_cache_maintenance import maintain_uv_cache, wipe_uv_cache
-        if config.UV_CACHE_WIPE_ON_START:
-            result = wipe_uv_cache()
-        else:
-            session_gen = get_session()
-            session = next(session_gen)
-            try:
-                result = maintain_uv_cache(session)
-            finally:
-                session.close()
+        aktion = wipe_uv_cache if config.UV_CACHE_WIPE_ON_START else maintain_uv_cache
+        result = await asyncio.to_thread(aktion)
         # Unbedingt loggen, auch wenn nichts zu tun war: Ein Schritt, der nur bei
-        # Treffern eine Zeile schreibt, ist im Boot-Log nicht von einem Schritt zu
+        # Treffern eine Zeile schreibt, ist im Log nicht von einem zu
         # unterscheiden, der gar nicht gelaufen ist.
         logger.info(
             "UV-Cache-Pflege: %s%s",
             result.get("status"),
             f" ({result['reason']})" if result.get("reason") else "",
         )
+
+    def start_uv_cache_maintenance():
+        asyncio.create_task(uv_cache_startup_maintenance())
     if not config.TESTING:
-        await _run_step("UV-Cache-Pflege", False, uv_cache_startup_maintenance)
+        await _run_step(
+            "UV-Cache-Pflege",
+            False,
+            start_uv_cache_maintenance,
+            "UV-Cache-Pflege beim Start angestossen (Hintergrund)",
+        )
 
     def start_sched():
         from app.services.scheduler import set_main_loop, start_scheduler
