@@ -11,10 +11,16 @@ interface SystemStatusResponse {
   version?: string
 }
 
-const CHECK_ORDER = ['database', 'docker', 'kubernetes', 'uv_cache', 'disk', 'inodes']
+// Whitelist: Was hier fehlt, rendert die Komponente nicht. Reihenfolge wie in
+// run_readiness_checks. shared_cache gated die Probe bewusst nicht — diese Zeile
+// ist damit der Ort, an dem ein volles /shared überhaupt sichtbar wird.
+const CHECK_ORDER = ['database', 'docker', 'kubernetes', 'uv_cache', 'shared_cache', 'disk', 'inodes']
 
+// 'n/a …' heisst "hier gibt es nichts zu prüfen" (kein Unix, Dateisystem ohne
+// Inode-Zahlen), nicht "kaputt". Präfix statt exaktem Vergleich, damit ein neuer
+// n/a-Grund nicht als Ausfall durchschlägt.
 function isOk(value: unknown): boolean {
-  return value === 'ok' || value === 'n/a (nur Unix)'
+  return value === 'ok' || (typeof value === 'string' && value.startsWith('n/a'))
 }
 
 /** A degraded value is a non-ok string that still looks like a soft warning (n/a, skipped, …) */

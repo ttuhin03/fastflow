@@ -11,6 +11,7 @@ Führt Pipeline-Runs als Kubernetes Jobs aus (für containerd-only/Talos-Cluster
 import asyncio
 import json
 import logging
+import os
 import shutil
 import time
 from datetime import datetime, timezone
@@ -107,6 +108,18 @@ def _copy_pipeline_to_shared(pipeline: DiscoveredPipeline, run_id: UUID) -> Path
         else:
             p.unlink(missing_ok=True)
     shutil.copytree(pipeline.path, dest, dirs_exist_ok=True)
+    # copytree schliesst mit copystat(src, dest) ab und hängt dem Ziel damit die
+    # mtime der *Quelle* an — beim Pipeline-Verzeichnis aus dem Git-Checkout also
+    # ein Datum von vor Wochen. Der Waisen-Sweep misst an dieser mtime das Alter
+    # des Verzeichnisses; ohne den Stempel hier ist eine frische Kopie für ihn
+    # sofort alt und die Schonfrist in cleanup_orphaned_shared_pipeline_runs
+    # wirkungslos.
+    try:
+        os.utime(dest, None)
+    except OSError as e:
+        # Der Sweep hat mit dem Run-Status eine zweite, unabhängige Schranke.
+        # Ein fehlender Stempel kostet die Schonfrist, nicht den Run.
+        logger.warning("Zeitstempel für pipeline_runs/%s nicht gesetzt: %s", run_id, e)
     return dest
 
 
@@ -126,18 +139,44 @@ def _cleanup_shared_pipeline_run(run_id: UUID) -> None:
         logger.warning("Cleanup pipeline_runs/%s fehlgeschlagen: %s", run_id, e)
 
 
+# Ein Run-Verzeichnis darf nur verschwinden, wenn der Run nachweislich beendet
+# ist. Deshalb die explizite Liste der Endzustände statt "alles ausser RUNNING":
+# käme ein Status dazu, würde die Negativform das Verzeichnis eines noch
+# laufenden Runs löschen.
+_TERMINAL_RUN_STATUSES = frozenset({
+    RunStatus.SUCCESS,
+    RunStatus.FAILED,
+    RunStatus.INTERRUPTED,
+    RunStatus.WARNING,
+})
+
+# Schonfrist für frische Verzeichnisse. run_container_task legt die Kopie an,
+# bevor es den Run auf RUNNING setzt — dazwischen ist der Run PENDING, und der
+# Statuswechsel kann in einer noch nicht committeten Transaktion stecken. Der
+# Sweep liest aus einer eigenen Session und sieht dann womöglich gar keinen Run,
+# würde also einem gerade startenden Run die Dateien unter den Füssen wegräumen.
+# Solange der Sweep nur beim Start lief, war das folgenlos (es läuft nichts);
+# im periodischen Lauf ist es das nicht.
+_ORPHAN_SWEEP_MIN_AGE_SECONDS = 15 * 60
+
+
 def cleanup_orphaned_shared_pipeline_runs(session: Session) -> int:
     """
-    Löscht alle pipeline_runs/<run_id>-Verzeichnisse im shared Volume, deren Run
-    nicht mehr RUNNING ist (oder in der DB fehlt). Wird beim App-Start aufgerufen,
-    um nach Update bestehende alte Verzeichnisse zu bereinigen.
+    Löscht pipeline_runs/<run_id>-Verzeichnisse beendeter Runs im shared Volume.
+
+    Gelöscht wird nur, was beides erfüllt: der Run steht in einem Endzustand (oder
+    fehlt in der DB) *und* das Verzeichnis ist älter als
+    _ORPHAN_SWEEP_MIN_AGE_SECONDS. Übrig bleiben damit genau die Verzeichnisse,
+    die der finally-Block von run_container_task nicht mehr erreicht hat — etwa
+    weil der Pod mitten im Run gestorben ist.
+
+    Läuft beim App-Start und danach periodisch (siehe startup.py).
     Returns: Anzahl gelöschter Verzeichnisse.
     """
-    from app.models import PipelineRun, RunStatus
-
     base = Path(app_config.KUBERNETES_SHARED_CACHE_MOUNT_PATH) / "pipeline_runs"
     if not base.is_dir():
         return 0
+    cutoff = time.time() - _ORPHAN_SWEEP_MIN_AGE_SECONDS
     deleted = 0
     for entry in base.iterdir():
         if not entry.is_dir():
@@ -145,15 +184,31 @@ def cleanup_orphaned_shared_pipeline_runs(session: Session) -> int:
         try:
             run_id = UUID(entry.name)
         except ValueError:
-            logger.debug("Startup-Cleanup: ignoriere Nicht-UUID-Verzeichnis %s", entry.name)
+            logger.debug("pipeline_runs-Cleanup: ignoriere Nicht-UUID-Verzeichnis %s", entry.name)
             continue
-        run = session.get(PipelineRun, run_id)
-        if run is None or run.status != RunStatus.RUNNING:
-            _cleanup_shared_pipeline_run(run_id)
-            deleted += 1
+        if not _is_finished_run_dir(entry, run_id, cutoff, session):
+            continue
+        _cleanup_shared_pipeline_run(run_id)
+        deleted += 1
     if deleted:
-        logger.info("Startup-Cleanup: %d alte pipeline_runs-Verzeichnisse gelöscht", deleted)
+        logger.info("pipeline_runs-Cleanup: %d Verzeichnis(se) beendeter Runs gelöscht", deleted)
     return deleted
+
+
+def _is_finished_run_dir(entry: Path, run_id: UUID, cutoff: float, session: Session) -> bool:
+    """True wenn das Verzeichnis zu einem beendeten Run gehört und älter als cutoff ist."""
+    # Die mtime taugt als Alter nur, weil _copy_pipeline_to_shared sie nach dem
+    # copytree ausdrücklich auf "jetzt" setzt — copytree selbst vererbt dem Ziel
+    # die mtime der Quelle. Wer das dort entfernt, nimmt dieser Schranke die
+    # Grundlage; der Run-Status unten bleibt dann die einzige.
+    try:
+        if entry.stat().st_mtime > cutoff:
+            return False
+    except OSError:
+        # Zwischen iterdir() und stat() verschwunden — dann gibt es nichts zu tun.
+        return False
+    run = session.get(PipelineRun, run_id)
+    return run is None or run.status in _TERMINAL_RUN_STATUSES
 
 
 def _memory_to_quantity(mem_limit: str) -> str:
@@ -499,10 +554,7 @@ async def run_container_task(
             run.status = RunStatus.FAILED
             run.finished_at = datetime.now(timezone.utc)
             run.exit_code = -1
-            if run.env_vars is None:
-                run.env_vars = {}
-            run.env_vars["_fastflow_error_type"] = "infrastructure_error"
-            run.env_vars["_fastflow_error_message"] = str(e)
+            executor_core.mark_infrastructure_error(run, e)
             session.add(run)
             session.commit()
             await executor_core._update_pipeline_stats(

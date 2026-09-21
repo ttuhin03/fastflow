@@ -357,6 +357,81 @@ def _get_pre_heating_lock(pipeline_name: str) -> asyncio.Lock:
     return _pre_heating_locks[pipeline_name]
 
 
+# Die Meldung landet als error_message im Fehler-Banner der Run-Detailseite.
+# shutil.copytree sammelt bei ENOSPC einen Eintrag pro Datei ein — bei einer
+# Pipeline mit dreistellig vielen Dateien sind das Dutzende Kilobyte, die weder
+# das Banner noch die Spalte brauchen. Der vollständige Fehler samt Traceback
+# steht im Orchestrator-Log.
+INFRASTRUCTURE_ERROR_MESSAGE_CHARS = 2000
+# Im Run-Log genügt der Hinweis, warum es leer ist; die Meldung selbst steht
+# daneben im Banner.
+_RUN_LOG_ERROR_EXCERPT_CHARS = 400
+
+
+def mark_infrastructure_error(run: PipelineRun, error: BaseException) -> None:
+    """
+    Hält einen Infrastruktur-Fehler am Run fest: Fehlertyp, Meldung, Log-Hinweis.
+
+    Der Aufrufer setzt Status und Exit-Code selbst und committet; diese Funktion
+    schreibt nur in ``run.env_vars`` (MutableDict, siehe models.py) und hängt zwei
+    Zeilen an das Run-Log.
+
+    Letzteres, weil ein Infrastruktur-Fehler den Run meist trifft, *bevor* der
+    Container läuft: Es gibt dann keine Container-Logs, die Detailseite zeigt
+    einen leeren Log-Tab, und nichts darin sagt, warum. Der Hinweis nennt deshalb
+    keinen Zeitpunkt — der Catch-all-Handler in _run_container_task greift auch
+    nach dem Container-Start — sondern lässt die Zeilen oberhalb sprechen.
+    """
+    message = str(error)
+    if len(message) > INFRASTRUCTURE_ERROR_MESSAGE_CHARS:
+        message = (
+            message[:INFRASTRUCTURE_ERROR_MESSAGE_CHARS].rstrip()
+            + f"… (gekürzt, vollständig im Orchestrator-Log zu Run {run.id})"
+        )
+    # env_vars ist nullable. Der Default aus dem Modell greift nur für Objekte,
+    # die in Python entstehen — eine Zeile mit SQL NULL lädt als None, und hier
+    # kommt der Run aus session.get(). Ohne diesen Zweig würfe das Schreiben
+    # unten TypeError, und zwar aus einem except-Block heraus: Der Commit
+    # darunter käme nie, der Run bliebe auf RUNNING stehen. Also genau der
+    # Zustand, den diese Funktion verhindern soll.
+    if run.env_vars is None:
+        run.env_vars = {}
+    run.env_vars["_fastflow_error_type"] = "infrastructure_error"
+    run.env_vars["_fastflow_error_message"] = message
+    _append_infrastructure_error_to_run_log(run, message)
+
+
+def _append_infrastructure_error_to_run_log(run: PipelineRun, message: str) -> None:
+    """
+    Hängt den Hinweis an die Log-Datei des Runs.
+
+    Bewusst synchron: zwei Zeilen auf einem Fehlerpfad, der ohnehin gerade
+    abbricht. Fehler beim Schreiben dürfen den Fehlerpfad nicht kapern — das Log
+    ist hier die Zugabe, Fehlertyp und Meldung am Run sind die Hauptsache.
+    """
+    if not run.log_file:
+        return
+    excerpt = " ".join(message.split())[:_RUN_LOG_ERROR_EXCERPT_CHARS]
+    try:
+        log_path = Path(run.log_file)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        # errors="replace": Die Meldung stammt aus str(exc) und kann Surrogates
+        # tragen (Bytes, die ein Client per surrogateescape dekodiert hat). Mit
+        # dem strikten Default wäre der Hinweis genau dann nicht schreibbar,
+        # wenn er am meisten erklärt.
+        with open(log_path, "a", encoding="utf-8", errors="replace") as f:
+            f.write(
+                "[FastFlow] Run durch einen Infrastruktur-Fehler beendet, nicht durch "
+                "die Pipeline selbst — stehen oberhalb keine Zeilen, ist er vor dem "
+                "Container-Start gescheitert.\n"
+                f"[FastFlow] Grund: {excerpt}\n"
+            )
+    # Bewusst breit: nicht nur OSError. Was hier hochkommt, kapert sonst den
+    # Fehlerpfad und kostet den Fehlertyp am Run — die Hauptsache für die Zugabe.
+    except Exception as e:
+        logger.warning("Run-Log-Hinweis für Run %s nicht geschrieben: %s", run.id, e)
+
+
 async def run_pipeline(
     name: str,
     env_vars: Optional[Dict[str, str]] = None,
@@ -1017,11 +1092,7 @@ async def _run_container_task(
             run.status = RunStatus.FAILED
             run.finished_at = datetime.now(timezone.utc)
             run.exit_code = -1
-            # Error-Type als Infrastructure Error markieren (in env_vars für Frontend)
-            if run.env_vars is None:
-                run.env_vars = {}
-            run.env_vars["_fastflow_error_type"] = "infrastructure_error"
-            run.env_vars["_fastflow_error_message"] = str(e)
+            mark_infrastructure_error(run, e)
             session.add(run)
             session.commit()
             
@@ -1051,10 +1122,7 @@ async def _run_container_task(
             run.exit_code = -1
             # Prüfe ob es ein Connection-Error ist (Infrastructure)
             if "connection" in str(e).lower() or "proxy" in str(e).lower() or "unreachable" in str(e).lower():
-                if run.env_vars is None:
-                    run.env_vars = {}
-                run.env_vars["_fastflow_error_type"] = "infrastructure_error"
-                run.env_vars["_fastflow_error_message"] = str(e)
+                mark_infrastructure_error(run, e)
             session.add(run)
             session.commit()
             

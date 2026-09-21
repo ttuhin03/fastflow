@@ -877,6 +877,7 @@
       "docker": "Docker",
       "kubernetes": "Kubernetes",
       "uv_cache": "UV-Cache",
+      "shared_cache": "Shared Volume",
       "disk": "Speicherplatz",
       "inodes": "Inodes"
     }

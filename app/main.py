@@ -217,7 +217,7 @@ async def health_check() -> JSONResponse:
 @limiter.exempt
 async def readiness_check() -> JSONResponse:
     """
-    Readiness-Check: DB, Docker, UV-Cache-Volume und Disk-Space.
+    Readiness-Check: DB, Docker, UV-Cache-Volume, shared Volume und Disk-Space.
     Gibt 503 zurück, wenn die App nicht verkehrsfähig ist.
     Für Kubernetes readinessProbe.
     """
