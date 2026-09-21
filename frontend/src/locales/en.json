@@ -846,7 +846,16 @@
     "defaultPython": "Default Python: {{version}}",
     "sharedVolumeTitle": "Shared volume",
     "sharedVolumeDir": "Pipeline copies, uv cache and Python installs",
-    "sharedVolumeUsedPercent": "{{pct}}% used"
+    "sharedVolumeUsedPercent": "{{pct}}% used",
+    "sharedBreakdownTitle": "What is using the shared volume",
+    "sharedBreakdownButton": "Compute breakdown",
+    "sharedBreakdownRunning": "Computing …",
+    "sharedBreakdownHint": "Reads the whole volume – may take a few seconds.",
+    "sharedBreakdownSummary": "{{files}} files, {{size}} GB, read in {{seconds}} s",
+    "sharedBreakdownOmitted": "… {{count}} more, {{size}} MB in total",
+    "sharedBreakdownUnavailable": "No volume is mounted at this path.",
+    "sharedBreakdownFailed": "Breakdown failed.",
+    "sharedBreakdownFiles": "{{count}} files"
   },
   "notifications": {
     "title": "Notifications",

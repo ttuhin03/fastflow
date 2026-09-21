@@ -12,10 +12,11 @@ import logging
 import os
 import secrets as secrets_module
 import shutil
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 import psutil
-from typing import Optional, Dict, Any, List, Literal
+from typing import Optional, Dict, Any, List, Literal, Tuple
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -70,6 +71,118 @@ def _volume_stats(path: Path | str) -> Optional[Dict[str, Any]]:
         "free_bytes": usage.free,
         "free_gb": round(usage.free / gib, 2),
         "used_percent": round(usage.used / usage.total * 100, 2) if usage.total else 0.0,
+    }
+
+
+# Zwei Ebenen, weil genau die die Frage beantworten: /shared/* zeigt, ob der
+# uv-Cache oder die Pipeline-Kopien den Platz halten, und /shared/uv_cache/*
+# trennt darin die entpackten Wheels (archive-v0) von den Resten alter
+# uv-Versionen (simple-v*, wheels-v*), die gefahrlos weg können.
+_SHARED_BREAKDOWN_DEPTH = 2
+# pipeline_runs kann dreistellig viele Unterverzeichnisse haben. Die grössten
+# sagen alles; der Rest wird zu einer Sammelzeile, damit die Antwort lesbar bleibt.
+_SHARED_BREAKDOWN_MAX_CHILDREN = 15
+
+
+def _walk_sizes(mount: Path) -> Tuple[Dict[Tuple[str, ...], List[int]], int, int]:
+    """
+    Summiert Dateigrössen unter mount, aggregiert auf die ersten Pfadsegmente.
+
+    Ein einzelner Durchlauf, dessen Ergebnis auf Präfixe verteilt wird — wie
+    ``du``, aber ohne den Baum je Ebene erneut zu lesen. Symlinks werden nicht
+    verfolgt; ein unter mount eingehängtes zweites Dateisystem würde hier
+    mitgezählt (``du -x`` täte das nicht).
+
+    Returns: ({Segment-Tupel: [bytes, dateien]}, bytes_gesamt, dateien_gesamt).
+    """
+    buckets: Dict[Tuple[str, ...], List[int]] = {}
+    total_bytes = 0
+    total_files = 0
+    for dirpath, _dirnames, filenames in os.walk(mount, onerror=lambda _e: None):
+        try:
+            segments = Path(dirpath).relative_to(mount).parts
+        except ValueError:
+            continue
+        for filename in filenames:
+            try:
+                size = os.stat(os.path.join(dirpath, filename), follow_symlinks=False).st_size
+            except (OSError, PermissionError):
+                continue
+            total_bytes += size
+            total_files += 1
+            # Lose Dateien direkt im Mount bilden ihren eigenen Eintrag, wie es
+            # `du -sh /shared/*` auch täte.
+            keys = segments or (filename,)
+            for depth in range(1, min(len(keys), _SHARED_BREAKDOWN_DEPTH) + 1):
+                bucket = buckets.setdefault(keys[:depth], [0, 0])
+                bucket[0] += size
+                bucket[1] += 1
+    return buckets, total_bytes, total_files
+
+
+def _breakdown_entry(segments: Tuple[str, ...], stats: List[int], volume_total: int) -> Dict[str, Any]:
+    size_bytes, file_count = stats
+    return {
+        "path": "/".join(segments),
+        "size_bytes": size_bytes,
+        "size_mb": round(size_bytes / (1024 * 1024), 2),
+        "size_gb": round(size_bytes / (1024 ** 3), 2),
+        "file_count": file_count,
+        "percent_of_volume": (
+            round(size_bytes / volume_total * 100, 2) if volume_total else 0.0
+        ),
+    }
+
+
+def _sync_shared_volume_breakdown() -> Dict[str, Any]:
+    """
+    Verzeichnisgrössen unterhalb des shared Volumes, zwei Ebenen tief.
+
+    Teuer: sechsstellige Dateizahlen sind auf diesem Volume normal. Läuft deshalb
+    nur auf Abruf und nicht im Polling-Pfad von GET /storage. Ersetzt das
+    ``du -xsh /shared/*``, für das man sonst Cluster-Zugriff braucht.
+    """
+    mount = Path(str(config.KUBERNETES_SHARED_CACHE_MOUNT_PATH))
+    volume = _volume_stats(mount)
+    if volume is None:
+        return {"dir": str(mount), "available": False, "entries": []}
+
+    started = time.monotonic()
+    buckets, total_bytes, total_files = _walk_sizes(mount)
+    volume_total = volume["total_bytes"]
+
+    entries: List[Dict[str, Any]] = []
+    for segments in sorted(
+        (key for key in buckets if len(key) == 1),
+        key=lambda key: buckets[key][0],
+        reverse=True,
+    ):
+        entry = _breakdown_entry(segments, buckets[segments], volume_total)
+        children = sorted(
+            (key for key in buckets if len(key) == 2 and key[0] == segments[0]),
+            key=lambda key: buckets[key][0],
+            reverse=True,
+        )
+        if children:
+            entry["children"] = [
+                _breakdown_entry(child, buckets[child], volume_total)
+                for child in children[:_SHARED_BREAKDOWN_MAX_CHILDREN]
+            ]
+            rest = children[_SHARED_BREAKDOWN_MAX_CHILDREN:]
+            if rest:
+                entry["children_omitted"] = len(rest)
+                entry["children_omitted_bytes"] = sum(buckets[key][0] for key in rest)
+        entries.append(entry)
+
+    return {
+        "dir": str(mount),
+        "available": True,
+        "volume": volume,
+        "entries": entries,
+        "total_bytes": total_bytes,
+        "total_gb": round(total_bytes / (1024 ** 3), 2),
+        "file_count": total_files,
+        "duration_seconds": round(time.monotonic() - started, 2),
     }
 
 
@@ -992,6 +1105,47 @@ async def get_storage_stats(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Fehler beim Abrufen der Speicherplatz-Statistiken: {str(e)}"
+        )
+
+
+@router.get("/storage/shared-breakdown", response_model=Dict[str, Any])
+async def get_shared_volume_breakdown(
+    current_user: User = Depends(get_current_user)
+) -> Dict[str, Any]:
+    """
+    Gibt die Verzeichnisgrössen des shared Volumes zurück, zwei Ebenen tief.
+
+    Antwortet auf die Frage, die GET /storage offen lässt: *was* hält den Platz.
+    Bewusst ein eigener Endpoint statt ein Feld dort — der Verzeichnis-Durchlauf
+    ist teuer (sechsstellige Dateizahlen sind auf diesem Volume normal) und hat im
+    30-Sekunden-Polling der Speicher-Statistiken nichts zu suchen.
+
+    Ersetzt das `du -xsh /shared/*` im Pod, für das man sonst Cluster-Zugriff
+    braucht — und den auch dann, wenn das Volume gerade volläuft und niemand mit
+    kubectl greifbar ist.
+
+    Returns:
+        - dir: Mount-Pfad des shared Volumes
+        - available: False, wenn dort kein Volume gemountet ist (dann keine entries)
+        - volume: total/used/free/used_percent des Dateisystems
+        - entries: Verzeichnisse der ersten Ebene, grösste zuerst, je mit children
+          der zweiten Ebene (auf die grössten begrenzt, Rest als children_omitted)
+        - total_bytes/total_gb/file_count: Summe des Durchlaufs
+        - duration_seconds: wie lange er gedauert hat
+    """
+    if config.PIPELINE_EXECUTOR != "kubernetes":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Kein shared Volume: PIPELINE_EXECUTOR ist nicht 'kubernetes'",
+        )
+    try:
+        # os.walk über sechsstellig viele Dateien blockiert sonst den Event-Loop
+        # (Liveness / UI), wie beim Payload von GET /storage.
+        return await asyncio.to_thread(_sync_shared_volume_breakdown)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Fehler beim Ermitteln der Shared-Volume-Aufschlüsselung: {str(e)}"
         )
 
 
