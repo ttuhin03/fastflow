@@ -35,6 +35,12 @@ logger = logging.getLogger(__name__)
 
 _GIB = 1024 ** 3
 
+# Ein am Timeout abgeschnittener Prune hat Platz gemacht, aber nicht aufgeräumt.
+# Ohne diese Notiz würde der nächste Lauf an der Schwelle abbiegen ("genug Platz")
+# und der Rest bliebe für immer liegen — beim ersten Aufräumen eines gewachsenen
+# Caches ist genau das der wahrscheinliche Verlauf.
+_letzter_prune_unvollstaendig = False
+
 
 def uv_cache_free_bytes() -> Optional[int]:
     """Freier Platz auf dem Volume des UV-Caches; None wenn nicht messbar."""
@@ -52,6 +58,7 @@ def prune_uv_cache() -> Dict[str, Any]:
     Der freigewordene Platz wird über das Dateisystem gemessen, nicht aus der
     Ausgabe von uv gelesen: Die Zahl soll sagen, was auf dem Volume ankommt.
     """
+    global _letzter_prune_unvollstaendig
     cache_dir = str(config.UV_CACHE_DIR)
     free_before = uv_cache_free_bytes()
     started = time.monotonic()
@@ -63,11 +70,15 @@ def prune_uv_cache() -> Dict[str, Any]:
             timeout=config.UV_CACHE_PRUNE_TIMEOUT,
         )
     except subprocess.TimeoutExpired:
+        _letzter_prune_unvollstaendig = True
+        free_now = uv_cache_free_bytes()
         logger.error(
-            "UV-Cache: prune nach %ds abgebrochen (UV_CACHE_PRUNE_TIMEOUT)",
+            "UV-Cache: prune nach %ds abgebrochen (UV_CACHE_PRUNE_TIMEOUT), jetzt %.2f GB "
+            "frei. Bereits gelöschte Dateien bleiben gelöscht; der nächste Lauf setzt fort.",
             config.UV_CACHE_PRUNE_TIMEOUT,
+            (free_now or 0) / _GIB,
         )
-        return {"status": "timeout", "freed_bytes": 0}
+        return {"status": "timeout", "freed_bytes": max(0, (free_now or 0) - (free_before or 0))}
     except OSError as e:
         logger.error("UV-Cache: prune nicht startbar: %s", e)
         return {"status": "failed", "error": str(e), "freed_bytes": 0}
@@ -81,6 +92,7 @@ def prune_uv_cache() -> Dict[str, Any]:
         )
         return {"status": "failed", "returncode": result.returncode, "freed_bytes": 0}
 
+    _letzter_prune_unvollstaendig = False
     free_after = uv_cache_free_bytes()
     freed = 0
     if free_before is not None and free_after is not None:
@@ -156,8 +168,10 @@ def maintain_uv_cache() -> Dict[str, Any]:
         return {"status": "unmeasurable"}
 
     free_gb = free / _GIB
-    if free_gb >= config.UV_CACHE_PRUNE_MIN_FREE_GB:
+    if free_gb >= config.UV_CACHE_PRUNE_MIN_FREE_GB and not _letzter_prune_unvollstaendig:
         return {"status": "skipped", "reason": "genug Platz", "free_gb": round(free_gb, 2)}
+    if _letzter_prune_unvollstaendig:
+        logger.info("UV-Cache: setze abgebrochenen Prune fort (%.2f GB frei)", free_gb)
 
     logger.warning(
         "UV-Cache: nur %.2f GB frei (Schwelle %.2f GB) — räume mit uv cache prune --ci",

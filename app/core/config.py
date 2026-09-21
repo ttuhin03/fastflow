@@ -287,6 +287,24 @@ class Config:
     Byte mehr frei war und jeder Pipeline-Run beim Kopieren mit ENOSPC scheiterte.
     """
 
+    UV_CACHE_PRUNE_BEFORE_PREHEAT: bool = os.getenv(
+        "UV_CACHE_PRUNE_BEFORE_PREHEAT", "true"
+    ).lower() == "true"
+    """
+    Wenn True: vor jedem Pre-Heating wird der UV-Cache geräumt.
+
+    Das Pre-Heating lädt anschliessend genau das nach, was die Pipelines brauchen —
+    der Cache enthält danach den aktuellen Satz und sonst nichts. Damit kann sich
+    gar nicht erst ansammeln, was sonst über Monate zu 14 GB Altlast wird, und die
+    Notfallschwelle unten wird praktisch nie erreicht.
+
+    Bezahlbar, weil das Räumen eines sauberen Caches nichts kostet (gemessen: 0,5 s
+    für 5.486 Dateien) und das Nachladen ohnehin passiert. Teuer ist nur der kalte
+    Cache direkt danach: rund 10 s je Pipeline, bis ihre Pakete wieder da sind.
+    Bei einem Sync-Intervall von Stunden ist das irrelevant; wer im Minutentakt
+    synchronisiert, sollte das hier abschalten und sich auf die Schwelle verlassen.
+    """
+
     UV_CACHE_PRUNE_MIN_FREE_GB: float = float(os.getenv("UV_CACHE_PRUNE_MIN_FREE_GB", "2.0"))
     """
     Schwelle für den Prune beim Start: darunter wird geräumt, darüber nicht.
@@ -296,13 +314,18 @@ class Config:
     Runs zu räumen — der Shutdown des Vorgängers hat dessen Jobs gelöscht.
     """
 
-    UV_CACHE_PRUNE_TIMEOUT: int = max(30, int(os.getenv("UV_CACHE_PRUNE_TIMEOUT", "900")))
+    UV_CACHE_PRUNE_TIMEOUT: int = max(30, int(os.getenv("UV_CACHE_PRUNE_TIMEOUT", "5400")))
     """
     Obergrenze für einen `uv cache prune`-Aufruf in Sekunden.
 
-    Grosszügig, weil der Aufruf hunderttausende Dateien anfasst: ein Durchlauf über
-    438.866 Dateien brauchte allein zum Lesen 218 s. Ohne Grenze könnte ein hängender
-    Storage-Mount den Job dauerhaft blockieren.
+    Grosszügig bemessen, weil der Aufruf hunderttausende Dateien löscht. In Prod
+    gemessen: rund 0,17 GB pro Minute auf dem Netzwerk-Volume, für die aufgelaufenen
+    ~13 GB also gut 75 Minuten. Mit den ursprünglich gesetzten 900 s wäre der erste
+    Durchlauf bei knapp 2,5 GB abgeschnitten worden — genug, damit Runs wieder
+    laufen, aber der Rest wäre liegengeblieben.
+
+    Eine Grenze bleibt nötig: ohne sie könnte ein hängender Storage-Mount den Job
+    dauerhaft blockieren.
     """
 
     UV_CACHE_WIPE_ON_START: bool = os.getenv("UV_CACHE_WIPE_ON_START", "false").lower() == "true"

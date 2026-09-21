@@ -27,6 +27,19 @@ from app.services import uv_cache_maintenance as uvm
 GIB = 1024 ** 3
 
 
+@pytest.fixture(autouse=True)
+def _reset_prune_state():
+    """
+    Die Notiz über einen abgebrochenen Prune liegt auf Modulebene.
+
+    Ohne Reset trägt ein Test sie ins nächste und die Schwellen-Tests sehen eine
+    Fortsetzung, wo sie ein Überspringen erwarten.
+    """
+    uvm._letzter_prune_unvollstaendig = False
+    yield
+    uvm._letzter_prune_unvollstaendig = False
+
+
 @pytest.fixture
 def cache_dir(tmp_path, monkeypatch):
     d = tmp_path / "uv_cache"
@@ -239,3 +252,48 @@ def test_scheduler_callable_has_an_importable_reference():
     assert obj_to_ref(uvm.run_uv_cache_maintenance_job) == (
         "app.services.uv_cache_maintenance:run_uv_cache_maintenance_job"
     )
+
+
+# --- Fortsetzung nach Timeout -------------------------------------------------
+#
+# Beim ersten Aufräumen eines gewachsenen Caches ist ein Abbruch der
+# wahrscheinliche Verlauf: in Prod wurden rund 0,17 GB pro Minute frei, für ~13 GB
+# also gut 75 Minuten. Ein abgeschnittener Prune hat Platz gemacht, aber nicht
+# aufgeräumt — würde der nächste Lauf dann an der Schwelle abbiegen, bliebe der
+# Rest für immer liegen.
+
+
+def test_timeout_is_remembered_and_continued_above_the_threshold(cache_dir, monkeypatch):
+    _fake_subprocess(monkeypatch, raises=subprocess.TimeoutExpired("uv", 1))
+    _freier_platz(monkeypatch, 0.1)
+    uvm.prune_uv_cache()
+    assert uvm._letzter_prune_unvollstaendig is True
+
+    # Jetzt ist wieder Platz — ohne die Notiz würde hier übersprungen.
+    _freier_platz(monkeypatch, 9.0)
+    gerufen = []
+    monkeypatch.setattr(uvm, "prune_uv_cache", lambda: gerufen.append(1) or {"status": "pruned"})
+
+    assert uvm.maintain_uv_cache()["status"] == "pruned"
+    assert gerufen == [1]
+
+
+def test_completed_prune_clears_the_note(cache_dir, monkeypatch):
+    uvm._letzter_prune_unvollstaendig = True
+    _fake_subprocess(monkeypatch)
+    _freier_platz(monkeypatch, 0.1, 9.0)
+
+    uvm.prune_uv_cache()
+
+    assert uvm._letzter_prune_unvollstaendig is False
+
+
+def test_timeout_reports_the_partial_gain(cache_dir, monkeypatch):
+    """Was bis zum Abbruch frei wurde, bleibt frei — und soll auch so gemeldet werden."""
+    _fake_subprocess(monkeypatch, raises=subprocess.TimeoutExpired("uv", 1))
+    _freier_platz(monkeypatch, 0.1, 2.6)
+
+    result = uvm.prune_uv_cache()
+
+    assert result["status"] == "timeout"
+    assert result["freed_bytes"] == pytest.approx(2.5 * GIB, rel=0.01)

@@ -536,6 +536,17 @@ def _ensure_python_versions(versions: Set[str]) -> None:
 
 async def _run_python_preheat(session: Session) -> Dict[str, Dict[str, Any]]:
     """Führt Python-Preheating aus: uv python install + uv pip compile für jede Pipeline mit requirements.txt."""
+    # Vor dem Nachladen räumen, nicht danach und nicht daneben. Danach wäre
+    # sinnlos — `--ci` würde genau das wieder wegwerfen, was gerade geladen wurde.
+    # Daneben war der bisherige Zustand: Räumen und Pre-Heating liefen als zwei
+    # Hintergrund-Aufgaben gleichzeitig und behinderten sich ("Could not acquire
+    # lock", abgebrochene Downloads). Nacheinander ist beides weg, und der Cache
+    # enthält hinterher genau den aktuellen Satz.
+    if config.UV_CACHE_PRUNE and config.UV_CACHE_PRUNE_BEFORE_PREHEAT:
+        from app.services.uv_cache_maintenance import prune_uv_cache
+        logger.info("Pre-Heating: räume den UV-Cache, bevor neu geladen wird")
+        await asyncio.get_running_loop().run_in_executor(_executor, prune_uv_cache)
+
     pre_heat_results: Dict[str, Dict[str, Any]] = {}
     versions = get_required_python_versions()
     if versions:
