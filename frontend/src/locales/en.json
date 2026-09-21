@@ -855,7 +855,9 @@
     "sharedBreakdownOmitted": "… {{count}} more, {{size}} MB in total",
     "sharedBreakdownUnavailable": "No volume is mounted at this path.",
     "sharedBreakdownFailed": "Breakdown failed.",
-    "sharedBreakdownFiles": "{{count}} files"
+    "sharedBreakdownFiles": "{{count}} files",
+    "sharedBreakdownRunningFor": "Computing … ({{seconds}} s)",
+    "sharedBreakdownStale": "Computed at {{time}}"
   },
   "notifications": {
     "title": "Notifications",

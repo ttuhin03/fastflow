@@ -855,7 +855,9 @@
     "sharedBreakdownOmitted": "… {{count}} weitere, zusammen {{size}} MB",
     "sharedBreakdownUnavailable": "Unter diesem Pfad ist kein Volume gemountet.",
     "sharedBreakdownFailed": "Aufschlüsselung fehlgeschlagen.",
-    "sharedBreakdownFiles": "{{count}} Dateien"
+    "sharedBreakdownFiles": "{{count}} Dateien",
+    "sharedBreakdownRunningFor": "Wird berechnet … ({{seconds}} s)",
+    "sharedBreakdownStale": "Gerechnet um {{time}}"
   },
   "notifications": {
     "title": "Benachrichtigungen",
