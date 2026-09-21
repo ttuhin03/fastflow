@@ -1,6 +1,11 @@
 """Tests für Speicher-Statistik und UV-Cache-Hilfsfunktionen."""
 
+import threading
+import time
+
 import pytest
+
+from app.api import settings as settings_api
 
 from app.api.settings import (
     _directory_size_bytes,
@@ -39,6 +44,19 @@ def test_directory_size_bytes_sums_files(tmp_path):
 # Volume und kam in diesen Statistiken nicht vor — obwohl dort die Pipeline-
 # Kopien, der uv-Cache und die Python-Installationen liegen und jeder Run
 # scheitert, sobald es volläuft. Die Seite sah dabei gesund aus.
+
+
+@pytest.fixture(autouse=True)
+def _reset_breakdown_state():
+    """
+    Der Zustand der Aufschlüsselung liegt auf Modulebene.
+
+    Ohne Reset trägt ein Test das Ergebnis des vorherigen mit sich — der
+    "noch nie gerechnet"-Test sieht dann ein fertiges Resultat.
+    """
+    settings_api._shared_breakdown_state = {"status": "never"}
+    yield
+    settings_api._shared_breakdown_state = {"status": "never"}
 
 
 @pytest.fixture
@@ -215,28 +233,125 @@ def test_breakdown_reports_an_unmounted_volume(tmp_path, monkeypatch):
     assert result["entries"] == []
 
 
-def test_breakdown_endpoint_returns_the_entries(
+def _warte_auf_ergebnis(client, versuche=100):
+    """Pollt GET, bis die Hintergrund-Rechnung durch ist."""
+    for _ in range(versuche):
+        body = client.get("/api/settings/storage/shared-breakdown").json()
+        if body["status"] != "running":
+            return body
+        time.sleep(0.02)
+    raise AssertionError(f"Rechnung nicht fertig geworden: {body}")
+
+
+def test_breakdown_runs_in_the_background_and_reports_the_result(
     authenticated_client, kubernetes_shared_volume
 ):
+    """
+    Zweistufig, weil der Durchlauf länger dauern kann als das Client-Timeout.
+
+    Synchron in der Anfrage gerechnet lief er ins 30-Sekunden-Timeout von
+    apiClient: der Aufrufer sah einen Fehler, der Server harkte weiter, und das
+    Ergebnis landete nirgends.
+    """
     _fuelle(kubernetes_shared_volume, {"uv_cache/archive-v0/gross": 4096})
 
-    response = authenticated_client.get("/api/settings/storage/shared-breakdown")
+    gestartet = authenticated_client.post("/api/settings/storage/shared-breakdown")
+    assert gestartet.status_code == 200
+    assert gestartet.json()["status"] in ("running", "done")
 
-    assert response.status_code == 200
-    body = response.json()
-    assert body["entries"][0]["path"] == "uv_cache"
-    assert body["file_count"] == 1
-    assert "duration_seconds" in body
+    body = _warte_auf_ergebnis(authenticated_client)
+
+    assert body["status"] == "done"
+    assert body["result"]["entries"][0]["path"] == "uv_cache"
+    assert body["result"]["file_count"] == 1
+    assert body["started_at"] and body["finished_at"]
 
 
-def test_breakdown_endpoint_needs_authentication(client, kubernetes_shared_volume):
+def test_breakdown_is_never_computed_before_the_first_trigger(
+    authenticated_client, kubernetes_shared_volume
+):
+    """Ein GET allein darf das Volume nicht durchharken."""
+    body = authenticated_client.get("/api/settings/storage/shared-breakdown").json()
+
+    assert body["status"] == "never"
+    assert "result" not in body or body["result"] is None
+
+
+def test_second_trigger_does_not_start_a_second_walk(
+    authenticated_client, kubernetes_shared_volume, monkeypatch
+):
+    """Ein zweiter Klick während des Durchlaufs würde sonst einen Thread nachlegen."""
+    laeuft = threading.Event()
+    weiter = threading.Event()
+    aufrufe = []
+
+    def _langsam():
+        aufrufe.append(1)
+        laeuft.set()
+        weiter.wait(timeout=5)
+        return {"dir": "/shared", "available": True, "entries": []}
+
+    monkeypatch.setattr(settings_api, "_sync_shared_volume_breakdown", _langsam)
+
+    authenticated_client.post("/api/settings/storage/shared-breakdown")
+    assert laeuft.wait(timeout=5)
+    zweiter = authenticated_client.post("/api/settings/storage/shared-breakdown")
+
+    assert zweiter.json()["status"] == "running"
+    weiter.set()
+    _warte_auf_ergebnis(authenticated_client)
+    assert len(aufrufe) == 1
+
+
+def test_running_state_reports_the_elapsed_time(
+    authenticated_client, kubernetes_shared_volume, monkeypatch
+):
+    """Damit die UI beim Warten etwas anzeigen kann — und nicht nur 'läuft'."""
+    weiter = threading.Event()
+    monkeypatch.setattr(
+        settings_api,
+        "_sync_shared_volume_breakdown",
+        lambda: (weiter.wait(timeout=5), {"dir": "/shared", "available": True, "entries": []})[1],
+    )
+
+    authenticated_client.post("/api/settings/storage/shared-breakdown")
+    body = authenticated_client.get("/api/settings/storage/shared-breakdown").json()
+
+    assert body["status"] == "running"
+    assert body["elapsed_seconds"] >= 0
+    # Die monotone Startzeit ist Interna und gehört nicht in die Antwort.
+    assert "started_monotonic" not in body
+    weiter.set()
+    _warte_auf_ergebnis(authenticated_client)
+
+
+def test_breakdown_failure_is_reported_not_swallowed(
+    authenticated_client, kubernetes_shared_volume, monkeypatch
+):
+    def _kaputt():
+        raise OSError("Volume weg")
+
+    monkeypatch.setattr(settings_api, "_sync_shared_volume_breakdown", _kaputt)
+
+    authenticated_client.post("/api/settings/storage/shared-breakdown")
+    body = _warte_auf_ergebnis(authenticated_client)
+
+    assert body["status"] == "failed"
+    assert "Volume weg" in body["error"]
+
+
+def test_breakdown_endpoints_need_authentication(client, kubernetes_shared_volume):
     """Pfade und Grössen des Volumes gehören nicht in eine offene Antwort."""
     assert client.get("/api/settings/storage/shared-breakdown").status_code in (401, 403)
+    assert client.post("/api/settings/storage/shared-breakdown").status_code in (401, 403)
 
 
-def test_breakdown_endpoint_is_404_without_kubernetes(authenticated_client, monkeypatch):
+def test_breakdown_endpoints_are_404_without_kubernetes(authenticated_client, monkeypatch):
     monkeypatch.setattr(config, "PIPELINE_EXECUTOR", "docker")
 
-    response = authenticated_client.get("/api/settings/storage/shared-breakdown")
-
-    assert response.status_code == 404
+    assert authenticated_client.get(
+        "/api/settings/storage/shared-breakdown"
+    ).status_code == 404
+    assert authenticated_client.post(
+        "/api/settings/storage/shared-breakdown"
+    ).status_code == 404

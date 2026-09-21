@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
@@ -74,6 +74,16 @@ interface SharedBreakdown {
   duration_seconds?: number
 }
 
+/** Die Rechnung läuft im Hintergrund; der Client fragt ihren Zustand ab. */
+interface SharedBreakdownState {
+  status: 'never' | 'running' | 'done' | 'failed'
+  started_at?: string
+  finished_at?: string
+  elapsed_seconds?: number
+  error?: string | null
+  result?: SharedBreakdown | null
+}
+
 export default function StorageStats() {
   const { t } = useTranslation()
   const numberLocale = getFormatLocale()
@@ -87,23 +97,29 @@ export default function StorageStats() {
     refetchInterval: storageInterval,
   })
 
-  // Der Durchlauf liest das ganze Volume und gehört deshalb nicht ins
-  // 30-Sekunden-Polling der Statistiken oben: erst auf Klick, dann nicht wieder.
+  // Der Durchlauf liest das ganze Volume: er gehört nicht ins 30-Sekunden-
+  // Polling der Statistiken oben, und er dauert länger als das Timeout dieses
+  // Clients (30 s). Deshalb startet der Klick eine Rechnung im Hintergrund, und
+  // solange sie läuft, wird ihr Zustand abgefragt.
   const [breakdownRequested, setBreakdownRequested] = useState(false)
-  const {
-    data: breakdown,
-    isFetching: breakdownFetching,
-    isError: breakdownError,
-  } = useQuery<SharedBreakdown>({
+  const { data: breakdown, isError: breakdownError } = useQuery<SharedBreakdownState>({
     queryKey: ['storage-shared-breakdown'],
     queryFn: async () => {
       const response = await apiClient.get('/settings/storage/shared-breakdown')
       return response.data
     },
     enabled: breakdownRequested,
-    refetchInterval: false,
-    staleTime: Infinity,
+    refetchInterval: (query) => (query.state.data?.status === 'running' ? 2000 : false),
+    staleTime: 0,
   })
+  const startBreakdown = useMutation({
+    mutationFn: async () => {
+      await apiClient.post('/settings/storage/shared-breakdown')
+    },
+    onSuccess: () => setBreakdownRequested(true),
+  })
+  const breakdownBusy = startBreakdown.isPending || breakdown?.status === 'running'
+  const breakdownResult = breakdown?.status === 'done' ? breakdown.result : undefined
 
   if (isLoading) {
     return (
@@ -431,36 +447,45 @@ export default function StorageStats() {
             <button
               type="button"
               className="btn btn-secondary btn-sm"
-              onClick={() => setBreakdownRequested(true)}
-              disabled={breakdownFetching}
+              onClick={() => startBreakdown.mutate()}
+              disabled={breakdownBusy}
             >
-              {breakdownFetching
+              {breakdownBusy
                 ? t('storage.sharedBreakdownRunning')
                 : t('storage.sharedBreakdownButton')}
             </button>
           </div>
 
-          {!breakdownRequested && (
+          {!breakdownRequested && !startBreakdown.isPending && (
             <p className="stat-detail-small">{t('storage.sharedBreakdownHint')}</p>
           )}
-          {breakdownError && (
-            <p className="stat-detail percentage high">{t('storage.sharedBreakdownFailed')}</p>
+          {breakdown?.status === 'running' && (
+            <p className="stat-detail-small">
+              {t('storage.sharedBreakdownRunningFor', {
+                seconds: (breakdown.elapsed_seconds ?? 0).toFixed(0),
+              })}
+            </p>
           )}
-          {breakdown && !breakdown.available && (
+          {(breakdownError || startBreakdown.isError || breakdown?.status === 'failed') && (
+            <p className="stat-detail percentage high">
+              {breakdown?.error || t('storage.sharedBreakdownFailed')}
+            </p>
+          )}
+          {breakdown?.status === 'done' && breakdownResult && !breakdownResult.available && (
             <p className="stat-detail-small">{t('storage.sharedBreakdownUnavailable')}</p>
           )}
 
-          {breakdown?.available && (
+          {breakdownResult?.available && (
             <>
               <p className="stat-detail-small">
                 {t('storage.sharedBreakdownSummary', {
-                  files: (breakdown.file_count ?? 0).toLocaleString(numberLocale),
-                  size: (breakdown.total_gb ?? 0).toFixed(2),
-                  seconds: (breakdown.duration_seconds ?? 0).toFixed(1),
+                  files: (breakdownResult.file_count ?? 0).toLocaleString(numberLocale),
+                  size: (breakdownResult.total_gb ?? 0).toFixed(2),
+                  seconds: (breakdownResult.duration_seconds ?? 0).toFixed(1),
                 })}
               </p>
               <ul className="shared-breakdown__list">
-                {breakdown.entries.map((entry) => (
+                {breakdownResult.entries.map((entry) => (
                   <li key={entry.path} className="shared-breakdown__entry">
                     <div className="shared-breakdown__row">
                       <span className="shared-breakdown__path">{entry.path}</span>

@@ -12,6 +12,7 @@ import logging
 import os
 import secrets as secrets_module
 import shutil
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -132,6 +133,71 @@ def _breakdown_entry(segments: Tuple[str, ...], stats: List[int], volume_total: 
             round(size_bytes / volume_total * 100, 2) if volume_total else 0.0
         ),
     }
+
+
+# Der Durchlauf kann Minuten dauern, der API-Client bricht nach 30 Sekunden ab
+# (frontend/src/api/client.ts). Synchron in der Anfrage gerechnet lief er deshalb
+# ins Timeout, während der Server weiterharkte: Der Aufrufer sah einen Fehler und
+# das Ergebnis landete nirgends. Also im Hintergrund rechnen, Ergebnis hier
+# ablegen, und der Aufrufer fragt den Zustand ab.
+_shared_breakdown_lock = threading.Lock()
+_shared_breakdown_state: Dict[str, Any] = {"status": "never"}
+# Referenz halten: ohne sie kann der Garbage Collector den Task einsammeln,
+# bevor der Thread fertig ist.
+_shared_breakdown_task: Optional[Any] = None
+
+
+def _shared_breakdown_snapshot() -> Dict[str, Any]:
+    """Kopie des Zustands; ergänzt bei laufender Rechnung die verstrichene Zeit."""
+    with _shared_breakdown_lock:
+        state = dict(_shared_breakdown_state)
+    started = state.pop("started_monotonic", None)
+    if state.get("status") == "running" and started is not None:
+        state["elapsed_seconds"] = round(time.monotonic() - started, 1)
+    return state
+
+
+def _run_shared_breakdown() -> None:
+    """Rechnet im Worker-Thread und legt Ergebnis oder Fehler im Zustand ab."""
+    global _shared_breakdown_state
+    try:
+        finished: Dict[str, Any] = {
+            "status": "done",
+            "result": _sync_shared_volume_breakdown(),
+            "error": None,
+        }
+    except Exception as e:
+        logger.exception("Shared-Volume-Aufschlüsselung fehlgeschlagen")
+        finished = {"status": "failed", "result": None, "error": str(e)}
+    finished["finished_at"] = datetime.now(timezone.utc).isoformat()
+    with _shared_breakdown_lock:
+        finished["started_at"] = _shared_breakdown_state.get("started_at")
+        _shared_breakdown_state = finished
+
+
+def _start_shared_breakdown() -> Dict[str, Any]:
+    """
+    Startet die Rechnung, falls nicht schon eine läuft. Gibt den Zustand zurück.
+
+    Der Wächter ist wichtig: Ein zweiter Klick während eines Durchlaufs würde
+    sonst einen weiteren Thread über dasselbe Volume schicken.
+    """
+    global _shared_breakdown_state, _shared_breakdown_task
+    with _shared_breakdown_lock:
+        running = _shared_breakdown_state.get("status") == "running"
+        if not running:
+            _shared_breakdown_state = {
+                "status": "running",
+                "started_at": datetime.now(timezone.utc).isoformat(),
+                "started_monotonic": time.monotonic(),
+                "result": None,
+                "error": None,
+            }
+    if not running:
+        _shared_breakdown_task = asyncio.create_task(
+            asyncio.to_thread(_run_shared_breakdown)
+        )
+    return _shared_breakdown_snapshot()
 
 
 def _sync_shared_volume_breakdown() -> Dict[str, Any]:
@@ -1108,45 +1174,60 @@ async def get_storage_stats(
         )
 
 
-@router.get("/storage/shared-breakdown", response_model=Dict[str, Any])
-async def get_shared_volume_breakdown(
-    current_user: User = Depends(get_current_user)
-) -> Dict[str, Any]:
-    """
-    Gibt die Verzeichnisgrössen des shared Volumes zurück, zwei Ebenen tief.
-
-    Antwortet auf die Frage, die GET /storage offen lässt: *was* hält den Platz.
-    Bewusst ein eigener Endpoint statt ein Feld dort — der Verzeichnis-Durchlauf
-    ist teuer (sechsstellige Dateizahlen sind auf diesem Volume normal) und hat im
-    30-Sekunden-Polling der Speicher-Statistiken nichts zu suchen.
-
-    Ersetzt das `du -xsh /shared/*` im Pod, für das man sonst Cluster-Zugriff
-    braucht — und den auch dann, wenn das Volume gerade volläuft und niemand mit
-    kubectl greifbar ist.
-
-    Returns:
-        - dir: Mount-Pfad des shared Volumes
-        - available: False, wenn dort kein Volume gemountet ist (dann keine entries)
-        - volume: total/used/free/used_percent des Dateisystems
-        - entries: Verzeichnisse der ersten Ebene, grösste zuerst, je mit children
-          der zweiten Ebene (auf die grössten begrenzt, Rest als children_omitted)
-        - total_bytes/total_gb/file_count: Summe des Durchlaufs
-        - duration_seconds: wie lange er gedauert hat
-    """
+def _require_shared_volume() -> None:
+    """404, wenn es kein shared Volume gibt (Docker-Betrieb)."""
     if config.PIPELINE_EXECUTOR != "kubernetes":
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Kein shared Volume: PIPELINE_EXECUTOR ist nicht 'kubernetes'",
         )
-    try:
-        # os.walk über sechsstellig viele Dateien blockiert sonst den Event-Loop
-        # (Liveness / UI), wie beim Payload von GET /storage.
-        return await asyncio.to_thread(_sync_shared_volume_breakdown)
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Fehler beim Ermitteln der Shared-Volume-Aufschlüsselung: {str(e)}"
-        )
+
+
+@router.post("/storage/shared-breakdown", response_model=Dict[str, Any])
+async def start_shared_volume_breakdown(
+    current_user: User = Depends(require_write)
+) -> Dict[str, Any]:
+    """
+    Startet die Aufschlüsselung des shared Volumes im Hintergrund.
+
+    Antwortet sofort mit dem Zustand; das Ergebnis holt GET auf denselben Pfad.
+    Der Umweg ist nötig, weil der Durchlauf das ganze Volume liest und damit
+    länger dauern kann als das Timeout des API-Clients (30 s) — synchron
+    gerechnet sah der Aufrufer nur einen Abbruch, während der Server weiterlief
+    und das Ergebnis nirgends landete.
+
+    Läuft schon eine Rechnung, wird keine zweite gestartet.
+    """
+    _require_shared_volume()
+    return _start_shared_breakdown()
+
+
+@router.get("/storage/shared-breakdown", response_model=Dict[str, Any])
+async def get_shared_volume_breakdown(
+    current_user: User = Depends(get_current_user)
+) -> Dict[str, Any]:
+    """
+    Gibt den Zustand der Aufschlüsselung des shared Volumes zurück.
+
+    Antwortet auf die Frage, die GET /storage offen lässt: *was* hält den Platz.
+    Ersetzt das `du -xsh /shared/*` im Pod, für das man sonst Cluster-Zugriff
+    braucht — und den auch dann, wenn das Volume gerade vollläuft und niemand mit
+    kubectl greifbar ist.
+
+    Returns:
+        - status: never (noch nie gerechnet) | running | done | failed
+        - started_at/finished_at: Zeitstempel der Rechnung
+        - elapsed_seconds: bei running, wie lange sie schon läuft
+        - error: Fehlermeldung bei failed
+        - result (bei done):
+          - dir: Mount-Pfad, available: False wenn dort kein Volume liegt
+          - volume: total/used/free/used_percent des Dateisystems
+          - entries: Verzeichnisse der ersten Ebene, grösste zuerst, je mit
+            children der zweiten Ebene (begrenzt, Rest als children_omitted)
+          - total_bytes/total_gb/file_count/duration_seconds des Durchlaufs
+    """
+    _require_shared_volume()
+    return _shared_breakdown_snapshot()
 
 
 @router.post("/test-email", response_model=Dict[str, str])

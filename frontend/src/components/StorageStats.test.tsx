@@ -16,8 +16,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import StorageStats from './StorageStats'
 
 const get = vi.fn()
+const post = vi.fn()
 vi.mock('../api/client', () => ({
-  default: { get: (...args: unknown[]) => get(...args) },
+  default: {
+    get: (...args: unknown[]) => get(...args),
+    post: (...args: unknown[]) => post(...args),
+  },
 }))
 
 const BASIS = {
@@ -39,11 +43,11 @@ const VOLL = {
 
 function renderStats(
   extra: Record<string, unknown> = {},
-  breakdown?: Record<string, unknown>,
+  breakdownState?: Record<string, unknown>,
 ) {
   get.mockImplementation((url: string) =>
     url.includes('shared-breakdown')
-      ? Promise.resolve({ data: breakdown })
+      ? Promise.resolve({ data: breakdownState })
       : Promise.resolve({ data: { ...BASIS, ...extra } }),
   )
   const queryClient = new QueryClient({
@@ -58,6 +62,8 @@ function renderStats(
 
 beforeEach(() => {
   get.mockReset()
+  post.mockReset()
+  post.mockResolvedValue({ data: { status: 'running' } })
 })
 
 describe('StorageStats', () => {
@@ -116,53 +122,82 @@ describe('StorageStats', () => {
     expect(urls.some((url) => url.includes('shared-breakdown'))).toBe(false)
   })
 
-  it('zeigt die Aufschlüsselung nach dem Klick, mit zweiter Ebene', async () => {
+  it('startet die Rechnung per POST und zeigt das Ergebnis, mit zweiter Ebene', async () => {
+    // Zweistufig, weil der Durchlauf länger dauern kann als das 30-Sekunden-
+    // Timeout von apiClient: POST startet, GET holt den Zustand.
     renderStats(VOLL, {
-      dir: '/shared',
-      available: true,
-      total_gb: 9.5,
-      file_count: 162959,
-      duration_seconds: 4.7,
-      entries: [
-        {
-          path: 'uv_cache',
-          size_mb: 8000,
-          size_gb: 7.81,
-          file_count: 101948,
-          percent_of_volume: 80.0,
-          children: [
-            {
-              path: 'uv_cache/archive-v0',
-              size_mb: 2595.2,
-              size_gb: 2.53,
-              file_count: 86071,
-              percent_of_volume: 26.0,
-            },
-          ],
-          children_omitted: 3,
-          children_omitted_bytes: 41943040,
-        },
-      ],
+      status: 'done',
+      started_at: '2026-09-21T19:00:00Z',
+      finished_at: '2026-09-21T19:00:05Z',
+      result: {
+        dir: '/shared',
+        available: true,
+        total_gb: 9.5,
+        file_count: 162959,
+        duration_seconds: 4.7,
+        entries: [
+          {
+            path: 'uv_cache',
+            size_mb: 8000,
+            size_gb: 7.81,
+            file_count: 101948,
+            percent_of_volume: 80.0,
+            children: [
+              {
+                path: 'uv_cache/archive-v0',
+                size_mb: 2595.2,
+                size_gb: 2.53,
+                file_count: 86071,
+                percent_of_volume: 26.0,
+              },
+            ],
+            children_omitted: 3,
+            children_omitted_bytes: 41943040,
+          },
+        ],
+      },
     })
     await screen.findByText('9.77 GB')
 
     await userEvent.click(screen.getByRole('button', { name: /Aufschlüsselung berechnen/i }))
 
+    expect(post).toHaveBeenCalledWith('/settings/storage/shared-breakdown')
     expect(await screen.findByText('uv_cache')).toBeInTheDocument()
     expect(screen.getByText('uv_cache/archive-v0')).toBeInTheDocument()
     expect(screen.getByText('7.81 GB')).toBeInTheDocument()
     expect(screen.getByText(/3 weitere/)).toBeInTheDocument()
   })
 
-  it('sagt es, wenn unter dem Pfad kein Volume liegt', async () => {
-    renderStats(VOLL, { dir: '/shared', available: false, entries: [] })
+  it('zeigt beim Warten, wie lange die Rechnung schon läuft', async () => {
+    renderStats(VOLL, { status: 'running', elapsed_seconds: 42.3 })
     await screen.findByText('9.77 GB')
 
     await userEvent.click(screen.getByRole('button', { name: /Aufschlüsselung berechnen/i }))
 
-    expect(
-      await screen.findByText(/kein Volume gemountet/i),
-    ).toBeInTheDocument()
+    expect(await screen.findByText(/Wird berechnet … \(42 s\)/)).toBeInTheDocument()
+    // Der Knopf bleibt gesperrt, solange gerechnet wird.
+    expect(screen.getByRole('button', { name: /Wird berechnet/i })).toBeDisabled()
+  })
+
+  it('zeigt die Fehlermeldung des Servers statt eines Sammeltexts', async () => {
+    renderStats(VOLL, { status: 'failed', error: 'Volume weg', result: null })
+    await screen.findByText('9.77 GB')
+
+    await userEvent.click(screen.getByRole('button', { name: /Aufschlüsselung berechnen/i }))
+
+    expect(await screen.findByText('Volume weg')).toBeInTheDocument()
+  })
+
+  it('sagt es, wenn unter dem Pfad kein Volume liegt', async () => {
+    renderStats(VOLL, {
+      status: 'done',
+      result: { dir: '/shared', available: false, entries: [] },
+    })
+    await screen.findByText('9.77 GB')
+
+    await userEvent.click(screen.getByRole('button', { name: /Aufschlüsselung berechnen/i }))
+
+    expect(await screen.findByText(/kein Volume gemountet/i)).toBeInTheDocument()
   })
 
   it('lässt die Karte weg, wenn kein shared Volume gemeldet wird', async () => {
