@@ -317,6 +317,50 @@ async def test_reconcile_resolves_running_runs_without_job(test_session, batch_a
     assert orphan.finished_at is not None
 
 
+async def test_reconcile_resolves_pending_runs_without_job(test_session, batch_api):
+    """
+    Dieselbe Ursache, einen Schritt früher — und lange unbemerkt.
+
+    Wird der Orchestrator zwischen dem Anlegen der Run-Zeile und dem Wechsel auf
+    RUNNING abgeschossen, bleibt sie auf PENDING. Die Reconciliation sah nur
+    RUNNING, solche Zeilen blieben also für immer offen: in der UI ewig
+    ausstehend, und für jede Prüfung auf "läuft gerade was" ein laufender Run.
+    Genau daran hat sich in Prod die UV-Cache-Pflege verklemmt.
+    """
+    pending = PipelineRun(
+        pipeline_name="nie-gestartet",
+        status=RunStatus.PENDING,
+        log_file=f"/tmp/{uuid4()}.log",
+    )
+    test_session.add(pending)
+    test_session.commit()
+    test_session.refresh(pending)
+
+    await asyncio.wait_for(k8s.reconcile_zombie_jobs(test_session), timeout=10)
+
+    test_session.refresh(pending)
+    assert pending.status == RunStatus.INTERRUPTED
+    assert pending.finished_at is not None
+
+
+async def test_reconcile_keeps_pending_runs_whose_job_exists(test_session, batch_api):
+    """Job da heisst: der Run ist unterwegs, auch wenn die Zeile noch PENDING sagt."""
+    pending = PipelineRun(
+        pipeline_name="gerade-angelaufen",
+        status=RunStatus.PENDING,
+        log_file=f"/tmp/{uuid4()}.log",
+    )
+    test_session.add(pending)
+    test_session.commit()
+    test_session.refresh(pending)
+    batch_api.add_job(pending.id)
+
+    await asyncio.wait_for(k8s.reconcile_zombie_jobs(test_session), timeout=10)
+
+    test_session.refresh(pending)
+    assert pending.status == RunStatus.PENDING
+
+
 async def test_reconcile_keeps_runs_whose_job_still_exists(test_session, batch_api):
     """Ein noch laufender Job heisst: der Run läuft. Nicht anfassen."""
     run = _running_run(test_session, "laeuft-noch")
