@@ -843,7 +843,19 @@
     "uvPercentOfTotal": "{{pct}}% vom Gesamtspeicher",
     "preHeatOn": "Pre-Heat bei Sync: an",
     "preHeatOff": "Pre-Heat bei Sync: aus",
-    "defaultPython": "Standard-Python: {{version}}"
+    "defaultPython": "Standard-Python: {{version}}",
+    "sharedVolumeTitle": "Shared Volume",
+    "sharedVolumeDir": "Pipeline-Kopien, UV-Cache und Python-Installationen",
+    "sharedVolumeUsedPercent": "{{pct}}% belegt",
+    "sharedBreakdownTitle": "Was belegt das Shared Volume",
+    "sharedBreakdownButton": "Aufschlüsselung berechnen",
+    "sharedBreakdownRunning": "Wird berechnet …",
+    "sharedBreakdownHint": "Liest das ganze Volume – kann einige Sekunden dauern.",
+    "sharedBreakdownSummary": "{{files}} Dateien, {{size}} GB, in {{seconds}} s gelesen",
+    "sharedBreakdownOmitted": "… {{count}} weitere, zusammen {{size}} MB",
+    "sharedBreakdownUnavailable": "Unter diesem Pfad ist kein Volume gemountet.",
+    "sharedBreakdownFailed": "Aufschlüsselung fehlgeschlagen.",
+    "sharedBreakdownFiles": "{{count}} Dateien"
   },
   "notifications": {
     "title": "Benachrichtigungen",

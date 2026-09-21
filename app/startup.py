@@ -375,11 +375,21 @@ async def run_startup_tasks() -> None:
         session = next(session_gen)
         try:
             n = cleanup_orphaned_shared_pipeline_runs(session)
-            return f"Kubernetes pipeline_runs Startup-Cleanup: {n} alte Verzeichnisse gelöscht" if n else None
+            # Unbedingt loggen, auch bei 0. Vorher baute dieser Schritt eine
+            # Meldung und gab sie zurück — _run_step verwirft den Rückgabewert
+            # aber und loggt nur sein eigenes success_msg, das hier None war. Der
+            # Schritt war damit im Boot-Log immer stumm und ein "lief, fand
+            # nichts" nicht von einem "lief gar nicht" zu unterscheiden. Genau
+            # diese Verwechslung hat beim Cleanup-Job daneben Zeit gekostet.
+            logger.info(
+                "Kubernetes pipeline_runs Startup-Cleanup: %d Verzeichnis(se) gelöscht", n
+            )
         finally:
             session.close()
     if not config.TESTING and config.PIPELINE_EXECUTOR == "kubernetes":
-        await _run_step("Kubernetes pipeline_runs Startup-Cleanup", False, k8s_cleanup_orphaned_pipeline_runs, None)
+        await _run_step(
+            "Kubernetes pipeline_runs Startup-Cleanup", False, k8s_cleanup_orphaned_pipeline_runs
+        )
 
     def start_sched():
         from app.services.scheduler import set_main_loop, start_scheduler
@@ -410,21 +420,14 @@ async def run_startup_tasks() -> None:
         await _run_step("OAuth-State-Cleanup-Job", False, schedule_oauth_state_cleanup, "OAuth-State-Cleanup alle 5 Minuten geplant")
 
     def schedule_session_cleanup():
-        from app.auth.auth import cleanup_expired_sessions, cleanup_expired_ephemeral_tokens
-        from app.core.database import get_session
+        from app.auth.auth import run_session_cleanup_job
         from app.services.scheduler import get_scheduler
         scheduler = get_scheduler()
         if scheduler is not None:
-            def _run_session_cleanup():
-                session_gen = get_session()
-                session = next(session_gen)
-                try:
-                    cleanup_expired_sessions(session)
-                    cleanup_expired_ephemeral_tokens(session)
-                finally:
-                    session.close()
+            # Die Callable muss auf Modulebene liegen, sonst lehnt der
+            # SQLAlchemyJobStore den Job ab — siehe run_session_cleanup_job.
             scheduler.add_job(
-                _run_session_cleanup,
+                run_session_cleanup_job,
                 "interval",
                 minutes=30,
                 id="session_cleanup",
@@ -439,20 +442,14 @@ async def run_startup_tasks() -> None:
     # Lebensdauer des Pods auf dem shared PVC und fressen genau den Platz,
     # dessen Fehlen jeden Run scheitern lässt.
     def schedule_k8s_pipeline_runs_cleanup():
-        from app.core.database import get_session
-        from app.executor.kubernetes_backend import cleanup_orphaned_shared_pipeline_runs
+        from app.executor.kubernetes_backend import sweep_orphaned_shared_pipeline_runs
         from app.services.scheduler import get_scheduler
         scheduler = get_scheduler()
         if scheduler is not None:
-            def _run_pipeline_runs_cleanup():
-                session_gen = get_session()
-                session = next(session_gen)
-                try:
-                    cleanup_orphaned_shared_pipeline_runs(session)
-                finally:
-                    session.close()
+            # Die Callable muss auf Modulebene liegen, sonst lehnt der
+            # SQLAlchemyJobStore den Job ab — siehe sweep_orphaned_shared_pipeline_runs.
             scheduler.add_job(
-                _run_pipeline_runs_cleanup,
+                sweep_orphaned_shared_pipeline_runs,
                 "interval",
                 minutes=60,
                 id="k8s_pipeline_runs_cleanup",

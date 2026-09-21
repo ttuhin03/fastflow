@@ -198,3 +198,67 @@ def test_a_fresh_copy_is_young_enough_to_be_spared(test_session, pipeline_runs_d
     # Kein Run in der DB — allein das Alter entscheidet.
     assert k8s.cleanup_orphaned_shared_pipeline_runs(test_session) == 0
     assert (dest / "main.py").exists()
+
+
+# --- Scheduler-Einstieg -------------------------------------------------------
+#
+# Der Sweep ist beim ersten Deploy still ausgefallen: startup.py übergab eine in
+# run_startup_tasks verschachtelte Funktion an scheduler.add_job. Der
+# SQLAlchemyJobStore persistiert Jobs und braucht dafür eine importierbare
+# Referenz (modul:name), die eine verschachtelte Funktion nicht hat. add_job
+# lehnte den Job ab, der Startup-Schritt wurde als "nicht kritisch" geloggt, und
+# der stündliche Sweep lief nie.
+#
+# Der Startup-Pfad selbst ist in Tests abgeschaltet (config.TESTING), deshalb
+# prüfen diese Tests die Eigenschaften, an denen es scheiterte.
+
+
+def test_scheduler_callable_has_an_importable_reference():
+    """
+    obj_to_ref ist genau der Aufruf, an dem Job.__getstate__ gescheitert ist.
+
+    Für eine verschachtelte Funktion wirft er "Cannot create a reference to a
+    nested function".
+    """
+    from apscheduler.util import obj_to_ref
+
+    assert obj_to_ref(k8s.sweep_orphaned_shared_pipeline_runs) == (
+        "app.executor.kubernetes_backend:sweep_orphaned_shared_pipeline_runs"
+    )
+
+
+class _FakeSession:
+    def __init__(self):
+        self.closed = False
+
+    def close(self):
+        self.closed = True
+
+
+def test_scheduler_entrypoint_opens_and_closes_its_own_session(monkeypatch):
+    """Der Scheduler ruft ohne Argumente auf — die Session muss von innen kommen."""
+    session = _FakeSession()
+    monkeypatch.setattr(k8s, "get_session", lambda: iter([session]))
+    seen = []
+    monkeypatch.setattr(k8s, "cleanup_orphaned_shared_pipeline_runs", seen.append)
+
+    k8s.sweep_orphaned_shared_pipeline_runs()
+
+    assert seen == [session]
+    assert session.closed
+
+
+def test_scheduler_entrypoint_closes_the_session_on_error(monkeypatch):
+    """Ein stündlicher Job darf pro Fehlschlag keine Session liegen lassen."""
+    session = _FakeSession()
+    monkeypatch.setattr(k8s, "get_session", lambda: iter([session]))
+
+    def _boom(_session):
+        raise OSError("Volume weg")
+
+    monkeypatch.setattr(k8s, "cleanup_orphaned_shared_pipeline_runs", _boom)
+
+    with pytest.raises(OSError):
+        k8s.sweep_orphaned_shared_pipeline_runs()
+
+    assert session.closed

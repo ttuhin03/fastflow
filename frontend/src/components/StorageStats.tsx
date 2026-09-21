@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
@@ -11,6 +12,7 @@ import {
   LuFolder,
   LuBox,
   LuCode,
+  LuHardDrive,
 } from 'react-icons/lu'
 import './StorageStats.css'
 
@@ -37,8 +39,39 @@ interface StorageStatsData {
   uv_python_percentage?: number
   uv_pre_heat?: boolean
   default_python_version?: string
+  /** Shared PVC des Kubernetes-Backends: eigenes Volume, nicht der Gesamtspeicher oben */
+  shared_volume_dir?: string
+  shared_volume_total_gb?: number
+  shared_volume_used_gb?: number
+  shared_volume_free_gb?: number
+  shared_volume_used_percent?: number
   /** false: UV-Cache-/Python-Größen nicht ermittelt (keine Karten) */
   uv_storage_stats_enabled?: boolean
+}
+
+// Ab hier scheitern Runs beim Kopieren ins shared Volume. Eine Stelle für Icon
+// und Balken, damit die beiden nicht auseinanderlaufen.
+const SHARED_VOLUME_WARN_PERCENT = 90
+const SHARED_WARN = (pct?: number) => (pct ?? 0) > SHARED_VOLUME_WARN_PERCENT
+
+interface BreakdownEntry {
+  path: string
+  size_mb: number
+  size_gb: number
+  file_count: number
+  percent_of_volume: number
+  children?: BreakdownEntry[]
+  children_omitted?: number
+  children_omitted_bytes?: number
+}
+
+interface SharedBreakdown {
+  dir: string
+  available: boolean
+  entries: BreakdownEntry[]
+  total_gb?: number
+  file_count?: number
+  duration_seconds?: number
 }
 
 export default function StorageStats() {
@@ -52,6 +85,24 @@ export default function StorageStats() {
       return response.data
     },
     refetchInterval: storageInterval,
+  })
+
+  // Der Durchlauf liest das ganze Volume und gehört deshalb nicht ins
+  // 30-Sekunden-Polling der Statistiken oben: erst auf Klick, dann nicht wieder.
+  const [breakdownRequested, setBreakdownRequested] = useState(false)
+  const {
+    data: breakdown,
+    isFetching: breakdownFetching,
+    isError: breakdownError,
+  } = useQuery<SharedBreakdown>({
+    queryKey: ['storage-shared-breakdown'],
+    queryFn: async () => {
+      const response = await apiClient.get('/settings/storage/shared-breakdown')
+      return response.data
+    },
+    enabled: breakdownRequested,
+    refetchInterval: false,
+    staleTime: Infinity,
   })
 
   if (isLoading) {
@@ -190,6 +241,36 @@ export default function StorageStats() {
             </p>
           </div>
         </div>
+
+        {/* Eigenes Volume: der Gesamtspeicher oben stammt von LOGS_DIR und bleibt
+            unverdächtig, während hier kein Byte mehr frei ist und jeder Run
+            beim Kopieren scheitert. */}
+        {stats.shared_volume_total_gb !== undefined && (
+          <div className="storage-stat-card card">
+            <div className={`stat-icon shared-icon ${SHARED_WARN(stats.shared_volume_used_percent) ? 'shared-warn' : ''}`}>
+              <LuHardDrive />
+            </div>
+            <div className="stat-content">
+              <h4 className="stat-label">{t('storage.sharedVolumeTitle')}</h4>
+              <p className="stat-value">{stats.shared_volume_total_gb.toFixed(2)} GB</p>
+              <div className="disk-usage-bar">
+                <div
+                  className={`disk-usage-fill shared ${SHARED_WARN(stats.shared_volume_used_percent) ? 'shared-warn' : ''}`}
+                  style={{
+                    width: `${(stats.shared_volume_used_percent ?? 0).toFixed(1)}%`,
+                  }}
+                />
+              </div>
+              <p className="stat-detail">
+                {t('storage.diskUsedFree', {
+                  used: (stats.shared_volume_used_gb ?? 0).toFixed(2),
+                  free: (stats.shared_volume_free_gb ?? 0).toFixed(2),
+                })}
+              </p>
+              <p className="stat-detail-small">{t('storage.sharedVolumeDir')}</p>
+            </div>
+          </div>
+        )}
 
         {stats.inode_total !== undefined && stats.inode_free !== undefined && (
           <div className="storage-stat-card card">
@@ -339,6 +420,98 @@ export default function StorageStats() {
           </div>
         )}
       </div>
+
+      {/* Was das Volume belegt, beantwortet GET /storage nicht — und ein
+          `du -xsh /shared/*` im Pod braucht Cluster-Zugriff, der ausgerechnet
+          dann fehlt, wenn das Volume vollläuft. Deshalb hier, auf Klick. */}
+      {stats.shared_volume_total_gb !== undefined && (
+        <div className="shared-breakdown card">
+          <div className="shared-breakdown__head">
+            <h4 className="stat-label">{t('storage.sharedBreakdownTitle')}</h4>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => setBreakdownRequested(true)}
+              disabled={breakdownFetching}
+            >
+              {breakdownFetching
+                ? t('storage.sharedBreakdownRunning')
+                : t('storage.sharedBreakdownButton')}
+            </button>
+          </div>
+
+          {!breakdownRequested && (
+            <p className="stat-detail-small">{t('storage.sharedBreakdownHint')}</p>
+          )}
+          {breakdownError && (
+            <p className="stat-detail percentage high">{t('storage.sharedBreakdownFailed')}</p>
+          )}
+          {breakdown && !breakdown.available && (
+            <p className="stat-detail-small">{t('storage.sharedBreakdownUnavailable')}</p>
+          )}
+
+          {breakdown?.available && (
+            <>
+              <p className="stat-detail-small">
+                {t('storage.sharedBreakdownSummary', {
+                  files: (breakdown.file_count ?? 0).toLocaleString(numberLocale),
+                  size: (breakdown.total_gb ?? 0).toFixed(2),
+                  seconds: (breakdown.duration_seconds ?? 0).toFixed(1),
+                })}
+              </p>
+              <ul className="shared-breakdown__list">
+                {breakdown.entries.map((entry) => (
+                  <li key={entry.path} className="shared-breakdown__entry">
+                    <div className="shared-breakdown__row">
+                      <span className="shared-breakdown__path">{entry.path}</span>
+                      <span className="shared-breakdown__size">
+                        {entry.size_gb >= 1
+                          ? `${entry.size_gb.toFixed(2)} GB`
+                          : t('storage.sizeMb', { size: entry.size_mb.toFixed(1) })}
+                      </span>
+                      <span className="shared-breakdown__meta">
+                        {entry.percent_of_volume.toFixed(1)}% ·{' '}
+                        {t('storage.sharedBreakdownFiles', {
+                          count: entry.file_count.toLocaleString(numberLocale),
+                        })}
+                      </span>
+                    </div>
+                    {entry.children && entry.children.length > 0 && (
+                      <ul className="shared-breakdown__children">
+                        {entry.children.map((child) => (
+                          <li key={child.path} className="shared-breakdown__row">
+                            <span className="shared-breakdown__path">{child.path}</span>
+                            <span className="shared-breakdown__size">
+                              {child.size_gb >= 1
+                                ? `${child.size_gb.toFixed(2)} GB`
+                                : t('storage.sizeMb', { size: child.size_mb.toFixed(1) })}
+                            </span>
+                            <span className="shared-breakdown__meta">
+                              {t('storage.sharedBreakdownFiles', {
+                                count: child.file_count.toLocaleString(numberLocale),
+                              })}
+                            </span>
+                          </li>
+                        ))}
+                        {entry.children_omitted !== undefined && (
+                          <li className="shared-breakdown__row shared-breakdown__omitted">
+                            {t('storage.sharedBreakdownOmitted', {
+                              count: entry.children_omitted,
+                              size: (
+                                (entry.children_omitted_bytes ?? 0) / (1024 * 1024)
+                              ).toFixed(1),
+                            })}
+                          </li>
+                        )}
+                      </ul>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -195,6 +195,24 @@ def cleanup_orphaned_shared_pipeline_runs(session: Session) -> int:
     return deleted
 
 
+def sweep_orphaned_shared_pipeline_runs() -> None:
+    """
+    Parameterloser Einstieg für den Scheduler; öffnet und schliesst seine Session selbst.
+
+    Muss auf Modulebene liegen: APScheduler legt seine Jobs im SQLAlchemyJobStore
+    ab und braucht dafür eine importierbare Referenz auf die Callable
+    (``modul:name``). Eine in run_startup_tasks verschachtelte Funktion hat keine
+    — ``add_job`` lehnt sie mit "cannot be serialized" ab, der Startup-Schritt
+    wird als "nicht kritisch" geloggt, und der Job läuft nie.
+    """
+    session_gen = get_session()
+    session = next(session_gen)
+    try:
+        cleanup_orphaned_shared_pipeline_runs(session)
+    finally:
+        session.close()
+
+
 def _is_finished_run_dir(entry: Path, run_id: UUID, cutoff: float, session: Session) -> bool:
     """True wenn das Verzeichnis zu einem beendeten Run gehört und älter als cutoff ist."""
     # Die mtime taugt als Alter nur, weil _copy_pipeline_to_shared sie nach dem

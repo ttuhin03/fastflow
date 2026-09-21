@@ -383,6 +383,26 @@ def cleanup_expired_ephemeral_tokens(session: Session) -> None:
         logger.info(f"{len(expired_tokens)} abgelaufene Ephemeral-Tokens bereinigt")
 
 
+def run_session_cleanup_job() -> None:
+    """
+    Parameterloser Einstieg für den Scheduler; öffnet und schliesst seine Session selbst.
+
+    Muss auf Modulebene liegen: APScheduler legt seine Jobs im SQLAlchemyJobStore
+    ab und braucht dafür eine importierbare Referenz auf die Callable
+    (``modul:name``). Als in run_startup_tasks verschachtelte Funktion hatte
+    dieser Job keine — ``add_job`` lehnte ihn mit "cannot be serialized" ab, der
+    Startup-Schritt wurde als "nicht kritisch" geloggt, und damit lief das
+    Aufräumen abgelaufener Sessions und Tokens nie.
+    """
+    session_gen = get_session()
+    session = next(session_gen)
+    try:
+        cleanup_expired_sessions(session)
+        cleanup_expired_ephemeral_tokens(session)
+    finally:
+        session.close()
+
+
 def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     db_session: Session = Depends(get_session)
