@@ -337,9 +337,11 @@ class CellLogBuffer:
                     if nachtrag:
                         row.stderr = (row.stderr or "") + nachtrag
                 elif isinstance(event, CellImage):
-                    # Neu zuweisen statt in place zu mutieren: SQLAlchemy erkennt
-                    # Änderungen an einer JSON-Spalte sonst nicht und das Bild
-                    # ginge beim Commit verloren.
+                    # Neu zuweisen statt in place zu mutieren. Die Spalte ist
+                    # MutableDict, ein row.outputs["k"] = v würde also ankommen —
+                    # images ist aber eine Liste *innerhalb* des Dicts, und so tief
+                    # reicht MutableDict nicht. Ein append darauf sieht SQLAlchemy
+                    # nicht und das Bild ginge beim Commit verloren.
                     outputs = dict(row.outputs or {})
                     outputs["images"] = list(outputs.get("images", [])) + [
                         {"mime": event.mime, "data": event.data}

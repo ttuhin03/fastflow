@@ -19,6 +19,22 @@ from sqlalchemy import Enum as SAEnum, Index, Text
 from sqlalchemy.ext.mutable import MutableDict
 from sqlmodel import SQLModel, Field, JSON, Column
 
+# Jede JSON-Spalte in diesem Modul wird als MutableDict.as_mutable(JSON)
+# deklariert, nie als nacktes Column(JSON).
+#
+# Grund: Bei einer nackten JSON-Spalte sieht SQLAlchemy ein In-Place-Schreiben
+# (d["k"] = v) nicht, nimmt die Spalte nicht ins UPDATE auf und verwirft den Wert
+# still. Das hat schon zweimal Daten gekostet — ein Notebook-Bild in
+# RunCellLog.outputs und den Fehlertyp gescheiterter Runs in PipelineRun.env_vars.
+# Beim zweiten Mal blieb der Status sichtbar (skalare Zuweisung, also getrackt)
+# und nur Typ und Meldung fehlten, was in der UI wie ein halb gespeicherter Run
+# aussah.
+#
+# Schranke: MutableDict trackt nur die oberste Ebene. Wer in ein verschachteltes
+# Dict oder eine Liste darin schreibt, muss den Wert weiterhin neu zuweisen —
+# siehe cell_logs.py für outputs["images"]. Festgehalten in
+# tests/test_json_column_mutation_tracking.py.
+
 
 def _utc_now() -> datetime:
     """Gibt die aktuelle UTC-Zeit zurück (zeitzone-aware)."""
@@ -154,22 +170,17 @@ class PipelineRun(SQLModel, table=True):
         default=None,
         description="Pfad zur Metrics-Datei (CPU/RAM über Zeit)"
     )
-    # MutableDict, nicht nur JSON: Der Executor schreibt den Fehlertyp eines
-    # gescheiterten Runs in-place (run.env_vars["_fastflow_error_type"] = ...).
-    # Bei einer nackten JSON-Spalte sieht SQLAlchemy diese Mutation nicht, nimmt
-    # die Spalte nicht ins UPDATE auf und verwirft sie still — status kam an,
-    # error_type nie, und die UI zeigte einen Fehler ohne Typ und ohne Meldung.
-    # Der None-Zweig in den Executor-Handlern hat das verdeckt: Nur wenn env_vars
-    # None war, gab es eine echte Zuweisung; mit default_factory=dict ist es aber
-    # nie None.
+    # MutableDict: Der Executor schreibt den Fehlertyp gescheiterter Runs
+    # in-place hierhin. Zur Begründung siehe den Hinweis bei den Imports.
     env_vars: Dict[str, str] = Field(
         default_factory=dict,
         sa_column=Column(MutableDict.as_mutable(JSON)),
         description="Environment-Variablen (Secrets + Parameter)"
     )
+    # MutableDict siehe Hinweis bei den Imports.
     parameters: Dict[str, str] = Field(
         default_factory=dict,
-        sa_column=Column(JSON),
+        sa_column=Column(MutableDict.as_mutable(JSON)),
         description="Normale Parameter (nicht verschlüsselt)"
     )
     uv_version: Optional[str] = Field(
@@ -235,9 +246,11 @@ class RunCellLog(SQLModel, table=True):
     status: str = Field(default="RUNNING", description="SUCCESS | FAILED | RETRYING | RUNNING")
     stdout: str = Field(default="", sa_column=Column(Text()), description="Stdout der Zelle")
     stderr: str = Field(default="", sa_column=Column(Text()), description="Stderr der Zelle")
+    # MutableDict siehe Hinweis bei den Imports; images ist eine Liste *im*
+    # Dict, dort greift es nicht — cell_logs.py weist deshalb neu zu.
     outputs: Optional[Dict[str, Any]] = Field(
         default=None,
-        sa_column=Column(JSON),
+        sa_column=Column(MutableDict.as_mutable(JSON)),
         description="Optionale Ausgaben (z. B. Bilder als Base64)",
     )
 
@@ -627,7 +640,8 @@ class AuditLogEntry(SQLModel, table=True):
     action: str = Field(index=True, description="Aktion z.B. run_start, system_settings_update, user_block, git_sync, downstream_trigger_create, …")
     resource_type: str = Field(index=True, description="Betroffene Ressource: pipeline, run, user, settings, secret, invite")
     resource_id: Optional[str] = Field(default=None, index=True, description="ID der betroffenen Ressource (z.B. Run-ID, Pipeline-Name)")
-    details: Optional[Dict[str, Any]] = Field(default=None, sa_column=Column(JSON), description="Zusätzliche Daten (z.B. new_run_id)")
+    # MutableDict siehe Hinweis bei den Imports.
+    details: Optional[Dict[str, Any]] = Field(default=None, sa_column=Column(MutableDict.as_mutable(JSON)), description="Zusätzliche Daten (z.B. new_run_id)")
     ip_address: Optional[str] = Field(default=None, description="Client-IP zum Zeitpunkt der Aktion (None bei System-/Hintergrund-Aktionen)")
 
 
