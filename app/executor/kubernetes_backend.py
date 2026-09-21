@@ -1214,7 +1214,7 @@ async def reconcile_zombie_jobs(session: Session) -> None:
 
 def _resolve_running_runs_without_job(session: Session, seen_run_ids: Set[UUID]) -> int:
     """
-    Schliesst RUNNING-Runs ab, zu denen es im Cluster keinen Job mehr gibt.
+    Schliesst offene Runs ab, zu denen es im Cluster keinen Job mehr gibt.
 
     Die Schleife darüber sieht nur noch existierende Jobs. Ein Run, dessen Job
     weg ist, bliebe damit für immer auf RUNNING — und das ist kein Randfall:
@@ -1228,8 +1228,15 @@ def _resolve_running_runs_without_job(session: Session, seen_run_ids: Set[UUID])
     keine Information mehr über den Ausgang, und ein geratener Ausgang wäre
     schlechter als ein ehrliches "abgebrochen".
 
+    PENDING zählt mit, und das war eine Lücke: Wird der Orchestrator zwischen dem
+    Anlegen der Run-Zeile und dem Wechsel auf RUNNING abgeschossen, bleibt sie auf
+    PENDING — dieselbe Ursache, nur einen Schritt früher, und bisher von niemandem
+    aufgelöst. Solche Zeilen blieben für immer offen, liessen den Run in der UI
+    ewig als ausstehend erscheinen und galten jeder Prüfung auf "läuft gerade was"
+    als laufender Run.
+
     Sicher ist das, weil die Reconciliation beim Start läuft, bevor Scheduler
-    und API eigene Runs starten (siehe ``app/startup.py``): jeder RUNNING-Run
+    und API eigene Runs starten (siehe ``app/startup.py``): jeder offene Run
     stammt aus einem früheren Prozess.
 
     Args:
@@ -1240,7 +1247,9 @@ def _resolve_running_runs_without_job(session: Session, seen_run_ids: Set[UUID])
         Anzahl der aufgelösten Runs.
     """
     runs = session.exec(
-        select(PipelineRun).where(PipelineRun.status == RunStatus.RUNNING)
+        select(PipelineRun).where(
+            PipelineRun.status.in_((RunStatus.PENDING, RunStatus.RUNNING))
+        )
     ).all()
     stale = [run for run in runs if run.id not in seen_run_ids]
     if not stale:
@@ -1261,7 +1270,7 @@ def _resolve_running_runs_without_job(session: Session, seen_run_ids: Set[UUID])
     for run_id in resolved:
         _cleanup_shared_pipeline_run(run_id)
     logger.warning(
-        "Zombie-Reconciliation: %d RUNNING-Run(s) ohne Job auf INTERRUPTED gesetzt "
+        "Zombie-Reconciliation: %d offene(r) Run(s) ohne Job auf INTERRUPTED gesetzt "
         "(Job beendet und aufgeräumt, oder Orchestrator im Shutdown abgeschossen)",
         len(resolved),
     )

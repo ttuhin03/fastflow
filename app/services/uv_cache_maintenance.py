@@ -29,29 +29,11 @@ import subprocess
 import time
 from typing import Any, Dict, Optional
 
-from sqlmodel import Session, select
-
 from app.core.config import config
-from app.models import PipelineRun, RunStatus
 
 logger = logging.getLogger(__name__)
 
-# Ein Run, der gerade auflöst oder installiert, liest aus dem Cache; uv hardlinkt
-# aus archive-v0 in die Venvs. PENDING zählt mit, weil zwischen Anlegen des Runs
-# und dem Statuswechsel auf RUNNING schon Arbeit am Cache passiert.
-_ACTIVE_RUN_STATUSES = (RunStatus.PENDING, RunStatus.RUNNING)
-
 _GIB = 1024 ** 3
-
-
-def has_active_runs(session: Session) -> bool:
-    """True, wenn mindestens ein Run nicht in einem Endzustand steht."""
-    statement = (
-        select(PipelineRun.id)
-        .where(PipelineRun.status.in_(_ACTIVE_RUN_STATUSES))
-        .limit(1)
-    )
-    return session.exec(statement).first() is not None
 
 
 def uv_cache_free_bytes() -> Optional[int]:
@@ -145,7 +127,7 @@ def wipe_uv_cache() -> Dict[str, Any]:
     return {"status": "wiped", "freed_bytes": freed, "free_bytes_after": free_after}
 
 
-def maintain_uv_cache(session: Session) -> Dict[str, Any]:
+def maintain_uv_cache() -> Dict[str, Any]:
     """
     Räumt den UV-Cache, wenn der Platz knapp wird. Sonst nichts.
 
@@ -153,6 +135,18 @@ def maintain_uv_cache(session: Session) -> Dict[str, Any]:
     Sinn des Caches, und ``--ci`` wirft ihn fast komplett weg. Erst wenn der Platz
     knapp wird, ist der kalte Cache der bessere von zwei schlechten Zuständen —
     denn ohne Platz scheitert *jeder* Run.
+
+    Es gibt bewusst *keine* Prüfung auf laufende Runs. Ein erster Entwurf hatte
+    eine, und sie hat in Prod genau das Gegenteil bewirkt: dort läuft im
+    Minutentakt eine Pipeline, es gibt also kein Leerlauffenster, und das Gate
+    verklemmte sich selbst — Volume voll, Runs hängen, sehen aktiv aus, es wird
+    nicht geräumt, Volume bleibt voll. Geschützt wird stattdessen von uv selbst:
+    ``prune`` ohne ``--force`` respektiert Einträge, die gerade benutzt werden,
+    und das ist eine Prüfung an der Wirklichkeit statt an der DB-Buchhaltung.
+
+    Die Abwägung ist asymmetrisch: Ohne Gate kann im schlimmsten Fall ein
+    einzelner Run scheitern und wird wiederholt. Mit Gate scheitern alle Runs
+    dauerhaft, weil nie geräumt wird.
     """
     if not config.UV_CACHE_PRUNE:
         return {"status": "disabled"}
@@ -165,13 +159,6 @@ def maintain_uv_cache(session: Session) -> Dict[str, Any]:
     if free_gb >= config.UV_CACHE_PRUNE_MIN_FREE_GB:
         return {"status": "skipped", "reason": "genug Platz", "free_gb": round(free_gb, 2)}
 
-    if has_active_runs(session):
-        # Nicht kritisch: der nächste Lauf oder der nächste Start holt es nach.
-        logger.info(
-            "UV-Cache: räumen verschoben, es laufen Runs (%.2f GB frei)", free_gb
-        )
-        return {"status": "skipped", "reason": "Runs aktiv", "free_gb": round(free_gb, 2)}
-
     logger.warning(
         "UV-Cache: nur %.2f GB frei (Schwelle %.2f GB) — räume mit uv cache prune --ci",
         free_gb,
@@ -182,17 +169,10 @@ def maintain_uv_cache(session: Session) -> Dict[str, Any]:
 
 def run_uv_cache_maintenance_job() -> None:
     """
-    Parameterloser Einstieg für den Scheduler; öffnet und schliesst seine Session selbst.
+    Einstieg für den Scheduler.
 
     Muss auf Modulebene liegen: APScheduler legt seine Jobs im SQLAlchemyJobStore ab
     und braucht dafür eine importierbare Referenz. Eine verschachtelte Funktion
     lehnt ``add_job`` mit "cannot be serialized" ab — der Job fehlt dann still.
     """
-    from app.core.database import get_session
-
-    session_gen = get_session()
-    session = next(session_gen)
-    try:
-        maintain_uv_cache(session)
-    finally:
-        session.close()
+    maintain_uv_cache()
