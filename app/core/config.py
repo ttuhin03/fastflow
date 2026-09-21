@@ -42,6 +42,10 @@ class Config:
         UV_PRE_HEAT: Automatisches Pre-Heating von Dependencies beim Git-Sync
         UV_ALLOW_SOURCE_BUILDS: sdist-Builds im Orchestrator zulassen (unsicher, Standard false)
         UV_STORAGE_STATS: UV-Cache-/Python-Größen in /settings/storage ermitteln (teuer bei großem Cache)
+        UV_CACHE_PRUNE: `uv cache prune` beim Start (bei knappem Platz) und periodisch
+        UV_CACHE_PRUNE_MIN_FREE_GB: Schwelle, unter der beim Start geprunt wird
+        UV_CACHE_PRUNE_TIMEOUT: Obergrenze für einen Prune-Aufruf in Sekunden
+        UV_CACHE_WIPE_ON_START: Notbremse, löscht den UV-Cache beim Start vollständig
         MAX_CONCURRENT_RUNS: Maximale Anzahl gleichzeitiger Pipeline-Runs
         CONTAINER_TIMEOUT: Globaler Timeout für Container in Sekunden (None = unbegrenzt)
         RETRY_ATTEMPTS: Anzahl Retry-Versuche bei fehlgeschlagenen Runs
@@ -271,6 +275,45 @@ class Config:
     Nur aktivieren, wenn das Pipeline-Repository dasselbe Vertrauensniveau hat wie
     der Orchestrator selbst (z. B. Single-Tenant mit geschütztem Branch und
     Review-Pflicht).
+    """
+
+    UV_CACHE_PRUNE: bool = os.getenv("UV_CACHE_PRUNE", "true").lower() == "true"
+    """
+    Wenn True: `uv cache prune` läuft beim Start (nur bei knappem Platz) und periodisch.
+
+    Der Cache wächst sonst unbegrenzt — uv räumt nichts von selbst auf, und jede je
+    aufgelöste Paketversion bleibt als entpacktes Archiv liegen. In Prod standen so
+    14,3 GB in uv_cache/archive-v0 (431.528 Dateien, 98,9 % des Volumes), bis kein
+    Byte mehr frei war und jeder Pipeline-Run beim Kopieren mit ENOSPC scheiterte.
+    """
+
+    UV_CACHE_PRUNE_MIN_FREE_GB: float = float(os.getenv("UV_CACHE_PRUNE_MIN_FREE_GB", "2.0"))
+    """
+    Schwelle für den Prune beim Start: darunter wird geräumt, darüber nicht.
+
+    Beim Start zu prunen kostet Zeit, die der Boot nicht braucht, solange Platz da
+    ist. Bei knappem Platz ist es umgekehrt die einzige Gelegenheit, ohne laufende
+    Runs zu räumen — der Shutdown des Vorgängers hat dessen Jobs gelöscht.
+    """
+
+    UV_CACHE_PRUNE_TIMEOUT: int = max(30, int(os.getenv("UV_CACHE_PRUNE_TIMEOUT", "900")))
+    """
+    Obergrenze für einen `uv cache prune`-Aufruf in Sekunden.
+
+    Grosszügig, weil der Aufruf hunderttausende Dateien anfasst: ein Durchlauf über
+    438.866 Dateien brauchte allein zum Lesen 218 s. Ohne Grenze könnte ein hängender
+    Storage-Mount den Job dauerhaft blockieren.
+    """
+
+    UV_CACHE_WIPE_ON_START: bool = os.getenv("UV_CACHE_WIPE_ON_START", "false").lower() == "true"
+    """
+    Notbremse: löscht UV_CACHE_DIR beim Start vollständig, statt zu prunen.
+
+    Für den Fall "ist wieder voll, muss jetzt laufen". Alles im Cache ist abgeleitet
+    und wird von PyPI nachgeladen, es geht also nichts verloren — der erste Run jeder
+    Pipeline dauert danach aber deutlich länger. Standard aus; bewusst ein eigener
+    Schalter und keine Automatik, weil der Prune das Gleiche ohne kalten Cache
+    erreicht.
     """
 
     UV_STORAGE_STATS: bool = os.getenv("UV_STORAGE_STATS", "false").lower() == "true"
