@@ -843,7 +843,10 @@
     "uvPercentOfTotal": "{{pct}}% of total storage",
     "preHeatOn": "Pre-heat on sync: on",
     "preHeatOff": "Pre-heat on sync: off",
-    "defaultPython": "Default Python: {{version}}"
+    "defaultPython": "Default Python: {{version}}",
+    "sharedVolumeTitle": "Shared volume",
+    "sharedVolumeDir": "Pipeline copies, uv cache and Python installs",
+    "sharedVolumeUsedPercent": "{{pct}}% used"
   },
   "notifications": {
     "title": "Notifications",

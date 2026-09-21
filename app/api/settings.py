@@ -50,6 +50,39 @@ import boto3
 logger = logging.getLogger(__name__)
 
 
+def _volume_stats(path: Path | str) -> Optional[Dict[str, Any]]:
+    """
+    Kennzahlen des Dateisystems, auf dem ``path`` liegt: total/used/free und Füllgrad.
+
+    Billig im Vergleich zu _directory_size_bytes — ein statvfs, kein Verzeichnis-Walk.
+    None, wenn der Pfad fehlt oder nicht lesbar ist (kein gemountetes Volume).
+    """
+    try:
+        usage = shutil.disk_usage(str(path))
+    except (OSError, PermissionError):
+        return None
+    gib = 1024 ** 3
+    return {
+        "total_bytes": usage.total,
+        "total_gb": round(usage.total / gib, 2),
+        "used_bytes": usage.used,
+        "used_gb": round(usage.used / gib, 2),
+        "free_bytes": usage.free,
+        "free_gb": round(usage.free / gib, 2),
+        "used_percent": round(usage.used / usage.total * 100, 2) if usage.total else 0.0,
+    }
+
+
+def _share_of_own_volume(path: Path, size_bytes: int) -> float:
+    """Anteil von size_bytes am Volume, auf dem path liegt; 0.0 wenn nicht messbar."""
+    if size_bytes <= 0:
+        return 0.0
+    volume = _volume_stats(path)
+    if volume is None or not volume["total_bytes"]:
+        return 0.0
+    return round(size_bytes / volume["total_bytes"] * 100, 2)
+
+
 def _directory_size_bytes(root: Path) -> int:
     """Summiert Dateigrößen unter root; fehlendes Verzeichnis oder Fehler → 0."""
     if not root.exists():
@@ -172,11 +205,15 @@ def _sync_build_storage_stats_payload(database_size_bytes: int) -> Dict[str, Any
         uv_python_install_size_bytes = 0
     uv_cache_size_mb = uv_cache_size_bytes / (1024 * 1024)
     uv_python_install_size_mb = uv_python_install_size_bytes / (1024 * 1024)
-    uv_cache_percentage = 0.0
-    uv_python_percentage = 0.0
-    if total_disk_space_bytes > 0:
-        uv_cache_percentage = (uv_cache_size_bytes / total_disk_space_bytes) * 100
-        uv_python_percentage = (uv_python_install_size_bytes / total_disk_space_bytes) * 100
+    # Anteil am Volume, auf dem das Verzeichnis wirklich liegt — nicht am
+    # Gesamtspeicher oben. Der stammt von LOGS_DIR, und im Kubernetes-Betrieb
+    # zeigen UV_CACHE_DIR/UV_PYTHON_INSTALL_DIR auf das shared PVC, also auf ein
+    # anderes Volume. Gegen den falschen Nenner gerechnet war der Anteil bisher
+    # sinnlos: ein voller uv-Cache konnte als harmlose Prozentzahl erscheinen.
+    uv_cache_percentage = _share_of_own_volume(config.UV_CACHE_DIR, uv_cache_size_bytes)
+    uv_python_percentage = _share_of_own_volume(
+        config.UV_PYTHON_INSTALL_DIR, uv_python_install_size_bytes
+    )
 
     result: Dict[str, Any] = {
         "log_files_count": log_files_count,
@@ -201,6 +238,16 @@ def _sync_build_storage_stats_payload(database_size_bytes: int) -> Dict[str, Any
         "default_python_version": config.DEFAULT_PYTHON_VERSION,
         "uv_storage_stats_enabled": config.UV_STORAGE_STATS,
     }
+
+    # Das shared PVC des Kubernetes-Backends ist ein eigenes Volume und tauchte
+    # in diesen Statistiken nirgends auf — obwohl genau dort die Runs scheitern,
+    # wenn es volläuft. Der Gesamtspeicher oben kommt von LOGS_DIR und sah dabei
+    # unverdächtig aus.
+    if config.PIPELINE_EXECUTOR == "kubernetes":
+        shared = _volume_stats(config.KUBERNETES_SHARED_CACHE_MOUNT_PATH)
+        if shared is not None:
+            result["shared_volume_dir"] = str(config.KUBERNETES_SHARED_CACHE_MOUNT_PATH)
+            result.update({f"shared_volume_{key}": value for key, value in shared.items()})
     if inode_total is not None and inode_free is not None:
         result["inode_total"] = inode_total
         result["inode_free"] = inode_free

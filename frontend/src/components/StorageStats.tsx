@@ -11,6 +11,7 @@ import {
   LuFolder,
   LuBox,
   LuCode,
+  LuHardDrive,
 } from 'react-icons/lu'
 import './StorageStats.css'
 
@@ -37,9 +38,20 @@ interface StorageStatsData {
   uv_python_percentage?: number
   uv_pre_heat?: boolean
   default_python_version?: string
+  /** Shared PVC des Kubernetes-Backends: eigenes Volume, nicht der Gesamtspeicher oben */
+  shared_volume_dir?: string
+  shared_volume_total_gb?: number
+  shared_volume_used_gb?: number
+  shared_volume_free_gb?: number
+  shared_volume_used_percent?: number
   /** false: UV-Cache-/Python-Größen nicht ermittelt (keine Karten) */
   uv_storage_stats_enabled?: boolean
 }
+
+// Ab hier scheitern Runs beim Kopieren ins shared Volume. Eine Stelle für Icon
+// und Balken, damit die beiden nicht auseinanderlaufen.
+const SHARED_VOLUME_WARN_PERCENT = 90
+const SHARED_WARN = (pct?: number) => (pct ?? 0) > SHARED_VOLUME_WARN_PERCENT
 
 export default function StorageStats() {
   const { t } = useTranslation()
@@ -190,6 +202,36 @@ export default function StorageStats() {
             </p>
           </div>
         </div>
+
+        {/* Eigenes Volume: der Gesamtspeicher oben stammt von LOGS_DIR und bleibt
+            unverdächtig, während hier kein Byte mehr frei ist und jeder Run
+            beim Kopieren scheitert. */}
+        {stats.shared_volume_total_gb !== undefined && (
+          <div className="storage-stat-card card">
+            <div className={`stat-icon shared-icon ${SHARED_WARN(stats.shared_volume_used_percent) ? 'shared-warn' : ''}`}>
+              <LuHardDrive />
+            </div>
+            <div className="stat-content">
+              <h4 className="stat-label">{t('storage.sharedVolumeTitle')}</h4>
+              <p className="stat-value">{stats.shared_volume_total_gb.toFixed(2)} GB</p>
+              <div className="disk-usage-bar">
+                <div
+                  className={`disk-usage-fill shared ${SHARED_WARN(stats.shared_volume_used_percent) ? 'shared-warn' : ''}`}
+                  style={{
+                    width: `${(stats.shared_volume_used_percent ?? 0).toFixed(1)}%`,
+                  }}
+                />
+              </div>
+              <p className="stat-detail">
+                {t('storage.diskUsedFree', {
+                  used: (stats.shared_volume_used_gb ?? 0).toFixed(2),
+                  free: (stats.shared_volume_free_gb ?? 0).toFixed(2),
+                })}
+              </p>
+              <p className="stat-detail-small">{t('storage.sharedVolumeDir')}</p>
+            </div>
+          </div>
+        )}
 
         {stats.inode_total !== undefined && stats.inode_free !== undefined && (
           <div className="storage-stat-card card">

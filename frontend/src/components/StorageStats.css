@@ -97,6 +97,22 @@
 .disk-usage-fill.inode      { background: var(--color-success); }
 .disk-usage-fill.inode.inode-warn { background: var(--color-error); }
 
+/* Eigene Klassen, nicht die Inode-Klassen mitbenutzt: deren Regeln greifen nur
+   in Kombination (.inode-icon.inode-warn, .disk-usage-fill.inode.inode-warn),
+   ein alleinstehendes inode-warn wäre also wirkungslos geblieben. */
+.storage-stat-card .stat-icon.shared-icon {
+  background-color: var(--color-success-subtle);
+  color: var(--color-success);
+}
+
+.storage-stat-card .stat-icon.shared-icon.shared-warn {
+  background-color: var(--color-error-subtle);
+  color: var(--color-error);
+}
+
+.disk-usage-fill.shared { background: var(--color-success); }
+.disk-usage-fill.shared.shared-warn { background: var(--color-error); }
+
 .storage-stat-card .stat-content {
   flex: 1;
   min-width: 0;
