@@ -285,7 +285,8 @@ async def test_shutdown_does_not_wait_for_the_shared_volume(
 ):
     """
     ``rmtree`` über ein RWX-Volume ist blockierende I/O ohne Obergrenze. Im
-    Shutdown hat sie nichts verloren – der Startup-Cleanup erledigt das.
+    Shutdown hat sie nichts verloren – der Waisen-Sweep erledigt das (beim Start
+    und stündlich, siehe cleanup_orphaned_shared_pipeline_runs).
     """
     shutdown_budget(2)
     run = _running_run(test_session)

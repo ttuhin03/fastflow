@@ -108,6 +108,18 @@ system_disk_total_bytes = Gauge(
     "Gesamter Speicherplatz auf dem Datenverzeichnis in Bytes",
 )
 
+# Eigenes PVC, nicht das Volume von DATA_DIR: Läuft es voll, scheitert jeder
+# Pipeline-Run beim Kopieren, ohne dass die Disk-Gauge oben sich bewegt.
+shared_cache_free_bytes = Gauge(
+    "fastflow_shared_cache_free_bytes",
+    "Freier Speicherplatz auf dem shared Volume des Kubernetes-Backends in Bytes",
+)
+
+shared_cache_total_bytes = Gauge(
+    "fastflow_shared_cache_total_bytes",
+    "Gesamter Speicherplatz auf dem shared Volume des Kubernetes-Backends in Bytes",
+)
+
 # --- Database Metriken ---
 
 database_size_bytes = Gauge(
@@ -182,6 +194,15 @@ def update_system_metrics() -> None:
             system_disk_total_bytes.set(disk.total)
         except Exception as e:
             logger.debug(f"Disk-Metriken nicht verfügbar: {e}")
+
+        # Shared Volume (nur Kubernetes-Backend)
+        if config.PIPELINE_EXECUTOR == "kubernetes":
+            try:
+                shared = psutil.disk_usage(config.KUBERNETES_SHARED_CACHE_MOUNT_PATH)
+                shared_cache_free_bytes.set(shared.free)
+                shared_cache_total_bytes.set(shared.total)
+            except Exception as e:
+                logger.debug(f"Shared-Volume-Metriken nicht verfügbar: {e}")
 
     except ImportError:
         logger.warning("psutil nicht verfügbar für System-Metriken")

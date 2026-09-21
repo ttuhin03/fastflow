@@ -433,6 +433,39 @@ async def run_startup_tasks() -> None:
     if not config.TESTING:
         await _run_step("Session-Cleanup-Job", False, schedule_session_cleanup, "Session-Cleanup alle 30 Minuten geplant")
 
+    # Der Sweep im Schritt "Kubernetes pipeline_runs Startup-Cleanup" läuft nur
+    # beim Boot. Verzeichnisse, die der finally-Block von run_container_task
+    # verpasst hat (Pod mitten im Run gestorben), lägen sonst die gesamte
+    # Lebensdauer des Pods auf dem shared PVC und fressen genau den Platz,
+    # dessen Fehlen jeden Run scheitern lässt.
+    def schedule_k8s_pipeline_runs_cleanup():
+        from app.core.database import get_session
+        from app.executor.kubernetes_backend import cleanup_orphaned_shared_pipeline_runs
+        from app.services.scheduler import get_scheduler
+        scheduler = get_scheduler()
+        if scheduler is not None:
+            def _run_pipeline_runs_cleanup():
+                session_gen = get_session()
+                session = next(session_gen)
+                try:
+                    cleanup_orphaned_shared_pipeline_runs(session)
+                finally:
+                    session.close()
+            scheduler.add_job(
+                _run_pipeline_runs_cleanup,
+                "interval",
+                minutes=60,
+                id="k8s_pipeline_runs_cleanup",
+                replace_existing=True,
+            )
+    if not config.TESTING and config.PIPELINE_EXECUTOR == "kubernetes":
+        await _run_step(
+            "Kubernetes pipeline_runs Cleanup-Job",
+            False,
+            schedule_k8s_pipeline_runs_cleanup,
+            "Kubernetes pipeline_runs Cleanup stündlich geplant",
+        )
+
     def schedule_git_auto_sync():
         from app.services.git_auto_sync import schedule_git_auto_sync_job
         schedule_git_auto_sync_job()

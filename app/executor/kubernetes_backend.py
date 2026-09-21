@@ -126,18 +126,44 @@ def _cleanup_shared_pipeline_run(run_id: UUID) -> None:
         logger.warning("Cleanup pipeline_runs/%s fehlgeschlagen: %s", run_id, e)
 
 
+# Ein Run-Verzeichnis darf nur verschwinden, wenn der Run nachweislich beendet
+# ist. Deshalb die explizite Liste der Endzustände statt "alles ausser RUNNING":
+# käme ein Status dazu, würde die Negativform das Verzeichnis eines noch
+# laufenden Runs löschen.
+_TERMINAL_RUN_STATUSES = frozenset({
+    RunStatus.SUCCESS,
+    RunStatus.FAILED,
+    RunStatus.INTERRUPTED,
+    RunStatus.WARNING,
+})
+
+# Schonfrist für frische Verzeichnisse. run_container_task legt die Kopie an,
+# bevor es den Run auf RUNNING setzt — dazwischen ist der Run PENDING, und der
+# Statuswechsel kann in einer noch nicht committeten Transaktion stecken. Der
+# Sweep liest aus einer eigenen Session und sieht dann womöglich gar keinen Run,
+# würde also einem gerade startenden Run die Dateien unter den Füssen wegräumen.
+# Solange der Sweep nur beim Start lief, war das folgenlos (es läuft nichts);
+# im periodischen Lauf ist es das nicht.
+_ORPHAN_SWEEP_MIN_AGE_SECONDS = 15 * 60
+
+
 def cleanup_orphaned_shared_pipeline_runs(session: Session) -> int:
     """
-    Löscht alle pipeline_runs/<run_id>-Verzeichnisse im shared Volume, deren Run
-    nicht mehr RUNNING ist (oder in der DB fehlt). Wird beim App-Start aufgerufen,
-    um nach Update bestehende alte Verzeichnisse zu bereinigen.
+    Löscht pipeline_runs/<run_id>-Verzeichnisse beendeter Runs im shared Volume.
+
+    Gelöscht wird nur, was beides erfüllt: der Run steht in einem Endzustand (oder
+    fehlt in der DB) *und* das Verzeichnis ist älter als
+    _ORPHAN_SWEEP_MIN_AGE_SECONDS. Übrig bleiben damit genau die Verzeichnisse,
+    die der finally-Block von run_container_task nicht mehr erreicht hat — etwa
+    weil der Pod mitten im Run gestorben ist.
+
+    Läuft beim App-Start und danach periodisch (siehe startup.py).
     Returns: Anzahl gelöschter Verzeichnisse.
     """
-    from app.models import PipelineRun, RunStatus
-
     base = Path(app_config.KUBERNETES_SHARED_CACHE_MOUNT_PATH) / "pipeline_runs"
     if not base.is_dir():
         return 0
+    cutoff = time.time() - _ORPHAN_SWEEP_MIN_AGE_SECONDS
     deleted = 0
     for entry in base.iterdir():
         if not entry.is_dir():
@@ -145,15 +171,27 @@ def cleanup_orphaned_shared_pipeline_runs(session: Session) -> int:
         try:
             run_id = UUID(entry.name)
         except ValueError:
-            logger.debug("Startup-Cleanup: ignoriere Nicht-UUID-Verzeichnis %s", entry.name)
+            logger.debug("pipeline_runs-Cleanup: ignoriere Nicht-UUID-Verzeichnis %s", entry.name)
             continue
-        run = session.get(PipelineRun, run_id)
-        if run is None or run.status != RunStatus.RUNNING:
-            _cleanup_shared_pipeline_run(run_id)
-            deleted += 1
+        if not _is_finished_run_dir(entry, run_id, cutoff, session):
+            continue
+        _cleanup_shared_pipeline_run(run_id)
+        deleted += 1
     if deleted:
-        logger.info("Startup-Cleanup: %d alte pipeline_runs-Verzeichnisse gelöscht", deleted)
+        logger.info("pipeline_runs-Cleanup: %d Verzeichnis(se) beendeter Runs gelöscht", deleted)
     return deleted
+
+
+def _is_finished_run_dir(entry: Path, run_id: UUID, cutoff: float, session: Session) -> bool:
+    """True wenn das Verzeichnis zu einem beendeten Run gehört und älter als cutoff ist."""
+    try:
+        if entry.stat().st_mtime > cutoff:
+            return False
+    except OSError:
+        # Zwischen iterdir() und stat() verschwunden — dann gibt es nichts zu tun.
+        return False
+    run = session.get(PipelineRun, run_id)
+    return run is None or run.status in _TERMINAL_RUN_STATUSES
 
 
 def _memory_to_quantity(mem_limit: str) -> str:

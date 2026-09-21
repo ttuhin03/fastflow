@@ -174,9 +174,81 @@ def get_public_status() -> Dict[str, Any]:
         return _with_age(checked_at, status)
 
 
+# Das shared Volume des Kubernetes-Backends liegt auf einem eigenen PVC
+# (k8s/deployment.yaml: cache-pvc auf /shared), nicht auf dem Volume von
+# DATA_DIR. Läuft es voll, scheitert jeder Run in _copy_pipeline_to_shared mit
+# ENOSPC, während DATA_DIR unbeeindruckt Platz meldet — der Disk-Check unten
+# sieht davon nichts. Genau diese Lücke hat rote Runs hinter durchgehend
+# grünen Probes versteckt.
+_SHARED_CACHE_MIN_FREE_GB = 1.0
+# Eine Pipeline-Kopie legt pro Run schnell dreistellig viele kleine Dateien an;
+# der Platz kann also reichen, während die Inodes ausgehen.
+_SHARED_CACHE_MIN_FREE_INODES = 5000
+
+
+def _check_shared_cache(checks: Dict[str, Any]) -> None:
+    """
+    Prüft Platz und Inodes auf dem shared Volume (nur Kubernetes-Backend).
+
+    Meldet, gated aber nicht: ok bleibt unberührt. Mit vollem /shared ist der
+    Orchestrator weiter verkehrsfähig — DB, API und UI arbeiten normal, nur neue
+    Runs scheitern beim Kopieren. Ein NotReady würde bei replicas: 1 den einzigen
+    Pod aus dem Service nehmen und damit die UI abschalten, über die man den
+    Zustand überhaupt sieht, ohne dass der Pod davon heilt: neu gestartet wird er
+    nicht (Liveness hängt an /health) und der Scheduler feuert unabhängig von der
+    Probe weiter. Das Signal läuft deshalb über Log-Level, den Checks-Eintrag
+    (sichtbar in /api/settings/system-status) und die Prometheus-Gauge.
+    """
+    mount = config.KUBERNETES_SHARED_CACHE_MOUNT_PATH
+    try:
+        disk = shutil.disk_usage(mount)
+    except Exception as e:
+        logger.warning("Readiness: Shared-Volume-Check fehlgeschlagen: %s", e)
+        checks["shared_cache"] = str(e)
+        return
+
+    free_gb = disk.free / (1024 ** 3)
+    checks["shared_cache_free_gb"] = round(free_gb, 2)
+    problems: List[str] = []
+    if free_gb < _SHARED_CACHE_MIN_FREE_GB:
+        problems.append(f"nur {free_gb:.2f} GB frei")
+
+    inode_free = _shared_cache_inodes_free(mount, checks)
+    if inode_free is not None and inode_free < _SHARED_CACHE_MIN_FREE_INODES:
+        problems.append(f"nur {inode_free} Inodes frei")
+
+    if not problems:
+        checks["shared_cache"] = "ok"
+        return
+
+    message = ", ".join(problems)
+    checks["shared_cache"] = f"kritisch: {message}"
+    # ERROR, nicht WARNING: In diesem Zustand scheitert jeder neue Run.
+    logger.error(
+        "Readiness: Shared-Volume %s erschöpft (%s) — Pipeline-Runs scheitern beim "
+        "Kopieren mit ENOSPC. Die Probe bleibt bewusst ready, siehe _check_shared_cache.",
+        mount, message,
+    )
+
+
+def _shared_cache_inodes_free(mount: str, checks: Dict[str, Any]) -> Optional[int]:
+    """Freie Inodes des shared Volumes, oder None wenn nicht ermittelbar."""
+    if not hasattr(os, "statvfs"):
+        return None
+    try:
+        st = os.statvfs(mount)
+    except Exception as e:
+        checks["shared_cache_inodes"] = str(e)
+        return None
+    inode_free = int(getattr(st, "f_favail", st.f_ffree))
+    checks["shared_cache_inode_free"] = inode_free
+    return inode_free
+
+
 def run_readiness_checks() -> Tuple[Dict[str, Any], bool]:
     """
-    Führt alle Readiness-Checks aus (DB, Executor, UV-Cache, Disk, Inodes).
+    Führt alle Readiness-Checks aus (DB, Executor, UV-Cache, Shared Volume,
+    Disk, Inodes).
 
     Returns:
         (checks, ok): checks enthält pro Check einen String („ok“ oder Fehlermeldung)
@@ -234,6 +306,11 @@ def run_readiness_checks() -> Tuple[Dict[str, Any], bool]:
         logger.warning("Readiness: UV-Cache-Check fehlgeschlagen: %s", e)
         checks["uv_cache"] = str(e)
         ok = False
+
+    # Shared Volume des Kubernetes-Backends: eigenes PVC, das der DATA_DIR-Check
+    # unten nicht abdeckt. Setzt ok bewusst nicht — Begründung in _check_shared_cache.
+    if config.PIPELINE_EXECUTOR == "kubernetes":
+        _check_shared_cache(checks)
 
     # Disk-Space verfügbar (kritisch für Logs, DB, UV-Cache)
     try:

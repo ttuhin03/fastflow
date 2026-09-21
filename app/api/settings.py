@@ -869,7 +869,8 @@ async def get_system_status(
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
-    Gibt Readiness-Checks für die UI zurück (DB, Docker/K8s, UV-Cache, Disk, Inodes).
+    Gibt Readiness-Checks für die UI zurück (DB, Docker/K8s, UV-Cache, shared
+    Volume, Disk, Inodes).
     Gleiche Logik wie GET /api/ready, aber auth-pflichtig und immer 200.
     """
     from app.core.readiness import run_readiness_checks
