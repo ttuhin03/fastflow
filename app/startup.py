@@ -410,21 +410,14 @@ async def run_startup_tasks() -> None:
         await _run_step("OAuth-State-Cleanup-Job", False, schedule_oauth_state_cleanup, "OAuth-State-Cleanup alle 5 Minuten geplant")
 
     def schedule_session_cleanup():
-        from app.auth.auth import cleanup_expired_sessions, cleanup_expired_ephemeral_tokens
-        from app.core.database import get_session
+        from app.auth.auth import run_session_cleanup_job
         from app.services.scheduler import get_scheduler
         scheduler = get_scheduler()
         if scheduler is not None:
-            def _run_session_cleanup():
-                session_gen = get_session()
-                session = next(session_gen)
-                try:
-                    cleanup_expired_sessions(session)
-                    cleanup_expired_ephemeral_tokens(session)
-                finally:
-                    session.close()
+            # Die Callable muss auf Modulebene liegen, sonst lehnt der
+            # SQLAlchemyJobStore den Job ab — siehe run_session_cleanup_job.
             scheduler.add_job(
-                _run_session_cleanup,
+                run_session_cleanup_job,
                 "interval",
                 minutes=30,
                 id="session_cleanup",
