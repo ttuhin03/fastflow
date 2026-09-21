@@ -73,8 +73,13 @@ function useWarnings(): string[] {
   const warnings: string[] = []
 
   if (systemStatus?.status === 'not_ready') {
+    // Nach Typ filtern, nicht nach Schlüsselnamen: checks enthält neben den
+    // Befunden ("ok" oder Fehlermeldung) auch Messwerte als Zahlen
+    // (disk_free_gb, inode_free, shared_cache_free_gb …). Die Liste dieser
+    // Namen lief der Wirklichkeit hinterher — jeder neue Messwert stand als
+    // Problem im Kasten, weil eine Zahl nun mal nicht 'ok' ist.
     const failed = Object.entries(systemStatus.checks || {}).filter(
-      ([k, v]) => k !== 'disk_free_gb' && k !== 'inode_total' && k !== 'inode_free' && v !== 'ok' && v !== 'n/a (nur Unix)'
+      ([, v]) => typeof v === 'string' && v !== 'ok' && !v.startsWith('n/a')
     )
     failed.forEach(([key]) => {
       const label = t(`warnings.systemLabels.${key}`, { defaultValue: key })
