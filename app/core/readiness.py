@@ -185,6 +185,22 @@ _SHARED_CACHE_MIN_FREE_GB = 1.0
 # der Platz kann also reichen, während die Inodes ausgehen.
 _SHARED_CACHE_MIN_FREE_INODES = 5000
 
+# f_files == 0 heisst nicht "keine Inodes mehr", sondern "dieses Dateisystem
+# führt keine feste Inode-Tabelle": btrfs und ZFS vergeben Inodes dynamisch und
+# melden deshalb 0, ebenso etliche NFS-Server — also genau die Sorte Speicher,
+# auf der ein RWX-Volume üblicherweise liegt. Ohne diesen Zweig läse der Check
+# daraus "0 Inodes frei" und meldete dauerhaft kritisch. Ein Daueralarm ist kein
+# Signal; er bringt nur bei, die Anzeige zu ignorieren.
+_INODES_NOT_TRACKED = "n/a (Dateisystem meldet keine Inode-Zahlen)"
+
+# Die readinessProbe fragt /ready alle 10 Sekunden (k8s/deployment.yaml). Ein
+# ERROR pro Probe wären über 8000 Zeilen am Tag für einen Zustand, der sich
+# nicht von selbst löst — geschrieben ausgerechnet auf das Volume, das noch
+# Platz hat. Der Dauerzustand steht ohnehin in checks und in der Gauge; das Log
+# braucht nur die regelmässige Erinnerung.
+_SHARED_CACHE_LOG_INTERVAL_SECONDS = 300.0
+_shared_cache_last_logged: Optional[float] = None
+
 
 def _check_shared_cache(checks: Dict[str, Any]) -> None:
     """
@@ -223,12 +239,26 @@ def _check_shared_cache(checks: Dict[str, Any]) -> None:
 
     message = ", ".join(problems)
     checks["shared_cache"] = f"kritisch: {message}"
-    # ERROR, nicht WARNING: In diesem Zustand scheitert jeder neue Run.
-    logger.error(
-        "Readiness: Shared-Volume %s erschöpft (%s) — Pipeline-Runs scheitern beim "
-        "Kopieren mit ENOSPC. Die Probe bleibt bewusst ready, siehe _check_shared_cache.",
-        mount, message,
-    )
+    if _shared_cache_alert_is_due():
+        # ERROR, nicht WARNING: In diesem Zustand scheitert jeder neue Run.
+        logger.error(
+            "Readiness: Shared-Volume %s erschöpft (%s) — Pipeline-Runs scheitern beim "
+            "Kopieren mit ENOSPC. Die Probe bleibt bewusst ready, siehe _check_shared_cache.",
+            mount, message,
+        )
+
+
+def _shared_cache_alert_is_due() -> bool:
+    """True, wenn der Shared-Volume-Alarm wieder ins Log darf (siehe Intervall oben)."""
+    global _shared_cache_last_logged
+    now = time.monotonic()
+    if (
+        _shared_cache_last_logged is not None
+        and now - _shared_cache_last_logged < _SHARED_CACHE_LOG_INTERVAL_SECONDS
+    ):
+        return False
+    _shared_cache_last_logged = now
+    return True
 
 
 def _shared_cache_inodes_free(mount: str, checks: Dict[str, Any]) -> Optional[int]:
@@ -240,9 +270,50 @@ def _shared_cache_inodes_free(mount: str, checks: Dict[str, Any]) -> Optional[in
     except Exception as e:
         checks["shared_cache_inodes"] = str(e)
         return None
+    if not st.f_files:
+        checks["shared_cache_inodes"] = _INODES_NOT_TRACKED
+        return None
     inode_free = int(getattr(st, "f_favail", st.f_ffree))
     checks["shared_cache_inode_free"] = inode_free
     return inode_free
+
+
+def _check_data_dir_inodes(checks: Dict[str, Any]) -> bool:
+    """
+    Prüft die Inodes des DATA_DIR-Volumes (df -i).
+
+    Returns: False, wenn die Inodes so knapp sind, dass der Pod nicht mehr
+    verkehrsfähig ist. Scheitert der Check selbst, bleibt es bei True — dass wir
+    nicht messen können, heisst nicht, dass etwas fehlt.
+    """
+    if not hasattr(os, "statvfs"):
+        checks["inodes"] = "n/a (nur Unix)"
+        return True
+    try:
+        st = os.statvfs(str(config.DATA_DIR))
+    except Exception as e:
+        logger.warning("Readiness: Inode-Check fehlgeschlagen: %s", e)
+        checks["inodes"] = str(e)
+        return True
+
+    inode_total = st.f_files
+    # Siehe _INODES_NOT_TRACKED. Hier wiegt der Zweig schwerer als beim shared
+    # Volume: Dieser Check gated, ein als "0 Inodes frei" gelesenes f_files == 0
+    # nähme den Pod dauerhaft aus dem Service.
+    if not inode_total:
+        checks["inodes"] = _INODES_NOT_TRACKED
+        return True
+
+    inode_free = getattr(st, "f_favail", st.f_ffree)
+    inode_used = inode_total - inode_free
+    checks["inode_total"] = inode_total
+    checks["inode_free"] = inode_free
+    inode_pct = inode_used / inode_total * 100
+    if inode_free < 1000 or inode_pct > 95:
+        checks["inodes"] = f"kritisch: nur {inode_free} Inodes frei ({inode_pct:.1f}% belegt)"
+        return False
+    checks["inodes"] = "ok"
+    return True
 
 
 def run_readiness_checks() -> Tuple[Dict[str, Any], bool]:
@@ -328,24 +399,7 @@ def run_readiness_checks() -> Tuple[Dict[str, Any], bool]:
         ok = False
 
     # Inodes (df -i): oft voll bei vielen kleinen Dateien (Logs, Cache)
-    if hasattr(os, "statvfs"):
-        try:
-            st = os.statvfs(str(config.DATA_DIR))
-            inode_total = st.f_files
-            inode_free = getattr(st, "f_favail", st.f_ffree)
-            inode_used = inode_total - inode_free
-            checks["inode_total"] = inode_total
-            checks["inode_free"] = inode_free
-            inode_pct = (inode_used / inode_total * 100) if inode_total else 0
-            if inode_free < 1000 or inode_pct > 95:
-                checks["inodes"] = f"kritisch: nur {inode_free} Inodes frei ({inode_pct:.1f}% belegt)"
-                ok = False
-            else:
-                checks["inodes"] = "ok"
-        except Exception as e:
-            logger.warning("Readiness: Inode-Check fehlgeschlagen: %s", e)
-            checks["inodes"] = str(e)
-    else:
-        checks["inodes"] = "n/a (nur Unix)"
+    if not _check_data_dir_inodes(checks):
+        ok = False
 
     return checks, ok
