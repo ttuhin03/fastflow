@@ -18,6 +18,7 @@ Die Tests pinnen deshalb die beiden Schranken: Endzustand-Liste und Schonfrist.
 
 import os
 import time
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -25,6 +26,7 @@ import pytest
 from app.core.config import config
 from app.executor import kubernetes_backend as k8s
 from app.models import PipelineRun, RunStatus
+from app.services.pipeline_discovery import DiscoveredPipeline
 
 
 @pytest.fixture
@@ -163,3 +165,36 @@ def test_only_the_finished_run_is_swept(test_session, pipeline_runs_dir):
     assert not finished_path.exists()
     assert running_path.exists()
     assert fresh_path.exists()
+
+
+def _source_pipeline(tmp_path: Path, *, mtime_age_days: int) -> DiscoveredPipeline:
+    """Ein Pipeline-Verzeichnis, dessen mtime aus der Vergangenheit stammt."""
+    src = tmp_path / "pipelines" / "demo"
+    src.mkdir(parents=True)
+    (src / "main.py").write_text("print('hi')")
+    stamp = time.time() - mtime_age_days * 24 * 3600
+    os.utime(src, (stamp, stamp))
+    return DiscoveredPipeline(name="demo", path=src, has_requirements=False)
+
+
+def test_a_fresh_copy_is_young_enough_to_be_spared(test_session, pipeline_runs_dir, tmp_path):
+    """
+    Die Schonfrist an der echten Kopie statt an einem os.utime aus dem Test.
+
+    ``shutil.copytree`` schliesst mit ``copystat(src, dest)`` ab und vererbt dem
+    Ziel die mtime der Quelle — beim Pipeline-Verzeichnis aus dem Git-Checkout
+    ein Datum von vor Wochen. Ohne den Stempel in ``_copy_pipeline_to_shared``
+    ist eine gerade angelegte Kopie für den Sweep sofort alt: Die Schonfrist
+    greift dann nie, und ein Run, dessen Zeile der Sweep noch nicht sieht,
+    verliert seine Dateien im Anlauf.
+    """
+    pipeline = _source_pipeline(tmp_path, mtime_age_days=30)
+    run_id = uuid4()
+
+    dest = k8s._copy_pipeline_to_shared(pipeline, run_id)
+
+    assert dest.exists()
+    assert time.time() - dest.stat().st_mtime < k8s._ORPHAN_SWEEP_MIN_AGE_SECONDS
+    # Kein Run in der DB — allein das Alter entscheidet.
+    assert k8s.cleanup_orphaned_shared_pipeline_runs(test_session) == 0
+    assert (dest / "main.py").exists()

@@ -11,6 +11,7 @@ Führt Pipeline-Runs als Kubernetes Jobs aus (für containerd-only/Talos-Cluster
 import asyncio
 import json
 import logging
+import os
 import shutil
 import time
 from datetime import datetime, timezone
@@ -107,6 +108,18 @@ def _copy_pipeline_to_shared(pipeline: DiscoveredPipeline, run_id: UUID) -> Path
         else:
             p.unlink(missing_ok=True)
     shutil.copytree(pipeline.path, dest, dirs_exist_ok=True)
+    # copytree schliesst mit copystat(src, dest) ab und hängt dem Ziel damit die
+    # mtime der *Quelle* an — beim Pipeline-Verzeichnis aus dem Git-Checkout also
+    # ein Datum von vor Wochen. Der Waisen-Sweep misst an dieser mtime das Alter
+    # des Verzeichnisses; ohne den Stempel hier ist eine frische Kopie für ihn
+    # sofort alt und die Schonfrist in cleanup_orphaned_shared_pipeline_runs
+    # wirkungslos.
+    try:
+        os.utime(dest, None)
+    except OSError as e:
+        # Der Sweep hat mit dem Run-Status eine zweite, unabhängige Schranke.
+        # Ein fehlender Stempel kostet die Schonfrist, nicht den Run.
+        logger.warning("Zeitstempel für pipeline_runs/%s nicht gesetzt: %s", run_id, e)
     return dest
 
 
@@ -184,6 +197,10 @@ def cleanup_orphaned_shared_pipeline_runs(session: Session) -> int:
 
 def _is_finished_run_dir(entry: Path, run_id: UUID, cutoff: float, session: Session) -> bool:
     """True wenn das Verzeichnis zu einem beendeten Run gehört und älter als cutoff ist."""
+    # Die mtime taugt als Alter nur, weil _copy_pipeline_to_shared sie nach dem
+    # copytree ausdrücklich auf "jetzt" setzt — copytree selbst vererbt dem Ziel
+    # die mtime der Quelle. Wer das dort entfernt, nimmt dieser Schranke die
+    # Grundlage; der Run-Status unten bleibt dann die einzige.
     try:
         if entry.stat().st_mtime > cutoff:
             return False
