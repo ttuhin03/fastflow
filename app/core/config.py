@@ -287,6 +287,24 @@ class Config:
     Byte mehr frei war und jeder Pipeline-Run beim Kopieren mit ENOSPC scheiterte.
     """
 
+    UV_CACHE_PRUNE_BEFORE_PREHEAT: bool = os.getenv(
+        "UV_CACHE_PRUNE_BEFORE_PREHEAT", "true"
+    ).lower() == "true"
+    """
+    Wenn True: vor jedem Pre-Heating wird der UV-Cache geräumt.
+
+    Das Pre-Heating lädt anschliessend genau das nach, was die Pipelines brauchen —
+    der Cache enthält danach den aktuellen Satz und sonst nichts. Damit kann sich
+    gar nicht erst ansammeln, was sonst über Monate zu 14 GB Altlast wird, und die
+    Notfallschwelle unten wird praktisch nie erreicht.
+
+    Bezahlbar, weil das Räumen eines sauberen Caches nichts kostet (gemessen: 0,5 s
+    für 5.486 Dateien) und das Nachladen ohnehin passiert. Teuer ist nur der kalte
+    Cache direkt danach: rund 10 s je Pipeline, bis ihre Pakete wieder da sind.
+    Bei einem Sync-Intervall von Stunden ist das irrelevant; wer im Minutentakt
+    synchronisiert, sollte das hier abschalten und sich auf die Schwelle verlassen.
+    """
+
     UV_CACHE_PRUNE_MIN_FREE_GB: float = float(os.getenv("UV_CACHE_PRUNE_MIN_FREE_GB", "2.0"))
     """
     Schwelle für den Prune beim Start: darunter wird geräumt, darüber nicht.

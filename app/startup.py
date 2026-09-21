@@ -422,7 +422,12 @@ async def run_startup_tasks() -> None:
 
     def start_uv_cache_maintenance():
         asyncio.create_task(uv_cache_startup_maintenance())
-    if not config.TESTING:
+    # Übernimmt das Pre-Heating das Räumen, ist dieser Schritt nicht nur überflüssig,
+    # sondern schädlich: zwei gleichzeitige Durchläufe über denselben Cache behindern
+    # sich (das waren die "Could not acquire lock"-Fehler). Dann bleibt hier nichts
+    # zu tun, und der stündliche Job ist das Netz für den Fall, dass Pre-Heating aus ist.
+    _preheat_raeumt = config.UV_PRE_HEAT and config.UV_CACHE_PRUNE_BEFORE_PREHEAT
+    if not config.TESTING and not _preheat_raeumt:
         await _run_step(
             "UV-Cache-Pflege",
             False,
