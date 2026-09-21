@@ -296,13 +296,18 @@ class Config:
     Runs zu räumen — der Shutdown des Vorgängers hat dessen Jobs gelöscht.
     """
 
-    UV_CACHE_PRUNE_TIMEOUT: int = max(30, int(os.getenv("UV_CACHE_PRUNE_TIMEOUT", "900")))
+    UV_CACHE_PRUNE_TIMEOUT: int = max(30, int(os.getenv("UV_CACHE_PRUNE_TIMEOUT", "5400")))
     """
     Obergrenze für einen `uv cache prune`-Aufruf in Sekunden.
 
-    Grosszügig, weil der Aufruf hunderttausende Dateien anfasst: ein Durchlauf über
-    438.866 Dateien brauchte allein zum Lesen 218 s. Ohne Grenze könnte ein hängender
-    Storage-Mount den Job dauerhaft blockieren.
+    Grosszügig bemessen, weil der Aufruf hunderttausende Dateien löscht. In Prod
+    gemessen: rund 0,17 GB pro Minute auf dem Netzwerk-Volume, für die aufgelaufenen
+    ~13 GB also gut 75 Minuten. Mit den ursprünglich gesetzten 900 s wäre der erste
+    Durchlauf bei knapp 2,5 GB abgeschnitten worden — genug, damit Runs wieder
+    laufen, aber der Rest wäre liegengeblieben.
+
+    Eine Grenze bleibt nötig: ohne sie könnte ein hängender Storage-Mount den Job
+    dauerhaft blockieren.
     """
 
     UV_CACHE_WIPE_ON_START: bool = os.getenv("UV_CACHE_WIPE_ON_START", "false").lower() == "true"
