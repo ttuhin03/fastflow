@@ -375,11 +375,21 @@ async def run_startup_tasks() -> None:
         session = next(session_gen)
         try:
             n = cleanup_orphaned_shared_pipeline_runs(session)
-            return f"Kubernetes pipeline_runs Startup-Cleanup: {n} alte Verzeichnisse gelöscht" if n else None
+            # Unbedingt loggen, auch bei 0. Vorher baute dieser Schritt eine
+            # Meldung und gab sie zurück — _run_step verwirft den Rückgabewert
+            # aber und loggt nur sein eigenes success_msg, das hier None war. Der
+            # Schritt war damit im Boot-Log immer stumm und ein "lief, fand
+            # nichts" nicht von einem "lief gar nicht" zu unterscheiden. Genau
+            # diese Verwechslung hat beim Cleanup-Job daneben Zeit gekostet.
+            logger.info(
+                "Kubernetes pipeline_runs Startup-Cleanup: %d Verzeichnis(se) gelöscht", n
+            )
         finally:
             session.close()
     if not config.TESTING and config.PIPELINE_EXECUTOR == "kubernetes":
-        await _run_step("Kubernetes pipeline_runs Startup-Cleanup", False, k8s_cleanup_orphaned_pipeline_runs, None)
+        await _run_step(
+            "Kubernetes pipeline_runs Startup-Cleanup", False, k8s_cleanup_orphaned_pipeline_runs
+        )
 
     def start_sched():
         from app.services.scheduler import set_main_loop, start_scheduler
