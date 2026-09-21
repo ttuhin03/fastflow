@@ -537,10 +537,7 @@ async def run_container_task(
             run.status = RunStatus.FAILED
             run.finished_at = datetime.now(timezone.utc)
             run.exit_code = -1
-            if run.env_vars is None:
-                run.env_vars = {}
-            run.env_vars["_fastflow_error_type"] = "infrastructure_error"
-            run.env_vars["_fastflow_error_message"] = str(e)
+            executor_core.mark_infrastructure_error(run, e)
             session.add(run)
             session.commit()
             await executor_core._update_pipeline_stats(

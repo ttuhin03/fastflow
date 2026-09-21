@@ -16,6 +16,7 @@ from typing import Optional, Dict, Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import Enum as SAEnum, Index, Text
+from sqlalchemy.ext.mutable import MutableDict
 from sqlmodel import SQLModel, Field, JSON, Column
 
 
@@ -153,9 +154,17 @@ class PipelineRun(SQLModel, table=True):
         default=None,
         description="Pfad zur Metrics-Datei (CPU/RAM über Zeit)"
     )
+    # MutableDict, nicht nur JSON: Der Executor schreibt den Fehlertyp eines
+    # gescheiterten Runs in-place (run.env_vars["_fastflow_error_type"] = ...).
+    # Bei einer nackten JSON-Spalte sieht SQLAlchemy diese Mutation nicht, nimmt
+    # die Spalte nicht ins UPDATE auf und verwirft sie still — status kam an,
+    # error_type nie, und die UI zeigte einen Fehler ohne Typ und ohne Meldung.
+    # Der None-Zweig in den Executor-Handlern hat das verdeckt: Nur wenn env_vars
+    # None war, gab es eine echte Zuweisung; mit default_factory=dict ist es aber
+    # nie None.
     env_vars: Dict[str, str] = Field(
         default_factory=dict,
-        sa_column=Column(JSON),
+        sa_column=Column(MutableDict.as_mutable(JSON)),
         description="Environment-Variablen (Secrets + Parameter)"
     )
     parameters: Dict[str, str] = Field(
