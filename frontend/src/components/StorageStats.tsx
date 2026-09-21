@@ -1,5 +1,4 @@
-import { useState } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useRefetchInterval } from '../hooks/useRefetchInterval'
 import apiClient from '../api/client'
@@ -80,6 +79,8 @@ interface SharedBreakdownState {
   started_at?: string
   finished_at?: string
   elapsed_seconds?: number
+  files_seen?: number
+  bytes_seen?: number
   error?: string | null
   result?: SharedBreakdown | null
 }
@@ -97,26 +98,27 @@ export default function StorageStats() {
     refetchInterval: storageInterval,
   })
 
-  // Der Durchlauf liest das ganze Volume: er gehört nicht ins 30-Sekunden-
-  // Polling der Statistiken oben, und er dauert länger als das Timeout dieses
-  // Clients (30 s). Deshalb startet der Klick eine Rechnung im Hintergrund, und
-  // solange sie läuft, wird ihr Zustand abgefragt.
-  const [breakdownRequested, setBreakdownRequested] = useState(false)
+  // Zwei Anfragen mit sehr unterschiedlichen Kosten: Das GET liest nur einen
+  // Zustand und läuft deshalb immer mit — nur so hängt sich die Anzeige nach
+  // einem Reload von selbst wieder an eine laufende Rechnung. Der teure
+  // Durchlauf über das ganze Volume wird ausschliesslich per POST angestossen.
+  const sharedVolumeKnown = stats?.shared_volume_total_gb !== undefined
   const { data: breakdown, isError: breakdownError } = useQuery<SharedBreakdownState>({
     queryKey: ['storage-shared-breakdown'],
     queryFn: async () => {
       const response = await apiClient.get('/settings/storage/shared-breakdown')
       return response.data
     },
-    enabled: breakdownRequested,
+    enabled: sharedVolumeKnown,
     refetchInterval: (query) => (query.state.data?.status === 'running' ? 2000 : false),
     staleTime: 0,
   })
+  const queryClient = useQueryClient()
   const startBreakdown = useMutation({
     mutationFn: async () => {
       await apiClient.post('/settings/storage/shared-breakdown')
     },
-    onSuccess: () => setBreakdownRequested(true),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['storage-shared-breakdown'] }),
   })
   const breakdownBusy = startBreakdown.isPending || breakdown?.status === 'running'
   const breakdownResult = breakdown?.status === 'done' ? breakdown.result : undefined
@@ -456,15 +458,25 @@ export default function StorageStats() {
             </button>
           </div>
 
-          {!breakdownRequested && !startBreakdown.isPending && (
+          {breakdown?.status === 'never' && !startBreakdown.isPending && (
             <p className="stat-detail-small">{t('storage.sharedBreakdownHint')}</p>
           )}
           {breakdown?.status === 'running' && (
-            <p className="stat-detail-small">
-              {t('storage.sharedBreakdownRunningFor', {
-                seconds: (breakdown.elapsed_seconds ?? 0).toFixed(0),
-              })}
-            </p>
+            <>
+              <p className="stat-detail-small">
+                {t('storage.sharedBreakdownRunningFor', {
+                  seconds: (breakdown.elapsed_seconds ?? 0).toFixed(0),
+                })}
+              </p>
+              {breakdown.files_seen !== undefined && (
+                <p className="stat-detail-small">
+                  {t('storage.sharedBreakdownProgress', {
+                    files: breakdown.files_seen.toLocaleString(numberLocale),
+                    size: ((breakdown.bytes_seen ?? 0) / 1024 ** 3).toFixed(2),
+                  })}
+                </p>
+              )}
+            </>
           )}
           {(breakdownError || startBreakdown.isError || breakdown?.status === 'failed') && (
             <p className="stat-detail percentage high">

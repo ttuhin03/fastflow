@@ -285,7 +285,7 @@ def test_second_trigger_does_not_start_a_second_walk(
     weiter = threading.Event()
     aufrufe = []
 
-    def _langsam():
+    def _langsam(_on_progress=None):
         aufrufe.append(1)
         laeuft.set()
         weiter.wait(timeout=5)
@@ -311,7 +311,10 @@ def test_running_state_reports_the_elapsed_time(
     monkeypatch.setattr(
         settings_api,
         "_sync_shared_volume_breakdown",
-        lambda: (weiter.wait(timeout=5), {"dir": "/shared", "available": True, "entries": []})[1],
+        lambda _on_progress=None: (
+            weiter.wait(timeout=5),
+            {"dir": "/shared", "available": True, "entries": []},
+        )[1],
     )
 
     authenticated_client.post("/api/settings/storage/shared-breakdown")
@@ -328,7 +331,7 @@ def test_running_state_reports_the_elapsed_time(
 def test_breakdown_failure_is_reported_not_swallowed(
     authenticated_client, kubernetes_shared_volume, monkeypatch
 ):
-    def _kaputt():
+    def _kaputt(_on_progress=None):
         raise OSError("Volume weg")
 
     monkeypatch.setattr(settings_api, "_sync_shared_volume_breakdown", _kaputt)
@@ -355,3 +358,54 @@ def test_breakdown_endpoints_are_404_without_kubernetes(authenticated_client, mo
     assert authenticated_client.post(
         "/api/settings/storage/shared-breakdown"
     ).status_code == 404
+
+
+# --- Fortschritt --------------------------------------------------------------
+#
+# Der Durchlauf war eine Blackbox: 218 s ohne jedes Lebenszeichen. Der Aufrufer
+# sah eine Uhr laufen, im Log stand bis zum Abschluss nichts. "Arbeitet" liess
+# sich nicht von "klemmt" unterscheiden.
+
+
+def test_walk_reports_progress_while_running(kubernetes_shared_volume, monkeypatch):
+    monkeypatch.setattr(settings_api, "_SHARED_BREAKDOWN_PROGRESS_FILES", 2)
+    _fuelle(kubernetes_shared_volume, {f"uv_cache/datei{i}": 10 for i in range(6)})
+    meldungen = []
+
+    settings_api._walk_sizes(
+        kubernetes_shared_volume, lambda files, size: meldungen.append((files, size))
+    )
+
+    assert meldungen, "kein Fortschritt gemeldet"
+    # Monoton steigend, und die letzte Meldung liegt nicht über dem Endstand.
+    assert [m[0] for m in meldungen] == sorted(m[0] for m in meldungen)
+    assert meldungen[-1][0] <= 6
+
+
+def test_running_state_exposes_files_and_bytes_seen(
+    authenticated_client, kubernetes_shared_volume, monkeypatch
+):
+    """Damit die UI echten Fortschritt zeigen kann statt nur einer Uhr."""
+    weiter = threading.Event()
+    gemeldet = threading.Event()
+
+    def _langsam(on_progress=None):
+        if on_progress is not None:
+            on_progress(1234, 5678)
+        gemeldet.set()
+        weiter.wait(timeout=5)
+        return {"dir": "/shared", "available": True, "entries": []}
+
+    monkeypatch.setattr(settings_api, "_sync_shared_volume_breakdown", _langsam)
+
+    authenticated_client.post("/api/settings/storage/shared-breakdown")
+    assert gemeldet.wait(timeout=5)
+    body = authenticated_client.get("/api/settings/storage/shared-breakdown").json()
+
+    assert body["files_seen"] == 1234
+    assert body["bytes_seen"] == 5678
+    # Die monotonen Zeitstempel sind Interna.
+    assert "last_logged_monotonic" not in body
+    assert "started_monotonic" not in body
+    weiter.set()
+    _warte_auf_ergebnis(authenticated_client)

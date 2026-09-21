@@ -112,14 +112,27 @@ describe('StorageStats', () => {
     expect(container.querySelector('.shared-warn')).toBeNull()
   })
 
-  it('fragt die Aufschlüsselung nicht von selbst ab', async () => {
-    // Der Durchlauf liest das ganze Volume. Läge er im 30-Sekunden-Polling der
-    // Statistiken, würde die Seite das Volume alle 30 Sekunden durchharken.
-    renderStats(VOLL)
+  it('startet beim Laden keine Rechnung, fragt aber den Zustand ab', async () => {
+    // Zwei Anfragen mit sehr unterschiedlichen Kosten. Teuer ist der Durchlauf
+    // über das ganze Volume, und der hängt am POST — der darf beim Laden nicht
+    // passieren. Das GET liest nur einen Zustand und muss mitlaufen, sonst
+    // findet die Anzeige nach einem Reload eine laufende Rechnung nicht wieder.
+    renderStats(VOLL, { status: 'never' })
     await screen.findByText('9.77 GB')
 
+    expect(post).not.toHaveBeenCalled()
     const urls = get.mock.calls.map((call) => String(call[0]))
-    expect(urls.some((url) => url.includes('shared-breakdown'))).toBe(false)
+    expect(urls.some((url) => url.includes('shared-breakdown'))).toBe(true)
+  })
+
+  it('hängt sich nach einem Reload an eine laufende Rechnung', async () => {
+    // Kein Klick in diesem Test: die Anzeige muss den laufenden Durchlauf allein
+    // aus dem Zustand erkennen.
+    renderStats(VOLL, { status: 'running', elapsed_seconds: 95.2, files_seen: 210000, bytes_seen: 7516192768 })
+
+    expect(await screen.findByText(/Wird berechnet … \(95 s\)/)).toBeInTheDocument()
+    expect(screen.getByText(/210.000 Dateien, 7\.00 GB gelesen/)).toBeInTheDocument()
+    expect(post).not.toHaveBeenCalled()
   })
 
   it('startet die Rechnung per POST und zeigt das Ergebnis, mit zweiter Ebene', async () => {
@@ -168,14 +181,13 @@ describe('StorageStats', () => {
     expect(screen.getByText(/3 weitere/)).toBeInTheDocument()
   })
 
-  it('zeigt beim Warten, wie lange die Rechnung schon läuft', async () => {
+  it('sperrt den Knopf, solange gerechnet wird', async () => {
+    // Ein zweiter Klick würde serverseitig zwar keine zweite Rechnung starten,
+    // aber der gesperrte Knopf sagt dem Benutzer, dass es läuft.
     renderStats(VOLL, { status: 'running', elapsed_seconds: 42.3 })
     await screen.findByText('9.77 GB')
 
-    await userEvent.click(screen.getByRole('button', { name: /Aufschlüsselung berechnen/i }))
-
     expect(await screen.findByText(/Wird berechnet … \(42 s\)/)).toBeInTheDocument()
-    // Der Knopf bleibt gesperrt, solange gerechnet wird.
     expect(screen.getByRole('button', { name: /Wird berechnet/i })).toBeDisabled()
   })
 

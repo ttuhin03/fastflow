@@ -83,9 +83,15 @@ _SHARED_BREAKDOWN_DEPTH = 2
 # pipeline_runs kann dreistellig viele Unterverzeichnisse haben. Die grössten
 # sagen alles; der Rest wird zu einer Sammelzeile, damit die Antwort lesbar bleibt.
 _SHARED_BREAKDOWN_MAX_CHILDREN = 15
+# Fortschritt nicht pro Datei melden — bei 438.866 Dateien wäre das Buchhaltung
+# statt Arbeit. Alle paar Tausend reicht, um "läuft" von "klemmt" zu trennen.
+_SHARED_BREAKDOWN_PROGRESS_FILES = 5000
+_SHARED_BREAKDOWN_LOG_EVERY_SECONDS = 30
 
 
-def _walk_sizes(mount: Path) -> Tuple[Dict[Tuple[str, ...], List[int]], int, int]:
+def _walk_sizes(
+    mount: Path, on_progress: Optional[Any] = None
+) -> Tuple[Dict[Tuple[str, ...], List[int]], int, int]:
     """
     Summiert Dateigrössen unter mount, aggregiert auf die ersten Pfadsegmente.
 
@@ -100,25 +106,47 @@ def _walk_sizes(mount: Path) -> Tuple[Dict[Tuple[str, ...], List[int]], int, int
     total_bytes = 0
     total_files = 0
     for dirpath, _dirnames, filenames in os.walk(mount, onerror=lambda _e: None):
-        try:
-            segments = Path(dirpath).relative_to(mount).parts
-        except ValueError:
+        segments = _segments_under(mount, dirpath)
+        if segments is None:
             continue
         for filename in filenames:
-            try:
-                size = os.stat(os.path.join(dirpath, filename), follow_symlinks=False).st_size
-            except (OSError, PermissionError):
+            size = _file_size(os.path.join(dirpath, filename))
+            if size is None:
                 continue
             total_bytes += size
             total_files += 1
+            if on_progress is not None and total_files % _SHARED_BREAKDOWN_PROGRESS_FILES == 0:
+                on_progress(total_files, total_bytes)
             # Lose Dateien direkt im Mount bilden ihren eigenen Eintrag, wie es
             # `du -sh /shared/*` auch täte.
-            keys = segments or (filename,)
-            for depth in range(1, min(len(keys), _SHARED_BREAKDOWN_DEPTH) + 1):
-                bucket = buckets.setdefault(keys[:depth], [0, 0])
-                bucket[0] += size
-                bucket[1] += 1
+            _add_to_buckets(buckets, segments or (filename,), size)
     return buckets, total_bytes, total_files
+
+
+def _segments_under(mount: Path, dirpath: str) -> Optional[Tuple[str, ...]]:
+    """Pfadsegmente von dirpath relativ zu mount; None wenn es nicht darunter liegt."""
+    try:
+        return Path(dirpath).relative_to(mount).parts
+    except ValueError:
+        return None
+
+
+def _file_size(path: str) -> Optional[int]:
+    """Grösse der Datei ohne Symlinks zu folgen; None bei Lesefehler."""
+    try:
+        return os.stat(path, follow_symlinks=False).st_size
+    except (OSError, PermissionError):
+        return None
+
+
+def _add_to_buckets(
+    buckets: Dict[Tuple[str, ...], List[int]], keys: Tuple[str, ...], size: int
+) -> None:
+    """Rechnet eine Datei auf alle Präfixe bis _SHARED_BREAKDOWN_DEPTH an."""
+    for depth in range(1, min(len(keys), _SHARED_BREAKDOWN_DEPTH) + 1):
+        bucket = buckets.setdefault(keys[:depth], [0, 0])
+        bucket[0] += size
+        bucket[1] += 1
 
 
 def _breakdown_entry(segments: Tuple[str, ...], stats: List[int], volume_total: int) -> Dict[str, Any]:
@@ -152,18 +180,50 @@ def _shared_breakdown_snapshot() -> Dict[str, Any]:
     with _shared_breakdown_lock:
         state = dict(_shared_breakdown_state)
     started = state.pop("started_monotonic", None)
+    state.pop("last_logged_monotonic", None)
     if state.get("status") == "running" and started is not None:
         state["elapsed_seconds"] = round(time.monotonic() - started, 1)
     return state
 
 
+def _note_shared_breakdown_progress(files: int, size_bytes: int) -> None:
+    """
+    Schreibt den Zwischenstand in den Zustand und loggt ihn gelegentlich.
+
+    Ohne das war der Durchlauf eine Blackbox: Der Aufrufer sah nur eine Uhr
+    laufen und konnte "arbeitet" nicht von "klemmt" unterscheiden, und im Log
+    stand bis zum Abschluss nichts — auch mit Cluster-Zugriff nicht.
+    """
+    global _shared_breakdown_state
+    now = time.monotonic()
+    with _shared_breakdown_lock:
+        _shared_breakdown_state["files_seen"] = files
+        _shared_breakdown_state["bytes_seen"] = size_bytes
+        letzte = _shared_breakdown_state.get("last_logged_monotonic")
+        faellig = letzte is None or now - letzte >= _SHARED_BREAKDOWN_LOG_EVERY_SECONDS
+        if faellig:
+            _shared_breakdown_state["last_logged_monotonic"] = now
+            started = _shared_breakdown_state.get("started_monotonic")
+    if faellig:
+        logger.info(
+            "Shared-Volume-Aufschlüsselung läuft: %d Dateien, %.2f GB, seit %.0fs",
+            files,
+            size_bytes / (1024 ** 3),
+            (now - started) if started else 0.0,
+        )
+
+
 def _run_shared_breakdown() -> None:
     """Rechnet im Worker-Thread und legt Ergebnis oder Fehler im Zustand ab."""
     global _shared_breakdown_state
+    logger.info(
+        "Shared-Volume-Aufschlüsselung gestartet für %s",
+        config.KUBERNETES_SHARED_CACHE_MOUNT_PATH,
+    )
     try:
         finished: Dict[str, Any] = {
             "status": "done",
-            "result": _sync_shared_volume_breakdown(),
+            "result": _sync_shared_volume_breakdown(_note_shared_breakdown_progress),
             "error": None,
         }
     except Exception as e:
@@ -200,7 +260,7 @@ def _start_shared_breakdown() -> Dict[str, Any]:
     return _shared_breakdown_snapshot()
 
 
-def _sync_shared_volume_breakdown() -> Dict[str, Any]:
+def _sync_shared_volume_breakdown(on_progress: Optional[Any] = None) -> Dict[str, Any]:
     """
     Verzeichnisgrössen unterhalb des shared Volumes, zwei Ebenen tief.
 
@@ -214,7 +274,7 @@ def _sync_shared_volume_breakdown() -> Dict[str, Any]:
         return {"dir": str(mount), "available": False, "entries": []}
 
     started = time.monotonic()
-    buckets, total_bytes, total_files = _walk_sizes(mount)
+    buckets, total_bytes, total_files = _walk_sizes(mount, on_progress)
     volume_total = volume["total_bytes"]
 
     entries: List[Dict[str, Any]] = []

@@ -857,7 +857,8 @@
     "sharedBreakdownFailed": "Aufschlüsselung fehlgeschlagen.",
     "sharedBreakdownFiles": "{{count}} Dateien",
     "sharedBreakdownRunningFor": "Wird berechnet … ({{seconds}} s)",
-    "sharedBreakdownStale": "Gerechnet um {{time}}"
+    "sharedBreakdownStale": "Gerechnet um {{time}}",
+    "sharedBreakdownProgress": "{{files}} Dateien, {{size}} GB gelesen"
   },
   "notifications": {
     "title": "Benachrichtigungen",
