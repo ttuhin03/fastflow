@@ -439,20 +439,14 @@ async def run_startup_tasks() -> None:
     # Lebensdauer des Pods auf dem shared PVC und fressen genau den Platz,
     # dessen Fehlen jeden Run scheitern lässt.
     def schedule_k8s_pipeline_runs_cleanup():
-        from app.core.database import get_session
-        from app.executor.kubernetes_backend import cleanup_orphaned_shared_pipeline_runs
+        from app.executor.kubernetes_backend import sweep_orphaned_shared_pipeline_runs
         from app.services.scheduler import get_scheduler
         scheduler = get_scheduler()
         if scheduler is not None:
-            def _run_pipeline_runs_cleanup():
-                session_gen = get_session()
-                session = next(session_gen)
-                try:
-                    cleanup_orphaned_shared_pipeline_runs(session)
-                finally:
-                    session.close()
+            # Die Callable muss auf Modulebene liegen, sonst lehnt der
+            # SQLAlchemyJobStore den Job ab — siehe sweep_orphaned_shared_pipeline_runs.
             scheduler.add_job(
-                _run_pipeline_runs_cleanup,
+                sweep_orphaned_shared_pipeline_runs,
                 "interval",
                 minutes=60,
                 id="k8s_pipeline_runs_cleanup",
