@@ -201,3 +201,50 @@ def test_missing_log_directory_is_created(test_session, tmp_path):
     mark_infrastructure_error(run, ENOSPC)
 
     assert "Infrastruktur-Fehler" in log_file.read_text(encoding="utf-8")
+
+
+def test_null_env_vars_from_the_database_still_get_the_error_type(test_session, tmp_path):
+    """
+    Die Spalte ist nullable — der Default aus dem Modell gilt nur in Python.
+
+    Eine Zeile mit SQL NULL lädt als ``None``, und genau so kommt der Run hier
+    an: aus ``session.get()`` im except-Block. Ein TypeError an dieser Stelle
+    verschluckt nicht nur die Fehler-Metadaten, er verhindert auch den Commit
+    darunter — der Run bliebe auf RUNNING stehen, also in dem Zustand, gegen den
+    diese Funktion überhaupt geschrieben ist.
+    """
+    run = _failed_run(test_session, tmp_path / "run.log")
+    run.env_vars = None
+    test_session.add(run)
+    test_session.commit()
+    test_session.expire_all()
+
+    reloaded = test_session.get(PipelineRun, run.id)
+    assert reloaded.env_vars is None
+
+    reloaded.status = RunStatus.FAILED
+    mark_infrastructure_error(reloaded, ENOSPC)
+    test_session.add(reloaded)
+    test_session.commit()
+    test_session.expire_all()
+
+    persisted = test_session.get(PipelineRun, run.id)
+    assert persisted.status == RunStatus.FAILED
+    assert persisted.env_vars["_fastflow_error_type"] == "infrastructure_error"
+
+
+def test_a_log_path_that_is_not_even_openable_does_not_hijack_the_error_path(test_session):
+    """
+    Die Zugabe darf auch dann nicht knallen, wenn sie nicht nur an Rechten scheitert.
+
+    Ein Nullbyte im Pfad ist kein ``OSError``, sondern ein ``ValueError`` aus
+    ``mkdir``/``open``. Ein zu enges except hier kostet den Fehlertyp am Run und
+    damit den Grund, aus dem der Run rot ist.
+    """
+    run = _failed_run(test_session, "/tmp/kein\x00pfad.log")
+
+    mark_infrastructure_error(run, ENOSPC)
+
+    assert run.env_vars["_fastflow_error_type"] == "infrastructure_error"
+    assert "No space left on device" in run.env_vars["_fastflow_error_message"]
+
