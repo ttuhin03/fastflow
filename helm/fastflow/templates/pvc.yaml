@@ -1,0 +1,38 @@
+{{- if and .Values.persistence.data.enabled (not .Values.persistence.data.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "fastflow.fullname" . }}-data
+  labels:
+    {{- include "fastflow.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    {{- toYaml .Values.persistence.data.accessModes | nindent 4 }}
+  {{- if .Values.persistence.data.storageClassName }}
+  storageClassName: {{ .Values.persistence.data.storageClassName | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.data.size | quote }}
+{{- end }}
+{{- if and (eq .Values.executor.type "kubernetes") .Values.persistence.cache.enabled (not .Values.persistence.cache.existingClaim) }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "fastflow.fullname" . }}-cache
+  labels:
+    {{- include "fastflow.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    {{- toYaml .Values.persistence.cache.accessModes | nindent 4 }}
+  {{- if .Values.persistence.cache.storageClassName }}
+  storageClassName: {{ .Values.persistence.cache.storageClassName | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.cache.size | quote }}
+  # For a real multi-node cluster, switch accessModes to ReadWriteMany with a
+  # storageClassName backed by NFS/EFS/CephFS so pipeline Job pods on other
+  # nodes can share the uv cache.
+{{- end }}

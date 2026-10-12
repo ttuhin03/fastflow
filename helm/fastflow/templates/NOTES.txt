@@ -1,0 +1,53 @@
+Fast-Flow has been deployed as "{{ include "fastflow.fullname" . }}" in namespace {{ .Release.Namespace }}.
+
+{{- if not .Values.secrets.existingSecret }}
+{{- if or (not .Values.secrets.encryptionKey) (not .Values.secrets.jwtSecretKey) }}
+
+  WARNING: secrets.encryptionKey and/or secrets.jwtSecretKey are empty.
+  The orchestrator will fail to start until these are set. Generate them with:
+
+    python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    openssl rand -base64 32
+
+  Then upgrade the release with:
+
+    helm upgrade {{ .Release.Name }} fastflow \
+      --set secrets.encryptionKey=<key> \
+      --set secrets.jwtSecretKey=<key> \
+      --reuse-values
+{{- end }}
+{{- end }}
+
+{{- if not (or .Values.secrets.github.clientId .Values.secrets.google.clientId .Values.secrets.microsoft.clientId .Values.secrets.custom.clientId) }}
+
+  WARNING: No OAuth provider is configured (github/google/microsoft/custom).
+  Fast-Flow requires at least one for login. See values.yaml under "secrets".
+{{- end }}
+
+1. Get the application URL:
+{{- if .Values.ingress.enabled }}
+{{- range .Values.ingress.hosts }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}{{ (index .paths 0).path }}
+{{- end }}
+{{- else if eq .Values.service.type "NodePort" }}
+  export NODE_PORT=$(kubectl get svc {{ include "fastflow.fullname" . }} -n {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}")
+  export NODE_IP=$(kubectl get nodes -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo http://$NODE_IP:$NODE_PORT
+{{- else if eq .Values.service.type "LoadBalancer" }}
+  kubectl get svc {{ include "fastflow.fullname" . }} -n {{ .Release.Namespace }} -w
+{{- else }}
+  kubectl port-forward svc/{{ include "fastflow.fullname" . }} -n {{ .Release.Namespace }} 8000:{{ .Values.service.port }}
+  echo http://localhost:8000
+{{- end }}
+
+2. Set the OAuth callback URL in your provider to match config.baseUrl, e.g.
+   {{ .Values.config.baseUrl }}/api/auth/github/callback
+
+3. Check rollout status:
+   kubectl rollout status deployment/{{ include "fastflow.fullname" . }} -n {{ .Release.Namespace }}
+
+{{- if eq .Values.executor.type "kubernetes" }}
+
+4. Pipeline runs execute as Kubernetes Jobs in this namespace. Watch them with:
+   kubectl get jobs -l app.kubernetes.io/instance={{ .Release.Name }} -n {{ .Release.Namespace }}
+{{- end }}

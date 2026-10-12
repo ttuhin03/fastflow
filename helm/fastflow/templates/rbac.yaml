@@ -1,0 +1,36 @@
+{{- if and .Values.rbac.create (eq .Values.executor.type "kubernetes") -}}
+# Minimal, namespaced Role for the "kubernetes" pipeline executor: create/read/delete
+# Jobs and read Pod logs for the pipeline Jobs it starts. No wildcards, no
+# secrets/exec/attach access.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "fastflow.fullname" . }}-executor
+  labels:
+    {{- include "fastflow.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list", "delete"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "fastflow.fullname" . }}-executor
+  labels:
+    {{- include "fastflow.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "fastflow.fullname" . }}-executor
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "fastflow.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
