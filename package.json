@@ -23,7 +23,7 @@
     "serialize-javascript": ">=7.0.3",
     "minimatch": ">=10.2.3",
     "svgo": ">=4.1.0",
-    "dompurify": ">=3.4.13",
+    "dompurify": ">=3.4.17",
     "protobufjs": ">=7.5.5",
     "fast-uri": ">=4.1.2",
     "axios": ">=1.15.2",
